@@ -12,6 +12,8 @@ import {
   X,
   Clock,
   ChevronRight,
+  Plus,
+  Pencil,
 } from "lucide-react";
 
 interface ExerciseCardData {
@@ -788,12 +790,129 @@ export default function ReadingLearningPage() {
   // Reset Confirm Modal
   const [resetCardConfirm, setResetCardConfirm] = useState<ExerciseCardData | null>(null);
 
+  // Card Create / Edit Modal State
+  const [showCreateCardModal, setShowCreateCardModal] = useState(false);
+  const [editingCard, setEditingCard] = useState<ExerciseCardData | null>(null);
+  const [cardFormTitle, setCardFormTitle] = useState("");
+  const [cardFormCategory, setCardFormCategory] = useState<"grammar" | "part5" | "part6" | "part7">("grammar");
+  const [cardFormSubCategory, setCardFormSubCategory] = useState<"word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types">("word_types");
+  const [cardFormTag, setCardFormTag] = useState("");
+  const [cardFormTotalQuestions, setCardFormTotalQuestions] = useState(50);
+  const [cardFormTheorySummary, setCardFormTheorySummary] = useState("");
+  const [cardFormTheoryRules, setCardFormTheoryRules] = useState("");
+  const [cardFormTheoryExample, setCardFormTheoryExample] = useState("");
+  const [deleteCardConfirm, setDeleteCardConfirm] = useState<ExerciseCardData | null>(null);
+
   // Success Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleOpenCreateCard = () => {
+    setEditingCard(null);
+    setCardFormTitle("");
+    setCardFormCategory(activeMainTab);
+    setCardFormSubCategory(
+      activeMainTab === "grammar"
+        ? (activeSubFilter === "all" ? "word_types" : activeSubFilter)
+        : activeMainTab === "part5"
+        ? "levels"
+        : "text_types"
+    );
+    setCardFormTag("");
+    setCardFormTotalQuestions(50);
+    setCardFormTheorySummary("");
+    setCardFormTheoryRules("");
+    setCardFormTheoryExample("");
+    setShowCreateCardModal(true);
+  };
+
+  const handleOpenEditCard = (card: ExerciseCardData, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingCard(card);
+    setCardFormTitle(card.title);
+    setCardFormCategory(card.category);
+    setCardFormSubCategory(card.subCategory || "word_types");
+    setCardFormTag(card.tag || "");
+    setCardFormTotalQuestions(card.totalQuestions);
+    setCardFormTheorySummary(card.theory?.summary || "");
+    setCardFormTheoryRules((card.theory?.rules || []).join("\n"));
+    setCardFormTheoryExample(card.theory?.example || "");
+    setShowCreateCardModal(true);
+  };
+
+  const handleSaveCard = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cardFormTitle.trim()) {
+      alert("Vui lòng nhập tên chủ điểm!");
+      return;
+    }
+
+    const rulesArr = cardFormTheoryRules
+      .split("\n")
+      .map((r) => r.trim())
+      .filter(Boolean);
+
+    if (editingCard) {
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === editingCard.id
+            ? {
+                ...c,
+                title: cardFormTitle.trim(),
+                category: cardFormCategory,
+                subCategory: cardFormSubCategory,
+                tag: cardFormTag.trim() || undefined,
+                totalQuestions: cardFormTotalQuestions,
+                theory: {
+                  summary: cardFormTheorySummary.trim() || c.theory?.summary || "Tóm tắt ngữ pháp và mẹo thi TOEIC Reading.",
+                  rules: rulesArr.length > 0 ? rulesArr : (c.theory?.rules || ["Nắm chắc dấu hiệu nhận biết."]),
+                  example: cardFormTheoryExample.trim() || c.theory?.example || "Example sentence for TOEIC reading practice.",
+                },
+              }
+            : c
+        )
+      );
+      showToast(`Đã cập nhật chủ điểm "${cardFormTitle}"! 💾`);
+    } else {
+      const newCard: ExerciseCardData = {
+        id: `reading-${Date.now()}`,
+        title: cardFormTitle.trim(),
+        category: cardFormCategory,
+        subCategory: cardFormSubCategory,
+        tag: cardFormTag.trim() || undefined,
+        totalQuestions: cardFormTotalQuestions,
+        studiedQuestions: 0,
+        correctAnswers: 0,
+        wrongAnswers: 0,
+        theory: {
+          summary: cardFormTheorySummary.trim() || "Tóm tắt ngữ pháp và mẹo thi TOEIC Reading.",
+          rules: rulesArr.length > 0 ? rulesArr : ["Nắm chắc dấu hiệu nhận biết."],
+          example: cardFormTheoryExample.trim() || "Example sentence for TOEIC reading practice.",
+        },
+        sampleQuestions: [
+          {
+            question: "The director approved the proposal after a ______ review of the budget.",
+            options: ["thorough", "thoroughly", "thoroughness", "more thorough"],
+            correctIndex: 0,
+            explanation: "Trước danh từ 'review' cần một tính từ ('thorough').",
+          },
+        ],
+      };
+      setCards((prev) => [newCard, ...prev]);
+      showToast(`Đã thêm chủ điểm "${newCard.title}" thành công! 🎉`);
+    }
+    setShowCreateCardModal(false);
+  };
+
+  const handleConfirmDeleteCard = () => {
+    if (!deleteCardConfirm) return;
+    setCards((prev) => prev.filter((c) => c.id !== deleteCardConfirm.id));
+    showToast(`Đã xóa chủ điểm "${deleteCardConfirm.title}"! 🗑️`);
+    setDeleteCardConfirm(null);
   };
 
   // Timer effect for Quiz Modal
@@ -922,11 +1041,32 @@ export default function ReadingLearningPage() {
             <h3 className="text-base font-bold text-slate-900 tracking-tight group-hover:text-blue-700 transition-colors">
               {card.title}
             </h3>
-            {card.bookmarked && (
-              <span className="text-amber-500 text-xs flex items-center gap-0.5 font-semibold">
-                ★ Đã lưu
-              </span>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {card.bookmarked && (
+                <span className="text-amber-500 text-xs flex items-center gap-0.5 font-semibold mr-1">
+                  ★ Đã lưu
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={(e) => handleOpenEditCard(card, e)}
+                className="w-6 h-6 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 flex items-center justify-center transition-colors cursor-pointer"
+                title="Sửa chủ điểm đọc"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteCardConfirm(card);
+                }}
+                className="w-6 h-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                title="Xóa chủ điểm đọc"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {card.tag && (
@@ -1127,51 +1267,62 @@ export default function ReadingLearningPage() {
       {/* --- TAB 1: NGỮ PHÁP --- */}
       {activeMainTab === "grammar" && (
         <div className="space-y-8 animate-in fade-in duration-150">
-          {/* Sub-filter bar */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Sub-filter bar & Add button */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveSubFilter("all")}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeSubFilter === "all"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Tất cả
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubFilter("word_types")}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeSubFilter === "word_types"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Từ loại
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubFilter("verbs")}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeSubFilter === "verbs"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Động từ
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubFilter("other_grammar")}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeSubFilter === "other_grammar"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Ngữ pháp khác
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => setActiveSubFilter("all")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                activeSubFilter === "all"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
+              onClick={handleOpenCreateCard}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
             >
-              Tất cả
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubFilter("word_types")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                activeSubFilter === "word_types"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              Từ loại
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubFilter("verbs")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                activeSubFilter === "verbs"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              Động từ
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubFilter("other_grammar")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                activeSubFilter === "other_grammar"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              Ngữ pháp khác
+              <Plus className="w-3.5 h-3.5" />
+              Thêm chủ điểm đọc
             </button>
           </div>
 
@@ -1227,11 +1378,21 @@ export default function ReadingLearningPage() {
         <div className="space-y-9 animate-in fade-in duration-150">
           {/* 4 Cấp độ Part 5 */}
           <div className="space-y-3">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Phần 5 theo 4 Cấp độ</h2>
-              <p className="text-xs font-medium text-slate-500">
-                Luyện theo mục tiêu điểm từ dưới 200 đến 495 điểm Reading.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Phần 5 theo 4 Cấp độ</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  Luyện theo mục tiêu điểm từ dưới 200 đến 495 điểm Reading.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateCard}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Thêm chủ điểm đọc
+              </button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {currentTabLevels.map(renderCard)}
@@ -1258,11 +1419,21 @@ export default function ReadingLearningPage() {
         <div className="space-y-9 animate-in fade-in duration-150">
           {/* Cấp độ Part 6 */}
           <div className="space-y-3">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Phần 6 theo Cấp độ</h2>
-              <p className="text-xs font-medium text-slate-500">
-                Luyện điền đoạn văn bản TOEIC (Text Completion) theo độ khó thích ứng.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Phần 6 theo Cấp độ</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  Luyện điền đoạn văn bản TOEIC (Text Completion) theo độ khó thích ứng.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateCard}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Thêm chủ điểm đọc
+              </button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {currentTabLevels.map(renderCard)}
@@ -1289,11 +1460,21 @@ export default function ReadingLearningPage() {
         <div className="space-y-9 animate-in fade-in duration-150">
           {/* Cấp độ Part 7 */}
           <div className="space-y-3">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Phần 7 theo Cấp độ</h2>
-              <p className="text-xs font-medium text-slate-500">
-                Đọc hiểu đoạn đơn, đoạn kép, đoạn ba với kỹ thuật Skimming & Scanning.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Phần 7 theo Cấp độ</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  Đọc hiểu đoạn đơn, đoạn kép, đoạn ba với kỹ thuật Skimming & Scanning.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateCard}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Thêm chủ điểm đọc
+              </button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {currentTabLevels.map(renderCard)}
@@ -1632,6 +1813,180 @@ export default function ReadingLearningPage() {
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 Đặt lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: THÊM / SỬA CHỦ ĐIỂM ĐỌC --- */}
+      {showCreateCardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Reading Content</span>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {editingCard ? "Chỉnh sửa chủ điểm đọc" : "Thêm chủ điểm đọc mới"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateCardModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCard} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên chủ điểm đọc *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Đại từ & Tính từ sở hữu"
+                  value={cardFormTitle}
+                  onChange={(e) => setCardFormTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Phần thi (Phân loại)</label>
+                  <select
+                    value={cardFormCategory}
+                    onChange={(e) => setCardFormCategory(e.target.value as "grammar" | "part5" | "part6" | "part7")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="grammar">Ngữ pháp</option>
+                    <option value="part5">Phần 5 (Part 5)</option>
+                    <option value="part6">Phần 6 (Part 6)</option>
+                    <option value="part7">Phần 7 (Part 7)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số câu hỏi</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={cardFormTotalQuestions}
+                    onChange={(e) => setCardFormTotalQuestions(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Nhóm con</label>
+                  <select
+                    value={cardFormSubCategory}
+                    onChange={(e) => setCardFormSubCategory(e.target.value as "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="word_types">Từ loại</option>
+                    <option value="verbs">Động từ</option>
+                    <option value="other_grammar">Ngữ pháp khác</option>
+                    <option value="levels">Theo cấp độ</option>
+                    <option value="by_topic">Theo chủ điểm</option>
+                    <option value="text_types">Theo dạng văn bản</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Thẻ ghi chú (Tag)</label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Cùng gốc, khác hậu tố"
+                    value={cardFormTag}
+                    onChange={(e) => setCardFormTag(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tóm tắt lý thuyết</label>
+                <textarea
+                  rows={2}
+                  placeholder="Kiến thức nền tảng cần ghi nhớ..."
+                  value={cardFormTheorySummary}
+                  onChange={(e) => setCardFormTheorySummary(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Mẹo thi & Quy tắc (mỗi dòng một mẹo)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Dấu hiệu nhận biết nhanh...&#10;Bẫy thường gặp..."
+                  value={cardFormTheoryRules}
+                  onChange={(e) => setCardFormTheoryRules(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Ví dụ minh họa ngữ cảnh</label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: The manager submitted the proposal on time."
+                  value={cardFormTheoryExample}
+                  onChange={(e) => setCardFormTheoryExample(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateCardModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {editingCard ? "Lưu thay đổi" : "Tạo chủ điểm"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: XÁC NHẬN XÓA CHỦ ĐIỂM ĐỌC --- */}
+      {deleteCardConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Xóa chủ điểm đọc?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Bạn có chắc chắn muốn xóa vĩnh viễn chủ điểm{" "}
+                <strong className="text-slate-900">&quot;{deleteCardConfirm.title}&quot;</strong>? Toàn bộ câu hỏi và tiến độ thuộc chủ điểm này sẽ bị xóa.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteCardConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteCard}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                Xóa ngay
               </button>
             </div>
           </div>
