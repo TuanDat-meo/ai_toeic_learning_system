@@ -1257,15 +1257,15 @@ export default function AdminGrammarPage() {
       </div>
 
       {/* KHỐI 2: THANH TAB CHUYỂN CHẾ ĐỘ CHÍNH & NÚT THAO TÁC */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-200/60 rounded-full w-fit">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 border border-slate-200/80 rounded-2xl max-w-full overflow-x-auto no-scrollbar shadow-2xs">
           <button
             type="button"
             onClick={() => setActiveMainTab("topics")}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
               activeMainTab === "topics"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
             }`}
           >
             <Book className="w-4 h-4" />
@@ -1275,10 +1275,10 @@ export default function AdminGrammarPage() {
           <button
             type="button"
             onClick={() => setActiveMainTab("progress")}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
               activeMainTab === "progress"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
             }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -1288,10 +1288,10 @@ export default function AdminGrammarPage() {
           <button
             type="button"
             onClick={() => setActiveMainTab("starred")}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
               activeMainTab === "starred"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
             }`}
           >
             <Star className="w-4 h-4 fill-amber-300 text-amber-300" />
@@ -1301,10 +1301,10 @@ export default function AdminGrammarPage() {
           <button
             type="button"
             onClick={() => setActiveMainTab("rules")}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
               activeMainTab === "rules"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
             }`}
           >
             <Lightbulb className="w-4 h-4" />

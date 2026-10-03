@@ -2,11 +2,21 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
+  ArrowLeft,
+  ShoppingBag,
+  Grid,
+  HelpCircle,
+  Headphones,
+  Target,
   ClipboardCheck,
   Sparkles,
   BookOpen,
   TrendingUp,
   BarChart2,
+  Bell,
+  BellOff,
+  Star,
+  Volume2,
   Signal,
   Trophy,
   Trash2,
@@ -24,6 +34,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Send,
   Eye,
   FileCheck,
   Bookmark,
@@ -441,6 +452,12 @@ export default function MockTestsPage() {
   const setCurrentTests = selectedVol === "vol1" ? setTestsVol1 : setTestsVol2;
 
   // --- MODAL STATES ---
+  // 0. Chọn chế độ (Mode Selection Modal)
+  const [modeSelectionTest, setModeSelectionTest] = useState<TestItem | null>(null);
+  const [selectedModeTab, setSelectedModeTab] = useState<"exam" | "practice">("practice");
+  const [selectedParts, setSelectedParts] = useState<string[]>(["Part 1"]);
+  const [activeExamParts, setActiveExamParts] = useState<string[]>([]);
+
   // 1. Thi thử (Full Exam Simulation)
   const [examModalTest, setExamModalTest] = useState<TestItem | null>(null);
   const [examDurationType, setExamDurationType] = useState<"120" | "60" | "30">("120");
@@ -461,8 +478,49 @@ export default function MockTestsPage() {
   // 2. Luyện tập (Practice Mode)
   const [practiceModalTest, setPracticeModalTest] = useState<TestItem | null>(null);
   const [practicePartFilter, setPracticePartFilter] = useState<string>("ALL");
+  const [practiceCurrentQIndex, setPracticeCurrentQIndex] = useState(0);
   const [practiceAnswers, setPracticeAnswers] = useState<{ [qId: number]: string }>({});
   const [practiceChecked, setPracticeChecked] = useState<{ [qId: number]: boolean }>({});
+  const [isSfxEnabled, setIsSfxEnabled] = useState(true);
+  // Web Audio Sound Effects Synthesizer (SFX chọn đáp án giống Part 5, 6, 7)
+    // Web Audio Sound Effects Synthesizer (Chuẩn 100% theo Part 5)
+  const playSfx = (type: "correct" | "wrong" | "click") => {
+    if (!isSfxEnabled) return; // Im lặng 100% khi tắt nút chuông
+    try {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === "correct") {
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15); // E5
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+      } else if (type === "wrong") {
+        osc.frequency.setValueAtTime(300, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+      } else {
+        osc.frequency.setValueAtTime(450, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
   const [dictationInput, setDictationInput] = useState<{ [qId: number]: string }>({});
   const [showBilingualPassage, setShowBilingualPassage] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
@@ -621,7 +679,7 @@ export default function MockTestsPage() {
 
     let correct = 0;
     let wrong = 0;
-    SAMPLE_EXAM_QUESTIONS.forEach((q) => {
+    activeExamQuestions.forEach((q) => {
       const selected = examAnswers[q.id];
       if (selected === q.correctAnswer) {
         correct += 1;
@@ -631,7 +689,7 @@ export default function MockTestsPage() {
     });
 
     // Ước tính điểm số TOEIC chuẩn theo tỷ lệ đúng
-    const correctRatio = correct / SAMPLE_EXAM_QUESTIONS.length;
+    const correctRatio = activeExamQuestions.length > 0 ? correct / activeExamQuestions.length : 0;
     // Scale điểm: Listening tối đa 495, Reading tối đa 495
     const estimatedListening = Math.min(495, Math.round(correctRatio * 460 + 35));
     const estimatedReading = Math.min(495, Math.round(correctRatio * 440 + 30));
@@ -705,6 +763,7 @@ export default function MockTestsPage() {
   // Mở modal Luyện tập
   const handleOpenPractice = (test: TestItem) => {
     setPracticeModalTest(test);
+    setPracticeCurrentQIndex(0);
     setPracticePartFilter("ALL");
     setPracticeAnswers({});
     setPracticeChecked({});
@@ -781,9 +840,18 @@ export default function MockTestsPage() {
     }
   };
 
+  // Danh sách câu hỏi thi thử theo Part được chọn
+  const activeExamQuestions = useMemo(() => {
+    if (!activeExamParts || activeExamParts.length === 0) return SAMPLE_EXAM_QUESTIONS;
+    return SAMPLE_EXAM_QUESTIONS.filter((q) => activeExamParts.includes(q.part));
+  }, [activeExamParts]);
+
   // Lọc câu hỏi luyện tập theo Part
   const filteredPracticeQuestions = useMemo(() => {
-    if (practicePartFilter === "ALL") return SAMPLE_EXAM_QUESTIONS;
+    if (!practicePartFilter || practicePartFilter === "ALL") return SAMPLE_EXAM_QUESTIONS;
+    if (Array.isArray(practicePartFilter)) {
+      return SAMPLE_EXAM_QUESTIONS.filter((q) => practicePartFilter.includes(q.part));
+    }
     return SAMPLE_EXAM_QUESTIONS.filter((q) => q.part === practicePartFilter);
   }, [practicePartFilter]);
 
@@ -832,14 +900,14 @@ export default function MockTestsPage() {
       </div>
 
       {/* KHỐI 2: THANH TAB CHUYỂN CHẾ ĐỘ CHÍNH: HỌC vs TIẾN ĐỘ */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-200/60 rounded-full w-fit">
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 border border-slate-200/80 rounded-2xl max-w-full overflow-x-auto no-scrollbar shadow-2xs">
         <button
           type="button"
           onClick={() => setActiveMainTab("study")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
             activeMainTab === "study"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+              ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+              : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
           }`}
         >
           <BookOpen className="w-4 h-4" />
@@ -849,10 +917,10 @@ export default function MockTestsPage() {
         <button
           type="button"
           onClick={() => setActiveMainTab("progress")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
             activeMainTab === "progress"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+              ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+              : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
           }`}
         >
           <BarChart2 className="w-4 h-4" />
@@ -996,7 +1064,10 @@ export default function MockTestsPage() {
                 <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => handleOpenExam(test)}
+                    onClick={() => {
+                      setModeSelectionTest(test);
+                      setSelectedModeTab("exam");
+                    }}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 hover:border-blue-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all shadow-2xs active:scale-95 cursor-pointer"
                   >
                     <Play className="w-3.5 h-3.5 text-slate-600" />
@@ -1005,7 +1076,10 @@ export default function MockTestsPage() {
 
                   <button
                     type="button"
-                    onClick={() => handleOpenPractice(test)}
+                    onClick={() => {
+                      setModeSelectionTest(test);
+                      setSelectedModeTab("practice");
+                    }}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-blue-600" />
@@ -1171,8 +1245,905 @@ export default function MockTestsPage() {
       )}
 
       {/* ======================================================== */}
+      {/* ======================================================== */}
+      {/* 0. MODAL CHỌN CHẾ ĐỘ (MODE SELECTION MODAL) */}
+      {/* ======================================================== */}
+      {modeSelectionTest && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+            {/* Header Modal */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-white shrink-0">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900">Chọn chế độ</h2>
+                <p className="text-sm font-bold text-slate-500 mt-0.5">{modeSelectionTest.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModeSelectionTest(null)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto bg-slate-50/50 flex-1">
+              {/* Mode Switcher Tabs */}
+              <div className="p-1.5 bg-slate-200/70 rounded-2xl flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedModeTab("exam")}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedModeTab === "exam"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-slate-600" />
+                  <span>Luyện thi</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedModeTab("practice")}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedModeTab === "practice"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Target className="w-4 h-4 text-blue-600" />
+                  <span>Luyện tập</span>
+                </button>
+              </div>
+
+              {/* CONTENT FOR EXAM MODE (LUYỆN THI) */}
+              {selectedModeTab === "exam" && (
+                <div className="space-y-5">
+                  {/* Top 3 Exam Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Card 1: Full Test */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-2xs flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-slate-900 text-base">Full Test</h3>
+                            <p className="text-xs text-slate-500 font-medium">Làm như thi thật</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const testToRun = modeSelectionTest;
+                            setModeSelectionTest(null);
+                            setActiveExamParts([]);
+                            setExamDurationType("120");
+                            handleOpenExam(testToRun);
+                            handleStartExamNow();
+                          }}
+                          className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+                        >
+                          <Play className="w-4 h-4 fill-white ml-0.5" />
+                          <span>Bắt đầu</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1 text-[11px] pt-2 border-t border-slate-100">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                          <Clock className="w-3 h-3" /> 120 phút
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                          <FileText className="w-3 h-3" /> 200 câu
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Thi Listening */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-2xs flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <Headphones className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-slate-900 text-base">Thi Listening</h3>
+                            <p className="text-xs text-slate-500 font-medium">Thi riêng phần nghe</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const testToRun = modeSelectionTest;
+                            setModeSelectionTest(null);
+                            setActiveExamParts(["Part 1", "Part 2", "Part 3", "Part 4"]);
+                            setExamDurationType("60");
+                            handleOpenExam(testToRun);
+                            handleStartExamNow();
+                          }}
+                          className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+                        >
+                          <Play className="w-4 h-4 fill-white ml-0.5" />
+                          <span>Bắt đầu</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1 text-[11px] pt-2 border-t border-slate-100">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                          <Clock className="w-3 h-3" /> 45 phút
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                          <FileText className="w-3 h-3" /> 100 câu
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Thi Reading */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-2xs flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                            <BookOpen className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-slate-900 text-base">Thi Reading</h3>
+                            <p className="text-xs text-slate-500 font-medium">Thi riêng phần đọc</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const testToRun = modeSelectionTest;
+                            setModeSelectionTest(null);
+                            setActiveExamParts(["Part 1", "Part 2", "Part 3", "Part 4"]);
+                            setExamDurationType("60");
+                            handleOpenExam(testToRun);
+                            handleStartExamNow();
+                          }}
+                          className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+                        >
+                          <Play className="w-4 h-4 fill-white ml-0.5" />
+                          <span>Bắt đầu</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-1 text-[11px] pt-2 border-t border-slate-100">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                          <Clock className="w-3 h-3" /> 75 phút
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                          <FileText className="w-3 h-3" /> 100 câu
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Card: Thi theo Part */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                          <Target className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-base">Thi theo Part</h3>
+                          <p className="text-xs text-slate-500">Chọn Part cụ thể để thi thử</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const testToRun = modeSelectionTest;
+                          setModeSelectionTest(null);
+                          setActiveExamParts(selectedParts.length > 0 ? selectedParts : ["Part 1"]);
+                          handleOpenExam(testToRun);
+                          handleStartExamNow();
+                        }}
+                        className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-1.5 transition shadow-md hover:shadow-lg cursor-pointer active:scale-95"
+                      >
+                        <Play className="w-4 h-4 fill-white" />
+                        <span>Bắt đầu</span>
+                      </button>
+                    </div>
+
+                    {/* Part List Selection */}
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Listening</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {[
+                            { id: "Part 1", count: "6 câu" },
+                            { id: "Part 2", count: "25 câu" },
+                            { id: "Part 3", count: "39 câu" },
+                            { id: "Part 4", count: "30 câu" },
+                          ].map((p) => {
+                            const isSelected = selectedParts.includes(p.id);
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedParts(selectedParts.filter((item) => item !== p.id));
+                                  } else {
+                                    setSelectedParts([...selectedParts, p.id]);
+                                  }
+                                }}
+                                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                                  isSelected
+                                    ? "bg-blue-50/70 border-blue-500 text-blue-900 font-bold"
+                                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                    isSelected ? "border-blue-600 bg-white" : "border-slate-300"
+                                  }`}>
+                                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                  </div>
+                                  <span className="text-xs sm:text-sm font-medium">{p.id}</span>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-400">{p.count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Reading</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {[
+                            { id: "Part 5", count: "30 câu" },
+                            { id: "Part 6", count: "16 câu" },
+                            { id: "Part 7", count: "54 câu" },
+                          ].map((p) => {
+                            const isSelected = selectedParts.includes(p.id);
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedParts(selectedParts.filter((item) => item !== p.id));
+                                  } else {
+                                    setSelectedParts([...selectedParts, p.id]);
+                                  }
+                                }}
+                                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                                  isSelected
+                                    ? "bg-blue-50/70 border-blue-500 text-blue-900 font-bold"
+                                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                    isSelected ? "border-blue-600 bg-white" : "border-slate-300"
+                                  }`}>
+                                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                  </div>
+                                  <span className="text-xs sm:text-sm font-medium">{p.id}</span>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-400">{p.count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Custom Time Selection Row */}
+                      <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Clock className="w-4 h-4 text-slate-500" />
+                          <span className="font-bold text-slate-800">Thời gian làm bài</span>
+                          <span className="px-2.5 py-0.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-bold">
+                            ⏱ 5 phút
+                          </span>
+                          <span className="text-slate-400 font-medium">(thời gian đề xuất)</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-slate-500 font-medium">Tự đặt</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" />
+                            <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Summary Footer */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center gap-3 text-xs">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-bold">
+                          <FileText className="w-3.5 h-3.5" />
+                          {(() => {
+                            const countMap: { [p: string]: number } = {
+                              "Part 1": 6, "Part 2": 25, "Part 3": 39, "Part 4": 30,
+                              "Part 5": 30, "Part 6": 16, "Part 7": 54
+                            };
+                            const totalQ = selectedParts.reduce((acc, curr) => acc + (countMap[curr] || 0), 0);
+                            return `${totalQ} câu`;
+                          })()}
+                        </span>
+                        <span className="text-slate-500 font-medium">
+                          Đã chọn {selectedParts.length} part
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENT FOR PRACTICE MODE (LUYỆN TẬP) */}
+              {selectedModeTab === "practice" && (
+                <div className="space-y-5">
+                  <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/80 text-blue-900 text-xs sm:text-sm font-semibold leading-relaxed">
+                    <span className="font-extrabold text-blue-700">Chế độ Luyện tập:</span> Xem đáp án và giải thích ngay sau mỗi câu/nhóm câu hỏi.
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-5">
+                    {/* Box Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-slate-900 text-base">Chọn Part để luyện tập</h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const testToRun = modeSelectionTest;
+                          const filterToSet = selectedParts.length === 7 || selectedParts.length === 0 ? "ALL" : (selectedParts[0] || "ALL");
+                          setModeSelectionTest(null);
+                          setPracticePartFilter(filterToSet);
+                          setPracticeCurrentQIndex(0);
+                          handleOpenPractice(testToRun);
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-2 transition shadow-md hover:shadow-lg cursor-pointer active:scale-95"
+                      >
+                        <Play className="w-4 h-4 fill-white" />
+                        <span>Bắt đầu</span>
+                      </button>
+                    </div>
+
+                    {/* Part Options List */}
+                    <div className="space-y-4">
+                      {/* Option: All 7 Parts */}
+                      {(() => {
+                        const isAllSelected = selectedParts.length === 7;
+                        return (
+                          <div
+                            onClick={() => {
+                              if (isAllSelected) setSelectedParts([]);
+                              else setSelectedParts(["Part 1", "Part 2", "Part 3", "Part 4", "Part 5", "Part 6", "Part 7"]);
+                            }}
+                            className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                              isAllSelected
+                                ? "bg-blue-50/70 border-blue-500 text-blue-900 font-bold"
+                                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                isAllSelected ? "border-blue-600 bg-white" : "border-slate-300"
+                              }`}>
+                                {isAllSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                              </div>
+                              <span className="text-sm font-semibold">Chọn tất cả 7 Part</span>
+                            </div>
+                            <span className="text-xs font-semibold text-slate-500">200 câu</span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* LISTENING SECTION */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Listening</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {[
+                            { id: "Part 1", count: "6 câu" },
+                            { id: "Part 2", count: "25 câu" },
+                            { id: "Part 3", count: "39 câu" },
+                            { id: "Part 4", count: "30 câu" },
+                          ].map((p) => {
+                            const isSelected = selectedParts.includes(p.id);
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedParts(selectedParts.filter((item) => item !== p.id));
+                                  } else {
+                                    setSelectedParts([...selectedParts, p.id]);
+                                  }
+                                }}
+                                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                                  isSelected
+                                    ? "bg-blue-50/70 border-blue-500 text-blue-900 font-bold"
+                                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                    isSelected ? "border-blue-600 bg-white" : "border-slate-300"
+                                  }`}>
+                                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                  </div>
+                                  <span className="text-xs sm:text-sm font-medium">{p.id}</span>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-400">{p.count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* READING SECTION */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Reading</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {[
+                            { id: "Part 5", count: "30 câu" },
+                            { id: "Part 6", count: "16 câu" },
+                            { id: "Part 7", count: "54 câu" },
+                          ].map((p) => {
+                            const isSelected = selectedParts.includes(p.id);
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedParts(selectedParts.filter((item) => item !== p.id));
+                                  } else {
+                                    setSelectedParts([...selectedParts, p.id]);
+                                  }
+                                }}
+                                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                                  isSelected
+                                    ? "bg-blue-50/70 border-blue-500 text-blue-900 font-bold"
+                                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                    isSelected ? "border-blue-600 bg-white" : "border-slate-300"
+                                  }`}>
+                                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                  </div>
+                                  <span className="text-xs sm:text-sm font-medium">{p.id}</span>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-400">{p.count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Selection Summary Footer */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center gap-3 text-xs">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-bold">
+                          <FileText className="w-3.5 h-3.5" />
+                          {(() => {
+                            const countMap: { [p: string]: number } = {
+                              "Part 1": 6, "Part 2": 25, "Part 3": 39, "Part 4": 30,
+                              "Part 5": 30, "Part 6": 16, "Part 7": 54
+                            };
+                            const totalQ = selectedParts.reduce((acc, curr) => acc + (countMap[curr] || 0), 0);
+                            return `${totalQ} câu`;
+                          })()}
+                        </span>
+                        <span className="text-slate-500 font-medium">
+                          Đã chọn {selectedParts.length} part
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. MODAL THI THỬ (FULL EXAM SIMULATION MODAL) */}
       {/* ======================================================== */}
+      {examModalTest && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 sm:p-3">
+          <div className="bg-white sm:rounded-3xl w-full h-full sm:max-w-6xl sm:max-h-[94vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200 font-sans">
+            {/* Header Modal - Đúng 100% theo Hình 3 */}
+            <div className="bg-blue-600 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md shrink-0 select-none">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold">
+                  <Headphones className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-xs sm:text-sm tracking-wide">
+                    {(() => {
+                      const q = activeExamQuestions[examCurrentQIndex];
+                      const part = q ? q.part : "Part 1";
+                      const section = (part === "Part 5" || part === "Part 6" || part === "Part 7") ? "Reading" : "Listening";
+                      return `${section}: Questions ${examCurrentQIndex + 1} of ${activeExamQuestions.length}`;
+                    })()}
+                  </h3>
+                  <p className="text-[11px] text-blue-100 hidden sm:block">
+                    Thi thử TOEIC: {examModalTest.title}
+                  </p>
+                </div>
+              </div>
+
+              {examStarted && !examSubmitted && (
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {/* Nút Audio Chuông Vàng / Trắng mờ (Đúng theo thiết kế Part 5 6 7 khi tắt) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isSfxEnabled;
+                      setIsSfxEnabled(next);
+                      setIsPlayingAudio(next);
+                      if (next) playSfx("correct");
+                      else playSfx("click");
+                      triggerToast(next ? "🔊 Đã bật âm thanh SFX chọn đáp án 👑" : "⏸ Đã tắt âm thanh SFX");
+                    }}
+                    title={isPlayingAudio ? "Đang bật âm thanh - Bấm để tắt" : "Đang tắt âm thanh - Bấm để bật"}
+                    className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                      isPlayingAudio
+                        ? "bg-amber-400 text-amber-950 shadow-xs animate-pulse"
+                        : "bg-white/20 text-white hover:bg-white/30"
+                    }`}
+                  >
+                    {isPlayingAudio ? <Bell className="w-4 h-4 text-amber-950" /> : <BellOff className="w-4 h-4 text-white" />}
+                  </button>
+
+                  <div className="bg-white/20 text-white font-mono font-bold text-xs px-2.5 py-1 rounded-xl">
+                    {Object.keys(examAnswers).length}/{activeExamQuestions.length}
+                  </div>
+
+                  <div className="bg-white/20 text-white font-mono font-bold text-xs px-2.5 py-1 rounded-xl flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatTime(examTimeRemaining)}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSubmitExam}
+                    className="bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5 fill-slate-900" />
+                    <span>Submit</span>
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setExamModalTest(null)}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer ml-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body Modal */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {/* Màn hình chuẩn bị trước khi bấm thi */}
+              {!examStarted && !examSubmitted && (
+                <div className="flex-1 overflow-y-auto p-6 flex items-center justify-center">
+                  <div className="max-w-2xl w-full py-4 space-y-6 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 mx-auto flex items-center justify-center shadow-inner">
+                      <Play className="w-8 h-8 ml-1" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-slate-900">
+                        Sẵn sàng thi thử {examModalTest.title}?
+                      </h2>
+                      <p className="text-sm text-slate-600">
+                        {activeExamParts.length > 0 
+                          ? `Bài thi tập trung cho phần: ${activeExamParts.join(", ")} (${activeExamQuestions.length} câu)`
+                          : "Đề thi bao gồm 2 phần Listening & Reading với hệ thống câu hỏi chuẩn format ETS."}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-3">
+                      <label className="text-xs font-bold text-slate-700 uppercase block">
+                        Chọn thời gian làm bài:
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { val: "120", label: "Chuẩn 120 phút", desc: "Full Test (200 câu)" },
+                          { val: "60", label: "Rút gọn 60 phút", desc: "Mini Test (100 câu)" },
+                          { val: "30", label: "Tập trung 30 phút", desc: "Speed Test (50 câu)" },
+                        ].map((item) => (
+                          <button
+                            key={item.val}
+                            type="button"
+                            onClick={() => setExamDurationType(item.val as any)}
+                            className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                              examDurationType === item.val
+                                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            <p className="font-bold text-xs">{item.label}</p>
+                            <p className={`text-[10px] mt-0.5 ${examDurationType === item.val ? "text-blue-100" : "text-slate-400"}`}>
+                              {item.desc}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleStartExamNow}
+                      className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-500/25 transition cursor-pointer active:scale-98"
+                    >
+                      Bắt đầu làm bài thi ngay
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Đang làm bài thi thử (Giao diện 2 bên chuẩn Hình 3) */}
+              {examStarted && !examSubmitted && (() => {
+                const currentQ = activeExamQuestions[examCurrentQIndex];
+                if (!currentQ) return null;
+
+                const isPart1or2 = currentQ.part === "Part 1" || currentQ.part === "Part 2";
+
+                return (
+                  <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                    <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+                      
+                      {/* LEFT PANE: Instruction & Content */}
+                      <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white border-r border-slate-200 flex flex-col justify-between space-y-6">
+                        <div className="space-y-4">
+                          {/* Instruction header text */}
+                          <p className="text-sm font-bold text-slate-800 leading-relaxed">
+                            {(() => {
+                              if (currentQ.part === "Part 1") return "Select the one statement that best describes what you see in the picture.";
+                              if (currentQ.part === "Part 2") return "Listen to the question and select the best response.";
+                              if (currentQ.part === "Part 3") return "Listen to the conversation and answer the questions below.";
+                              if (currentQ.part === "Part 4") return "Listen to the talk and answer the questions below.";
+                              if (currentQ.part === "Part 5") return "Select the best answer to complete the sentence.";
+                              if (currentQ.part === "Part 6" || currentQ.part === "Part 7") return "Read the passage and answer the questions.";
+                              return "Select the best answer to complete the question.";
+                            })()}
+                          </p>
+
+                          {/* Image for Part 1 */}
+                          {currentQ.imageUrl && (
+                            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3 shadow-xs flex items-center justify-center overflow-hidden max-w-md mx-auto">
+                              <img
+                                src={currentQ.imageUrl}
+                                alt="Part Illustration"
+                                className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
+                              />
+                            </div>
+                          )}
+
+                          {/* Passage for Reading parts */}
+                          {currentQ.passage && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-mono whitespace-pre-line text-slate-800 leading-relaxed max-h-72 overflow-y-auto">
+                              {currentQ.passage}
+                            </div>
+                          )}
+
+                          {/* Audio player for Listening parts */}
+                          {currentQ.audioUrl && (
+                            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsPlayingAudio(!isPlayingAudio);
+                                    triggerToast(isPlayingAudio ? "⏸ Đã tạm dừng âm thanh bài nghe" : "🔊 Đã phát âm thanh bài nghe");
+                                  }}
+                                  className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shrink-0 cursor-pointer"
+                                >
+                                  {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                                </button>
+                                
+                                <div className="flex-1 flex items-center gap-1 h-8 px-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+                                  {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50].map((h, i) => (
+                                    <div
+                                      key={i}
+                                      className={`flex-1 rounded-full transition-all duration-300 ${
+                                        isPlayingAudio ? "bg-blue-600 animate-pulse" : "bg-slate-300"
+                                      }`}
+                                      style={{ height: `${isPlayingAudio ? Math.max(20, (h * (i % 3 + 1)) % 100) : h}%` }}
+                                    />
+                                  ))}
+                                </div>
+
+                                <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
+                                  00:45
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* RIGHT PANE: Question & Options */}
+                      <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-slate-50/70 flex flex-col justify-between space-y-6">
+                        <div className="space-y-4">
+                          <h3 className="text-base font-bold text-slate-800 tracking-tight">Question</h3>
+
+                          <div className="text-sm font-extrabold text-slate-900 leading-relaxed">
+                            {isPart1or2 ? `${examCurrentQIndex + 1}.` : `${examCurrentQIndex + 1}. ${currentQ.questionText}`}
+                          </div>
+
+                          {/* Options List */}
+                          <div className="space-y-3 pt-2">
+                            {Object.entries(currentQ.options).map(([optKey, optVal]) => {
+                              if (currentQ.part === "Part 2" && optKey === "D") return null;
+
+                              const isChosen = examAnswers[currentQ.id] === optKey;
+
+                              return (
+                                <button
+                                  key={optKey}
+                                  type="button"
+                                  onClick={() => {
+                                  if (isSfxEnabled) playSfx("click");
+                                  setExamAnswers((prev) => ({ ...prev, [currentQ.id]: optKey }));
+                                }}
+                                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
+                                    isChosen
+                                      ? "bg-white border-blue-600 text-blue-900 ring-2 ring-blue-500/20 shadow-xs"
+                                      : "bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50 text-slate-800"
+                                  }`}
+                                >
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                    isChosen ? "border-blue-600 bg-white" : "border-slate-300"
+                                  }`}>
+                                    {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                  </div>
+                                  <span className="text-sm font-semibold">
+                                    {isPart1or2 ? `(${optKey})` : `(${optKey}) ${optVal}`}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Navigation Footer */}
+                    <footer className="h-14 bg-white border-t border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
+                      <button
+                        type="button"
+                        disabled={examCurrentQIndex === 0}
+                        onClick={() => setExamCurrentQIndex((prev) => Math.max(0, prev - 1))}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition cursor-pointer"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Câu trước</span>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs font-mono">
+                          {examCurrentQIndex + 1}/{activeExamQuestions.length}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={examCurrentQIndex === activeExamQuestions.length - 1}
+                        onClick={() => setExamCurrentQIndex((prev) => Math.min(activeExamQuestions.length - 1, prev + 1))}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs"
+                      >
+                        <span>Câu tiếp</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </footer>
+                  </div>
+                );
+              })()}
+
+              {/* Màn hình kết quả sau khi nộp bài */}
+              {examSubmitted && examResultScore && (
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="max-w-3xl mx-auto space-y-6">
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-xl">
+                      <Trophy className="w-14 h-14 text-amber-300 mx-auto drop-shadow-md animate-bounce" />
+                      <h2 className="text-2xl sm:text-3xl font-black">
+                        Chúc mừng bạn đã hoàn thành bài thi!
+                      </h2>
+                      <p className="text-sm text-blue-100">
+                        Điểm thi đã được lưu tự động vào bảng tiến độ và thẻ đề thi {examModalTest.title}.
+                      </p>
+
+                      <div className="flex items-center justify-center gap-6 pt-4">
+                        <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl">
+                          <p className="text-xs uppercase text-blue-200 font-bold">Listening</p>
+                          <p className="text-2xl font-black">{examResultScore.listening} / 495</p>
+                        </div>
+
+                        <div className="bg-white/25 backdrop-blur-xs px-6 py-4 rounded-2xl ring-2 ring-white/30">
+                          <p className="text-xs uppercase text-amber-200 font-bold">Tổng điểm TOEIC</p>
+                          <p className="text-3xl sm:text-4xl font-black text-amber-300">
+                            {examResultScore.total} / 990
+                          </p>
+                        </div>
+
+                        <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl">
+                          <p className="text-xs uppercase text-blue-200 font-bold">Reading</p>
+                          <p className="text-2xl font-black">{examResultScore.reading} / 495</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                        <FileCheck className="w-5 h-5 text-blue-600" />
+                        Chi tiết đáp án & Giải thích AI từng câu:
+                      </h3>
+
+                      <div className="space-y-4">
+                        {activeExamQuestions.map((q) => {
+                          const userAns = examAnswers[q.id];
+                          const isCorrect = userAns === q.correctAnswer;
+
+                          return (
+                            <div
+                              key={q.id}
+                              className={`p-4 rounded-2xl border transition ${
+                                isCorrect ? "bg-emerald-50/50 border-emerald-200" : "bg-rose-50/50 border-rose-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-bold text-xs text-slate-800">
+                                  Câu {q.id} ({q.part})
+                                </span>
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                                    isCorrect ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                                  }`}
+                                >
+                                  {isCorrect ? "Chính xác ✓" : `Sai ✗ (Bạn chọn: ${userAns || "Bỏ qua"})`}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-800 font-medium mb-2">{q.questionText}</p>
+
+                              <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 space-y-1">
+                                <p className="font-semibold text-blue-700">
+                                  Đáp án đúng: <span className="font-bold">{q.correctAnswer}</span> - {q.options[q.correctAnswer]}
+                                </p>
+                                <p className="text-slate-600">
+                                  <span className="font-bold text-slate-700">Giải thích:</span> {q.explanation}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setExamModalTest(null)}
+                        className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition cursor-pointer"
+                      >
+                        Đóng và quay về danh sách đề
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+{/* ======================================================== */}
       {examModalTest && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
           <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
@@ -1581,256 +2552,342 @@ export default function MockTestsPage() {
       )}
 
       {/* ======================================================== */}
-      {/* 2. MODAL LUYỆN TẬP (PRACTICE MODE MODAL) */}
+      {/* 2. MODAL LUYỆN TẬP (DUAL-PANE PRACTICE MODAL MATCHING IMAGE 2) */}
       {/* ======================================================== */}
-      {practiceModalTest && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
-            {/* Header Modal */}
-            <div className="bg-gradient-to-r from-blue-600 to-sky-600 text-white p-4 sm:p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base sm:text-lg">
-                    Chế độ luyện tập: {practiceModalTest.title}
-                  </h3>
-                  <p className="text-xs text-blue-100">
-                    Nghe chép chính tả, đọc song ngữ Anh–Việt và xem dẫn chứng chi tiết
-                  </p>
-                </div>
-              </div>
+      {practiceModalTest && (() => {
+        const currentQ = filteredPracticeQuestions[practiceCurrentQIndex] || filteredPracticeQuestions[0];
+        const qPart = currentQ ? currentQ.part : "Part 1";
+        const chosenOpt = currentQ ? practiceAnswers[currentQ.id] : undefined;
+        const isChecked = currentQ ? !!practiceChecked[currentQ.id] : false;
 
-              <button
-                type="button"
-                onClick={() => setPracticeModalTest(null)}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Thanh chọn Part & Chế độ học đặc biệt */}
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              {/* Lọc Part */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {["ALL", "Part 1", "Part 2", "Part 3", "Part 5", "Part 6", "Part 7"].map((p) => (
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white rounded-3xl w-full max-w-7xl h-[95vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+              
+              {/* --- TOP HEADER BAR --- */}
+              <header className="h-16 bg-blue-600 text-white px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-md">
+                <div className="flex items-center gap-3">
                   <button
-                    key={p}
                     type="button"
-                    onClick={() => setPracticePartFilter(p)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
-                      practicePartFilter === p
-                        ? "bg-blue-600 text-white shadow-xs"
-                        : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
+                    onClick={() => setPracticeModalTest(null)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Thoát</span>
+                  </button>
+
+                  <span className="inline-block px-4 py-1.5 rounded-full bg-blue-700/90 border border-blue-400/40 text-white text-xs font-extrabold tracking-wide">
+                    {practiceModalTest.title} • {practicePartFilter === "ALL" ? "7 Part" : practicePartFilter}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowBilingualPassage(!showBilingualPassage)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      showBilingualPassage
+                        ? "bg-amber-400 text-slate-900 shadow-xs"
+                        : "bg-white/15 hover:bg-white/25 text-white"
                     }`}
                   >
-                    {p}
+                    <Languages className="w-3.5 h-3.5" />
+                    <span>Song ngữ</span>
                   </button>
-                ))}
-              </div>
 
-              {/* Tùy chọn học thông minh */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBilingualPassage(!showBilingualPassage)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                    showBilingualPassage
-                      ? "bg-indigo-600 text-white shadow-xs"
-                      : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  <Languages className="w-3.5 h-3.5" />
-                  Đọc song ngữ Anh–Việt
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowEvidence(!showEvidence)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                    showEvidence
-                      ? "bg-amber-600 text-white shadow-xs"
-                      : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  Xem dẫn chứng
-                </button>
-              </div>
-            </div>
-
-            {/* Danh sách câu hỏi luyện tập */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              {filteredPracticeQuestions.map((q) => {
-                const isChecked = !!practiceChecked[q.id];
-                const selectedOpt = practiceAnswers[q.id];
-                const isCorrect = selectedOpt === q.correctAnswer;
-
-                return (
-                  <div
-                    key={q.id}
-                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4 hover:border-blue-200 transition"
+                  <button
+                    type="button"
+                    onClick={() => triggerToast("Tính năng Ghi chú cá nhân")}
+                    className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    {/* Header câu hỏi */}
-                    <div className="flex items-center justify-between">
-                      <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
-                        {q.part} • Câu {q.id}
-                      </span>
+                    <FileText className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Ghi chú</span>
+                  </button>
 
-                      {q.transcript && (
-                        <span className="text-[11px] font-semibold text-slate-400">
-                          Kèm Lời thoại & Bản dịch
-                        </span>
-                      )}
+                  <button
+                    type="button"
+                    onClick={() => triggerToast("Tính năng Annotator")}
+                    className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Annotator</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white transition cursor-pointer"
+                  >
+                    <Bell className="w-4 h-4" />
+                  </button>
+
+                  <span className="font-mono text-xs font-bold bg-white/15 px-3 py-1 rounded-lg">
+                    ⏱ 00:02
+                  </span>
+
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500 text-white text-xs font-black shadow-2xs">
+                    ✓ {Object.keys(practiceChecked).length}/{filteredPracticeQuestions.length}
+                  </span>
+
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-800 text-white text-xs font-bold shadow-2xs font-mono">
+                    Câu {practiceCurrentQIndex + 1}/{filteredPracticeQuestions.length}
+                  </span>
+                </div>
+              </header>
+
+              {/* --- MAIN DUAL PANE PRACTICE AREA --- */}
+              <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+                
+                {/* LEFT PANE: INSTRUCTION & CONTENT */}
+                <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      Yêu cầu bài tập (Instruction)
                     </div>
 
-                    {/* Hình ảnh (Part 1) */}
-                    {q.imageUrl && (
-                      <div className="rounded-xl overflow-hidden border border-slate-200 max-w-sm shadow-xs">
-                        <img src={q.imageUrl} alt="Part 1" className="w-full h-48 object-cover" />
-                      </div>
-                    )}
+                    <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
+                      {(() => {
+                        if (qPart === "Part 1") return "Listen to the audio and select the best statement describing the photograph.";
+                        if (qPart === "Part 2") return "Listen to the question and select the best response.";
+                        if (qPart === "Part 3") return "Listen to the conversation and answer the questions below.";
+                        if (qPart === "Part 4") return "Listen to the talk and answer the questions below.";
+                        if (qPart === "Part 5") return "Select the best answer to complete the sentence.";
+                        if (qPart === "Part 6" || qPart === "Part 7") return "Read the passage and answer the questions.";
+                        return "Select the best answer to complete the question.";
+                      })()}
+                    </h2>
 
-                    {/* Đoạn văn (Part 6, Part 7) */}
-                    {q.passage && (
-                      <div className="space-y-2">
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-mono whitespace-pre-line text-slate-800 leading-relaxed">
-                          {q.passage}
+                    {/* Passage text for Part 6 & Part 7 */}
+                    {currentQ && currentQ.passage && (
+                      <div className="space-y-3">
+                        <div className="bg-white rounded-2xl border border-slate-200 p-4 text-xs font-mono whitespace-pre-line text-slate-800 leading-relaxed shadow-xs">
+                          {currentQ.passage}
                         </div>
 
-                        {/* Song ngữ Anh - Việt */}
-                        {showBilingualPassage && q.bilingualPassage && (
-                          <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 text-xs text-indigo-950 whitespace-pre-line leading-relaxed">
+                        {showBilingualPassage && currentQ.bilingualPassage && (
+                          <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 text-xs text-indigo-950 whitespace-pre-line leading-relaxed shadow-xs">
                             <p className="font-bold text-indigo-700 mb-1 flex items-center gap-1.5">
                               <Languages className="w-3.5 h-3.5" /> Bản dịch song ngữ tiếng Việt:
                             </p>
-                            {q.bilingualPassage}
-                          </div>
-                        )}
-
-                        {/* Dẫn chứng đáp án */}
-                        {showEvidence && q.evidence && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed flex items-start gap-2">
-                            <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                            <div>
-                              <p className="font-bold text-amber-800">Dẫn chứng câu trả lời trong bài:</p>
-                              <p className="italic">&quot;{q.evidence}&quot;</p>
-                            </div>
+                            {currentQ.bilingualPassage}
                           </div>
                         )}
                       </div>
                     )}
 
-                    {/* Audio Player cho bài nghe */}
-                    {q.audioUrl && (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
+                    {/* Photograph Image for Part 1 */}
+                    {currentQ && currentQ.imageUrl && (
+                      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
+                        <img
+                          src={currentQ.imageUrl}
+                          alt="Photograph"
+                          className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
+                        />
+                      </div>
+                    )}
+
+                    {/* Audio player for listening parts */}
+                    {currentQ && currentQ.audioUrl && (
+                      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between gap-3">
                           <button
                             type="button"
                             onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                            className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition cursor-pointer"
+                            className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shrink-0 cursor-pointer"
                           >
-                            {isPlayingAudio ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+                            {isPlayingAudio ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
                           </button>
-                          <span className="text-xs font-semibold text-slate-700">Nghe đoạn audio</span>
-                        </div>
-
-                        {/* Chế độ chép chính tả */}
-                        <div className="flex-1 max-w-sm">
-                          <input
-                            type="text"
-                            placeholder="Gõ chính tả những gì bạn nghe được..."
-                            value={dictationInput[q.id] || ""}
-                            onChange={(e) => setDictationInput({ ...dictationInput, [q.id]: e.target.value })}
-                            className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-500"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Nội dung câu hỏi */}
-                    <p className="text-sm font-bold text-slate-900">{q.questionText}</p>
-
-                    {/* Lựa chọn trắc nghiệm */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {Object.entries(q.options).map(([optKey, optVal]) => {
-                        const isChosen = selectedOpt === optKey;
-                        const isRightKey = optKey === q.correctAnswer;
-
-                        let style = "bg-white border-slate-200 hover:bg-slate-50 text-slate-800";
-                        if (isChecked) {
-                          if (isRightKey) style = "bg-emerald-50 border-emerald-500 text-emerald-900 font-bold ring-2 ring-emerald-500/20";
-                          else if (isChosen) style = "bg-rose-50 border-rose-400 text-rose-900";
-                        } else if (isChosen) {
-                          style = "bg-blue-50 border-blue-600 text-blue-900 ring-1 ring-blue-500/30";
-                        }
-
-                        return (
-                          <button
-                            key={optKey}
-                            type="button"
-                            onClick={() => {
-                              if (!isChecked) {
-                                setPracticeAnswers({ ...practiceAnswers, [q.id]: optKey });
-                              }
-                            }}
-                            className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition cursor-pointer ${style}`}
-                          >
-                            <span className="w-6 h-6 rounded-md bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0">
-                              {optKey}
-                            </span>
-                            <span className="text-xs leading-relaxed">{optVal}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Nút Kiểm tra đáp án & Giải thích ngay */}
-                    {!isChecked ? (
-                      <button
-                        type="button"
-                        disabled={!selectedOpt}
-                        onClick={() => setPracticeChecked({ ...practiceChecked, [q.id]: true })}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Kiểm tra kết quả
-                      </button>
-                    ) : (
-                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-2">
-                        <div className="flex items-center gap-2 text-xs font-bold">
-                          {isCorrect ? (
-                            <span className="text-emerald-600 flex items-center gap-1">
-                              <CheckCircle2 className="w-4 h-4" /> Chính xác! Tuyệt vời.
-                            </span>
-                          ) : (
-                            <span className="text-rose-600 flex items-center gap-1">
-                              <X className="w-4 h-4" /> Chưa chính xác. Đáp án đúng là {q.correctAnswer}.
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-slate-700 leading-relaxed">
-                          <span className="font-bold text-slate-900">Giải thích AI:</span> {q.explanation}
-                        </p>
-
-                        {q.transcript && (
-                          <div className="pt-2 border-t border-slate-200/80 text-xs text-slate-600 space-y-1">
-                            <p className="font-bold text-slate-800">Lời thoại (Transcript):</p>
-                            <p className="italic text-slate-700">{q.transcript}</p>
-                            <p className="text-slate-500 font-sans">{q.translation}</p>
+                          
+                          <div className="flex-1 flex items-center gap-1 h-9 px-3 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                            {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50, 30, 70, 85, 40].map((h, i) => (
+                              <div
+                                key={i}
+                                className={`flex-1 rounded-full transition-all duration-300 ${
+                                  isPlayingAudio ? "bg-blue-600 animate-pulse" : "bg-slate-300"
+                                }`}
+                                style={{ height: `${isPlayingAudio ? Math.max(20, (h * (i % 3 + 1)) % 100) : h}%` }}
+                              />
+                            ))}
                           </div>
-                        )}
+
+                          <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
+                            00:00 / 00:00
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
+                </div>
+
+                {/* RIGHT PANE: QUESTION & OPTIONS */}
+                <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+                  {currentQ && (
+                    <div className="space-y-5">
+                      <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
+                            {currentQ.part} • Nhập môn
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => triggerToast("Trợ lý AI đang sẵn sàng giải đáp câu hỏi của bạn!")}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
+                            >
+                              <HelpCircle className="w-3.5 h-3.5" />
+                              <span>Hỏi bài</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="w-8 h-8 rounded-full border border-slate-200 text-slate-400 hover:text-amber-500 hover:bg-amber-50 flex items-center justify-center transition cursor-pointer"
+                            >
+                              <Star className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="text-base font-extrabold text-slate-900 leading-relaxed">
+                          {currentQ.id}. {currentQ.questionText}
+                        </div>
+
+                        {/* OPTIONS LIST */}
+                        <div className="space-y-3">
+                          {Object.entries(currentQ.options).map(([optKey, optVal]) => {
+                            const isChosen = chosenOpt === optKey;
+                            const isRight = optKey === currentQ.correctAnswer;
+                            const isPart1or2 = currentQ.part === "Part 1" || currentQ.part === "Part 2";
+
+                            if (currentQ.part === "Part 2" && optKey === "D") return null;
+
+                            let cardStyle = "bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800";
+                            let iconNode = (
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0">
+                                {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                              </div>
+                            );
+                            let textColor = "text-slate-900";
+
+                            if (isChecked) {
+                              if (isRight) {
+                                cardStyle = "bg-emerald-50/90 border-emerald-500 text-emerald-950 font-bold ring-2 ring-emerald-500/20";
+                                textColor = "text-emerald-700 font-bold";
+                                iconNode = (
+                                  <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-xs font-black">
+                                    ✓
+                                  </div>
+                                );
+                              } else if (isChosen) {
+                                cardStyle = "bg-rose-50/90 border-rose-400 text-rose-950 font-bold ring-2 ring-rose-400/20";
+                                textColor = "text-rose-700 font-bold";
+                                iconNode = (
+                                  <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 text-xs font-black">
+                                    ✕
+                                  </div>
+                                );
+                              }
+                            }
+
+                            return (
+                              <div
+                                key={optKey}
+                                onClick={() => {
+                                  if (isChecked) return;
+                                  if (isSfxEnabled) {
+                                    if (optKey === currentQ.correctAnswer) playSfx("correct");
+                                    else playSfx("wrong");
+                                  }
+                                  setPracticeAnswers({ ...practiceAnswers, [currentQ.id]: optKey });
+                                  setPracticeChecked({ ...practiceChecked, [currentQ.id]: true });
+                                }}
+                                className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {iconNode}
+                                  <span className={`text-sm ${textColor}`}>
+                                    {isPart1or2 ? `(${optKey})` : `(${optKey}) ${optVal}`}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Explanation container when checked */}
+                      {isChecked && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
+                          <p className="font-bold text-slate-900">Giải thích AI:</p>
+                          <p className="text-slate-700 leading-relaxed">{currentQ.explanation}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* --- BOTTOM NAVIGATION BAR --- */}
+              <footer className="h-14 bg-white border-t border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                  >
+                    <Flag className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Báo lỗi</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition cursor-pointer"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Giỏ từ (0)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                  >
+                    <Search className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Tra từ</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={practiceCurrentQIndex === 0}
+                    onClick={() => setPracticeCurrentQIndex((prev) => Math.max(0, prev - 1))}
+                    className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-xs cursor-pointer"
+                  >
+                    <Grid className="w-4 h-4" />
+                    <span>{practiceCurrentQIndex + 1}/{filteredPracticeQuestions.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={practiceCurrentQIndex === filteredPracticeQuestions.length - 1}
+                    onClick={() => setPracticeCurrentQIndex((prev) => Math.min(filteredPracticeQuestions.length - 1, prev + 1))}
+                    className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </footer>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      
 
       {/* ======================================================== */}
       {/* 3. MODAL XÓA LỊCH SỬ THI (DELETE MODAL) */}

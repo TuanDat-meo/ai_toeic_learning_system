@@ -25,6 +25,7 @@ interface WordItem {
   partOfSpeech: string;
   meaning: string;
   example: string;
+  exampleMeaning?: string;
   level: string;
   starred?: boolean;
 }
@@ -46,6 +47,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Verb",
     meaning: "Đàm phán, thương lượng hợp đồng hoặc thỏa thuận thương mại",
     example: "The executive team successfully negotiated a lucrative distribution agreement.",
+    exampleMeaning: "Ban điều hành đã thương lượng thành công một thỏa thuận phân phối có lợi nhuận cao.",
     level: "B2",
     starred: true,
   },
@@ -56,6 +58,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Noun",
     meaning: "Hóa đơn thanh toán hàng hóa hoặc dịch vụ",
     example: "All invoices must be submitted to the finance department by the end of each month.",
+    exampleMeaning: "Tất cả hóa đơn phải được nộp cho bộ phận tài chính vào cuối mỗi tháng.",
     level: "B1",
   },
   {
@@ -65,6 +68,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Verb",
     meaning: "Triển khai, thực thi chính sách hoặc quy trình mới",
     example: "We plan to implement the revised safety protocol starting next Monday.",
+    exampleMeaning: "Chúng tôi dự định thực thi quy trình an toàn đã sửa đổi bắt đầu từ thứ Hai tuần tới.",
     level: "B2",
   },
   {
@@ -74,6 +78,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Noun",
     meaning: "Lịch trình chi tiết chuyến đi công tác hoặc hội nghị",
     example: "The corporate travel coordinator emailed the complete flight itinerary to the delegate.",
+    exampleMeaning: "Điều phối viên du lịch công ty đã gửi email lịch trình chuyến bay đầy đủ cho đại biểu.",
     level: "B1",
   },
   {
@@ -83,6 +88,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Noun",
     meaning: "Phiếu bảo hành hoặc cam kết chất lượng sản phẩm",
     example: "The commercial air conditioner is covered by an extensive three-year warranty.",
+    exampleMeaning: "Máy điều hòa thương mại được bảo hành toàn diện trong vòng ba năm.",
     level: "B1",
     starred: true,
   },
@@ -93,6 +99,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Verb",
     meaning: "Hợp tác, cùng làm việc trong dự án",
     example: "Engineers from both branches collaborated on developing the AI engine.",
+    exampleMeaning: "Các kỹ sư từ cả hai chi nhánh đã hợp tác phát triển động cơ AI.",
     level: "B2",
   },
   {
@@ -102,6 +109,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Noun",
     meaning: "Tổng doanh thu, nguồn thu nhập doanh nghiệp",
     example: "Online marketing efforts resulted in a 25% increase in total quarterly revenue.",
+    exampleMeaning: "Các nỗ lực tiếp thị trực tuyến đã mang lại mức tăng 25% tổng doanh thu hàng quý.",
     level: "B2",
   },
   {
@@ -111,6 +119,7 @@ const SAMPLE_WORDS: WordItem[] = [
     partOfSpeech: "Verb",
     meaning: "Tuyển dụng nhân sự mới cho cơ quan tổ chức",
     example: "The human resources manager hopes to recruit talented front-end developers.",
+    exampleMeaning: "Trưởng phòng nhân sự hy vọng tuyển dụng được các lập trình viên front-end tài năng.",
     level: "B1",
   },
 ];
@@ -382,58 +391,60 @@ export default function VocabularyLearningPage() {
       </div>
 
       {/* KHỐI 2: THANH TAB CHUYỂN CHẾ ĐỘ CHÍNH */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-200/60 rounded-full w-fit">
-        <button
-          type="button"
-          onClick={() => setActiveMainTab("study")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
-            activeMainTab === "study"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <Book className="w-4 h-4" />
-          Học
-        </button>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 border border-slate-200/80 rounded-2xl max-w-full overflow-x-auto no-scrollbar shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setActiveMainTab("study")}
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+              activeMainTab === "study"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
+            }`}
+          >
+            <Book className="w-4 h-4" />
+            Học
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveMainTab("progress")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
-            activeMainTab === "progress"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          Tiến độ
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveMainTab("progress")}
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+              activeMainTab === "progress"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            Tiến độ
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveMainTab("my_words")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
-            activeMainTab === "my_words"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <Star className="w-4 h-4" />
-          Từ vựng của tôi
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveMainTab("my_words")}
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+              activeMainTab === "my_words"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
+            }`}
+          >
+            <Star className="w-4 h-4" />
+            Từ vựng của tôi
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveMainTab("algorithm")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
-            activeMainTab === "algorithm"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-          }`}
-        >
-          <Brain className="w-4 h-4" />
-          Thuật toán học từ
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveMainTab("algorithm")}
+            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+              activeMainTab === "algorithm"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
+            }`}
+          >
+            <Brain className="w-4 h-4" />
+            Thuật toán học từ
+          </button>
+        </div>
       </div>
 
       {/* --- TAB 1: HỌC (DANH SÁCH BỘ ĐỀ / TEST CARDS) --- */}
@@ -770,6 +781,9 @@ export default function VocabularyLearningPage() {
                     </div>
                     <p className="text-xs font-semibold text-slate-800">{w.meaning}</p>
                     <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{w.example}&quot;</p>
+                    {w.exampleMeaning && (
+                      <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
@@ -895,9 +909,16 @@ export default function VocabularyLearningPage() {
                         <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                           Ví dụ ngữ cảnh TOEIC:
                         </span>
-                        <p className="text-xs text-slate-800 leading-relaxed mt-1 bg-white/90 p-3 rounded-xl border border-blue-100 shadow-2xs font-medium italic">
-                          &quot;{currentWord.example}&quot;
-                        </p>
+                        <div className="mt-1 bg-white/90 p-3 rounded-xl border border-blue-100 shadow-2xs space-y-1.5">
+                          <p className="text-xs text-slate-800 leading-relaxed font-medium italic">
+                            &quot;{currentWord.example}&quot;
+                          </p>
+                          {currentWord.exampleMeaning && (
+                            <p className="text-xs text-blue-700 leading-relaxed font-semibold border-t border-slate-100 pt-1.5">
+                              👉 {currentWord.exampleMeaning}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <p className="text-center text-xs text-slate-400 pt-1 font-medium">
                         👆 Chạm để lật lại từ tiếng Anh

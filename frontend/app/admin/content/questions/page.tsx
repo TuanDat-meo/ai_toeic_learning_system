@@ -787,8 +787,8 @@ export default function AdminQuestionsPage() {
       </div>
 
       {/* KHỐI 2: THANH TAB CHUYỂN NHANH THEO CÁC PART VÀ CỤM NÚT THAO TÁC */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-200/60 rounded-full w-fit">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 border border-slate-200/80 rounded-2xl max-w-full overflow-x-auto no-scrollbar shadow-2xs">
           {DEFAULT_PARTS.map((p) => {
             const isActive = selectedPartTab === p.part;
             const countInPart =
@@ -804,17 +804,19 @@ export default function AdminQuestionsPage() {
                   setSelectedPartTab(p.part);
                   setCurrentPage(1);
                 }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                className={`group flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/80 active:bg-slate-200/60"
                 }`}
                 title={p.desc}
               >
                 <span>{p.label}</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    isActive ? "bg-white/20 text-white" : "bg-slate-300/80 text-slate-700"
+                  className={`text-[11px] px-2 py-0.5 rounded-full font-bold transition-colors ${
+                    isActive
+                      ? "bg-white/20 text-white border border-white/20"
+                      : "bg-slate-200/90 text-slate-700 group-hover:bg-slate-300/80"
                   }`}
                 >
                   {countInPart}
