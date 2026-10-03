@@ -87,6 +87,40 @@ const INITIAL_CARDS: ExerciseCardData[] = [
     },
     sampleQuestions: [
       {
+        questionNum: "113",
+        question: "Mr. Olivero praised the film in his review, even though he ------- disliked its aesthetic style.",
+        bilingual: "Ông Olivero đã khen ngợi bộ phim trong bài đánh giá của mình, mặc dù đích thân ông không thích phong cách thẩm mỹ của nó.",
+        options: ["personal", "personally", "personals", "person"],
+        optionMeanings: [
+          "(adj): cá nhân",
+          "(adv): đích thân / về mặt cá nhân",
+          "(n-plural): tin nhắn cá nhân",
+          "(n): người"
+        ],
+        correctIndex: 1,
+        explanation: "Trạng từ 'personally' bổ nghĩa cho động từ 'disliked'.",
+        steps: [
+          {
+            title: "Bước 1: Xác định vị trí từ loại trong câu",
+            desc: "Chủ ngữ 'he' + [Trạng từ] + Động từ 'disliked'."
+          },
+          {
+            title: "Bước 2: Phân tích chọn đuôi từ loại",
+            desc: "Bổ nghĩa cho động từ thường 'disliked' cần một trạng từ chỉ cách thức tận cùng bằng -ly ('personally')."
+          },
+          {
+            title: "Bước 3: Chọn đáp án",
+            desc: "Chọn (B) personally (đích thân / về phần cá nhân)."
+          }
+        ],
+        vocabList: [
+          { word: "praise", pos: "v", level: "B2", ipa: "/preɪz/", meaning: "khen ngợi" },
+          { word: "personally", pos: "adv", level: "B1", ipa: "/ˈpɜːrsənəli/", meaning: "đích thân, về phần cá nhân" },
+          { word: "dislike", pos: "v", level: "A2", ipa: "/dɪsˈlaɪk/", meaning: "không thích" },
+          { word: "aesthetic", pos: "adj", level: "C1", ipa: "/esˈθetɪk/", meaning: "thẩm mỹ" }
+        ]
+      },
+      {
         questionNum: "105",
         question: "------- of the garments will begin two weeks after the contract is signed.",
         bilingual: "Việc sản xuất hàng may mặc sẽ bắt đầu hai tuần sau khi hợp đồng được ký kết.",
@@ -110,7 +144,7 @@ const INITIAL_CARDS: ExerciseCardData[] = [
           },
           {
             title: "Bước 3: Chọn đáp án",
-            desc: "Xét nghĩa: thứ \"will begin two weeks after the contract is signed\" (sẽ bắt đầu hai tuần sau khi ký hợp đồng) là một hoạt động; loại \"Product\" (A) vì chỉ sản phẩm và \"Produce\" (B) vì là động từ, chọn danh từ \"Production\" (D) (việc sản xuất)."
+            desc: "Xét nghĩa: thứ \"will begin two weeks after the contract is signed\" là một hoạt động; loại \"Product\" (A) vì chỉ sản phẩm và \"Produce\" (B) vì là động từ, chọn danh từ \"Production\" (D) (việc sản xuất)."
           }
         ],
         vocabList: [
@@ -191,23 +225,6 @@ const INITIAL_CARDS: ExerciseCardData[] = [
         vocabList: [
           { word: "summary", pos: "n", level: "B2", ipa: "/ˈsʌməri/", meaning: "bản tóm tắt" },
           { word: "detailed", pos: "adj", level: "B1", ipa: "/ˈdiːteɪld/", meaning: "chi tiết" }
-        ]
-      },
-      {
-        questionNum: "102",
-        question: "The newly hired ______ will begin orientation on Monday morning.",
-        bilingual: "Thanh tra viên mới được tuyển dụng sẽ bắt đầu khóa định hướng vào sáng thứ Hai.",
-        options: ["inspect", "inspector", "inspects", "inspecting"],
-        optionMeanings: ["(v): kiểm tra", "(n): thanh tra viên", "(v-s): kiểm tra", "(v-ing): việc kiểm tra"],
-        correctIndex: 1,
-        explanation: "Cần danh từ chỉ người làm chủ ngữ cho động từ 'will begin'. 'Inspector' là đáp án đúng.",
-        steps: [
-          { title: "Bước 1: Phân tích vị trí chủ ngữ", desc: "The + trạng từ 'newly' + tính từ 'hired' + [Danh từ chỉ người]." },
-          { title: "Bước 2: Chọn đáp án", desc: "Inspector (thanh tra viên) là danh từ chỉ người phù hợp." }
-        ],
-        vocabList: [
-          { word: "inspector", pos: "n", level: "B2", ipa: "/ɪnˈspektər/", meaning: "thanh tra viên" },
-          { word: "orientation", pos: "n", level: "B2", ipa: "/ˌɔːriənˈteɪʃn/", meaning: "buổi định hướng" }
         ]
       }
     ]
@@ -673,13 +690,16 @@ export default function ReadingLearningPage() {
     setEnergyScore(0);
   };
 
-  // Submit Answer in Workspace
-  const handleCheckAnswer = () => {
-    if (selectedOption === null || !activePracticeCard) return;
+  // Option selection handler - Clicking an option checks the answer and reveals details!
+  const handleSelectOption = (idx: number) => {
+    if (isChecked) return;
+    setSelectedOption(idx);
     setIsChecked(true);
-    const q = activePracticeCard.sampleQuestions[currentQuestionIndex];
-    const isRight = selectedOption === q.correctIndex;
 
+    const q = activePracticeCard?.sampleQuestions[currentQuestionIndex];
+    if (!q) return;
+
+    const isRight = idx === q.correctIndex;
     if (isRight) {
       playSfx("correct");
       setSessionCorrectCount((prev) => prev + 1);
@@ -691,7 +711,7 @@ export default function ReadingLearningPage() {
 
     setCards((prev) =>
       prev.map((c) => {
-        if (c.id === activePracticeCard.id) {
+        if (c.id === activePracticeCard?.id) {
           return {
             ...c,
             studiedQuestions: c.studiedQuestions + 1,
@@ -934,44 +954,27 @@ export default function ReadingLearningPage() {
       <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col h-screen overflow-hidden font-sans text-slate-900 animate-in fade-in duration-150">
         {/* --- TOP HEADER BAR --- */}
         <header className="h-14 bg-[#1e60f0] text-white px-4 sm:px-6 flex items-center justify-between shadow-md shrink-0 select-none">
-          {/* Left Exit Button */}
-          <button
-            type="button"
-            onClick={() => {
-              playSfx("click");
-              setActivePracticeCard(null);
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Thoát</span>
-          </button>
+          {/* Left Exit Button & Title (NO Mascot Cat Image per user directive!) */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                playSfx("click");
+                setActivePracticeCard(null);
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Thoát</span>
+            </button>
 
-          {/* Center Topic Title (NO Mascot Cat Image per user directive!) */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center font-bold text-white shadow-xs">
-              <BookOpen className="w-4 h-4 text-white" />
-            </div>
             <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">
               {activePracticeCard.title}
             </h1>
           </div>
 
-          {/* Right Action Controls */}
+          {/* Right Action Controls: Song ngữ 👑 -> Ghi chú -> Annotator -> SFX -> Badges */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Annotator */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowAnnotatorModal(true);
-                playSfx("click");
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-800 hover:bg-slate-100 text-xs font-semibold shadow-xs transition-all cursor-pointer"
-            >
-              <Pencil className="w-3.5 h-3.5 text-blue-600" />
-              <span className="hidden md:inline">Annotator</span>
-            </button>
-
             {/* Song ngữ toggle */}
             <button
               type="button"
@@ -1001,6 +1004,19 @@ export default function ReadingLearningPage() {
             >
               <FileText className="w-3.5 h-3.5 text-blue-600" />
               <span className="hidden md:inline">Ghi chú</span>
+            </button>
+
+            {/* Annotator */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowAnnotatorModal(true);
+                playSfx("click");
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-800 hover:bg-slate-100 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden md:inline">Annotator</span>
             </button>
 
             {/* SFX Toggle */}
@@ -1051,7 +1067,6 @@ export default function ReadingLearningPage() {
                 Select the best answer to complete the sentence.
               </h2>
 
-              {/* Passage text if available (Part 6 / Part 7) */}
               {activePracticeCard.passageText && (
                 <div className="mt-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
@@ -1074,274 +1089,277 @@ export default function ReadingLearningPage() {
             </div>
           </div>
 
-          {/* RIGHT PANE: QUESTION, OPTIONS, EXPLANATION & VOCABULARY */}
+          {/* RIGHT PANE: QUESTION & OPTIONS */}
           <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
             <div className="space-y-5">
-              {/* Question Bar Header */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-block px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold tracking-wide shadow-2xs">
-                  {activePracticeCard.tag || "Lv.1"}
-                </span>
+              {/* Question Outer Card Container (Matches User Image 4 Border Frame) */}
+              <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
+                {/* Tag & Controls Header inside Card */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
+                    {activePracticeCard.tag || "Lv.1"}
+                  </span>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const key = `${activePracticeCard.id}-${currentQuestionIndex}`;
-                      const next = !bookmarkedQuestions[key];
-                      setBookmarkedQuestions((prev) => ({ ...prev, [key]: next }));
-                      showToast(next ? "Đã đánh dấu sao câu hỏi này! 🌟" : "Đã bỏ đánh dấu sao câu hỏi");
-                    }}
-                    className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all cursor-pointer ${
-                      isQuestionBookmarked
-                        ? "border-amber-300 bg-amber-50 text-amber-500"
-                        : "border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                    }`}
-                    title="Đánh dấu câu hỏi"
-                  >
-                    <Star className={`w-4 h-4 ${isQuestionBookmarked ? "fill-amber-400 text-amber-500" : ""}`} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowHelpModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Hỏi bài</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowHelpModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
-                  >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    <span>Hỏi bài</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Main Question Box */}
-              <div className="p-5 rounded-2xl bg-blue-50/40 border border-blue-200/80 space-y-3">
-                <p className="text-base font-bold text-slate-900 leading-relaxed font-sans">
-                  {q.questionNum ? `${q.questionNum}. ` : ""}{q.question}
-                </p>
-
-                {/* Bilingual Translation line */}
-                {isBilingual && q.bilingual && (
-                  <div className="border-l-3 border-blue-500 pl-3 py-1 text-sm font-semibold text-blue-800 bg-blue-100/50 rounded-r-lg">
-                    {q.bilingual}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const key = `${activePracticeCard.id}-${currentQuestionIndex}`;
+                        const next = !bookmarkedQuestions[key];
+                        setBookmarkedQuestions((prev) => ({ ...prev, [key]: next }));
+                        showToast(next ? "Đã đánh dấu sao câu hỏi này! 🌟" : "Đã bỏ đánh dấu sao câu hỏi");
+                      }}
+                      className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all cursor-pointer ${
+                        isQuestionBookmarked
+                          ? "border-amber-300 bg-amber-50 text-amber-500"
+                          : "border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                      }`}
+                      title="Đánh dấu câu hỏi"
+                    >
+                      <Star className={`w-4 h-4 ${isQuestionBookmarked ? "fill-amber-400 text-amber-500" : ""}`} />
+                    </button>
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* 4 Option Cards (A, B, C, D) */}
-              <div className="space-y-3">
-                {q.options.map((opt, idx) => {
-                  const letter = ["A", "B", "C", "D"][idx];
-                  const isSelected = selectedOption === idx;
-                  const isCorrect = idx === q.correctIndex;
-                  const meaning = q.optionMeanings?.[idx];
+                {/* Main Question Sentence */}
+                <div className="space-y-3">
+                  <p className="text-base font-bold text-slate-900 leading-relaxed font-sans">
+                    {q.questionNum ? `${q.questionNum}. ` : ""}{q.question}
+                  </p>
 
-                  let cardStyle = "border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/30 text-slate-800";
-                  let circleIcon = null;
+                  {/* Bilingual Translation line (shown when answered OR when isBilingual enabled after check) */}
+                  {isChecked && isBilingual && q.bilingual && (
+                    <div className="border-l-3 border-blue-500 pl-3 py-1.5 text-sm font-semibold text-blue-800 bg-blue-50 rounded-r-xl animate-in fade-in duration-200">
+                      {q.bilingual}
+                    </div>
+                  )}
+                </div>
 
-                  if (isChecked) {
+                {/* 4 OPTION CARDS (A, B, C, D) */}
+                <div className="space-y-3 pt-1">
+                  {q.options.map((opt, idx) => {
+                    const letter = ["A", "B", "C", "D"][idx];
+                    const isSelected = selectedOption === idx;
+                    const isCorrect = idx === q.correctIndex;
+                    const meaning = q.optionMeanings?.[idx];
+
+                    // BEFORE ANSWERING (Image 4): Clean Radio Circle List
+                    if (!isChecked) {
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectOption(idx)}
+                          className="w-full p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-blue-400 hover:bg-blue-50/40 text-slate-800 text-left flex items-center gap-3.5 transition-all duration-150 cursor-pointer shadow-2xs group"
+                        >
+                          <div className="w-5 h-5 rounded-full border-2 border-slate-300 group-hover:border-blue-500 flex items-center justify-center shrink-0">
+                            <div className="w-2.5 h-2.5 rounded-full bg-transparent group-hover:bg-blue-500 transition-colors" />
+                          </div>
+                          <span className="text-sm font-semibold text-slate-800 font-sans">
+                            ({letter}) {opt}
+                          </span>
+                        </button>
+                      );
+                    }
+
+                    // AFTER ANSWERING (Images 1, 2, 3): Red (Wrong) / Green (Right) Result Cards
+                    let cardStyle = "border-slate-200 bg-white text-slate-700 opacity-70";
+                    let circleIcon = null;
+
                     if (isCorrect) {
                       cardStyle = "border-emerald-500 bg-emerald-50/90 text-emerald-950 font-bold ring-2 ring-emerald-500/20";
-                      circleIcon = <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />;
+                      circleIcon = <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />;
                     } else if (isSelected) {
                       cardStyle = "border-rose-400 bg-rose-50/90 text-rose-950 font-bold ring-2 ring-rose-400/20";
-                      circleIcon = <XCircle className="w-5 h-5 text-rose-500 shrink-0" />;
-                    } else {
-                      cardStyle = "border-slate-100 bg-slate-50 text-slate-400 opacity-60";
+                      circleIcon = <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />;
                     }
-                  } else if (isSelected) {
-                    cardStyle = "border-blue-600 bg-blue-50/80 text-blue-950 font-bold ring-2 ring-blue-500/20";
-                  }
 
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      disabled={isChecked}
-                      onClick={() => {
-                        setSelectedOption(idx);
-                        playSfx("click");
-                      }}
-                      className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all duration-150 cursor-pointer ${cardStyle}`}
-                    >
-                      {circleIcon ? (
-                        circleIcon
-                      ) : (
-                        <span
-                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 ${
-                            isSelected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
+                    return (
+                      <div
+                        key={idx}
+                        className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all duration-150 ${cardStyle}`}
+                      >
+                        {circleIcon ? (
+                          circleIcon
+                        ) : (
+                          <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5">
+                            ({letter})
+                          </span>
+                        )}
+
+                        <div className="flex-1">
+                          <span className="text-sm font-semibold">({letter}) {opt}</span>
+                          {isBilingual && meaning && (
+                            <div className="text-xs font-normal text-blue-700/90 mt-0.5 pl-0.5">
+                              {meaning}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* REVEALED SECTIONS AFTER ANSWERING (Images 2 & 3) */}
+              {isChecked && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  {/* Toggle 1: Giải thích chi tiết */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Giải thích chi tiết</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExplanation(!showExplanation)}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                          showExplanation ? "bg-blue-600" : "bg-slate-300"
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                            showExplanation ? "translate-x-5" : "translate-x-0"
                           }`}
-                        >
-                          ({letter})
-                        </span>
-                      )}
+                        />
+                      </button>
+                    </div>
 
-                      <div className="flex-1">
-                        <span className="text-sm font-semibold">{opt}</span>
-                        {isBilingual && meaning && (
-                          <div className="text-xs font-normal text-blue-700/90 mt-0.5">
-                            {meaning}
-                          </div>
+                    {showExplanation && (
+                      <div className="mt-2 p-4 rounded-2xl bg-blue-50/60 border border-blue-100 text-xs text-slate-800 space-y-2.5 animate-in fade-in duration-150">
+                        {q.steps && q.steps.length > 0 ? (
+                          q.steps.map((st, i) => (
+                            <div key={i} className="space-y-0.5">
+                              <p className="font-bold text-blue-900">{st.title}</p>
+                              <p className="text-slate-600 leading-relaxed pl-2 border-l-2 border-blue-300">
+                                {st.desc}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="leading-relaxed">{q.explanation}</p>
                         )}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Toggle 1: Giải thích chi tiết */}
-              <div className="pt-2">
-                <div className="flex items-center justify-between py-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Giải thích chi tiết</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowExplanation(!showExplanation)}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
-                      showExplanation ? "bg-blue-600" : "bg-slate-300"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        showExplanation ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {showExplanation && (
-                  <div className="mt-2 p-4 rounded-2xl bg-blue-50/60 border border-blue-100 text-xs text-slate-800 space-y-2.5 animate-in fade-in duration-150">
-                    {q.steps && q.steps.length > 0 ? (
-                      q.steps.map((st, i) => (
-                        <div key={i} className="space-y-0.5">
-                          <p className="font-bold text-blue-900">{st.title}</p>
-                          <p className="text-slate-600 leading-relaxed pl-2 border-l-2 border-blue-300">
-                            {st.desc}
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="leading-relaxed">{q.explanation}</p>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* Toggle 2: Từ vựng nên học */}
-              <div className="pt-2">
-                <div className="flex items-center justify-between py-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
-                    <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Từ vựng nên học</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowVocab(!showVocab)}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
-                      showVocab ? "bg-amber-500" : "bg-slate-300"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        showVocab ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {showVocab && q.vocabList && q.vocabList.length > 0 && (
-                  <div className="mt-2 p-4 rounded-2xl bg-[#fffdf5] border border-amber-200/90 space-y-3 animate-in fade-in duration-150">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-amber-900">{q.vocabList.length} từ vựng mới</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleAddAllWords(q.vocabList)}
-                          className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-all cursor-pointer shadow-2xs"
-                        >
-                          + Thêm tất cả ({q.vocabList.length})
-                        </button>
+                  {/* Toggle 2: Từ vựng nên học */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
+                        <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Từ vựng nên học</span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowVocab(!showVocab)}
+                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                          showVocab ? "bg-amber-500" : "bg-slate-300"
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                            showVocab ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
                     </div>
 
-                    <div className="space-y-2.5">
-                      {q.vocabList.map((vItem, vIdx) => {
-                        const isAdded = savedWords.includes(vItem.word);
-                        return (
-                          <div
-                            key={vIdx}
-                            className="p-3 rounded-xl bg-white border border-amber-100/80 flex items-center justify-between gap-3 shadow-2xs"
-                          >
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900 text-sm">{vItem.word}</span>
-                                <span className="text-xs italic text-slate-500">{vItem.pos}</span>
-                                <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-extrabold text-[10px]">
-                                  {vItem.level}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-slate-500">
-                                <span>{vItem.ipa}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => speakWord(vItem.word)}
-                                  className="text-blue-600 hover:text-blue-800 cursor-pointer"
-                                  title="Phát âm từ vựng"
-                                >
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <p className="text-xs font-semibold text-amber-900">{vItem.meaning}</p>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => showToast(`Đã gắn cờ từ "${vItem.word}" để xem lại!`)}
-                                className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors cursor-pointer"
-                                title="Gắn cờ"
-                              >
-                                <Flag className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleAddWordToBasket(vItem)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                  isAdded
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-                                }`}
-                              >
-                                {isAdded ? "✓ Đã thêm" : "+ Thêm"}
-                              </button>
-                            </div>
+                    {showVocab && q.vocabList && q.vocabList.length > 0 && (
+                      <div className="mt-2 p-4 rounded-2xl bg-[#fffdf5] border border-amber-200/90 space-y-3 animate-in fade-in duration-150">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-amber-900">{q.vocabList.length} từ vựng mới</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddAllWords(q.vocabList)}
+                              className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-all cursor-pointer shadow-2xs"
+                            >
+                              + Thêm tất cả ({q.vocabList.length})
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {q.vocabList.map((vItem, vIdx) => {
+                            const isAdded = savedWords.includes(vItem.word);
+                            return (
+                              <div
+                                key={vIdx}
+                                className="p-3 rounded-xl bg-white border border-amber-100/80 flex items-center justify-between gap-3 shadow-2xs"
+                              >
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900 text-sm">{vItem.word}</span>
+                                    <span className="text-xs italic text-slate-500">{vItem.pos}</span>
+                                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-extrabold text-[10px]">
+                                      {vItem.level}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                                    <span>{vItem.ipa}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => speakWord(vItem.word)}
+                                      className="text-blue-600 hover:text-blue-800 cursor-pointer"
+                                      title="Phát âm từ vựng"
+                                    >
+                                      <Volume2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <p className="text-xs font-semibold text-amber-900">{vItem.meaning}</p>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => showToast(`Đã gắn cờ từ "${vItem.word}" để xem lại!`)}
+                                    className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors cursor-pointer"
+                                    title="Gắn cờ"
+                                  >
+                                    <Flag className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddWordToBasket(vItem)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                      isAdded
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                                    }`}
+                                  >
+                                    {isAdded ? "✓ Đã thêm" : "+ Thêm"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* Bottom Actions Bar inside Practice Card */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-              <span className="text-xs font-bold text-slate-500">
-                Đúng: <strong className="text-emerald-600">{sessionCorrectCount}</strong> | Sai:{" "}
-                <strong className="text-rose-500">{sessionWrongCount}</strong>
-              </span>
+            {/* Bottom Next Question Action */}
+            {isChecked && (
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-slate-500">
+                  Đúng: <strong className="text-emerald-600">{sessionCorrectCount}</strong> | Sai:{" "}
+                  <strong className="text-rose-500">{sessionWrongCount}</strong>
+                </span>
 
-              {!isChecked ? (
-                <button
-                  type="button"
-                  disabled={selectedOption === null}
-                  onClick={handleCheckAnswer}
-                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all shadow-md cursor-pointer"
-                >
-                  Kiểm tra đáp án
-                </button>
-              ) : (
                 <button
                   type="button"
                   onClick={handleNextQuestion}
@@ -1350,8 +1368,8 @@ export default function ReadingLearningPage() {
                   {currentQuestionIndex < totalQ - 1 ? "Câu tiếp theo" : "Hoàn thành bài tập"}
                   <ChevronRight className="w-4 h-4" />
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
