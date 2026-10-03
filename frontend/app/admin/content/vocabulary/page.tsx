@@ -13,6 +13,9 @@ import {
   Brain,
   TrendingUp,
   Flame,
+  Plus,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 interface WordItem {
@@ -144,6 +147,37 @@ export default function VocabularyLearningPage() {
   const [activeMainTab, setActiveMainTab] = useState<"study" | "progress" | "my_words" | "algorithm">("study");
   const [activeSubCategory, setActiveSubCategory] = useState<"2026" | "600_essential" | "2023">("2026");
 
+  // Tests state (CRUD)
+  const [tests, setTests] = useState<TestItem[]>(INITIAL_TESTS);
+
+  // Toast state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Create / Edit Test Modal
+  const [showCreateTestModal, setShowCreateTestModal] = useState(false);
+  const [editingTest, setEditingTest] = useState<TestItem | null>(null);
+  const [testFormTitle, setTestFormTitle] = useState("");
+  const [testFormYear, setTestFormYear] = useState("2026");
+  const [testFormCategory, setTestFormCategory] = useState<"2026" | "600_essential" | "2023">("2026");
+
+  // Delete Test Modal
+  const [deleteTestConfirm, setDeleteTestConfirm] = useState<TestItem | null>(null);
+
+  // Word CRUD (inside wordListModalTest)
+  const [showAddWordModal, setShowAddWordModal] = useState(false);
+  const [editingWord, setEditingWord] = useState<WordItem | null>(null);
+  const [wordFormWord, setWordFormWord] = useState("");
+  const [wordFormIpa, setWordFormIpa] = useState("");
+  const [wordFormPos, setWordFormPos] = useState("Verb");
+  const [wordFormMeaning, setWordFormMeaning] = useState("");
+  const [wordFormExample, setWordFormExample] = useState("");
+  const [wordFormLevel, setWordFormLevel] = useState("B2");
+  const [deleteWordConfirm, setDeleteWordConfirm] = useState<WordItem | null>(null);
+
   // Modals state
   const [wordListModalTest, setWordListModalTest] = useState<TestItem | null>(null);
   const [flashcardModalTest, setFlashcardModalTest] = useState<TestItem | null>(null);
@@ -169,7 +203,7 @@ export default function VocabularyLearningPage() {
   };
 
   // Filtered test items
-  const currentTests = INITIAL_TESTS.filter((t) => t.category === activeSubCategory);
+  const currentTests = tests.filter((t) => t.category === activeSubCategory);
 
   // My Starred words
   const starredWords = SAMPLE_WORDS.filter((w) => w.starred);
@@ -188,6 +222,140 @@ export default function VocabularyLearningPage() {
     setGameScore(0);
     setGameSelectedOption(null);
     setGameAnswerChecked(false);
+  };
+
+  // Test CRUD Handlers
+  const handleOpenCreateTest = () => {
+    setTestFormTitle("");
+    setTestFormYear(activeSubCategory === "600_essential" ? "Essential" : activeSubCategory);
+    setTestFormCategory(activeSubCategory);
+    setShowCreateTestModal(true);
+  };
+
+  const handleSaveCreateTest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testFormTitle.trim()) {
+      alert("Vui lòng nhập tên bộ từ vựng!");
+      return;
+    }
+    const newTest: TestItem = {
+      id: `test-${Date.now()}`,
+      title: testFormTitle.trim(),
+      year: testFormYear.trim() || "2026",
+      category: testFormCategory,
+      wordCount: SAMPLE_WORDS.length,
+      words: [...SAMPLE_WORDS],
+    };
+    setTests((prev) => [newTest, ...prev]);
+    showToast(`Đã thêm bộ từ vựng "${newTest.title}" thành công! 🎉`);
+    setShowCreateTestModal(false);
+  };
+
+  const handleOpenEditTest = (test: TestItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingTest(test);
+    setTestFormTitle(test.title);
+    setTestFormYear(test.year);
+    setTestFormCategory(test.category);
+  };
+
+  const handleSaveEditTest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTest) return;
+    setTests((prev) =>
+      prev.map((t) =>
+        t.id === editingTest.id
+          ? { ...t, title: testFormTitle.trim() || t.title, year: testFormYear.trim() || t.year, category: testFormCategory }
+          : t
+      )
+    );
+    showToast(`Đã cập nhật bộ từ vựng "${testFormTitle}"! 💾`);
+    setEditingTest(null);
+  };
+
+  const handleConfirmDeleteTest = () => {
+    if (!deleteTestConfirm) return;
+    setTests((prev) => prev.filter((t) => t.id !== deleteTestConfirm.id));
+    showToast(`Đã xóa bộ từ vựng "${deleteTestConfirm.title}"! 🗑️`);
+    setDeleteTestConfirm(null);
+  };
+
+  // Word CRUD Handlers
+  const handleOpenAddWord = () => {
+    setEditingWord(null);
+    setWordFormWord("");
+    setWordFormIpa("");
+    setWordFormPos("Verb");
+    setWordFormMeaning("");
+    setWordFormExample("");
+    setWordFormLevel("B2");
+    setShowAddWordModal(true);
+  };
+
+  const handleOpenEditWord = (w: WordItem) => {
+    setEditingWord(w);
+    setWordFormWord(w.word);
+    setWordFormIpa(w.ipa);
+    setWordFormPos(w.partOfSpeech);
+    setWordFormMeaning(w.meaning);
+    setWordFormExample(w.example);
+    setWordFormLevel(w.level);
+    setShowAddWordModal(true);
+  };
+
+  const handleSaveWord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wordFormWord.trim() || !wordFormMeaning.trim()) {
+      alert("Vui lòng nhập từ vựng và nghĩa tiếng Việt!");
+      return;
+    }
+    if (!wordListModalTest) return;
+
+    if (editingWord) {
+      const updatedWords = wordListModalTest.words.map((w) =>
+        w.id === editingWord.id
+          ? {
+              ...w,
+              word: wordFormWord.trim(),
+              ipa: wordFormIpa.trim(),
+              partOfSpeech: wordFormPos,
+              meaning: wordFormMeaning.trim(),
+              example: wordFormExample.trim(),
+              level: wordFormLevel,
+            }
+          : w
+      );
+      const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+      setWordListModalTest(updatedTest);
+      setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+      showToast(`Đã cập nhật từ "${wordFormWord}"! 💾`);
+    } else {
+      const newWord: WordItem = {
+        id: `w-${Date.now()}`,
+        word: wordFormWord.trim(),
+        ipa: wordFormIpa.trim() || `/${wordFormWord.trim().toLowerCase()}/`,
+        partOfSpeech: wordFormPos,
+        meaning: wordFormMeaning.trim(),
+        example: wordFormExample.trim() || `Example with ${wordFormWord.trim()}`,
+        level: wordFormLevel,
+      };
+      const updatedWords = [newWord, ...wordListModalTest.words];
+      const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+      setWordListModalTest(updatedTest);
+      setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+      showToast(`Đã thêm từ "${newWord.word}" vào bộ từ vựng! 🎉`);
+    }
+    setShowAddWordModal(false);
+  };
+
+  const handleConfirmDeleteWord = () => {
+    if (!deleteWordConfirm || !wordListModalTest) return;
+    const updatedWords = wordListModalTest.words.filter((w) => w.id !== deleteWordConfirm.id);
+    const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+    setWordListModalTest(updatedTest);
+    setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+    showToast(`Đã xóa từ "${deleteWordConfirm.word}" khỏi bộ! 🗑️`);
+    setDeleteWordConfirm(null);
   };
 
   return (
@@ -271,42 +439,53 @@ export default function VocabularyLearningPage() {
       {/* --- TAB 1: HỌC (DANH SÁCH BỘ ĐỀ / TEST CARDS) --- */}
       {activeMainTab === "study" && (
         <div className="space-y-6 animate-in fade-in duration-150">
-          {/* Sub-filter tabs */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => setActiveSubCategory("2026")}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                activeSubCategory === "2026"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              2026 (10)
-            </button>
+          {/* Sub-filter tabs & Add Test button */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveSubCategory("2026")}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  activeSubCategory === "2026"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                2026 ({tests.filter((t) => t.category === "2026").length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveSubCategory("600_essential")}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  activeSubCategory === "600_essential"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                600 Essential Words ({tests.filter((t) => t.category === "600_essential").length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveSubCategory("2023")}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  activeSubCategory === "2023"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                2023 ({tests.filter((t) => t.category === "2023").length})
+              </button>
+            </div>
 
             <button
               type="button"
-              onClick={() => setActiveSubCategory("600_essential")}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                activeSubCategory === "600_essential"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
+              onClick={handleOpenCreateTest}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
             >
-              600 Essential Words (50)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSubCategory("2023")}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                activeSubCategory === "2023"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              2023 (10)
+              <Plus className="w-4 h-4" />
+              Thêm bộ từ vựng
             </button>
           </div>
 
@@ -315,18 +494,41 @@ export default function VocabularyLearningPage() {
             {currentTests.map((t) => (
               <div
                 key={t.id}
-                className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:shadow-md hover:border-blue-400 transition-all duration-200 flex flex-col justify-between min-h-[145px]"
+                className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:shadow-md hover:border-blue-400 transition-all duration-200 flex flex-col justify-between min-h-[155px]"
               >
-                <div>
-                  <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-600">
-                    {t.year}
-                  </span>
-                  <h3 className="text-base font-extrabold text-slate-900 mt-1.5 tracking-tight group-hover:text-blue-700 transition-colors">
-                    {t.title}
-                  </h3>
-                  <p className="text-xs font-medium text-slate-500 mt-0.5">
-                    {t.wordCount} từ vựng
-                  </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-600">
+                      {t.year}
+                    </span>
+                    <h3 className="text-base font-extrabold text-slate-900 mt-1.5 tracking-tight group-hover:text-blue-700 transition-colors">
+                      {t.title}
+                    </h3>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">
+                      {t.wordCount} từ vựng
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenEditTest(t, e)}
+                      className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                      title="Sửa bộ từ vựng"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTestConfirm(t);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                      title="Xóa bộ từ vựng"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* 3 Nút thao tác: Xem từ | Học | Chơi */}
@@ -525,19 +727,29 @@ export default function VocabularyLearningPage() {
               <X className="w-4 h-4" />
             </button>
 
-            <div>
-              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
-                Danh sách từ vựng
-              </span>
-              <h3 className="text-xl font-bold text-slate-900">
-                {wordListModalTest.title} ({wordListModalTest.wordCount} từ)
-              </h3>
+            <div className="flex items-center justify-between gap-4 pr-10">
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+                  Danh sách từ vựng
+                </span>
+                <h3 className="text-xl font-bold text-slate-900">
+                  {wordListModalTest.title} ({wordListModalTest.wordCount} từ)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenAddWord}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Thêm từ
+              </button>
             </div>
 
             <div className="divide-y divide-slate-100">
               {wordListModalTest.words.map((w, index) => (
                 <div key={w.id} className="py-3.5 flex items-start justify-between gap-3">
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-slate-900">
                         {index + 1}. {w.word}
@@ -559,9 +771,27 @@ export default function VocabularyLearningPage() {
                     <p className="text-xs font-semibold text-slate-800">{w.meaning}</p>
                     <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{w.example}&quot;</p>
                   </div>
-                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60 shrink-0">
-                    {w.level}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                      {w.level}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditWord(w)}
+                      className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                      title="Chỉnh sửa từ"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteWordConfirm(w)}
+                      className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                      title="Xóa từ"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -832,6 +1062,329 @@ export default function VocabularyLearningPage() {
               );
             })()}
           </div>
+        </div>
+      )}
+
+      {/* --- MODAL: THÊM BỘ TỪ VỰNG MỚI --- */}
+      {showCreateTestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-150">
+            <button
+              type="button"
+              onClick={() => setShowCreateTestModal(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div>
+              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Quản lý nội dung</span>
+              <h3 className="text-lg font-bold text-slate-900 mt-0.5">Thêm bộ từ vựng mới</h3>
+            </div>
+            <form onSubmit={handleSaveCreateTest} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên bộ từ vựng *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Test 5 (ETS 2026)"
+                  value={testFormTitle}
+                  onChange={(e) => setTestFormTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Nhãn / Năm</label>
+                  <input
+                    type="text"
+                    placeholder="2026"
+                    value={testFormYear}
+                    onChange={(e) => setTestFormYear(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại</label>
+                  <select
+                    value={testFormCategory}
+                    onChange={(e) => setTestFormCategory(e.target.value as "2026" | "600_essential" | "2023")}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                  >
+                    <option value="2026">ETS 2026</option>
+                    <option value="600_essential">600 Essential Words</option>
+                    <option value="2023">ETS 2023</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTestModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-all"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
+                >
+                  Tạo bộ từ vựng
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: SỬA BỘ TỪ VỰNG --- */}
+      {editingTest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-150">
+            <button
+              type="button"
+              onClick={() => setEditingTest(null)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div>
+              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Chỉnh sửa</span>
+              <h3 className="text-lg font-bold text-slate-900 mt-0.5">Sửa bộ từ vựng</h3>
+            </div>
+            <form onSubmit={handleSaveEditTest} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên bộ từ vựng *</label>
+                <input
+                  type="text"
+                  required
+                  value={testFormTitle}
+                  onChange={(e) => setTestFormTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Nhãn / Năm</label>
+                  <input
+                    type="text"
+                    value={testFormYear}
+                    onChange={(e) => setTestFormYear(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại</label>
+                  <select
+                    value={testFormCategory}
+                    onChange={(e) => setTestFormCategory(e.target.value as "2026" | "600_essential" | "2023")}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                  >
+                    <option value="2026">ETS 2026</option>
+                    <option value="600_essential">600 Essential Words</option>
+                    <option value="2023">ETS 2023</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingTest(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-all"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
+                >
+                  Lưu thay đổi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: XÁC NHẬN XÓA BỘ TỪ VỰNG --- */}
+      {deleteTestConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Xóa bộ từ vựng?</h3>
+              <p className="text-xs text-slate-500">
+                Bạn có chắc chắn muốn xóa bộ &quot;{deleteTestConfirm.title}&quot;? Toàn bộ từ vựng trong bộ này sẽ bị xóa khỏi hệ thống.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTestConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTest}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              >
+                Xóa ngay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: THÊM / SỬA TỪ VỰNG (WORD CRUD) --- */}
+      {showAddWordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setShowAddWordModal(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div>
+              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Từ vựng</span>
+              <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+                {editingWord ? "Chỉnh sửa từ vựng" : "Thêm từ vựng mới"}
+              </h3>
+            </div>
+            <form onSubmit={handleSaveWord} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Từ tiếng Anh *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: allocate"
+                  value={wordFormWord}
+                  onChange={(e) => setWordFormWord(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Phiên âm IPA</label>
+                  <input
+                    type="text"
+                    placeholder="/ˈæləkeɪt/"
+                    value={wordFormIpa}
+                    onChange={(e) => setWordFormIpa(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Từ loại</label>
+                  <select
+                    value={wordFormPos}
+                    onChange={(e) => setWordFormPos(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                  >
+                    <option value="Noun">Noun (Danh từ)</option>
+                    <option value="Verb">Verb (Động từ)</option>
+                    <option value="Adjective">Adjective (Tính từ)</option>
+                    <option value="Adverb">Adverb (Trạng từ)</option>
+                    <option value="Preposition">Preposition (Giới từ)</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Nghĩa tiếng Việt *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Phân bổ, chỉ định ngân sách hoặc nguồn lực"
+                  value={wordFormMeaning}
+                  onChange={(e) => setWordFormMeaning(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Ví dụ ngữ cảnh TOEIC</label>
+                <textarea
+                  rows={2}
+                  placeholder="The committee allocated funds for the new research laboratory."
+                  value={wordFormExample}
+                  onChange={(e) => setWordFormExample(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Cấp độ CEFR / TOEIC</label>
+                <select
+                  value={wordFormLevel}
+                  onChange={(e) => setWordFormLevel(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                >
+                  <option value="A2">A2 (300-400 TOEIC)</option>
+                  <option value="B1">B1 (450-600 TOEIC)</option>
+                  <option value="B2">B2 (650-800 TOEIC)</option>
+                  <option value="C1">C1 (850-990 TOEIC)</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddWordModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-all"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
+                >
+                  {editingWord ? "Cập nhật từ" : "Thêm vào danh sách"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: XÁC NHẬN XÓA TỪ VỰNG --- */}
+      {deleteWordConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Xóa từ vựng?</h3>
+              <p className="text-xs text-slate-500">
+                Bạn có chắc chắn muốn xóa từ &quot;{deleteWordConfirm.word}&quot; khỏi bộ từ vựng này?
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteWordConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteWord}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              >
+                Xóa ngay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- TOAST NOTIFICATION --- */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-xl border border-slate-700 text-sm font-semibold flex items-center gap-2 animate-in slide-in-from-bottom-5 duration-200">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          {toastMessage}
         </div>
       )}
     </div>

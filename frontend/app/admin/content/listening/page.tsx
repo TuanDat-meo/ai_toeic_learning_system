@@ -16,6 +16,8 @@ import {
   ShoppingBag,
   ChevronRight,
   Eye,
+  Plus,
+  Pencil,
 } from "lucide-react";
 
 // --- TYPES & INTERFACES ---
@@ -756,6 +758,197 @@ export default function ListeningPage() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioSpeed, setAudioSpeed] = useState<"0.8" | "1.0" | "1.2">("1.0");
 
+  // --- CRUD STATES FOR DICTATION CARDS ---
+  const [showDictationModal, setShowDictationModal] = useState(false);
+  const [editingDictationCard, setEditingDictationCard] = useState<DictationCardData | null>(null);
+  const [dictationFormTestNum, setDictationFormTestNum] = useState(1);
+  const [dictationFormPart, setDictationFormPart] = useState<"Part 1" | "Part 2" | "Part 3" | "Part 4">("Part 1");
+  const [dictationFormYear, setDictationFormYear] = useState<"2026" | "2024" | "2023" | "2022">("2026");
+  const [dictationFormQuestions, setDictationFormQuestions] = useState(24);
+  const [deleteDictationConfirm, setDeleteDictationConfirm] = useState<DictationCardData | null>(null);
+
+  // --- CRUD STATES FOR LEVEL / CATEGORY CARDS ---
+  const [showLevelModal, setShowLevelModal] = useState(false);
+  const [editingLevelCard, setEditingLevelCard] = useState<LevelCategoryCardData | null>(null);
+  const [levelFormPart, setLevelFormPart] = useState<"Part 1" | "Part 2" | "Part 3" | "Part 4">("Part 1");
+  const [levelFormType, setLevelFormType] = useState<"level" | "category">("level");
+  const [levelFormTitle, setLevelFormTitle] = useState("");
+  const [levelFormQuestions, setLevelFormQuestions] = useState(30);
+  const [levelFormTheory, setLevelFormTheory] = useState("");
+  const [levelFormRules, setLevelFormRules] = useState("");
+  const [deleteLevelConfirm, setDeleteLevelConfirm] = useState<LevelCategoryCardData | null>(null);
+
+  // Dictation CRUD Handlers
+  const handleOpenAddDictation = () => {
+    setEditingDictationCard(null);
+    setDictationFormTestNum(1);
+    setDictationFormPart("Part 1");
+    setDictationFormYear(selectedYear);
+    setDictationFormQuestions(24);
+    setShowDictationModal(true);
+  };
+
+  const handleOpenEditDictation = (card: DictationCardData, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingDictationCard(card);
+    setDictationFormTestNum(card.testNumber);
+    setDictationFormPart(card.part);
+    setDictationFormYear(card.year);
+    setDictationFormQuestions(card.totalQuestions);
+    setShowDictationModal(true);
+  };
+
+  const handleSaveDictation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingDictationCard) {
+      setDictationCards((prev) =>
+        prev.map((c) =>
+          c.id === editingDictationCard.id
+            ? {
+                ...c,
+                testNumber: dictationFormTestNum,
+                part: dictationFormPart,
+                year: dictationFormYear,
+                totalQuestions: dictationFormQuestions,
+              }
+            : c
+        )
+      );
+      triggerToast(`Đã cập nhật bài nghe ${dictationFormPart} - Test ${dictationFormTestNum}! 💾`);
+    } else {
+      const newCard: DictationCardData = {
+        id: `dict-${Date.now()}`,
+        testNumber: dictationFormTestNum,
+        part: dictationFormPart,
+        year: dictationFormYear,
+        totalQuestions: dictationFormQuestions,
+        completedQuestions: 0,
+        status: "Chưa bắt đầu",
+        notesCount: 0,
+        vocabItems: [],
+        questions: [...SAMPLE_DICTATION_QUESTIONS.slice(0, 2)],
+      };
+      setDictationCards((prev) => [newCard, ...prev]);
+      triggerToast(`Đã thêm bài nghe ${newCard.part} - Test ${newCard.testNumber}! 🎉`);
+    }
+    setShowDictationModal(false);
+  };
+
+  const handleConfirmDeleteDictationCard = () => {
+    if (!deleteDictationConfirm) return;
+    setDictationCards((prev) => prev.filter((c) => c.id !== deleteDictationConfirm.id));
+    triggerToast(`Đã xóa bài nghe ${deleteDictationConfirm.part} - Test ${deleteDictationConfirm.testNumber}! 🗑️`);
+    setDeleteDictationConfirm(null);
+  };
+
+  // Level / Category CRUD Handlers
+  const handleOpenAddLevel = (part: "Part 1" | "Part 2" | "Part 3" | "Part 4", type: "level" | "category" = "level") => {
+    setEditingLevelCard(null);
+    setLevelFormPart(part);
+    setLevelFormType(type);
+    setLevelFormTitle("");
+    setLevelFormQuestions(30);
+    setLevelFormTheory("");
+    setLevelFormRules("");
+    setShowLevelModal(true);
+  };
+
+  const handleOpenEditLevel = (card: LevelCategoryCardData, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingLevelCard(card);
+    setLevelFormPart(card.part);
+    setLevelFormType(card.type);
+    setLevelFormTitle(card.title);
+    setLevelFormQuestions(card.totalQuestions);
+    setLevelFormTheory(card.theorySummary);
+    setLevelFormRules(card.rules.join("\n"));
+    setShowLevelModal(true);
+  };
+
+  const handleSaveLevel = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!levelFormTitle.trim()) {
+      alert("Vui lòng nhập tên chủ điểm!");
+      return;
+    }
+    const rulesArray = levelFormRules
+      .split("\n")
+      .map((r) => r.trim())
+      .filter(Boolean);
+
+    const updateInList = (list: LevelCategoryCardData[]) =>
+      list.map((c) =>
+        c.id === editingLevelCard?.id
+          ? {
+              ...c,
+              title: levelFormTitle.trim(),
+              totalQuestions: levelFormQuestions,
+              theorySummary: levelFormTheory.trim(),
+              rules: rulesArray.length > 0 ? rulesArray : c.rules,
+            }
+          : c
+      );
+
+    if (editingLevelCard) {
+      if (editingLevelCard.part === "Part 1") {
+        if (editingLevelCard.type === "level") setPart1Levels(updateInList);
+        else setPart1Categories(updateInList);
+      } else if (editingLevelCard.part === "Part 2") {
+        setPart2Levels(updateInList);
+      } else if (editingLevelCard.part === "Part 3") {
+        setPart3Levels(updateInList);
+      } else if (editingLevelCard.part === "Part 4") {
+        setPart4Levels(updateInList);
+      }
+      triggerToast(`Đã cập nhật chủ điểm "${levelFormTitle}"! 💾`);
+    } else {
+      const newCard: LevelCategoryCardData = {
+        id: `lvl-${Date.now()}`,
+        part: levelFormPart,
+        type: levelFormType,
+        title: levelFormTitle.trim(),
+        totalQuestions: levelFormQuestions,
+        completedQuestions: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        status: "Chưa luyện tập",
+        theorySummary: levelFormTheory.trim() || "Chủ điểm luyện nghe chuyên sâu với phương pháp làm bài chi tiết.",
+        rules: rulesArray.length > 0 ? rulesArray : ["Lắng nghe cẩn thận các từ khóa quan trọng trong audio."],
+        vocabBag: [],
+        questions: [...SAMPLE_DICTATION_QUESTIONS.slice(0, 1)],
+      };
+      if (levelFormPart === "Part 1") {
+        if (levelFormType === "level") setPart1Levels((prev) => [newCard, ...prev]);
+        else setPart1Categories((prev) => [newCard, ...prev]);
+      } else if (levelFormPart === "Part 2") {
+        setPart2Levels((prev) => [newCard, ...prev]);
+      } else if (levelFormPart === "Part 3") {
+        setPart3Levels((prev) => [newCard, ...prev]);
+      } else if (levelFormPart === "Part 4") {
+        setPart4Levels((prev) => [newCard, ...prev]);
+      }
+      triggerToast(`Đã thêm chủ điểm "${newCard.title}"! 🎉`);
+    }
+    setShowLevelModal(false);
+  };
+
+  const handleConfirmDeleteLevelCard = () => {
+    if (!deleteLevelConfirm) return;
+    const filterOut = (list: LevelCategoryCardData[]) => list.filter((c) => c.id !== deleteLevelConfirm.id);
+    if (deleteLevelConfirm.part === "Part 1") {
+      if (deleteLevelConfirm.type === "level") setPart1Levels(filterOut);
+      else setPart1Categories(filterOut);
+    } else if (deleteLevelConfirm.part === "Part 2") {
+      setPart2Levels(filterOut);
+    } else if (deleteLevelConfirm.part === "Part 3") {
+      setPart3Levels(filterOut);
+    } else if (deleteLevelConfirm.part === "Part 4") {
+      setPart4Levels(filterOut);
+    }
+    triggerToast(`Đã xóa chủ điểm "${deleteLevelConfirm.title}"! 🗑️`);
+    setDeleteLevelConfirm(null);
+  };
+
   // --- ACTIONS XỬ LÝ ---
 
   // Mở modal Nghe chép chính tả
@@ -978,7 +1171,7 @@ export default function ListeningPage() {
       {/* ======================================================== */}
       {activeTab === "dictation" && (
         <div className="space-y-6">
-          {/* Thanh lọc theo Năm & Nút "Câu cần luyện lại" */}
+          {/* Thanh lọc theo Năm & Nút "Câu cần luyện lại" & Thêm bài */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Lọc Năm */}
             <div className="flex items-center gap-2">
@@ -998,15 +1191,25 @@ export default function ListeningPage() {
               ))}
             </div>
 
-            {/* Nút Câu cần luyện lại */}
-            <button
-              type="button"
-              onClick={() => setShowReviewQuestionsModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50/70 hover:bg-amber-100 text-amber-800 text-xs font-bold transition cursor-pointer shadow-2xs"
-            >
-              <Bookmark className="w-3.5 h-3.5 fill-amber-600 text-amber-600" />
-              Câu cần luyện lại ({flaggedReviewIds.length})
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenAddDictation}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Thêm bài nghe chép
+              </button>
+              {/* Nút Câu cần luyện lại */}
+              <button
+                type="button"
+                onClick={() => setShowReviewQuestionsModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50/70 hover:bg-amber-100 text-amber-800 text-xs font-bold transition cursor-pointer shadow-2xs"
+              >
+                <Bookmark className="w-3.5 h-3.5 fill-amber-600 text-amber-600" />
+                Câu cần luyện lại ({flaggedReviewIds.length})
+              </button>
+            </div>
           </div>
 
           {/* Danh sách các phần Test: | Test 1, | Test 2, | Test 3 */}
@@ -1032,13 +1235,36 @@ export default function ListeningPage() {
                       className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-200 transition-all flex flex-col justify-between"
                     >
                       <div>
-                        {/* Hàng trên: Huy hiệu Part & 2 Icon Sổ từ / Ghi chú */}
+                        {/* Hàng trên: Huy hiệu Part & 2 Icon Sổ từ / Ghi chú & Sửa / Xóa */}
                         <div className="flex items-center justify-between mb-3">
                           <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold">
                             {card.part}
                           </span>
 
-                          <div className="flex items-center gap-2 text-slate-400">
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            {/* Icon Sửa bài */}
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenEditDictation(card, e)}
+                              title="Sửa bài nghe"
+                              className="p-1 rounded-md hover:bg-slate-100 hover:text-blue-600 transition cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Icon Xóa bài */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteDictationConfirm(card);
+                              }}
+                              title="Xóa bài nghe"
+                              className="p-1 rounded-md hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+
                             {/* Icon A - Sổ từ */}
                             <button
                               type="button"
@@ -1114,6 +1340,22 @@ export default function ListeningPage() {
       {/* ======================================================== */}
       {activeTab === "part1" && (
         <div className="space-y-8">
+          {/* Header Part 1 Level */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Theo cấp độ điểm</h3>
+              <p className="text-xs text-slate-500">Bộ đề luyện nghe phân cấp độ chuẩn TOEIC.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenAddLevel("Part 1", "level")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Thêm chủ điểm
+            </button>
+          </div>
+
           {/* 4 Cấp độ: Level 1, Level 2, Level 3, Level 4 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {part1Levels.map((lvl) => (
@@ -1130,9 +1372,25 @@ export default function ListeningPage() {
                   </p>
                 </div>
 
-                {/* Hàng dưới: 4 icon + Nút "Học ngay" */}
+                {/* Hàng dưới: icon + Nút "Học ngay" */}
                 <div className="flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-slate-400">
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenEditLevel(lvl, e)}
+                      title="Sửa chủ điểm"
+                      className="hover:text-blue-600 transition cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteLevelConfirm(lvl)}
+                      title="Xóa chủ điểm"
+                      className="hover:text-rose-500 transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -1168,20 +1426,6 @@ export default function ListeningPage() {
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDeleteConfirmTarget({
-                          type: "level",
-                          id: lvl.id,
-                          title: lvl.title,
-                        })
-                      }
-                      title="Xóa tiến độ"
-                      className="hover:text-rose-500 transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
 
                   <button
@@ -1198,13 +1442,23 @@ export default function ListeningPage() {
 
           {/* Phân loại: Theo dạng tranh (Ảnh 4) */}
           <div className="space-y-3">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Theo dạng tranh
-              </h3>
-              <p className="text-xs text-slate-500">
-                Cùng bộ câu ở trên, chia theo bức tranh mô tả gì. Mỗi câu thuộc đúng một dạng.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Theo dạng tranh
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Cùng bộ câu ở trên, chia theo bức tranh mô tả gì. Mỗi câu thuộc đúng một dạng.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenAddLevel("Part 1", "category")}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Thêm dạng tranh
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1225,6 +1479,22 @@ export default function ListeningPage() {
                   {/* 4 icon + Nút "Học ngay" */}
                   <div className="flex items-center justify-between pt-2">
                     <div className="flex items-center gap-2 text-slate-400">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEditLevel(cat, e)}
+                        title="Sửa dạng tranh"
+                        className="hover:text-blue-600 transition cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteLevelConfirm(cat)}
+                        title="Xóa dạng tranh"
+                        className="hover:text-rose-500 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -1260,20 +1530,6 @@ export default function ListeningPage() {
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDeleteConfirmTarget({
-                            type: "level",
-                            id: cat.id,
-                            title: cat.title,
-                          })
-                        }
-                        title="Xóa tiến độ"
-                        className="hover:text-rose-500 transition cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
 
                     <button
@@ -1296,6 +1552,21 @@ export default function ListeningPage() {
       {/* ======================================================== */}
       {activeTab === "part2" && (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Luyện nghe Part 2 theo cấp độ</h3>
+              <p className="text-xs text-slate-500">Hỏi & Đáp từ mức cơ bản đến câu hỏi bẫy phản xạ.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenAddLevel("Part 2", "level")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Thêm chủ điểm
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {part2Levels.map((lvl) => {
               const hasProgress = lvl.completedQuestions > 0;
@@ -1310,7 +1581,7 @@ export default function ListeningPage() {
                       {lvl.title}
                     </h3>
 
-                    {/* Dòng trạng thái (nếu có làm dở hiển thị: 1/154 ✓ 1 ✗ 0 hệt ảnh 5) */}
+                    {/* Dòng trạng thái */}
                     <div className="text-xs mb-4">
                       {hasProgress ? (
                         <div className="flex items-center gap-2 font-semibold">
@@ -1335,6 +1606,22 @@ export default function ListeningPage() {
                   {/* 4 icon + Nút Học ngay */}
                   <div className="flex items-center justify-between pt-2">
                     <div className="flex items-center gap-2 text-slate-400">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEditLevel(lvl, e)}
+                        title="Sửa chủ điểm"
+                        className="hover:text-blue-600 transition cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteLevelConfirm(lvl)}
+                        title="Xóa chủ điểm"
+                        className="hover:text-rose-500 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -1370,20 +1657,6 @@ export default function ListeningPage() {
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDeleteConfirmTarget({
-                            type: "level",
-                            id: lvl.id,
-                            title: lvl.title,
-                          })
-                        }
-                        title="Xóa tiến độ"
-                        className="hover:text-rose-500 transition cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
 
                     <button
@@ -1410,6 +1683,23 @@ export default function ListeningPage() {
       {/* ======================================================== */}
       {(activeTab === "part3" || activeTab === "part4") && (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Luyện nghe {activeTab === "part3" ? "Part 3: Đoạn hội thoại" : "Part 4: Bài nói ngắn"}
+              </h3>
+              <p className="text-xs text-slate-500">Các chủ điểm và mức độ nghe hiểu thực tế.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenAddLevel(activeTab === "part3" ? "Part 3" : "Part 4", "level")}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Thêm chủ điểm
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {(activeTab === "part3" ? part3Levels : part4Levels).map((lvl) => (
               <div
@@ -1427,6 +1717,22 @@ export default function ListeningPage() {
 
                 <div className="flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-slate-400">
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenEditLevel(lvl, e)}
+                      title="Sửa chủ điểm"
+                      className="hover:text-blue-600 transition cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteLevelConfirm(lvl)}
+                      title="Xóa chủ điểm"
+                      className="hover:text-rose-500 transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -1461,20 +1767,6 @@ export default function ListeningPage() {
                       className="hover:text-blue-600 transition cursor-pointer"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDeleteConfirmTarget({
-                          type: "level",
-                          id: lvl.id,
-                          title: lvl.title,
-                        })
-                      }
-                      title="Xóa tiến độ"
-                      className="hover:text-rose-500 transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -2076,6 +2368,279 @@ export default function ListeningPage() {
             >
               Đóng
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: THÊM / SỬA BÀI NGHE CHÉP (DICTATION) */}
+      {/* ======================================================== */}
+      {showDictationModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Quản lý nội dung</span>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {editingDictationCard ? "Chỉnh sửa bài nghe" : "Thêm bài nghe chép mới"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDictationModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDictation} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Test số</label>
+                  <select
+                    value={dictationFormTestNum}
+                    onChange={(e) => setDictationFormTestNum(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value={1}>Test 1</option>
+                    <option value={2}>Test 2</option>
+                    <option value={3}>Test 3</option>
+                    <option value={4}>Test 4</option>
+                    <option value={5}>Test 5</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Phần thi (Part)</label>
+                  <select
+                    value={dictationFormPart}
+                    onChange={(e) => setDictationFormPart(e.target.value as "Part 1" | "Part 2" | "Part 3" | "Part 4")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="Part 1">Part 1 (Mô tả tranh)</option>
+                    <option value="Part 2">Part 2 (Hỏi & Đáp)</option>
+                    <option value="Part 3">Part 3 (Hội thoại)</option>
+                    <option value="Part 4">Part 4 (Bài nói)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Năm đề thi</label>
+                  <select
+                    value={dictationFormYear}
+                    onChange={(e) => setDictationFormYear(e.target.value as "2026" | "2024" | "2023" | "2022")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="2026">ETS 2026</option>
+                    <option value="2024">ETS 2024</option>
+                    <option value="2023">ETS 2023</option>
+                    <option value="2022">ETS 2022</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số câu hỏi</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={dictationFormQuestions}
+                    onChange={(e) => setDictationFormQuestions(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowDictationModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {editingDictationCard ? "Lưu thay đổi" : "Tạo bài nghe"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: XÁC NHẬN XÓA BÀI NGHE CHÉP */}
+      {/* ======================================================== */}
+      {deleteDictationConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Xóa bài nghe chép?</h3>
+              <p className="text-xs text-slate-500">
+                Bạn có chắc chắn muốn xóa bài {deleteDictationConfirm.part} (Test {deleteDictationConfirm.testNumber}) năm {deleteDictationConfirm.year}? Dữ liệu sẽ không thể khôi phục.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteDictationConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteDictationCard}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Xóa ngay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: THÊM / SỬA CHỦ ĐIỂM LUYỆN NGHE (LEVEL / CATEGORY) */}
+      {/* ======================================================== */}
+      {showLevelModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">{levelFormPart}</span>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {editingLevelCard ? "Chỉnh sửa chủ điểm" : "Thêm chủ điểm luyện nghe mới"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLevelModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLevel} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tiêu đề chủ điểm *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Level 5 – 450–495 hoặc Tranh phong cảnh"
+                  value={levelFormTitle}
+                  onChange={(e) => setLevelFormTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Phần thi</label>
+                  <select
+                    value={levelFormPart}
+                    onChange={(e) => setLevelFormPart(e.target.value as "Part 1" | "Part 2" | "Part 3" | "Part 4")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="Part 1">Part 1</option>
+                    <option value="Part 2">Part 2</option>
+                    <option value="Part 3">Part 3</option>
+                    <option value="Part 4">Part 4</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số câu hỏi</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={levelFormQuestions}
+                    onChange={(e) => setLevelFormQuestions(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Lý thuyết kỹ năng / Tóm tắt</label>
+                <textarea
+                  rows={2}
+                  placeholder="Mô tả kỹ năng cần thiết để xử lý dạng câu hỏi này..."
+                  value={levelFormTheory}
+                  onChange={(e) => setLevelFormTheory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Quy tắc / Mẹo làm bài (mỗi dòng 1 mẹo)</label>
+                <textarea
+                  rows={3}
+                  placeholder="Bẫy từ vựng cần tránh...&#10;Cấu trúc thường gặp..."
+                  value={levelFormRules}
+                  onChange={(e) => setLevelFormRules(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowLevelModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {editingLevelCard ? "Lưu thay đổi" : "Tạo chủ điểm"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: XÁC NHẬN XÓA CHỦ ĐIỂM (LEVEL / CATEGORY) */}
+      {/* ======================================================== */}
+      {deleteLevelConfirm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Xóa chủ điểm luyện nghe?</h3>
+              <p className="text-xs text-slate-500">
+                Bạn có chắc chắn muốn xóa &quot;{deleteLevelConfirm.title}&quot;? Mọi tiến độ và câu hỏi trong chủ điểm này sẽ bị xóa.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteLevelConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteLevelCard}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Xóa ngay
+              </button>
+            </div>
           </div>
         </div>
       )}

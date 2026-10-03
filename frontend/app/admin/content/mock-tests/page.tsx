@@ -27,6 +27,8 @@ import {
   Eye,
   FileCheck,
   Bookmark,
+  Plus,
+  Pencil,
 } from "lucide-react";
 
 // --- TYPES & INTERFACES ---
@@ -485,6 +487,94 @@ export default function MockTestsPage() {
   // Audio simulation state
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
+  // --- TEST CRUD STATES ---
+  const [showCreateTestModal, setShowCreateTestModal] = useState(false);
+  const [editingTest, setEditingTest] = useState<TestItem | null>(null);
+  const [testFormTitle, setTestFormTitle] = useState("");
+  const [testFormVolId, setTestFormVolId] = useState<"vol1" | "vol2">("vol1");
+  const [testFormDifficulty, setTestFormDifficulty] = useState<"Khó" | "Trung bình" | "Vừa sức">("Trung bình");
+  const [deleteConfirmTest, setDeleteConfirmTest] = useState<TestItem | null>(null);
+
+  // Test CRUD Handlers
+  const handleOpenCreateTest = () => {
+    setEditingTest(null);
+    setTestFormTitle(`Test ${(selectedVol === "vol1" ? testsVol1.length : testsVol2.length) + 1}`);
+    setTestFormVolId(selectedVol);
+    setTestFormDifficulty("Trung bình");
+    setShowCreateTestModal(true);
+  };
+
+  const handleOpenEditTest = (test: TestItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingTest(test);
+    setTestFormTitle(test.title);
+    setTestFormVolId(test.volId as "vol1" | "vol2");
+    setTestFormDifficulty(test.difficulty);
+    setShowCreateTestModal(true);
+  };
+
+  const handleSaveTest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testFormTitle.trim()) {
+      alert("Vui lòng nhập tên đề thi!");
+      return;
+    }
+
+    if (editingTest) {
+      const updateFn = (list: TestItem[]) =>
+        list.map((t) =>
+          t.id === editingTest.id
+            ? {
+                ...t,
+                title: testFormTitle.trim(),
+                volId: testFormVolId,
+                difficulty: testFormDifficulty,
+              }
+            : t
+        );
+      if (editingTest.volId === "vol1") setTestsVol1(updateFn);
+      else setTestsVol2(updateFn);
+      triggerToast(`Đã cập nhật thông tin đề thi "${testFormTitle}"! 💾`);
+    } else {
+      const targetList = testFormVolId === "vol1" ? testsVol1 : testsVol2;
+      const nextId = targetList.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+      const newTest: TestItem = {
+        id: nextId,
+        volId: testFormVolId,
+        title: testFormTitle.trim(),
+        difficulty: testFormDifficulty,
+        score: null,
+        listeningScore: null,
+        readingScore: null,
+        status: "Chưa luyện tập",
+        completedAt: null,
+        historyAttempts: [],
+        keyVocab: [
+          { word: "commence", ipa: "/kəˈmens/", pos: "v", meaning: "Bắt đầu, khởi động chương trình", example: "The test will commence at 9:00 AM sharp." },
+          { word: "adhere", ipa: "/ədˈhɪr/", pos: "v", meaning: "Tuân thủ chặt chẽ theo quy định", example: "All test-takers must adhere to the examination rules." },
+        ],
+      };
+      if (testFormVolId === "vol1") {
+        setTestsVol1((prev) => [...prev, newTest]);
+      } else {
+        setTestsVol2((prev) => [...prev, newTest]);
+      }
+      triggerToast(`Đã thêm đề thi "${newTest.title}" thành công! 🎉`);
+    }
+    setShowCreateTestModal(false);
+  };
+
+  const handleConfirmDeleteTest = () => {
+    if (!deleteConfirmTest) return;
+    if (deleteConfirmTest.volId === "vol1") {
+      setTestsVol1((prev) => prev.filter((t) => t.id !== deleteConfirmTest.id));
+    } else {
+      setTestsVol2((prev) => prev.filter((t) => t.id !== deleteConfirmTest.id));
+    }
+    triggerToast(`Đã xóa đề thi "${deleteConfirmTest.title}"! 🗑️`);
+    setDeleteConfirmTest(null);
+  };
+
   // Helper trigger Toast
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -773,30 +863,41 @@ export default function MockTestsPage() {
       {/* TAB 1: NỘI DUNG CHẾ ĐỘ "HỌC" */}
       {activeMainTab === "study" && (
         <div className="space-y-6">
-          {/* KHỐI 3: THANH CHỌN BỘ ĐỀ (CRACK TOEIC VOL 1, VOL 2) */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => setSelectedVol("vol1")}
-              className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                selectedVol === "vol1"
-                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/25"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              Crack TOEIC Vol 1 (10)
-            </button>
+          {/* KHỐI 3: THANH CHỌN BỘ ĐỀ (CRACK TOEIC VOL 1, VOL 2) & THÊM ĐỀ */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSelectedVol("vol1")}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  selectedVol === "vol1"
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-500/25"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Crack TOEIC Vol 1 ({testsVol1.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedVol("vol2")}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  selectedVol === "vol2"
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-500/25"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Crack TOEIC Vol 2 ({testsVol2.length})
+              </button>
+            </div>
 
             <button
               type="button"
-              onClick={() => setSelectedVol("vol2")}
-              className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                selectedVol === "vol2"
-                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/25"
-                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
+              onClick={handleOpenCreateTest}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
             >
-              Crack TOEIC Vol 2 (10)
+              <Plus className="w-4 h-4" />
+              Thêm đề thi mới
             </button>
           </div>
 
@@ -808,19 +909,28 @@ export default function MockTestsPage() {
                 className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-200 transition-all flex flex-col justify-between group"
               >
                 <div>
-                  {/* Dòng 1: Tiêu đề Test & Cụm 5 icon thao tác */}
+                  {/* Dòng 1: Tiêu đề Test & Cụm icon thao tác */}
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <h3 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
                       {test.title}
                     </h3>
 
-                    {/* 5 icon thao tác: Xóa / Lịch sử / Làm lại / Lời thoại / Từ vựng */}
+                    {/* Các icon thao tác: Sửa / Xóa / Lịch sử / Làm lại / Lời thoại / Từ vựng */}
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <button
                         type="button"
-                        onClick={() => handleOpenDelete(test)}
-                        title="Xóa lịch sử làm bài"
-                        className="p-1 rounded-md hover:bg-slate-100 hover:text-rose-500 transition-colors cursor-pointer"
+                        onClick={(e) => handleOpenEditTest(test, e)}
+                        title="Sửa thông tin đề thi"
+                        className="p-1 rounded-md hover:bg-slate-100 hover:text-blue-600 transition-colors cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmTest(test)}
+                        title="Xóa đề thi này"
+                        className="p-1 rounded-md hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1814,13 +1924,28 @@ export default function MockTestsPage() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setHistoryModalTest(null)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition cursor-pointer"
-            >
-              Đóng
-            </button>
+            <div className="flex gap-2">
+              {historyModalTest.historyAttempts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = historyModalTest;
+                    setHistoryModalTest(null);
+                    handleOpenDelete(target);
+                  }}
+                  className="py-2.5 px-4 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
+                >
+                  Xóa lịch sử
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setHistoryModalTest(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2000,6 +2125,122 @@ export default function MockTestsPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: THÊM / SỬA ĐỀ THI THỬ (MOCK TEST CRUD) */}
+      {/* ======================================================== */}
+      {showCreateTestModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Quản lý đề thi</span>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {editingTest ? "Chỉnh sửa thông tin đề thi" : "Thêm đề thi thử mới"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateTestModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTest} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên đề thi *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Test 11"
+                  value={testFormTitle}
+                  onChange={(e) => setTestFormTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Bộ đề (Volume)</label>
+                  <select
+                    value={testFormVolId}
+                    onChange={(e) => setTestFormVolId(e.target.value as "vol1" | "vol2")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="vol1">Crack TOEIC Vol 1</option>
+                    <option value="vol2">Crack TOEIC Vol 2</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Mức độ khó</label>
+                  <select
+                    value={testFormDifficulty}
+                    onChange={(e) => setTestFormDifficulty(e.target.value as "Khó" | "Trung bình" | "Vừa sức")}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                  >
+                    <option value="Vừa sức">Vừa sức</option>
+                    <option value="Trung bình">Trung bình</option>
+                    <option value="Khó">Khó</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTestModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {editingTest ? "Lưu thay đổi" : "Tạo đề thi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: XÁC NHẬN XÓA ĐỀ THI (DELETE TEST CONFIRM) */}
+      {/* ======================================================== */}
+      {deleteConfirmTest && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Xóa đề thi này?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Bạn có chắc chắn muốn xóa vĩnh viễn đề <strong className="text-slate-900">&quot;{deleteConfirmTest.title}&quot;</strong> khỏi {deleteConfirmTest.volId === "vol1" ? "Crack TOEIC Vol 1" : "Crack TOEIC Vol 2"}? Toàn bộ lịch sử làm bài và câu hỏi của đề này sẽ bị xóa.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmTest(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTest}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Xóa ngay
+              </button>
             </div>
           </div>
         </div>
