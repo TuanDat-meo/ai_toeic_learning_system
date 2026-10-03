@@ -9,18 +9,10 @@ import {
   Gamepad2,
   Volume2,
   X,
-  Check,
-  RotateCcw,
   Star,
   Brain,
   TrendingUp,
   Flame,
-  Award,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Layers,
-  ArrowRight,
 } from "lucide-react";
 
 interface WordItem {
@@ -466,7 +458,7 @@ export default function VocabularyLearningPage() {
                     </button>
                   </div>
                   <p className="text-xs font-semibold text-blue-900">{w.meaning}</p>
-                  <p className="text-xs text-slate-500 italic">"{w.example}"</p>
+                  <p className="text-xs text-slate-500 italic">&quot;{w.example}&quot;</p>
                 </div>
                 <Star className="w-5 h-5 fill-amber-400 text-amber-400 shrink-0" />
               </div>
@@ -565,7 +557,7 @@ export default function VocabularyLearningPage() {
                       </button>
                     </div>
                     <p className="text-xs font-semibold text-slate-800">{w.meaning}</p>
-                    <p className="text-xs text-slate-500 italic leading-relaxed">"{w.example}"</p>
+                    <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{w.example}&quot;</p>
                   </div>
                   <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60 shrink-0">
                     {w.level}
@@ -674,7 +666,7 @@ export default function VocabularyLearningPage() {
                           Ví dụ ngữ cảnh TOEIC:
                         </span>
                         <p className="text-xs text-slate-800 leading-relaxed mt-1 bg-white/90 p-3 rounded-xl border border-blue-100 shadow-2xs font-medium italic">
-                          "{currentWord.example}"
+                          &quot;{currentWord.example}&quot;
                         </p>
                       </div>
                       <p className="text-center text-xs text-slate-400 pt-1 font-medium">

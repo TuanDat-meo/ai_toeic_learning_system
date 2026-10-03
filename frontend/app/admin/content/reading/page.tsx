@@ -12,10 +12,6 @@ import {
   X,
   Clock,
   ChevronRight,
-  HelpCircle,
-  Award,
-  Layers,
-  ArrowRight,
 } from "lucide-react";
 
 interface ExerciseCardData {
@@ -802,14 +798,10 @@ export default function ReadingLearningPage() {
 
   // Timer effect for Quiz Modal
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (activePracticeCard) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      setTimerSeconds(0);
-    }
+    if (!activePracticeCard) return;
+    const interval = setInterval(() => {
+      setTimerSeconds((prev) => prev + 1);
+    }, 1000);
     return () => clearInterval(interval);
   }, [activePracticeCard]);
 
@@ -1522,7 +1514,7 @@ export default function ReadingLearningPage() {
                     Ví dụ minh họa:
                   </span>
                   <p className="font-mono text-xs text-slate-800 italic">
-                    "{theoryCard.theory.example}"
+                    &quot;{theoryCard.theory.example}&quot;
                   </p>
                 </div>
               </div>
@@ -1623,7 +1615,7 @@ export default function ReadingLearningPage() {
               <h3 className="text-lg font-bold text-slate-900">Đặt lại tiến độ học?</h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 Bạn có chắc chắn muốn xóa lịch sử đúng/sai của chủ điểm{" "}
-                <strong className="text-slate-900">"{resetCardConfirm.title}"</strong> không?
+                <strong className="text-slate-900">&quot;{resetCardConfirm.title}&quot;</strong> không?
               </p>
             </div>
             <div className="flex gap-2.5 pt-1">

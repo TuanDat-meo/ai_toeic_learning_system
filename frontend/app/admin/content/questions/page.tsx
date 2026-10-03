@@ -4,7 +4,6 @@ import React, { useState, useMemo } from "react";
 import {
   FileQuestion,
   Search,
-  Filter,
   Plus,
   FileDown,
   FileUp,
@@ -16,11 +15,7 @@ import {
   Sparkles,
   HelpCircle,
   AlertTriangle,
-  Layers,
-  BookOpen,
   CheckCircle2,
-  ListFilter,
-  CheckCircle,
   Volume2,
   Image as ImageIcon,
   Play,
@@ -29,9 +24,6 @@ import {
   Table as TableIcon,
   ChevronLeft,
   ChevronRight,
-  Lightbulb,
-  Award,
-  BookMarked,
 } from "lucide-react";
 
 // --- TYPES & INTERFACES ---
@@ -415,7 +407,7 @@ export default function AdminQuestionsPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const pageSize = 10;
 
   // Modals state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -500,12 +492,7 @@ export default function AdminQuestionsPage() {
     });
   }, [questions, selectedPartTab, selectedSkill, selectedDifficulty, selectedStatus, keyword]);
 
-  // Statistics
-  const totalCount = questions.length;
-  const publishedCount = questions.filter((q) => q.status === "PUBLISHED").length;
-  const draftCount = questions.filter((q) => q.status === "DRAFT").length;
-  const explainedCount = questions.filter((q) => q.explanation && q.explanation.trim().length > 10).length;
-  const explainedPercentage = totalCount > 0 ? Math.round((explainedCount / totalCount) * 100) : 0;
+
 
   // Pagination calculations
   const totalItems = filteredQuestions.length;

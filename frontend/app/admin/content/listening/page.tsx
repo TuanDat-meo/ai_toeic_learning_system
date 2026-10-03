@@ -8,22 +8,14 @@ import {
   FileText,
   RotateCcw,
   Trash2,
-  Check,
   X,
   Play,
   Pause,
-  RotateCw,
-  Search,
   CheckCircle2,
-  AlertCircle,
-  Volume2,
   Languages,
-  BookOpen,
   ShoppingBag,
-  Sliders,
   ChevronRight,
   Eye,
-  Flag,
 } from "lucide-react";
 
 // --- TYPES & INTERFACES ---
@@ -786,7 +778,7 @@ export default function ListeningPage() {
   };
 
   // Kiểm tra chính tả
-  const handleCheckDictation = (qId: number, targetScript: string) => {
+  const handleCheckDictation = (qId: number) => {
     setDictationChecked((prev) => ({ ...prev, [qId]: true }));
     triggerToast("Đã đối chiếu với audio script gốc!");
   };
@@ -1628,7 +1620,7 @@ export default function ListeningPage() {
                       <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => handleCheckDictation(q.id, q.fullTranscript)}
+                          onClick={() => handleCheckDictation(q.id)}
                           className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
                         >
                           Kiểm tra chính tả
@@ -1899,7 +1891,7 @@ export default function ListeningPage() {
                         </div>
                         <p className="text-xs text-slate-600 mt-1">{it.meaning}</p>
                         {it.example && (
-                          <p className="text-[11px] text-slate-500 italic mt-0.5">"{it.example}"</p>
+                          <p className="text-[11px] text-slate-500 italic mt-0.5">&quot;{it.example}&quot;</p>
                         )}
                       </div>
 
@@ -2000,7 +1992,7 @@ export default function ListeningPage() {
                 Xóa tiến độ {deleteConfirmTarget.title}?
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Thao tác này sẽ đặt lại toàn bộ số câu đã làm, số câu đúng/sai về trạng thái "Chưa luyện tập".
+                Thao tác này sẽ đặt lại toàn bộ số câu đã làm, số câu đúng/sai về trạng thái &quot;Chưa luyện tập&quot;.
               </p>
             </div>
 

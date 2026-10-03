@@ -4,20 +4,16 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   SpellCheck,
   Sparkles,
-  Bookmark,
   FileText,
   RotateCcw,
   Trash2,
   Check,
   X,
   Clock,
-  ChevronRight,
   HelpCircle,
   Award,
-  Layers,
   ArrowRight,
   Search,
-  Filter,
   Plus,
   Play,
   CheckSquare,
@@ -26,16 +22,10 @@ import {
   Lightbulb,
   Edit3,
   BookOpen,
-  Shuffle,
   BarChart3,
   Star,
-  RefreshCw,
-  FolderPlus,
   Compass,
   Book,
-  GraduationCap,
-  Eye,
-  Volume2,
 } from "lucide-react";
 
 // --- INTERFACES ---
@@ -942,11 +932,7 @@ export default function AdminGrammarPage() {
 
   // Statistics
   const totalTopicsCount = topics.length;
-  const totalQuestionsCount = topics.reduce((acc, t) => acc + t.questions.length, 0);
   const studiedTopicsCount = topics.filter((t) => t.studiedCount > 0).length;
-  const totalCorrectQuestions = topics.reduce((acc, t) => acc + t.correctCount, 0);
-  const totalStudiedQuestions = topics.reduce((acc, t) => acc + t.studiedCount, 0);
-  const overallAccuracy = totalStudiedQuestions > 0 ? Math.round((totalCorrectQuestions / totalStudiedQuestions) * 100) : 0;
   const starredTopicsCount = topics.filter((t) => t.bookmarked).length;
 
   // Toggle Bookmark
@@ -1852,7 +1838,7 @@ export default function AdminGrammarPage() {
                         key={idx}
                         className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5"
                       >
-                        <p className="font-bold text-slate-900 text-sm">"{ex.sentence}"</p>
+                        <p className="font-bold text-slate-900 text-sm">&quot;{ex.sentence}&quot;</p>
                         <p className="text-xs text-slate-600 italic">➔ Dịch: {ex.translation}</p>
                         {ex.analysis && (
                           <div className="pt-1.5 border-t border-slate-200 text-xs text-emerald-700 font-medium">
@@ -2049,7 +2035,7 @@ export default function AdminGrammarPage() {
 
                     {quizQuestions[currentQuizIndex].translation && (
                       <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 italic">
-                        <strong>Dịch nghĩa:</strong> "{quizQuestions[currentQuizIndex].translation}"
+                        <strong>Dịch nghĩa:</strong> &quot;{quizQuestions[currentQuizIndex].translation}&quot;
                       </div>
                     )}
                   </div>
@@ -2207,7 +2193,7 @@ export default function AdminGrammarPage() {
                   <label className="font-bold text-slate-700">Phần thi (Part)</label>
                   <select
                     value={createPart}
-                    onChange={(e) => setCreatePart(e.target.value as any)}
+                    onChange={(e) => setCreatePart(e.target.value as GrammarTopicItem["part"])}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
                   >
                     <option value="Part 5">Part 5</option>
@@ -2219,7 +2205,7 @@ export default function AdminGrammarPage() {
                   <label className="font-bold text-slate-700">Target Điểm</label>
                   <select
                     value={createScore}
-                    onChange={(e) => setCreateScore(e.target.value as any)}
+                    onChange={(e) => setCreateScore(e.target.value as GrammarTopicItem["targetScore"])}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
                   >
                     <option value="350-500">350 - 500 (Cơ bản)</option>
@@ -2543,7 +2529,7 @@ export default function AdminGrammarPage() {
                   <label className="font-bold text-slate-700">Target Điểm</label>
                   <select
                     value={editTopicItem.targetScore}
-                    onChange={(e) => setEditTopicItem({ ...editTopicItem, targetScore: e.target.value as any })}
+                    onChange={(e) => setEditTopicItem({ ...editTopicItem, targetScore: e.target.value as GrammarTopicItem["targetScore"] })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
                   >
                     <option value="350-500">350-500</option>
@@ -2555,7 +2541,7 @@ export default function AdminGrammarPage() {
                   <label className="font-bold text-slate-700">Phần thi (Part)</label>
                   <select
                     value={editTopicItem.part}
-                    onChange={(e) => setEditTopicItem({ ...editTopicItem, part: e.target.value as any })}
+                    onChange={(e) => setEditTopicItem({ ...editTopicItem, part: e.target.value as GrammarTopicItem["part"] })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
                   >
                     <option value="Part 5">Part 5</option>
@@ -2617,7 +2603,7 @@ export default function AdminGrammarPage() {
               <h3 className="text-base font-bold text-slate-900">Xác nhận xóa chủ điểm?</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Bạn có chắc chắn muốn xóa chủ điểm{" "}
-                <strong className="text-slate-900 font-bold">"{deleteConfirmTopic.title}"</strong> ({deleteConfirmTopic.code}) không? Thao tác này không thể hoàn tác.
+                <strong className="text-slate-900 font-bold">&quot;{deleteConfirmTopic.title}&quot;</strong> ({deleteConfirmTopic.code}) không? Thao tác này không thể hoàn tác.
               </p>
             </div>
 

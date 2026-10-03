@@ -19,20 +19,13 @@ import {
   X,
   Clock,
   Search,
-  Volume2,
   Pause,
   Flag,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  Award,
-  Check,
-  BookMarked,
   Eye,
-  HelpCircle,
-  Headphones,
   FileCheck,
-  Plus,
   Bookmark,
 } from "lucide-react";
 
@@ -466,7 +459,6 @@ export default function MockTestsPage() {
   // 2. Luyện tập (Practice Mode)
   const [practiceModalTest, setPracticeModalTest] = useState<TestItem | null>(null);
   const [practicePartFilter, setPracticePartFilter] = useState<string>("ALL");
-  const [practiceModeType, setPracticeModeType] = useState<"regular" | "dictation" | "bilingual">("regular");
   const [practiceAnswers, setPracticeAnswers] = useState<{ [qId: number]: string }>({});
   const [practiceChecked, setPracticeChecked] = useState<{ [qId: number]: boolean }>({});
   const [dictationInput, setDictationInput] = useState<{ [qId: number]: string }>({});
@@ -498,24 +490,6 @@ export default function MockTestsPage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
-
-  // --- TIMER FOR EXAM ---
-  useEffect(() => {
-    let timer: any;
-    if (examStarted && !examSubmitted && examTimeRemaining > 0) {
-      timer = setInterval(() => {
-        setExamTimeRemaining((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleSubmitExam();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [examStarted, examSubmitted, examTimeRemaining]);
 
   // Format seconds to mm:ss or hh:mm:ss
   const formatTime = (secs: number) => {
@@ -615,11 +589,33 @@ export default function MockTestsPage() {
     triggerToast(`Chúc mừng! Bạn đã hoàn thành ${examModalTest.title} với ${estimatedTotal}/990 điểm.`);
   };
 
+  const handleSubmitExamRef = React.useRef(handleSubmitExam);
+  useEffect(() => {
+    handleSubmitExamRef.current = handleSubmitExam;
+  });
+
+  // --- TIMER FOR EXAM ---
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    if (examStarted && !examSubmitted && examTimeRemaining > 0) {
+      timer = setInterval(() => {
+        setExamTimeRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleSubmitExamRef.current();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [examStarted, examSubmitted, examTimeRemaining]);
+
   // Mở modal Luyện tập
   const handleOpenPractice = (test: TestItem) => {
     setPracticeModalTest(test);
     setPracticePartFilter("ALL");
-    setPracticeModeType("regular");
     setPracticeAnswers({});
     setPracticeChecked({});
     setDictationInput({});
@@ -1135,15 +1131,17 @@ export default function MockTestsPage() {
                       Chọn thời gian làm bài:
                     </label>
                     <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { val: "120", label: "Chuẩn 120 phút", desc: "Full Test (200 câu)" },
-                        { val: "60", label: "Rút gọn 60 phút", desc: "Mini Test (100 câu)" },
-                        { val: "30", label: "Tập trung 30 phút", desc: "Speed Test (50 câu)" },
-                      ].map((item) => (
+                      {(
+                        [
+                          { val: "120", label: "Chuẩn 120 phút", desc: "Full Test (200 câu)" },
+                          { val: "60", label: "Rút gọn 60 phút", desc: "Mini Test (100 câu)" },
+                          { val: "30", label: "Tập trung 30 phút", desc: "Speed Test (50 câu)" },
+                        ] as const
+                      ).map((item) => (
                         <button
                           key={item.val}
                           type="button"
-                          onClick={() => setExamDurationType(item.val as any)}
+                          onClick={() => setExamDurationType(item.val)}
                           className={`p-3 rounded-xl border text-center transition cursor-pointer ${
                             examDurationType === item.val
                               ? "bg-blue-600 text-white border-blue-600 shadow-sm"
@@ -1163,7 +1161,7 @@ export default function MockTestsPage() {
                     <p className="font-bold flex items-center gap-1.5">
                       <AlertCircle className="w-4 h-4 text-amber-600" /> Lưu ý khi làm bài thi thử:
                     </p>
-                    <p>• Đồng hồ sẽ bắt đầu đếm ngược ngay khi bấm "Bắt đầu làm bài".</p>
+                    <p>• Đồng hồ sẽ bắt đầu đếm ngược ngay khi bấm &quot;Bắt đầu làm bài&quot;.</p>
                     <p>• Bạn có thể đánh dấu câu hỏi (Flag) để kiểm tra lại trước khi nộp.</p>
                     <p>• Đáp án và giải thích chi tiết sẽ được hiển thị ngay sau khi nộp bài.</p>
                   </div>
@@ -1608,7 +1606,7 @@ export default function MockTestsPage() {
                             <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                             <div>
                               <p className="font-bold text-amber-800">Dẫn chứng câu trả lời trong bài:</p>
-                              <p className="italic">"{q.evidence}"</p>
+                              <p className="italic">&quot;{q.evidence}&quot;</p>
                             </div>
                           </div>
                         )}
@@ -1739,7 +1737,7 @@ export default function MockTestsPage() {
                 Xóa lịch sử {deleteModalTest.title}?
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Thao tác này sẽ xóa toàn bộ điểm số, thời gian làm và các lượt thi của đề thi này. Đề sẽ được đặt lại về trạng thái "Chưa luyện tập".
+                Thao tác này sẽ xóa toàn bộ điểm số, thời gian làm và các lượt thi của đề thi này. Đề sẽ được đặt lại về trạng thái &quot;Chưa luyện tập&quot;.
               </p>
             </div>
 
@@ -1984,7 +1982,7 @@ export default function MockTestsPage() {
                         </span>
                       </div>
                       <p className="text-xs text-slate-700 font-medium">{item.meaning}</p>
-                      <p className="text-xs italic text-slate-500 font-sans">Ví dụ: "{item.example}"</p>
+                      <p className="text-xs italic text-slate-500 font-sans">Ví dụ: &quot;{item.example}&quot;</p>
                     </div>
 
                     <button
