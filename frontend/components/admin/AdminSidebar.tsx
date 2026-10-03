@@ -17,7 +17,8 @@ import {
   Bot,
   Database,
   Settings,
-  Users
+  Users,
+  X,
 } from "lucide-react";
 
 const navGroups = [
@@ -63,11 +64,20 @@ const navGroups = [
   },
 ];
 
-export function AdminSidebar() {
+export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 flex h-screen w-72 flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm">
+    <>
+      {isOpen ? (
+        <button
+          type="button"
+          aria-label="Đóng điều hướng"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
+        />
+      ) : null}
+      <aside className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
       {/* Header */}
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-100 px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white shadow-md shadow-blue-500/20">
@@ -77,6 +87,9 @@ export function AdminSidebar() {
           <span className="text-sm font-bold tracking-tight text-slate-900">TOEIC MASTER</span>
           <span className="text-[10px] font-medium text-slate-500">Admin Workspace</span>
         </div>
+        <button type="button" aria-label="Đóng điều hướng" onClick={onClose} className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 md:hidden">
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -96,6 +109,7 @@ export function AdminSidebar() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={onClose}
                       className={[
                         "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
                         active
@@ -122,24 +136,7 @@ export function AdminSidebar() {
         </nav>
       </div>
 
-      {/* Footer / System Status */}
-      <div className="mt-auto border-t border-slate-100 bg-slate-50 p-4">
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-            </span>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-slate-700">System Online</span>
-              <span className="text-[10px] text-slate-500">Latency: 32ms</span>
-            </div>
-          </div>
-          <div className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
-            v2.1.0
-          </div>
-        </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
