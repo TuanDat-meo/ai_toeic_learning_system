@@ -5,11 +5,13 @@ import { GrammarTopicItem, GrammarQuestionItem } from "./types";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import { GrammarFilterBar } from "./components/GrammarFilterBar";
 import { GrammarTopicList } from "./components/GrammarTopicList";
-import { GrammarTopicDetailModal } from "./components/GrammarTopicDetailModal";
-import { GrammarTopicEditModal } from "./components/GrammarTopicEditModal";
-import { GrammarDeleteModal } from "./components/GrammarDeleteModal";
-import { GrammarQuizModal } from "./components/GrammarQuizModal";
-import { GrammarAddQuestionModal } from "./components/GrammarAddQuestionModal";
+import {
+  GrammarTopicDetailModal,
+  GrammarTopicEditModal,
+  GrammarDeleteModal,
+  GrammarQuizModal,
+  GrammarAddQuestionModal,
+} from "./components/GrammarModals";
 
 export default function AdminGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
