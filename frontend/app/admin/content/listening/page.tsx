@@ -15,11 +15,11 @@ import {
   INITIAL_PART4_LEVELS,
   INITIAL_PART4_CATEGORIES,
 } from "./mockData";
-import { ListeningHeader } from "./components/ListeningHeader";
-import { ListeningDictationTab } from "./components/ListeningDictationTab";
-import { ListeningPartTab } from "./components/ListeningPartTab";
-import { ListeningDictationModal } from "./components/ListeningDictationModal";
-import { ListeningQuizModal } from "./components/ListeningQuizModal";
+import { ListeningHeader } from "@/components/admin/content/listening/ListeningHeader";
+import { ListeningDictationTab } from "@/components/admin/content/listening/ListeningDictationTab";
+import { ListeningPartTab } from "@/components/admin/content/listening/ListeningPartTab";
+import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
+import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
 import {
   VocabBagModal,
   TheoryModal,
@@ -29,7 +29,7 @@ import {
   DeleteDictationModal,
   LevelFormModal,
   DeleteLevelModal,
-} from "./components/ListeningModals";
+} from "@/components/admin/content/listening/ListeningModals";
 
 export default function ListeningPage() {
   // --- STATES CHÍNH ---

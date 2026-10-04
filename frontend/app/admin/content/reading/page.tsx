@@ -6,12 +6,12 @@ import { Sparkles } from "lucide-react";
 import { ExerciseCardData } from "./types";
 import { INITIAL_CARDS } from "./mockData";
 
-import { ReadingHeader } from "./components/ReadingHeader";
-import { ReadingCardGrid } from "./components/ReadingCardGrid";
-import { ReadingTheoryModal } from "./components/ReadingTheoryModal";
-import { ReadingCreateCardModal } from "./components/ReadingCreateCardModal";
-import { ReadingDeleteCardModal, ReadingResetModal } from "./components/ReadingDeleteCardModal";
-import { ReadingPracticeWorkspace } from "./components/ReadingPracticeWorkspace";
+import { ReadingHeader } from "@/components/admin/content/reading/ReadingHeader";
+import { ReadingCardGrid } from "@/components/admin/content/reading/ReadingCardGrid";
+import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
+import { ReadingCreateCardModal } from "@/components/admin/content/reading/ReadingCreateCardModal";
+import { ReadingDeleteCardModal, ReadingResetModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
+import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);

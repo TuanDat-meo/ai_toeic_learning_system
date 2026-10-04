@@ -4,10 +4,10 @@ import React, { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { WordItem, TestItem } from "./types";
 import { SAMPLE_WORDS, INITIAL_TESTS } from "./mockData";
-import { VocabularyHeader } from "./components/VocabularyHeader";
-import { VocabularyTestGrid } from "./components/VocabularyTestGrid";
-import { VocabularyProgressView, VocabularyStarredView, VocabularyAlgorithmView } from "./components/VocabularyViews";
-import { VocabularyModals } from "./components/VocabularyModals";
+import { VocabularyHeader } from "@/components/admin/content/vocabulary/VocabularyHeader";
+import { VocabularyTestGrid } from "@/components/admin/content/vocabulary/VocabularyTestGrid";
+import { VocabularyProgressView, VocabularyStarredView, VocabularyAlgorithmView } from "@/components/admin/content/vocabulary/VocabularyViews";
+import { VocabularyModals } from "@/components/admin/content/vocabulary/VocabularyModals";
 
 export default function VocabularyLearningPage() {
   const [activeMainTab, setActiveMainTab] = useState<"study" | "progress" | "my_words" | "algorithm">("study");

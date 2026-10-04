@@ -3,12 +3,12 @@
 import React, { useState, useMemo } from "react";
 import { QuestionItem, QuestionPart, QuestionDifficulty } from "./types";
 import { INITIAL_QUESTIONS } from "./mockData";
-import { QuestionFilterBar } from "./components/QuestionFilterBar";
-import { QuestionTableView } from "./components/QuestionTableView";
-import { QuestionCardGridView } from "./components/QuestionCardGridView";
-import { QuestionPreviewModal } from "./components/QuestionPreviewModal";
-import { QuestionEditModal } from "./components/QuestionEditModal";
-import { QuestionDeleteModal } from "./components/QuestionDeleteModal";
+import { QuestionFilterBar } from "@/components/admin/content/questions/QuestionFilterBar";
+import { QuestionTableView } from "@/components/admin/content/questions/QuestionTableView";
+import { QuestionCardGridView } from "@/components/admin/content/questions/QuestionCardGridView";
+import { QuestionPreviewModal } from "@/components/admin/content/questions/QuestionPreviewModal";
+import { QuestionEditModal } from "@/components/admin/content/questions/QuestionEditModal";
+import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<QuestionItem[]>(INITIAL_QUESTIONS);

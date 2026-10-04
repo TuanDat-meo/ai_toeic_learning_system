@@ -6,17 +6,17 @@ import { Sparkles } from "lucide-react";
 import { TestItem, PracticeQuestion } from "./types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "./mockData";
 
-import { MockTestHeader } from "./components/MockTestHeader";
-import { MockTestCardGrid } from "./components/MockTestCardGrid";
-import { MockTestProgressView } from "./components/MockTestProgressView";
-import { MockTestModeModal } from "./components/MockTestModeModal";
-import { MockTestExamModal } from "./components/MockTestExamModal";
-import { MockTestPracticeModal } from "./components/MockTestPracticeModal";
-import { MockTestHistoryModal } from "./components/MockTestHistoryModal";
-import { MockTestTranscriptModal } from "./components/MockTestTranscriptModal";
-import { MockTestVocabModal } from "./components/MockTestVocabModal";
-import { MockTestDeleteModal } from "./components/MockTestDeleteModal";
-import { MockTestCreateModal } from "./components/MockTestCreateModal";
+import { MockTestHeader } from "@/components/admin/content/mock-tests/MockTestHeader";
+import { MockTestCardGrid } from "@/components/admin/content/mock-tests/MockTestCardGrid";
+import { MockTestProgressView } from "@/components/admin/content/mock-tests/MockTestProgressView";
+import { MockTestModeModal } from "@/components/admin/content/mock-tests/MockTestModeModal";
+import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
+import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
+import { MockTestHistoryModal } from "@/components/admin/content/mock-tests/MockTestHistoryModal";
+import { MockTestTranscriptModal } from "@/components/admin/content/mock-tests/MockTestTranscriptModal";
+import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTestVocabModal";
+import { MockTestDeleteModal } from "@/components/admin/content/mock-tests/MockTestDeleteModal";
+import { MockTestCreateModal } from "@/components/admin/content/mock-tests/MockTestCreateModal";
 
 export default function AdminMockTestsPage() {
   // State quản lý tab & danh sách đề thi

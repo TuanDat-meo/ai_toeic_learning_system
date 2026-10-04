@@ -3,15 +3,15 @@
 import React, { useState, useMemo } from "react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
-import { GrammarFilterBar } from "./components/GrammarFilterBar";
-import { GrammarTopicList } from "./components/GrammarTopicList";
+import { GrammarFilterBar } from "@/components/admin/content/grammar/GrammarFilterBar";
+import { GrammarTopicList } from "@/components/admin/content/grammar/GrammarTopicList";
 import {
   GrammarTopicDetailModal,
   GrammarTopicEditModal,
   GrammarDeleteModal,
   GrammarQuizModal,
   GrammarAddQuestionModal,
-} from "./components/GrammarModals";
+} from "@/components/admin/content/grammar/GrammarModals";
 
 export default function AdminGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
