@@ -1066,6 +1066,17 @@ export default function ListeningPage() {
   const [activeQuizQIndex, setActiveQuizQIndex] = useState(0);
   const [quizSelectedOption, setQuizSelectedOption] = useState<{ [qId: number]: string }>({});
   const [quizAnswerChecked, setQuizAnswerChecked] = useState<{ [qId: number]: boolean }>({});
+  const [showBilingualQuiz, setShowBilingualQuiz] = useState(false);
+
+  const playAudio = (text: string) => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window && text.trim()) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
 
   // 3. Modal Giỏ từ vựng (Shopping Bag Modal)
   const [vocabBagModalData, setVocabBagModalData] = useState<{
@@ -2549,7 +2560,11 @@ export default function ListeningPage() {
             <div className="flex items-center gap-2 sm:gap-2.5">
               <button
                 type="button"
-                onClick={() => triggerToast(showBilingualQuiz ? "Đã tắt hiển thị song ngữ" : "Đã bật dịch song ngữ Tiếng Việt 👑")}
+                onClick={() => {
+                  const next = !showBilingualQuiz;
+                  setShowBilingualQuiz(next);
+                  triggerToast(next ? "Đã bật dịch song ngữ Tiếng Việt 👑" : "Đã tắt hiển thị song ngữ");
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 text-amber-950 ring-2 ring-amber-300 text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 <Languages className="w-3.5 h-3.5" />

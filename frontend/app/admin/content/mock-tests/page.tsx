@@ -82,6 +82,7 @@ export interface PracticeQuestion {
   audioUrl?: string;
   imageUrl?: string;
   options: { [key: string]: string };
+  optionGlosses?: { [key: string]: string };
   correctAnswer: string;
   explanation: string;
   transcript?: string;
@@ -90,6 +91,26 @@ export interface PracticeQuestion {
 
 // DỮ LIỆU CÂU HỎI MẪU CHO MÔ PHỎNG THI THỬ & LUYỆN TẬP
 const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
+  {
+    id: 101,
+    part: "Part 5",
+    questionText: "The board must be given written notice of -------- to the retirement plan at least 30 days in advance.",
+    options: {
+      A: "revisions",
+      B: "revising",
+      C: "revised",
+      D: "revises",
+    },
+    optionGlosses: {
+      A: "(n-plural): những sự sửa đổi",
+      B: "(v-ing): đang sửa đổi",
+      C: "(v-ed): đã sửa đổi",
+      D: "(v-s): sửa đổi",
+    },
+    correctAnswer: "A",
+    translation: "Hội đồng quản trị phải được thông báo bằng văn bản về những sửa đổi đối với chương trình hưu trí ít nhất 30 ngày trước.",
+    explanation: "Sau giới từ 'of' cần một Danh từ (Noun) đóng vai trò làm tân ngữ. 'revisions' (những sự sửa đổi) là danh từ chính xác.",
+  },
   // Part 1: Photographs
   {
     id: 1,
@@ -2750,6 +2771,17 @@ export default function MockTestsPage() {
                         <div className="text-base font-extrabold text-slate-900 leading-relaxed">
                           {currentQ.id}. {currentQ.questionText}
                         </div>
+
+                        {/* Bản dịch tiếng Việt chuẩn theo Ảnh 5 */}
+                        {(isChecked || showBilingualPassage) && currentQ.translation && (
+                          <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 text-xs sm:text-sm font-semibold leading-relaxed shadow-xs space-y-1">
+                            <div className="font-bold text-blue-700 flex items-center gap-1.5">
+                              <Languages className="w-4 h-4 text-blue-600" />
+                              <span>Bản dịch tiếng Việt:</span>
+                            </div>
+                            <p className="text-blue-950 font-medium">{currentQ.translation}</p>
+                          </div>
+                        )}
 
                         {/* OPTIONS LIST */}
                         <div className="space-y-3">
