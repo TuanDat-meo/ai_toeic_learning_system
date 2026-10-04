@@ -32,6 +32,7 @@ import {
   Bell,
   BellOff,
   HelpCircle,
+  Lock,
 } from "lucide-react";
 
 // --- TYPES & INTERFACES ---
@@ -1061,6 +1062,12 @@ export default function ListeningPage() {
   const [dictationChecked, setDictationChecked] = useState<{ [qId: number]: boolean }>({});
   const [showDictationScript, setShowDictationScript] = useState<{ [qId: number]: boolean }>({});
 
+  // Dictation Check Studio specific states (matching user reference mockup)
+  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("check");
+  const [fillPercentage, setFillPercentage] = useState<30 | 50 | 100>(50);
+  const [revealedWordCount, setRevealedWordCount] = useState<number>(0);
+  const [replayCount, setReplayCount] = useState<number>(1);
+
   // 2. Modal Học ngay trắc nghiệm (Practice Quiz Modal)
   const [quizModalCard, setQuizModalCard] = useState<LevelCategoryCardData | null>(null);
   const [activeQuizQIndex, setActiveQuizQIndex] = useState(0);
@@ -1069,6 +1076,7 @@ export default function ListeningPage() {
   const [showBilingualQuiz, setShowBilingualQuiz] = useState(false);
 
   const playAudio = (text: string) => {
+    if (!isSfxEnabled) return; // Im lặng 100% khi tắt âm thanh (BellOff)
     if (typeof window !== "undefined" && "speechSynthesis" in window && text.trim()) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -1104,40 +1112,37 @@ export default function ListeningPage() {
   // Trình phát audio mô phỏng
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
+  // Interactive states for Top Header Bar buttons (Song ngữ, Ghi chú, Annotator, Timer, Ma trận câu hỏi)
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
+  const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
+  const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
+  const [practiceTimerSeconds, setPracticeTimerSeconds] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
+  const [showDetailedExplanation, setShowDetailedExplanation] = useState(true);
+  const [showVocabSection, setShowVocabSection] = useState(true);
+  const [isVocabExpanded, setIsVocabExpanded] = useState(false);
   // Web Audio Sound Effects Synthesizer (SFX chọn đáp án giống Part 5, 6, 7)
     // Web Audio Sound Effects Synthesizer (Chuẩn 100% theo Part 5)
-  const playSfx = (type: "correct" | "wrong" | "click") => {
-    if (!isSfxEnabled) return; // Im lặng 100% khi tắt nút chuông
+  const playSfx = (type?: "correct" | "wrong" | "click") => {
+    if (!isSfxEnabled) return; // Im lặng 100% khi tắt nút chuông (BellOff)
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      osc.type = "sine";
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      if (type === "correct") {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15); // E5
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
-      } else if (type === "wrong") {
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(450, ctx.currentTime);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.08);
-      }
+      // ĐỒNG BỘ 1 ÂM THANH DUY NHẤT (Single 520Hz Tone) CHO TẤT CẢ THAO TÁC
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
     } catch {
       // Fallback
     }
@@ -2345,189 +2350,439 @@ export default function ListeningPage() {
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 1: LUYỆN TẬP NGHE CHÉP CHÍNH TẢ (DICTATION STUDIO) */}
-      {/* ======================================================== */}
       {dictationModalCard && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
-            {/* Header Modal */}
-            <div className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-4 sm:p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-white">
-                  <Headphones className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base sm:text-lg">
-                    Nghe chép chính tả: {dictationModalCard.part} (Test {dictationModalCard.testNumber})
-                  </h3>
-                  <p className="text-xs text-blue-100">
-                    Nghe từng câu, gõ lại chính tả và đối chiếu kết quả tức thì
-                  </p>
-                </div>
-              </div>
-
+        <div className="fixed inset-0 z-50 bg-[#f8fafc] flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans text-slate-800">
+          <div className="bg-[#f8fafc] w-full h-full flex flex-col overflow-hidden">
+            
+            {/* 1. HEADER MODAL (TRẮNG KHÔNG VIỀN CẮT, THANH PIL THU HẸP, XP BADGES) */}
+            <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between shrink-0 shadow-2xs select-none">
+              {/* Nút Thoát góc trái */}
               <button
                 type="button"
                 onClick={() => setDictationModalCard(null)}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 text-sm font-bold transition cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
+                <span>Thoát</span>
               </button>
-            </div>
 
-            {/* Nội dung bài nghe chép */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-              {dictationModalCard.questions[activeDictationQIndex] && (
-                (() => {
-                  const q = dictationModalCard.questions[activeDictationQIndex];
-                  const userInput = dictationUserInputs[q.id] || "";
-                  const isChecked = !!dictationChecked[q.id];
-                  const isScriptShown = !!showDictationScript[q.id];
-                  const isFlagged = flaggedReviewIds.includes(q.id);
+              {/* Cụm 3 Tab ở giữa: Nghe chép - Nghe check - Nghe full */}
+              <div className="flex items-center bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSfx("click");
+                    setDictationSubTab("chep");
+                  }}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    dictationSubTab === "chep"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Nghe chép
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSfx("click");
+                    setDictationSubTab("check");
+                  }}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    dictationSubTab === "check"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Nghe check
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSfx("click");
+                    setDictationSubTab("full");
+                  }}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    dictationSubTab === "full"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Nghe full
+                </button>
+              </div>
 
-                  return (
-                    <div className="space-y-5">
-                      {/* Thanh công cụ câu hỏi */}
-                      <div className="flex items-center justify-between">
-                        <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-bold text-xs">
-                          Câu {activeDictationQIndex + 1} / {dictationModalCard.questions.length}
-                        </span>
+              {/* Thẻ thời gian & XP bên phải */}
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-bold shadow-2xs">
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <span>2s</span>
+                <span className="text-amber-300 font-bold">•</span>
+                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span>+0 XP</span>
+              </div>
+            </header>
 
-                        <button
-                          type="button"
-                          onClick={() => handleToggleFlagReview(q.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                            isFlagged
-                              ? "bg-amber-100 text-amber-800 border border-amber-300"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          <Bookmark className={`w-3.5 h-3.5 ${isFlagged ? "fill-amber-600 text-amber-600" : ""}`} />
-                          {isFlagged ? "Đã lưu vào câu cần luyện lại" : "Lưu vào câu cần luyện lại"}
-                        </button>
-                      </div>
+            {/* 2. NỘI DUNG CHÍNH (DIVIDED INTO LEFT & RIGHT PANELS) */}
+            {dictationModalCard.questions[activeDictationQIndex] && (
+              (() => {
+                const q = dictationModalCard.questions[activeDictationQIndex];
+                const userInput = dictationUserInputs[q.id] || "";
+                const isChecked = !!dictationChecked[q.id];
+                const isFlagged = flaggedReviewIds.includes(q.id);
 
-                      {/* Hình ảnh (nếu Part 1) */}
-                      {q.imageUrl && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 max-w-sm mx-auto shadow-xs">
-                          <img src={q.imageUrl} alt="Part 1 Illustration" className="w-full h-48 object-cover" />
-                        </div>
-                      )}
+                // Tách câu thành từ để làm chế độ đục lỗ fill-in-the-blanks
+                const words = q.fullTranscript.split(" ");
+                const totalWords = words.length;
 
-                      {/* Trình phát Audio nghe có chỉnh tốc độ */}
-                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                            className="w-11 h-11 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition cursor-pointer"
-                          >
-                            {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-                          </button>
-                          <div>
-                            <p className="text-xs font-bold text-slate-800">Bấm nghe câu thoại</p>
-                            <p className="text-[11px] text-slate-400">Nghe lại nhiều lần nếu cần</p>
+                return (
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-between max-w-7xl mx-auto w-full gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      
+                      {/* KHỐI BÊN TRÁI (COL 12 -> 7): AUDIO WAVEFORM & KHUNG ĐỤC LỖ */}
+                      <div className="lg:col-span-7 space-y-5">
+                        
+                        {/* THẺ 1: SÓNG ÂM & BỘ ĐIỀU KHIỂN AUDIO */}
+                        <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+                          {/* Dạng sóng âm SVG Visualizer */}
+                          <div className="w-full h-16 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between px-6 relative overflow-hidden">
+                            <div className="flex items-center justify-between w-full h-10 gap-1.5">
+                              {Array.from({ length: 42 }).map((_, idx) => {
+                                const heights = [20, 35, 60, 40, 85, 50, 30, 95, 45, 25, 75, 90, 35, 65, 40];
+                                const h = heights[idx % heights.length];
+                                const isPlayed = idx < 12;
+                                return (
+                                  <span
+                                    key={idx}
+                                    style={{ height: `${h}%` }}
+                                    className={`w-1.5 rounded-full transition-all ${
+                                      isPlayed ? "bg-blue-500" : "bg-slate-200"
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+                            {/* Nút chấm mốc phát âm */}
+                            <div className="absolute left-[28%] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-md" />
                           </div>
-                        </div>
 
-                        {/* Tốc độ phát */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-medium">Tốc độ:</span>
-                          {(["0.8", "1.0", "1.2"] as const).map((spd) => (
+                          {/* Hàng nút điều khiển bên dưới sóng âm */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                            {/* Nút Phát lại */}
                             <button
-                              key={spd}
                               type="button"
                               onClick={() => {
                                 playSfx("click");
-                                setAudioSpeed(spd);
-                                triggerToast(`Đã đổi tốc độ phát sang ${spd}x`);
+                                setReplayCount((r) => r + 1);
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                audioSpeed === spd
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
-                              }`}
+                              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
                             >
-                              {spd}x
+                              <span>Phát lại</span>
+                              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-700 text-[10px] flex items-center justify-center font-mono">
+                                {replayCount}
+                              </span>
                             </button>
-                          ))}
+
+                            {/* Cụm nút Lùi - Play/Pause - Tới */}
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  triggerToast("Đã lùi 2 giây");
+                                }}
+                                className="w-8 h-8 rounded-full border border-slate-200/90 hover:bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+                              >
+                                &lt;
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setIsPlayingAudio(!isPlayingAudio);
+                                }}
+                                className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md shadow-blue-500/25 transition cursor-pointer active:scale-95"
+                              >
+                                {isPlayingAudio ? (
+                                  <Pause className="w-5 h-5 fill-white" />
+                                ) : (
+                                  <Play className="w-5 h-5 ml-0.5 fill-white" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  triggerToast("Đã tới 2 giây");
+                                }}
+                                className="w-8 h-8 rounded-full border border-slate-200/90 hover:bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
+                              >
+                                &gt;
+                              </button>
+                            </div>
+
+                            {/* Tốc độ & Nút Tự lập */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  const nextSpeed = audioSpeed === "1.0" ? "0.8" : audioSpeed === "0.8" ? "1.2" : "1.0";
+                                  setAudioSpeed(nextSpeed);
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                {audioSpeed}x
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  triggerToast("Đã kích hoạt chế độ Tự lập");
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                Tự lập
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* THẺ 2: KHUNG ĐỤC LỖ TỪ VỰNG & NÚT LẬT TỪ */}
+                        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">
+                          {/* Hàng trên: % Tỉ lệ đục lỗ & Công cụ */}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60">
+                              {([30, 50, 100] as const).map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() => {
+                                    playSfx("click");
+                                    setFillPercentage(pct);
+                                  }}
+                                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                    fillPercentage === pct
+                                      ? "bg-blue-600 text-white shadow-2xs"
+                                      : "text-slate-600 hover:text-slate-900"
+                                  }`}
+                                >
+                                  {pct}%
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  handleToggleFlagReview(q.id);
+                                }}
+                                title="Lưu câu hỏi"
+                                className={`p-2 rounded-xl border border-slate-200/90 transition cursor-pointer ${
+                                  isFlagged ? "bg-amber-100 text-amber-700 border-amber-300" : "hover:bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                <Bookmark className={`w-4 h-4 ${isFlagged ? "fill-amber-600" : ""}`} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setIsNotesModalOpen(true);
+                                }}
+                                title="Ghi chú"
+                                className="p-2 rounded-xl border border-slate-200/90 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                              >
+                                <FileText className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  triggerToast("Đã gửi yêu cầu hỗ trợ giải đáp!");
+                                }}
+                                className="px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                Hỏi bài
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Ô HÀNG ĐÂY: KHUNG HIỂN THỊ CÂU ĐỤC LỖ HOẶC NHẬP CHÍNH TẢ */}
+                          <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-6 min-h-[110px] flex items-center justify-center">
+                            <div className="flex flex-wrap items-center justify-center gap-2 text-base font-semibold leading-loose text-slate-800">
+                              {words.map((w, idx) => {
+                                // Deterministic rule hiding words based on percentage
+                                const shouldHide =
+                                  idx < revealedWordCount
+                                    ? false
+                                    : fillPercentage === 100
+                                    ? true
+                                    : fillPercentage === 50
+                                    ? idx % 2 === 1
+                                    : idx % 3 === 2;
+
+                                if (!shouldHide || isChecked) {
+                                  return (
+                                    <span key={idx} className="font-bold text-slate-900 border-b-2 border-slate-300 px-1">
+                                      {w}
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <input
+                                    key={idx}
+                                    type="text"
+                                    placeholder=""
+                                    className="w-16 h-9 rounded-xl border-2 border-slate-200 bg-white text-center font-bold text-sm text-blue-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-2xs transition"
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Hàng dưới: LẬT TỪ (1 từ, 2 từ, 3 từ, Tất cả) */}
+                          <div className="flex flex-wrap items-center gap-3 pt-2">
+                            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                              LẬT TỪ
+                            </span>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setRevealedWordCount((r) => Math.min(totalWords, r + 1));
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                1 từ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setRevealedWordCount((r) => Math.min(totalWords, r + 2));
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                2 từ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setRevealedWordCount((r) => Math.min(totalWords, r + 3));
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                3 từ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setRevealedWordCount(totalWords);
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                Tất cả
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+
+                      {/* KHỐI BÊN PHẢI (COL 12 -> 5): TỪ VỰNG NÊN HỌC */}
+                      <div className="lg:col-span-5 space-y-5">
+                        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs min-h-[380px] flex flex-col justify-between">
+                          <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+                            <BookOpen className="w-4 h-4 text-blue-600" />
+                            <h3 className="font-extrabold text-sm text-slate-900">Từ vựng nên học</h3>
+                          </div>
+
+                          {/* Trạng thái chưa hoàn thiện bài nghe (Khóa từ vựng) */}
+                          {!isChecked && revealedWordCount < totalWords ? (
+                            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3 my-auto">
+                              <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center shadow-2xs">
+                                <Lock className="w-6 h-6 stroke-[2.2]" />
+                              </div>
+                              <h4 className="font-bold text-sm text-slate-800">Chép xong câu để xem 1 từ nên học</h4>
+                              <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
+                                Từ vựng nằm ngay trong câu, hiện sớm sẽ lộ đáp án.
+                              </p>
+                            </div>
+                          ) : (
+                            /* Trạng thái đã hoàn thành hoặc đã lật từ vựng */
+                            <div className="space-y-4 pt-4 flex-1">
+                              <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-100 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-extrabold text-base text-blue-950">photograph</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => playAudio("photograph")}
+                                    className="p-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition cursor-pointer"
+                                  >
+                                    <Volume2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <p className="text-xs font-mono font-medium text-slate-500">/ˈfəʊtəɡrɑːf/</p>
+                                <p className="text-xs font-bold text-slate-700">n. bức ảnh, bức hình</p>
+                                <p className="text-xs text-slate-500 italic pt-1">Ví dụ: A man is holding a photograph.</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Ô nhập chính tả */}
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
-                          <Languages className="w-4 h-4 text-blue-600" />
-                          Gõ những từ bạn nghe được vào đây:
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={userInput}
-                          placeholder="Gõ chính tả câu bạn vừa nghe được tại đây..."
-                          onChange={(e) => setDictationUserInputs({ ...dictationUserInputs, [q.id]: e.target.value })}
-                          className="w-full p-3.5 rounded-2xl border border-slate-200 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 leading-relaxed font-sans"
-                        />
-                      </div>
-
-                      {/* Nút Kiểm tra và Hiện Transcript */}
-                      <div className="flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handleCheckDictation(q.id)}
-                          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
-                        >
-                          Kiểm tra chính tả
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowDictationScript((prev) => ({ ...prev, [q.id]: !prev[q.id] }))}
-                          className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          {isScriptShown ? "Ẩn đáp án & Lời thoại" : "Xem đáp án & Dịch nghĩa"}
-                        </button>
-                      </div>
-
-                      {/* Hiển thị đối chiếu kết quả */}
-                      {isChecked && (
-                        <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 space-y-2 text-xs leading-relaxed animate-in fade-in">
-                          <p className="font-bold text-blue-900">Audio Script chuẩn:</p>
-                          <p className="text-sm font-semibold text-blue-950 font-serif bg-white p-3 rounded-xl border border-blue-100">
-                            {q.fullTranscript}
-                          </p>
-                          <p className="text-slate-600 italic">
-                            <span className="font-bold text-slate-700">Dịch nghĩa:</span> {q.vietnameseTranslation}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Điều hướng câu trước / câu sau */}
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                        <button
-                          type="button"
-                          disabled={activeDictationQIndex === 0}
-                          onClick={() => setActiveDictationQIndex((prev) => Math.max(0, prev - 1))}
-                          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold disabled:opacity-40 hover:bg-slate-100 transition cursor-pointer"
-                        >
-                          Câu trước
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={activeDictationQIndex === dictationModalCard.questions.length - 1}
-                          onClick={() => setActiveDictationQIndex((prev) => Math.min(dictationModalCard.questions.length - 1, prev + 1))}
-                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold disabled:opacity-40 transition cursor-pointer"
-                        >
-                          Câu tiếp theo
-                        </button>
-                      </div>
                     </div>
-                  );
-                })()
-              )}
-            </div>
+                  </div>
+                );
+              })()
+            )}
+
+            {/* 3. FOOTER THANH ĐIỀU HƯỚNG BÊN DƯỚI (PHÍM TẮT & MA TRẬN CÂU HỎI) */}
+            <footer className="h-14 bg-white border-t border-slate-200/90 px-6 sm:px-8 flex items-center justify-between shrink-0 shadow-lg select-none">
+              {/* Nút Báo lỗi & Giỏ từ góc trái */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => triggerToast("Đã nhận phản hồi báo lỗi từ bạn!")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <Flag className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Báo lỗi</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => triggerToast("Đã mở giỏ từ vựng cá nhân")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Giỏ từ</span>
+                </button>
+              </div>
+
+              {/* Dòng hướng dẫn phím tắt ở giữa */}
+              <div className="hidden md:block text-xs font-semibold text-slate-400 tracking-wide">
+                Ctrl: phát lại · Tab: lật từ · Enter: câu tiếp theo · ←/→: chuyển câu
+              </div>
+
+              {/* Nút Ma trận câu hỏi xanh dương góc phải */}
+              <button
+                type="button"
+                onClick={() => setIsQuestionGridOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs active:scale-95"
+              >
+                <Grid className="w-4 h-4" />
+                <span>{activeDictationQIndex + 1}/{dictationModalCard.questions.length}</span>
+              </button>
+            </footer>
+
           </div>
         </div>
       )}
@@ -2592,22 +2847,26 @@ export default function ListeningPage() {
               <button
                 type="button"
                 onClick={() => {
-                                playSfx("click");
                   const next = !isSfxEnabled;
                   setIsSfxEnabled(next);
-                  setIsPlayingAudio(next);
-                  if (next) playSfx("correct");
-                  else playSfx("click");
-                  triggerToast(next ? "🔊 Đã bật âm thanh SFX chọn đáp án 👑" : "⏸ Đã tắt âm thanh SFX");
+                  if (!next) {
+                    setIsPlayingAudio(false);
+                    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                      window.speechSynthesis.cancel();
+                    }
+                  } else {
+                    playSfx("correct");
+                  }
+                  triggerToast(next ? "🔊 Đã bật âm thanh 🔔" : "🔕 Đã tắt toàn bộ âm thanh (Im lặng)");
                 }}
                 className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-                  isPlayingAudio
-                    ? "bg-amber-400 text-amber-950 shadow-xs animate-pulse"
+                  isSfxEnabled
+                    ? "bg-amber-400 text-amber-950 shadow-xs"
                     : "bg-white/20 text-white hover:bg-white/30"
                 }`}
-                title={isPlayingAudio ? "Đang bật âm thanh - Bấm để tắt" : "Đang tắt âm thanh - Bấm để bật"}
+                title={isSfxEnabled ? "Đang bật âm thanh - Bấm để tắt" : "Đang tắt âm thanh - Bấm để bật"}
               >
-                {isPlayingAudio ? <Bell className="w-4 h-4 text-amber-950" /> : <BellOff className="w-4 h-4 text-white" />}
+                {isSfxEnabled ? <Bell className="w-4 h-4 text-amber-950" /> : <BellOff className="w-4 h-4 text-white" />}
               </button>
 
               <div className="flex items-center gap-1.5">
@@ -2629,7 +2888,215 @@ export default function ListeningPage() {
             </div>
           </header>
 
-          {/* --- MAIN DUAL PANE PRACTICE AREA --- */}
+          
+              {/* --- ANNOTATOR FLOATING TOOLBAR --- */}
+              {isAnnotatorActive && (
+                <div className="bg-amber-100 border-b border-amber-300 px-6 py-2 flex items-center justify-between shadow-xs select-none text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="font-extrabold text-amber-900 flex items-center gap-1.5">
+                      <Pencil className="w-4 h-4 text-amber-700" />
+                      Công cụ Annotator (Đánh dấu & Tô màu bài viết):
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      {(["yellow", "green", "pink", "blue"] as const).map((color) => {
+                        const colorMap = {
+                          yellow: "bg-yellow-400 border-yellow-500",
+                          green: "bg-emerald-400 border-emerald-500",
+                          pink: "bg-pink-400 border-pink-500",
+                          blue: "bg-sky-400 border-sky-500",
+                        };
+                        return (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => {
+                              setAnnotatorColor(color);
+                              triggerToast(`Đã chọn bút tô màu ${color}`);
+                            }}
+                            className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${colorMap[color]} ${
+                              annotatorColor === color ? "scale-110 ring-2 ring-slate-800" : "opacity-70 hover:opacity-100"
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => triggerToast("Đã tẩy toàn bộ nét vẽ / đánh dấu")}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-bold hover:bg-amber-50 transition cursor-pointer"
+                    >
+                      🧹 Xóa đánh dấu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAnnotatorActive(false)}
+                      className="p-1 rounded-full text-amber-900 hover:bg-amber-200 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MODAL SỔ TAY GHI CHÚ CÁ NHÂN --- */}
+              {isNotesModalOpen && currentQ && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-base text-slate-900">Ghi chú cá nhân</h3>
+                          <p className="text-xs text-slate-500">Câu {currentQ.id} • {currentQ.part}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsNotesModalOpen(false)}
+                        className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <textarea
+                      rows={5}
+                      value={practiceUserNotes[currentQ.id] || ""}
+                      onChange={(e) => setPracticeUserNotes({ ...practiceUserNotes, [currentQ.id]: e.target.value })}
+                      placeholder="Nhập ghi chú hoặc kiến thức cần nhớ cho câu hỏi này tại đây..."
+                      className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
+                    />
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...practiceUserNotes };
+                          delete updated[currentQ.id];
+                          setPracticeUserNotes(updated);
+                          triggerToast("Đã xóa ghi chú của câu hỏi này!");
+                        }}
+                        className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
+                      >
+                        🗑 Xóa ghi chú
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsNotesModalOpen(false)}
+                          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsNotesModalOpen(false);
+                            triggerToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                          }}
+                          className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                        >
+                          💾 Lưu ghi chú
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MODAL MA TRẬN TOÀN BỘ CÂU HỎI (QUESTION GRID MODAL) --- */}
+              {isQuestionGridOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <Grid className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-base text-slate-900">Danh sách toàn bộ câu hỏi</h3>
+                          <p className="text-xs text-slate-500">
+                            Đã làm {Object.keys(practiceChecked).length}/{filteredPracticeQuestions.length} câu
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsQuestionGridOpen(false)}
+                        className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs font-semibold text-slate-600 py-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> Đúng
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" /> Sai
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> Đang xem
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-slate-200 inline-block" /> Chưa làm
+                      </span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+                      {filteredPracticeQuestions.map((q, idx) => {
+                        const isCurrent = idx === practiceCurrentQIndex;
+                        const isCheckedQ = !!practiceChecked[q.id];
+                        const userAns = practiceAnswers[q.id];
+                        const isRight = userAns === q.correctAnswer;
+
+                        let qBtnStyle = "bg-white border-slate-200 text-slate-700 hover:border-blue-400";
+                        if (isCurrent) {
+                          qBtnStyle = "bg-blue-600 text-white font-extrabold border-blue-600 ring-2 ring-blue-300";
+                        } else if (isCheckedQ) {
+                          if (isRight) qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
+                          else qBtnStyle = "bg-rose-500 text-white font-bold border-rose-500";
+                        }
+
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => {
+                              setPracticeCurrentQIndex(idx);
+                              setIsQuestionGridOpen(false);
+                            }}
+                            className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
+                          >
+                            <span className="font-extrabold">{idx + 1}</span>
+                            <span className="text-[9px] opacity-80">{q.part}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsQuestionGridOpen(false)}
+                        className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+                      >
+                        Đóng danh sách
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MAIN DUAL PANE PRACTICE AREA --- */}
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
             {quizModalCard.questions[activeQuizQIndex] && (() => {
               const q = quizModalCard.questions[activeQuizQIndex];

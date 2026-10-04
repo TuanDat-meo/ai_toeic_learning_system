@@ -1205,6 +1205,22 @@ export default function ReadingLearningPage() {
   // Workspace Controls Toggles
   const [isBilingual, setIsBilingual] = useState(true);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
+  // Interactive states for Top Header Bar buttons (Song ngữ, Ghi chú, Annotator, Timer, Ma trận câu hỏi)
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  // States cho Part 1 Audio & Listening Toolbar (Chính xác theo Ảnh Part 1)
+  const [audioSpeed, setAudioSpeed] = useState<"1x" | "1.25x" | "1.5x" | "0.75x">("1x");
+  const [isDictationMode, setIsDictationMode] = useState(false);
+  const [isFlipCardMode, setIsFlipCardMode] = useState(false);
+  const [isAutoPlayNext, setIsAutoPlayNext] = useState(true);
+  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
+  const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
+  const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
+  const [practiceTimerSeconds, setPracticeTimerSeconds] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
+  const [showDetailedExplanation, setShowDetailedExplanation] = useState(true);
+  const [showVocabSection, setShowVocabSection] = useState(true);
+  const [isVocabExpanded, setIsVocabExpanded] = useState(false);
   const [showExplanation, setShowExplanation] = useState(true);
   const [showVocab, setShowVocab] = useState(true);
   const [isVocabCollapsed, setIsVocabCollapsed] = useState(false);
@@ -1433,7 +1449,7 @@ export default function ReadingLearningPage() {
 
   // Web Audio Sound Effects Synthesizer (Zero external dependency)
     // Web Audio Sound Effects Synthesizer (Chuẩn 100% theo Part 5)
-  const playSfx = (type: "correct" | "wrong" | "click") => {
+  const playSfx = (type?: "correct" | "wrong" | "click") => {
     if (!isSfxEnabled) return; // Im lặng 100% khi tắt nút chuông
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -1441,30 +1457,16 @@ export default function ReadingLearningPage() {
       const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      osc.type = "sine";
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      if (type === "correct") {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15); // E5
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
-      } else if (type === "wrong") {
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(450, ctx.currentTime);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.08);
-      }
+      // ĐỒNG BỘ 1 ÂM THANH DUY NHẤT (Single 520Hz Tone) CHO TẤT CẢ THAO TÁC
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
     } catch {
       // Fallback
     }
@@ -2011,7 +2013,215 @@ export default function ReadingLearningPage() {
           </div>
         </header>
 
-        {/* --- MAIN DUAL PANE PRACTICE AREA --- */}
+        
+              {/* --- ANNOTATOR FLOATING TOOLBAR --- */}
+              {isAnnotatorActive && (
+                <div className="bg-amber-100 border-b border-amber-300 px-6 py-2 flex items-center justify-between shadow-xs select-none text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="font-extrabold text-amber-900 flex items-center gap-1.5">
+                      <Pencil className="w-4 h-4 text-amber-700" />
+                      Công cụ Annotator (Đánh dấu & Tô màu bài viết):
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      {(["yellow", "green", "pink", "blue"] as const).map((color) => {
+                        const colorMap = {
+                          yellow: "bg-yellow-400 border-yellow-500",
+                          green: "bg-emerald-400 border-emerald-500",
+                          pink: "bg-pink-400 border-pink-500",
+                          blue: "bg-sky-400 border-sky-500",
+                        };
+                        return (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => {
+                              setAnnotatorColor(color);
+                              triggerToast(`Đã chọn bút tô màu ${color}`);
+                            }}
+                            className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${colorMap[color]} ${
+                              annotatorColor === color ? "scale-110 ring-2 ring-slate-800" : "opacity-70 hover:opacity-100"
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => triggerToast("Đã tẩy toàn bộ nét vẽ / đánh dấu")}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-bold hover:bg-amber-50 transition cursor-pointer"
+                    >
+                      🧹 Xóa đánh dấu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAnnotatorActive(false)}
+                      className="p-1 rounded-full text-amber-900 hover:bg-amber-200 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MODAL SỔ TAY GHI CHÚ CÁ NHÂN --- */}
+              {isNotesModalOpen && currentQ && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-base text-slate-900">Ghi chú cá nhân</h3>
+                          <p className="text-xs text-slate-500">Câu {currentQ.id} • {currentQ.part}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsNotesModalOpen(false)}
+                        className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <textarea
+                      rows={5}
+                      value={practiceUserNotes[currentQ.id] || ""}
+                      onChange={(e) => setPracticeUserNotes({ ...practiceUserNotes, [currentQ.id]: e.target.value })}
+                      placeholder="Nhập ghi chú hoặc kiến thức cần nhớ cho câu hỏi này tại đây..."
+                      className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
+                    />
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...practiceUserNotes };
+                          delete updated[currentQ.id];
+                          setPracticeUserNotes(updated);
+                          triggerToast("Đã xóa ghi chú của câu hỏi này!");
+                        }}
+                        className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
+                      >
+                        🗑 Xóa ghi chú
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsNotesModalOpen(false)}
+                          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsNotesModalOpen(false);
+                            triggerToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                          }}
+                          className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                        >
+                          💾 Lưu ghi chú
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MODAL MA TRẬN TOÀN BỘ CÂU HỎI (QUESTION GRID MODAL) --- */}
+              {isQuestionGridOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <Grid className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-base text-slate-900">Danh sách toàn bộ câu hỏi</h3>
+                          <p className="text-xs text-slate-500">
+                            Đã làm {Object.keys(practiceChecked).length}/{filteredPracticeQuestions.length} câu
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsQuestionGridOpen(false)}
+                        className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs font-semibold text-slate-600 py-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> Đúng
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" /> Sai
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> Đang xem
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-slate-200 inline-block" /> Chưa làm
+                      </span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+                      {filteredPracticeQuestions.map((q, idx) => {
+                        const isCurrent = idx === practiceCurrentQIndex;
+                        const isCheckedQ = !!practiceChecked[q.id];
+                        const userAns = practiceAnswers[q.id];
+                        const isRight = userAns === q.correctAnswer;
+
+                        let qBtnStyle = "bg-white border-slate-200 text-slate-700 hover:border-blue-400";
+                        if (isCurrent) {
+                          qBtnStyle = "bg-blue-600 text-white font-extrabold border-blue-600 ring-2 ring-blue-300";
+                        } else if (isCheckedQ) {
+                          if (isRight) qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
+                          else qBtnStyle = "bg-rose-500 text-white font-bold border-rose-500";
+                        }
+
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => {
+                              setPracticeCurrentQIndex(idx);
+                              setIsQuestionGridOpen(false);
+                            }}
+                            className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
+                          >
+                            <span className="font-extrabold">{idx + 1}</span>
+                            <span className="text-[9px] opacity-80">{q.part}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsQuestionGridOpen(false)}
+                        className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+                      >
+                        Đóng danh sách
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MAIN DUAL PANE PRACTICE AREA --- */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
           {/* LEFT PANE: INSTRUCTION & PASSAGE CONTENT */}
           <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">

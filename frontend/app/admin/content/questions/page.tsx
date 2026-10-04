@@ -24,6 +24,16 @@ import {
   Table as TableIcon,
   ChevronLeft,
   ChevronRight,
+  ArrowLeft,
+  Pause,
+  Bell,
+  BellOff,
+  BookOpen,
+  XCircle,
+  Star,
+  MessageSquare,
+  EyeOff,
+  Flag,
 } from "lucide-react";
 
 // --- TYPES & INTERFACES ---
@@ -415,6 +425,11 @@ export default function AdminQuestionsPage() {
   const [previewQuestion, setPreviewQuestion] = useState<QuestionItem | null>(null);
   const [userSelectedOption, setUserSelectedOption] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showScript, setShowScript] = useState(false);
+  const [showExplanationDetails, setShowExplanationDetails] = useState(true);
+  const [showVocabSection, setShowVocabSection] = useState(true);
+  const [isVocabExpanded, setIsVocabExpanded] = useState(true);
+  const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
   const [deleteConfirmQuestion, setDeleteConfirmQuestion] = useState<QuestionItem | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -441,10 +456,38 @@ export default function AdminQuestionsPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const [isSfxEnabled, setIsSfxEnabled] = useState(true);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioSpeed, setAudioSpeed] = useState<"0.8" | "1.0" | "1.2">("1.0");
+
+  const playSfx = (type?: "correct" | "wrong" | "click") => {
+    if (!isSfxEnabled) return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
+    } catch {
+      // Ignore
+    }
+  };
+
   // Sound synthesis / audio play
   const playAudio = (textOrUrl: string) => {
+    if (!isSfxEnabled) return; // Silent when muted
     if (textOrUrl.startsWith("http")) {
       const audio = new Audio(textOrUrl);
+      audio.playbackRate = parseFloat(audioSpeed);
       audio.play().catch(() => {
         showToast("Âm thanh mô phỏng đang phát...");
       });
@@ -452,7 +495,7 @@ export default function AdminQuestionsPage() {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(textOrUrl);
       utterance.lang = "en-US";
-      utterance.rate = 0.9;
+      utterance.rate = parseFloat(audioSpeed);
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -670,6 +713,10 @@ export default function AdminQuestionsPage() {
     setPreviewQuestion(q);
     setUserSelectedOption(null);
     setShowExplanation(false);
+    setShowScript(false);
+    setShowExplanationDetails(true);
+    setShowVocabSection(true);
+    setIsVocabExpanded(true);
   };
 
   // Mock AI Generator for explanation & options
@@ -1373,184 +1420,963 @@ export default function AdminQuestionsPage() {
         </div>
       )}
 
-      {/* ================= MODAL 1: XEM THỬ / LÀM THỬ CÂU HỎI (PREVIEW QUIZ MODAL) ================= */}
+      {/* ================= MODAL 1: XEM THỬ / LÀM THỬ CÂU HỎI (PREVIEW QUIZ MODAL - FULLSCREEN DUAL-PANE) ================= */}
       {previewQuestion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
-            <button
-              type="button"
-              onClick={() => setPreviewQuestion(null)}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider font-mono bg-blue-50 px-2 py-0.5 rounded">
-                  {previewQuestion.part}
-                </span>
-                <span className="text-xs font-bold text-slate-500">• {previewQuestion.skill}</span>
-                <span className="text-xs font-bold text-emerald-600">• Độ khó: {previewQuestion.difficulty}</span>
-              </div>
-              <h3 className="text-lg font-bold text-slate-900">
-                Thử Nghiệm Câu Hỏi ({previewQuestion.code || previewQuestion.id})
-              </h3>
-            </div>
-
-            {/* Ảnh nếu có (Part 1) */}
-            {previewQuestion.imageUrl && (
-              <div className="rounded-2xl overflow-hidden border border-slate-200 max-h-60 flex items-center justify-center bg-slate-100">
-                <img
-                  src={previewQuestion.imageUrl}
-                  alt="Part 1 Photograph"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
-
-            {/* Audio nếu có */}
-            {previewQuestion.audioUrl && (
-              <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
-                  <Volume2 className="w-4 h-4 text-blue-600" />
-                  <span>Âm thanh câu hỏi trích đoạn</span>
-                </div>
+        <div className="fixed inset-0 z-50 bg-white flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans text-slate-800">
+          <div className="bg-white w-full h-full flex flex-col overflow-hidden">
+            {/* Header Modal - Fullscreen Blue Header */}
+            <header className="h-16 bg-blue-600 text-white px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-md select-none">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => playAudio(previewQuestion.audioUrl!)}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  onClick={() => {
+                    playSfx("click");
+                    setPreviewQuestion(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition cursor-pointer"
                 >
-                  <Play className="w-3 h-3 fill-white" />
-                  Phát âm thanh
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Thoát</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="inline-block px-3.5 py-1.5 rounded-full bg-blue-700/90 border border-blue-400/40 text-white text-xs font-extrabold tracking-wide">
+                    {previewQuestion.part === "Part 1" && "Part 1 • Mô tả hình ảnh"}
+                    {previewQuestion.part === "Part 2" && "Part 2 • Hỏi & Đáp"}
+                    {previewQuestion.part === "Part 3" && "Part 3 • Hội thoại ngắn"}
+                    {previewQuestion.part === "Part 4" && "Part 4 • Bài nói ngắn"}
+                    {previewQuestion.part === "Part 5" && "Part 5 • Hoàn thành câu"}
+                    {previewQuestion.part === "Part 6" && "Part 6 • Điền đoạn văn"}
+                    {previewQuestion.part === "Part 7" && "Part 7 • Đọc hiểu văn bản"}
+                  </span>
+                  <span className="text-xs font-bold text-blue-100 font-mono bg-blue-700/60 px-2.5 py-1 rounded-full border border-blue-400/30">
+                    {previewQuestion.code || previewQuestion.id}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-blue-700/90 text-white text-xs font-bold border border-blue-400/30">
+                  {previewQuestion.skill}
+                </span>
+                <span className="px-3 py-1 rounded-full bg-emerald-500/90 text-white text-xs font-extrabold shadow-2xs">
+                  Độ khó: {previewQuestion.difficulty}
+                </span>
+
+                {/* Nút Chuông âm thanh */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isSfxEnabled;
+                    setIsSfxEnabled(next);
+                    if (!next) {
+                      setIsPlayingAudio(false);
+                      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                        window.speechSynthesis.cancel();
+                      }
+                    } else {
+                      playSfx("click");
+                    }
+                    showToast(next ? "🔊 Đã bật âm thanh 🔔" : "🔕 Đã tắt âm thanh");
+                  }}
+                  className={`p-2 rounded-full transition cursor-pointer ${
+                    isSfxEnabled ? "bg-amber-400 text-amber-950 shadow-xs" : "bg-white/15 text-white hover:bg-white/25"
+                  }`}
+                  title={isSfxEnabled ? "Đang bật âm thanh - Bấm để tắt" : "Đang tắt âm thanh - Bấm để bật"}
+                >
+                  {isSfxEnabled ? <Bell className="w-4 h-4 text-amber-950" /> : <BellOff className="w-4 h-4 text-white" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSfx("click");
+                    setPreviewQuestion(null);
+                  }}
+                  className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            )}
+            </header>
 
-            {/* Đoạn văn nếu có (Part 6, 7) */}
-            {previewQuestion.passage && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1 leading-relaxed">
-                <p className="font-bold text-slate-500 uppercase text-[10px]">Đoạn văn đọc hiểu:</p>
-                <p className="whitespace-pre-line">{previewQuestion.passage}</p>
-              </div>
-            )}
+            {/* Body 2 Cột Dual-Pane chuẩn như Listening & Reading & Mock Tests */}
+            {(() => {
+              const cleanQuestionText = previewQuestion.questionText
+                ? previewQuestion.questionText.replace(/^Audio Prompt:\s*/i, "")
+                : "";
+              const isPart1 = previewQuestion.part === "Part 1";
+              const isPart2 = previewQuestion.part === "Part 2";
+              const hideOptionText = (isPart1 || isPart2) && !showExplanation && !showScript;
 
-            {/* Câu hỏi */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-              <p className="text-sm font-bold text-slate-900 leading-relaxed">
-                {previewQuestion.questionText}
-              </p>
-            </div>
-
-            {/* 4 Phương án */}
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              {previewQuestion.options.map((opt) => {
-                const isSelected = userSelectedOption === opt.id;
-                const isCorrect = opt.id === previewQuestion.correctAnswer;
-
-                let btnStyle = "bg-white border-slate-200 text-slate-800 hover:bg-slate-50";
-                if (showExplanation) {
-                  if (isCorrect) {
-                    btnStyle = "bg-emerald-50 border-emerald-500 text-emerald-900 font-bold";
-                  } else if (isSelected && !isCorrect) {
-                    btnStyle = "bg-rose-50 border-rose-500 text-rose-900";
-                  }
-                } else if (isSelected) {
-                  btnStyle = "bg-blue-50 border-blue-500 text-blue-900 ring-2 ring-blue-500/20";
-                }
-
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={showExplanation}
-                    onClick={() => setUserSelectedOption(opt.id)}
-                    className={`p-3.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2.5 cursor-pointer ${btnStyle}`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                          showExplanation && isCorrect
-                            ? "bg-emerald-600 text-white"
-                            : showExplanation && isSelected && !isCorrect
-                            ? "bg-rose-600 text-white"
-                            : isSelected
-                            ? "bg-blue-600 text-white"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {opt.id}
-                      </span>
-                      <span>{opt.text}</span>
+              return (
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+                  
+                  {/* CỘT TRÁI (LEFT PANE) */}
+                  <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 space-y-6">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      Yêu cầu bài tập ({previewQuestion.part})
                     </div>
 
-                    {showExplanation && isCorrect && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                    {showExplanation && isSelected && !isCorrect && (
-                      <X className="w-4 h-4 text-rose-600 shrink-0" />
+                    {/* PART 1: HÌNH ẢNH MINH HỌA */}
+                    {previewQuestion.part === "Part 1" && (
+                      <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
+                          Quan sát bức ảnh bên dưới và chọn câu mô tả chính xác nhất hành động/trạng thái trong hình:
+                        </h2>
+
+                        {previewQuestion.imageUrl && (
+                          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center justify-center overflow-hidden">
+                            <img
+                              src={previewQuestion.imageUrl}
+                              alt="Part 1 Photograph"
+                              className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
+                            />
+                          </div>
+                        )}
+                      </div>
                     )}
-                  </button>
-                );
-              })}
-            </div>
 
-            {/* Giải thích chi tiết khi bấm kiểm tra */}
-            {showExplanation && (
-              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-2 text-xs text-blue-950 animate-in fade-in duration-150">
-                <div className="font-bold flex items-center gap-2 text-sm">
-                  {userSelectedOption === previewQuestion.correctAnswer ? (
-                    <span className="text-emerald-700 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" /> Bạn đã trả lời chính xác!
-                    </span>
-                  ) : (
-                    <span className="text-rose-700 flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4" /> Đáp án đúng là {previewQuestion.correctAnswer}
-                    </span>
-                  )}
+                    {/* PART 2: AUDIO PROMPT & HƯỚNG DẪN */}
+                    {previewQuestion.part === "Part 2" && (
+                      <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
+                          Lắng nghe câu hỏi/câu nói ngắn và chọn 1 trong 3 câu phản hồi thích hợp nhất (A, B hoặc C):
+                        </h2>
+
+                        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+                          <div className="flex items-center gap-2 text-xs font-extrabold text-blue-800 uppercase tracking-wider">
+                            <Volume2 className="w-4 h-4 text-blue-600" />
+                            Audio Prompt (Nội dung nghe câu hỏi)
+                          </div>
+                          <p className="text-sm font-bold text-slate-900 bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono">
+                            {cleanQuestionText}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PART 3 & 4: SCRIPT HỘI THOẠI / BÀI NÓI */}
+                    {(previewQuestion.part === "Part 3" || previewQuestion.part === "Part 4") && (
+                      <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
+                          Nghe đoạn hội thoại/bài nói ngắn và tham khảo Lời thoại Script bên dưới để chọn đáp án đúng:
+                        </h2>
+
+                        {previewQuestion.passage && (
+                          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-2">
+                            <p className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                              Audio Script (Lời thoại bài nghe):
+                            </p>
+                            <div className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-line bg-slate-50 p-4 rounded-xl border border-slate-200">
+                              {previewQuestion.passage}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* PART 5: HOÀN THÀNH CÂU */}
+                    {previewQuestion.part === "Part 5" && (
+                      <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
+                          Đọc câu hỏi bên dưới và chọn 1 từ/cụm từ thích hợp nhất để điền vào chỗ trống:
+                        </h2>
+
+                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-3">
+                          <span className="px-3 py-1 rounded-md bg-blue-50 text-blue-700 font-extrabold text-xs">
+                            Câu hỏi Part 5
+                          </span>
+                          <p className="text-base font-bold text-slate-900 leading-relaxed pt-1">
+                            {cleanQuestionText}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PART 6 & 7: ĐOẠN VĂN ĐỌC HIỂU */}
+                    {(previewQuestion.part === "Part 6" || previewQuestion.part === "Part 7") && (
+                      <div className="space-y-4">
+                        <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
+                          Đọc kỹ văn bản bên dưới để tìm thông tin trả lời câu hỏi:
+                        </h2>
+
+                        {previewQuestion.passage && (
+                          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-3">
+                            <span className="px-3 py-1 rounded-md bg-blue-50 text-blue-700 font-extrabold text-xs uppercase tracking-wider">
+                              Văn bản đọc hiểu ({previewQuestion.part})
+                            </span>
+                            <div className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-xl border border-slate-200">
+                              {previewQuestion.passage}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TRÌNH PHÁT AUDIO CHO CÁC PART CÓ ÂM THANH */}
+                    {previewQuestion.audioUrl && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playSfx("click");
+                                setIsPlayingAudio(!isPlayingAudio);
+                                playAudio(previewQuestion.audioUrl!);
+                              }}
+                              className="w-12 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition cursor-pointer"
+                            >
+                              {isPlayingAudio ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 ml-0.5 fill-white" />}
+                            </button>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">Bấm nghe âm thanh câu hỏi</p>
+                              <p className="text-[11px] text-slate-400">Nghe lại nhiều lần nếu cần</p>
+                            </div>
+                          </div>
+
+                          <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
+                            00:15
+                          </span>
+                        </div>
+
+                        {/* Tốc độ phát audio */}
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                          <span className="text-xs font-bold text-slate-600">Tốc độ phát:</span>
+                          <div className="flex items-center gap-2">
+                            {(["0.8", "1.0", "1.2"] as const).map((spd) => (
+                              <button
+                                key={spd}
+                                type="button"
+                                onClick={() => {
+                                  playSfx("click");
+                                  setAudioSpeed(spd);
+                                  showToast(`Đã đổi tốc độ phát sang ${spd}x`);
+                                }}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                  audioSpeed === spd
+                                    ? "bg-blue-600 text-white shadow-xs"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                }`}
+                              >
+                                {spd}x
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CỘT PHẢI (RIGHT PANE): CÂU HỎI, CÁC ĐÁP ÁN & GIẢI THÍCH */}
+                  <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+                    <div className="space-y-6">
+                      {/* Khung nội dung câu hỏi & Dịch câu hỏi (Ảnh 3 Style) */}
+                      <div className="space-y-3">
+                        {/* Thanh Tiêu đề Câu Hỏi: Level Badge, Hỏi bài, Favorite Star */}
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[11px] font-extrabold shadow-2xs">
+                            {previewQuestion.difficulty === "Easy" ? "Lv.1" : previewQuestion.difficulty === "Hard" ? "Lv.3" : "Lv.2"}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => showToast("Đã gửi yêu cầu hỏi bài đến giảng viên/AI!")}
+                              className="px-3 py-1 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                            >
+                              <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Hỏi bài</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => showToast("Đã lưu câu hỏi vào danh sách yêu thích! ⭐")}
+                              className="p-1.5 rounded-xl border border-slate-200 text-amber-500 hover:bg-slate-50 transition cursor-pointer"
+                            >
+                              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Nội dung chính câu hỏi */}
+                        {previewQuestion.part === "Part 2" ? (
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                            <span className="text-[11px] font-extrabold text-blue-600 uppercase tracking-wider">
+                              Câu hỏi (Part 2):
+                            </span>
+                            <p className="text-sm font-bold text-slate-900 leading-relaxed">
+                              {cleanQuestionText}
+                            </p>
+                          </div>
+                        ) : previewQuestion.part !== "Part 1" ? (
+                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                            <p className="text-sm font-bold text-slate-900 leading-relaxed">
+                              {cleanQuestionText}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {/* Dịch nghĩa câu hỏi tiếng Việt (Bilingual translation - Ảnh 3) */}
+                        {showExplanation && (
+                          <div className="border-l-3 border-blue-500 pl-3 py-2.5 text-xs font-semibold text-blue-800 bg-blue-50/80 rounded-r-xl animate-in fade-in duration-200 leading-relaxed">
+                            {previewQuestion.part === "Part 1" && "Bức ảnh thể hiện rõ người phụ nữ đang tập trung gõ phím làm việc tại bàn máy tính ('She is working at a computer workstation')."}
+                            {previewQuestion.part === "Part 2" && "Tôi nên cất giữ các hóa đơn lô hàng mới được phê duyệt ở đâu?"}
+                            {(previewQuestion.part === "Part 3" || previewQuestion.part === "Part 4") && "Người phụ nữ đề nghị làm gì để giải quyết vấn đề trước mắt?"}
+                            {previewQuestion.part === "Part 5" && "Khoản hoàn trả chi phí đi lại sẽ được bao gồm trong phiếu lương ngày 1 tháng 10 của bạn."}
+                            {(previewQuestion.part === "Part 6" || previewQuestion.part === "Part 7") && "Đọc kỹ văn bản bên dưới để tìm thông tin trả lời câu hỏi."}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CÁC PHƯƠNG ÁN ĐÁP ÁN (Chuẩn thiết kế Ảnh 3) */}
+                      <div className="space-y-3">
+                        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                          Chọn phương án đúng:
+                        </p>
+
+                        <div className="space-y-3">
+                          {previewQuestion.options
+                            .filter((opt) => previewQuestion.part !== "Part 2" || opt.id !== "D")
+                            .map((opt) => {
+                              const isSelected = userSelectedOption === opt.id;
+                              const isCorrect = opt.id === previewQuestion.correctAnswer;
+                              const isPart1Or2 = previewQuestion.part === "Part 1" || previewQuestion.part === "Part 2";
+                              const hideScriptBeforeCheck = isPart1Or2 && !showExplanation;
+
+                              const cleanOptText = opt.text ? opt.text.replace(/^[A-D][\.\:\)]\s*/i, "").trim() : "";
+                              const mainText = hideScriptBeforeCheck ? "" : (cleanOptText || opt.text || "");
+
+                              let subtext = "";
+                              if (previewQuestion.part === "Part 1") {
+                                if (opt.id === "A") subtext = "| Dịch: Cô ấy đang treo một chiếc bảng trắng lên tường";
+                                if (opt.id === "B") subtext = "| Dịch: Cô ấy đang làm việc tại bàn máy tính làm việc";
+                                if (opt.id === "C") subtext = "| Dịch: Cô ấy đang sắp xếp tài liệu giấy vào tủ kim loại";
+                                if (opt.id === "D") subtext = "| Dịch: Cô ấy đang trả lời một cuộc điện thoại gọi đến";
+                              } else if (previewQuestion.part === "Part 2") {
+                                if (opt.id === "A") subtext = "| Dịch: Ở tủ hồ sơ ngay bên cạnh bàn lễ tân";
+                                if (opt.id === "B") subtext = "| Dịch: Có, đơn giao hàng đã đến vào chiều qua";
+                                if (opt.id === "C") subtext = "| Dịch: Khoảng 50 đô la cho mỗi hóa đơn";
+                              } else if (previewQuestion.part === "Part 5") {
+                                if (opt.id === "A") subtext = "| (pron): bạn";
+                                if (opt.id === "B") subtext = "| (adj sở hữu): của bạn";
+                                if (opt.id === "C") subtext = "| (pron sở hữu): cái của bạn";
+                                if (opt.id === "D") subtext = "| (pron): chính bạn";
+                              } else if (previewQuestion.part === "Part 3" || previewQuestion.part === "Part 4") {
+                                if (opt.id === "A") subtext = "| Dịch: Cung cấp thiết bị thay thế";
+                                if (opt.id === "B") subtext = "| Dịch: Hoàn lại tiền cho khách hàng";
+                                if (opt.id === "C") subtext = "| Dịch: Sửa chữa linh kiện bị hỏng";
+                                if (opt.id === "D") subtext = "| Dịch: Hủy bỏ hợp đồng dịch vụ";
+                              } else {
+                                if (opt.id === "A") subtext = "| Dịch: Thông báo thay đổi chính sách công ty";
+                                if (opt.id === "B") subtext = "| Dịch: Yêu cầu xác nhận đơn đặt hàng";
+                                if (opt.id === "C") subtext = "| Dịch: Cung cấp lịch trình bảo trì thiết bị";
+                                if (opt.id === "D") subtext = "| Dịch: Gửi lời mời tham dự hội thảo";
+                              }
+
+                              let cardStyle = "border-slate-200 bg-white text-slate-800 hover:bg-slate-50";
+                              let iconNode = (
+                                <span className="w-7 h-7 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs shrink-0 transition">
+                                  {opt.id}
+                                </span>
+                              );
+
+                              if (showExplanation) {
+                                if (isCorrect) {
+                                  cardStyle = "border-emerald-500 bg-emerald-50/90 text-emerald-950 font-bold ring-2 ring-emerald-500/20";
+                                  iconNode = <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />;
+                                } else if (isSelected) {
+                                  cardStyle = "border-rose-400 bg-rose-50/90 text-rose-950 font-bold ring-2 ring-rose-400/20";
+                                  iconNode = <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />;
+                                } else {
+                                  cardStyle = "border-slate-200 bg-white text-slate-700 opacity-75";
+                                }
+                              } else if (isSelected) {
+                                cardStyle = "border-2 border-blue-600 bg-blue-50/90 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-xs";
+                              }
+
+                              return (
+                                <div
+                                  key={opt.id}
+                                  onClick={() => {
+                                    if (showExplanation) return;
+                                    playSfx("click");
+                                    setUserSelectedOption(opt.id);
+                                  }}
+                                  className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all duration-150 cursor-pointer ${cardStyle}`}
+                                >
+                                  {iconNode}
+
+                                  <div className="flex-1 space-y-1">
+                                    <span className="text-sm font-semibold">
+                                      ({opt.id}){mainText ? ` ${mainText}` : ""}
+                                    </span>
+                                    {showExplanation && subtext && (
+                                      <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 pt-0.5">
+                                        <span>{subtext}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      {/* NÚT KIỂM TRA ĐÁP ÁN */}
+                      {!showExplanation ? (
+                        <button
+                          type="button"
+                          disabled={!userSelectedOption}
+                          onClick={() => {
+                            playSfx("click");
+                            setShowExplanation(true);
+                          }}
+                          className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 text-white text-sm font-extrabold transition-all shadow-md cursor-pointer active:scale-95"
+                        >
+                          Kiểm tra đáp án
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playSfx("click");
+                            setUserSelectedOption(null);
+                            setShowExplanation(false);
+                          }}
+                          className="w-full py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Làm lại câu hỏi này
+                        </button>
+                      )}
+
+                      {/* GIẢI THÍCH CHI TIẾT & TỪ VỰNG NÊN HỌC KHI KIỂM TRA (Images 2 & 3) */}
+                      {showExplanation && (() => {
+                        const vocabList = (previewQuestion as any).vocabList || (
+                          previewQuestion.part === "Part 1"
+                            ? [
+                                {
+                                  word: "workstation",
+                                  pos: "n",
+                                  level: "B1",
+                                  ipa: "/ˈwɜːrksteɪʃn/",
+                                  meaning: "bàn làm việc máy tính",
+                                  exampleEn: "She is sitting focused at her computer workstation.",
+                                  exampleVi: "Cô ấy đang ngồi tập trung tại bàn máy tính làm việc của mình.",
+                                  collocations: ["computer workstation – trạm máy tính làm việc", "workstation setup – thiết lập bàn làm việc"],
+                                  synonyms: ["desk – bàn làm việc"],
+                                  antonyms: ["field – ngoài trời/công trường"],
+                                  wordFamily: ["work v – làm việc", "worker n – người lao động"],
+                                },
+                                {
+                                  word: "cabinet",
+                                  pos: "n",
+                                  level: "B1",
+                                  ipa: "/ˈkæbɪnət/",
+                                  meaning: "tủ tài liệu/hồ sơ",
+                                  exampleEn: "Important paper documents are organized into a metal cabinet.",
+                                  exampleVi: "Tài liệu giấy quan trọng được sắp xếp vào tủ hồ sơ kim loại.",
+                                  collocations: ["filing cabinet – tủ đựng hồ sơ", "cabinet drawer – ngăn kéo tủ"],
+                                  synonyms: ["cupboard – tủ đựng đồ"],
+                                  antonyms: [],
+                                  wordFamily: [],
+                                },
+                                {
+                                  word: "whiteboard",
+                                  pos: "n",
+                                  level: "A2",
+                                  ipa: "/ˈwaɪtbɔːrd/",
+                                  meaning: "bảng viết bút lông",
+                                  exampleEn: "She is hanging a new whiteboard on the wall.",
+                                  exampleVi: "Cô ấy đang treo một chiếc bảng trắng mới lên tường.",
+                                  collocations: ["whiteboard marker – bút viết bảng"],
+                                  synonyms: [],
+                                  antonyms: [],
+                                  wordFamily: [],
+                                },
+                              ]
+                            : previewQuestion.part === "Part 2"
+                            ? [
+                                {
+                                  word: "invoice",
+                                  pos: "n",
+                                  level: "B2",
+                                  ipa: "/ˈɪnvɔɪs/",
+                                  meaning: "hóa đơn thanh toán/giao hàng",
+                                  exampleEn: "Where should I file the newly approved shipment invoices?",
+                                  exampleVi: "Tôi nên cất giữ các hóa đơn lô hàng mới được phê duyệt ở đâu?",
+                                  collocations: ["tax invoice – hóa đơn thuế", "paid invoice – hóa đơn đã thanh toán"],
+                                  synonyms: ["bill – hóa đơn"],
+                                  antonyms: [],
+                                  wordFamily: ["invoicing n – việc lập hóa đơn"],
+                                },
+                                {
+                                  word: "shipment",
+                                  pos: "n",
+                                  level: "B2",
+                                  ipa: "/ˈʃɪpmənt/",
+                                  meaning: "lô hàng, việc vận chuyển",
+                                  exampleEn: "Yes, the shipment arrived yesterday afternoon.",
+                                  exampleVi: "Có, đơn giao lô hàng đã đến vào chiều qua.",
+                                  collocations: ["shipment tracking – theo dõi lô hàng"],
+                                  synonyms: ["delivery – giao hàng"],
+                                  antonyms: [],
+                                  wordFamily: ["ship v – vận chuyển"],
+                                },
+                                {
+                                  word: "approved",
+                                  pos: "adj",
+                                  level: "B1",
+                                  ipa: "/əˈpruːvd/",
+                                  meaning: "đã được phê duyệt",
+                                  exampleEn: "The newly approved plan will take effect tomorrow.",
+                                  exampleVi: "Kế hoạch mới được phê duyệt sẽ có hiệu lực vào ngày mai.",
+                                  collocations: ["approved budget – ngân sách đã phê duyệt"],
+                                  synonyms: ["authorized – được ủy quyền"],
+                                  antonyms: ["rejected – bị từ chối"],
+                                  wordFamily: ["approve v – phê duyệt", "approval n – sự phê duyệt"],
+                                },
+                              ]
+                            : previewQuestion.part === "Part 5"
+                            ? [
+                                {
+                                  word: "include",
+                                  pos: "v",
+                                  level: "B1",
+                                  ipa: "/ɪnˈkluːd/",
+                                  meaning: "bao gồm",
+                                  exampleEn: "The price does not include breakfast.",
+                                  exampleVi: "Giá này không bao gồm bữa sáng.",
+                                  collocations: ["include tax – bao gồm thuế", "include the details – bao gồm cả chi tiết"],
+                                  synonyms: ["contain – chứa"],
+                                  antonyms: ["exclude – loại trừ"],
+                                  wordFamily: ["including prep – bao gồm cả", "inclusion n – sự bao gồm", "inclusive adj – bao gồm tất cả"],
+                                },
+                                {
+                                  word: "reimbursement",
+                                  pos: "n",
+                                  level: "B2",
+                                  ipa: "/ˌriːɪmˈbɜːrsmənt/",
+                                  meaning: "khoản hoàn trả chi phí",
+                                  exampleEn: "Reimbursement for travel expenses will be included in your paycheck.",
+                                  exampleVi: "Khoản hoàn trả chi phí đi lại sẽ được bao gồm trong phiếu lương của bạn.",
+                                  collocations: ["expense reimbursement – hoàn trả chi phí", "reimbursement policy – chính sách hoàn trả"],
+                                  synonyms: ["refund – tiền hoàn lại"],
+                                  antonyms: [],
+                                  wordFamily: ["reimburse v – hoàn lại tiền"],
+                                },
+                                {
+                                  word: "paycheck",
+                                  pos: "n",
+                                  level: "B1",
+                                  ipa: "/ˈpeɪtʃek/",
+                                  meaning: "phiếu lương, tiền lương",
+                                  exampleEn: "Reimbursement will be included in your October 1 paycheck.",
+                                  exampleVi: "Khoản hoàn trả sẽ được bao gồm trong phiếu lương ngày 1 tháng 10 của bạn.",
+                                  collocations: ["monthly paycheck – phiếu lương hàng tháng"],
+                                  synonyms: ["salary – tiền lương"],
+                                  antonyms: [],
+                                  wordFamily: [],
+                                },
+                              ]
+                            : [
+                                {
+                                  word: "replacement",
+                                  pos: "n",
+                                  level: "B2",
+                                  ipa: "/rɪˈpleɪsmənt/",
+                                  meaning: "sự thay thế, vật thay thế",
+                                  exampleEn: "We will offer a free replacement cartridge.",
+                                  exampleVi: "Chúng tôi sẽ cung cấp hộp mực thay thế miễn phí.",
+                                  collocations: ["replacement part – linh kiện thay thế"],
+                                  synonyms: ["substitute – vật thay thế"],
+                                  antonyms: [],
+                                  wordFamily: ["replace v – thay thế"],
+                                },
+                                {
+                                  word: "supplier",
+                                  pos: "n",
+                                  level: "B2",
+                                  ipa: "/səˈplaɪər/",
+                                  meaning: "nhà cung cấp",
+                                  exampleEn: "The logistics supplier responded to our inquiry.",
+                                  exampleVi: "Nhà cung cấp hậu cần đã phản hồi yêu cầu của chúng tôi.",
+                                  collocations: ["equipment supplier – nhà cung cấp thiết bị"],
+                                  synonyms: ["vendor – nhà bán hàng"],
+                                  antonyms: [],
+                                  wordFamily: ["supply v/n – cung cấp/nguồn cung"],
+                                },
+                              ]
+                        );
+
+                        const steps = previewQuestion.part === "Part 1"
+                          ? [
+                              { title: "Bước 1: Quan sát bức ảnh", desc: "Xác định các chủ thể hành động và vật thể chính trong không gian phòng làm việc." },
+                              { title: "Bước 2: Phân tích hành động", desc: previewQuestion.explanation || "Bức ảnh thể hiện rõ người trong hình đang thao tác làm việc với thiết bị máy tính." },
+                              { title: "Bước 3: Chọn đáp án", desc: "Phương án B mô tả chính xác nhất hành động làm việc tại bàn máy tính." },
+                            ]
+                          : previewQuestion.part === "Part 2"
+                          ? [
+                              { title: "Bước 1: Xác định từ hỏi (Where)", desc: "Lắng nghe từ hỏi 'Where' chỉ vị trí/nơi chốn để loại trừ các đáp án trả lời Yes/No hay số lượng." },
+                              { title: "Bước 2: Phân tích nội dung câu hỏi", desc: previewQuestion.explanation || "Hỏi vị trí cất giữ tài liệu hóa đơn lô hàng mới được phê duyệt." },
+                              { title: "Bước 3: Chọn đáp án", desc: "Phương án A chỉ rõ vị trí tủ hồ sơ cạnh bàn lễ tân." },
+                            ]
+                          : [
+                              { title: "Bước 1: Xác định dạng câu hỏi & từ loại", desc: "Phân tích cấu trúc ngữ pháp và vị trí đại từ / tính từ sở hữu cần điền vào câu." },
+                              { title: "Bước 2: Phân tích ngữ cảnh & nghĩa của câu", desc: previewQuestion.explanation || "Chỗ trống nằm trước cụm danh từ 'October 1 paycheck' nên cần tính từ sở hữu 'your'." },
+                              { title: "Bước 3: Chọn đáp án chính xác", desc: "Chọn tính từ sở hữu 'your' bổ nghĩa cho cụm danh từ phía sau." },
+                            ];
+
+                        return (
+                          <div className="space-y-4 animate-in fade-in">
+                            {/* TOGGLE 1: GIẢI THÍCH CHI TIẾT (Ảnh 2) */}
+                            <div className="pt-2">
+                              <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Giải thích chi tiết</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playSfx("click");
+                                    setShowExplanationDetails(!showExplanationDetails);
+                                  }}
+                                  className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                                    showExplanationDetails ? "bg-blue-600" : "bg-slate-300"
+                                  }`}
+                                >
+                                  <div
+                                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                                      showExplanationDetails ? "translate-x-5" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+
+                              {showExplanationDetails && (
+                                <div className="mt-2 p-4 rounded-2xl bg-blue-50/60 border border-blue-100 text-xs text-slate-800 space-y-2.5 animate-in fade-in duration-150 shadow-2xs">
+                                  {steps.map((st, i) => (
+                                    <div key={i} className="space-y-0.5">
+                                      <p className="font-bold text-blue-900">{st.title}</p>
+                                      <p className="text-slate-600 leading-relaxed pl-2 border-l-2 border-blue-300">
+                                        {st.desc}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* TOGGLE 2: TỪ VỰNG NÊN HỌC (Ảnh 1 & Ảnh 2) */}
+                            <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-3 shadow-xs">
+                              {/* Thanh tiêu đề chính của Từ vựng */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 font-extrabold text-amber-900 text-sm">
+                                  <BookOpen className="w-4.5 h-4.5 text-amber-600" />
+                                  <span>Từ vựng nên học</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    playSfx("click");
+                                    setShowVocabSection(!showVocabSection);
+                                  }}
+                                  className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                                    showVocabSection ? "bg-blue-600" : "bg-slate-300"
+                                  }`}
+                                >
+                                  <div
+                                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                                      showVocabSection ? "translate-x-5" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+
+                              {/* Khung nội dung danh sách từ vựng khi BẬT toggle */}
+                              {showVocabSection && (
+                                <div className="space-y-3 animate-in fade-in">
+                                  {/* Thanh thao tác: Số lượng từ, Nút Xem chi tiết / Thu gọn, Nút Thêm tất cả */}
+                                  <div className="flex items-center justify-between pt-1 pb-1 border-t border-amber-200/50">
+                                    <span className="text-xs font-semibold text-slate-600">
+                                      {vocabList.length} từ
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          playSfx("click");
+                                          setIsVocabExpanded(!isVocabExpanded);
+                                        }}
+                                        className="px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-amber-100/70 transition cursor-pointer flex items-center gap-1.5"
+                                      >
+                                        {isVocabExpanded ? (
+                                          <>
+                                            <EyeOff className="w-3.5 h-3.5 text-slate-600" />
+                                            <span>Thu gọn</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                            <span>Xem chi tiết</span>
+                                          </>
+                                        )}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          playSfx("click");
+                                          setAddedVocabItems(vocabList.map((v: any) => v.word));
+                                          showToast(`Đã thêm tất cả ${vocabList.length} từ vào sổ từ vựng! ✨`);
+                                        }}
+                                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Thêm tất cả ({vocabList.length})</span>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Danh sách các từ vựng */}
+                                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                                    {vocabList.map((v: any, idx: number) => {
+                                      const isSaved = addedVocabItems.includes(v.word);
+
+                                      // Dạng xem chi tiết (Ảnh 2)
+                                      if (isVocabExpanded) {
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-2xs space-y-3 transition"
+                                          >
+                                            {/* Dòng 1: Từ, Loại từ, Cấp độ, Nút lưu */}
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-extrabold text-slate-900 text-base">{v.word}</span>
+                                                  <span className="italic font-serif text-slate-500 text-xs">{v.pos}</span>
+                                                  <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-extrabold text-[10px]">
+                                                    {v.level}
+                                                  </span>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 text-xs text-slate-600 font-mono">
+                                                  <span>{v.ipa}</span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      playSfx("click");
+                                                      playAudio(v.word);
+                                                    }}
+                                                    className="text-blue-600 hover:text-blue-800 p-0.5 rounded transition cursor-pointer"
+                                                    title="Nghe phát âm"
+                                                  >
+                                                    <Volume2 className="w-3.5 h-3.5 inline" />
+                                                  </button>
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => showToast(`Đã ghim từ "${v.word}"!`)}
+                                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-amber-500 hover:bg-slate-50 transition cursor-pointer"
+                                                  title="Đánh dấu từ"
+                                                >
+                                                  <Flag className="w-3.5 h-3.5" />
+                                                </button>
+
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    playSfx("click");
+                                                    if (isSaved) {
+                                                      setAddedVocabItems(addedVocabItems.filter((item) => item !== v.word));
+                                                    } else {
+                                                      setAddedVocabItems([...addedVocabItems, v.word]);
+                                                      showToast(`Đã lưu từ "${v.word}" vào sổ từ vựng!`);
+                                                    }
+                                                  }}
+                                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                                                    isSaved
+                                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                      : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                                                  }`}
+                                                >
+                                                  {isSaved ? (
+                                                    <>
+                                                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Đã lưu
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <Plus className="w-3.5 h-3.5" /> Thêm
+                                                    </>
+                                                  )}
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            {/* Định nghĩa nghĩa tiếng Việt */}
+                                            <p className="text-sm font-bold text-slate-800 leading-snug">{v.meaning}</p>
+
+                                            {/* Ví dụ mẫu (Example Sentence) */}
+                                            {v.exampleEn && (
+                                              <div className="p-3 rounded-xl bg-slate-50 border border-slate-150/80 text-xs space-y-1">
+                                                <p className="text-slate-800 font-medium">{v.exampleEn}</p>
+                                                <p className="text-slate-500">{v.exampleVi}</p>
+                                              </div>
+                                            )}
+
+                                            {/* Cụm từ (Collocations) */}
+                                            {v.collocations && v.collocations.length > 0 && (
+                                              <div className="space-y-1 text-xs pt-1">
+                                                <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider">Cụm từ</span>
+                                                <div className="space-y-0.5 text-slate-700">
+                                                  {v.collocations.map((c: string, cIdx: number) => (
+                                                    <p key={cIdx} className="leading-tight">• {c}</p>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* Đồng nghĩa & Trái nghĩa */}
+                                            {((v.synonyms && v.synonyms.length > 0) || (v.antonyms && v.antonyms.length > 0)) && (
+                                              <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100">
+                                                {v.synonyms && v.synonyms.length > 0 && (
+                                                  <div>
+                                                    <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Đồng nghĩa</span>
+                                                    <p className="text-slate-700 text-[11px] font-medium">{v.synonyms.join(", ")}</p>
+                                                  </div>
+                                                )}
+                                                {v.antonyms && v.antonyms.length > 0 && (
+                                                  <div>
+                                                    <span className="text-[10px] font-extrabold text-rose-500 uppercase tracking-wider">Trái nghĩa</span>
+                                                    <p className="text-slate-700 text-[11px] font-medium">{v.antonyms.join(", ")}</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+
+                                            {/* Họ từ (Word Family) */}
+                                            {v.wordFamily && v.wordFamily.length > 0 && (
+                                              <div className="space-y-1 text-xs pt-1 border-t border-slate-100">
+                                                <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Họ từ</span>
+                                                <div className="space-y-0.5 text-slate-700 text-[11px]">
+                                                  {v.wordFamily.map((wf: string, wfIdx: number) => (
+                                                    <p key={wfIdx}>• {wf}</p>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+
+                                      // Dạng gọn (Ảnh 1)
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="p-3 rounded-xl border border-amber-200/80 bg-white flex items-center justify-between gap-3 text-xs shadow-2xs"
+                                        >
+                                          <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-extrabold text-slate-900 text-sm">{v.word}</span>
+                                              <span className="italic text-slate-500 font-semibold">{v.pos}</span>
+                                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-100 text-blue-800">
+                                                {v.level}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-slate-600 text-[11px]">
+                                              <span className="font-mono text-slate-500">{v.ipa}</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  playSfx("click");
+                                                  playAudio(v.word);
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 cursor-pointer p-0.5 rounded hover:bg-blue-50 transition"
+                                                title="Phát âm từ này"
+                                              >
+                                                <Volume2 className="w-3.5 h-3.5" />
+                                              </button>
+                                              <span className="text-slate-300">•</span>
+                                              <span className="font-medium text-slate-800">{v.meaning}</span>
+                                            </div>
+                                          </div>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              playSfx("click");
+                                              if (isSaved) {
+                                                setAddedVocabItems(addedVocabItems.filter((item) => item !== v.word));
+                                              } else {
+                                                setAddedVocabItems([...addedVocabItems, v.word]);
+                                                showToast(`Đã lưu từ "${v.word}" vào sổ từ vựng!`);
+                                              }
+                                            }}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                                              isSaved
+                                                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                                            }`}
+                                          >
+                                            {isSaved ? (
+                                              <>
+                                                <Check className="w-3 h-3 text-emerald-600" /> Đã lưu
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Plus className="w-3 h-3" /> Lưu từ
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
                 </div>
-                <p className="leading-relaxed font-medium text-slate-700">
-                  <strong>Giải thích:</strong> {previewQuestion.explanation}
-                </p>
-              </div>
-            )}
+              );
+            })()}
 
-            {/* Modal Footer */}
-            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-              <span className="text-xs text-slate-500">
-                {userSelectedOption ? `Đã chọn: Phương án ${userSelectedOption}` : "Hãy chọn 1 phương án"}
-              </span>
+            {/* Bottom Navigation Footer */}
+            <footer className="h-14 bg-white border-t border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
+              <button
+                type="button"
+                onClick={() => {
+                  playSfx("click");
+                  showToast("Đã ghi nhận phản hồi về câu hỏi này!");
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer"
+              >
+                <span>Báo lỗi câu hỏi</span>
+              </button>
 
-              <div className="flex items-center gap-2.5">
-                {!showExplanation ? (
-                  <button
-                    type="button"
-                    disabled={!userSelectedOption}
-                    onClick={() => setShowExplanation(true)}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    Kiểm tra đáp án
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUserSelectedOption(null);
-                      setShowExplanation(false);
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Làm lại
-                  </button>
-                )}
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setPreviewQuestion(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                  onClick={() => {
+                    playSfx("click");
+                    setPreviewQuestion(null);
+                  }}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs"
                 >
-                  Đóng
+                  Đóng cửa sổ
                 </button>
               </div>
-            </div>
+            </footer>
           </div>
         </div>
       )}

@@ -82,6 +82,14 @@ export interface PracticeQuestion {
   audioUrl?: string;
   imageUrl?: string;
   options: { [key: string]: string };
+  groupTitle?: string;
+  groupId?: string;
+  groupTotal?: number;
+  optionGlosses?: { [key: string]: string };
+  step1?: string;
+  step2?: string;
+  step3?: string;
+  note?: string;
   optionGlosses?: { [key: string]: string };
   correctAnswer: string;
   explanation: string;
@@ -90,7 +98,141 @@ export interface PracticeQuestion {
 }
 
 // DỮ LIỆU CÂU HỎI MẪU CHO MÔ PHỎNG THI THỬ & LUYỆN TẬP
+// DỮ LIỆU CÂU HỎI MẪU CHUẨN ĐỦ 7 PART (PART 1,2,3,4 LISTENING & PART 5,6,7 READING)
 const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
+  // ================= LISTENING SECTION (PART 1 - 4) =================
+  // --- PART 1: PHOTOGRAPHS (6 câu) ---
+  {
+    id: 1,
+    part: "Part 1",
+    questionText: "Look at the photograph and choose the statement that best describes what you see.",
+    imageUrl: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=800&q=80",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    options: {
+      A: "A chef is preparing food in a commercial kitchen.",
+      B: "Plates are being washed in a sink.",
+      C: "Food is being served to restaurant customers.",
+      D: "Groceries are being loaded into a delivery truck.",
+    },
+    correctAnswer: "A",
+    transcript: "(A) A chef is preparing food in a commercial kitchen. (B) Plates are being washed in a sink. (C) Food is being served to restaurant customers. (D) Groceries are being loaded into a delivery truck.",
+    translation: "(A) Một đầu bếp đang chuẩn bị đồ ăn trong bếp thương mại. (B) Bát đĩa đang được rửa trong bồn. (C) Thức ăn đang được phục vụ cho khách hàng. (D) Hàng hóa đang được chất lên xe giao hàng.",
+    explanation: "Bức ảnh thể hiện người đầu bếp đang đứng nấu ăn bên bếp lò trong nhà bếp nhà hàng -> Phương án (A) mô tả đúng nhất.",
+  },
+  {
+    id: 2,
+    part: "Part 1",
+    questionText: "Look at the photograph and choose the best description.",
+    imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    options: {
+      A: "Some people are seated around a conference table.",
+      B: "Documents are being filed in the cabinet.",
+      C: "A presentation is being displayed on the monitor.",
+      D: "The office windows are currently being cleaned.",
+    },
+    correctAnswer: "A",
+    transcript: "(A) Some people are seated around a conference table.",
+    translation: "(A) Một số người đang ngồi quanh bàn họp.",
+    explanation: "Nhân sự đang ngồi trao đổi xung quanh bàn họp lớn.",
+  },
+
+  // --- PART 2: QUESTION - RESPONSE (25 câu - chỉ có A, B, C) ---
+  {
+    id: 7,
+    part: "Part 2",
+    questionText: "When is the annual budget proposal scheduled to be submitted?",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    options: {
+      A: "Yes, our team approved it yesterday.",
+      B: "By the end of business hours this Friday.",
+      C: "In the main boardroom on the fifth floor.",
+    },
+    correctAnswer: "B",
+    transcript: "Question: When is the annual budget proposal scheduled to be submitted? (A) Yes, approved yesterday. (B) By Friday. (C) On the fifth floor.",
+    translation: "Câu hỏi: Khi nào đề xuất ngân sách hàng năm dự kiến được nộp? (A) Vâng, đã duyệt. (B) Trước thứ Sáu này. (C) Ở tầng 5.",
+    explanation: "Câu hỏi 'When' hỏi về thời gian -> (B) đưa ra thời hạn cụ thể.",
+  },
+  {
+    id: 8,
+    part: "Part 2",
+    questionText: "Why hasn't the overseas shipment from Tokyo arrived yet?",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    options: {
+      A: "Severe weather conditions delayed international flights.",
+      B: "No, we only received forty cartons.",
+      C: "Mr. Sato is the chief logistics coordinator.",
+    },
+    correctAnswer: "A",
+    translation: "Tại sao lô hàng từ Tokyo chưa tới?",
+    explanation: "Câu hỏi 'Why' hỏi nguyên nhân -> (A) giải thích do thời tiết xấu hoãn chuyến bay.",
+  },
+
+  // --- PART 3: SHORT CONVERSATIONS (39 câu - Nhóm 3 câu) ---
+  {
+    id: 32,
+    part: "Part 3",
+    groupTitle: "Questions 32–34 refer to the following conversation.",
+    groupId: "32–34",
+    groupTotal: 3,
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    questionText: "32. Where does the conversation most likely take place?",
+    options: {
+      A: "At an electronics retail store",
+      B: "In a corporate medical clinic",
+      C: "At an airport check-in counter",
+      D: "In a hotel reception lobby",
+    },
+    optionGlosses: {
+      A: "Cửa hàng bán lẻ đồ điện tử",
+      B: "Phòng khám y tế doanh nghiệp",
+      C: "Quầy làm thủ tục sân bay",
+      D: "Sảnh lễ tân khách sạn",
+    },
+    correctAnswer: "D",
+    translation: "Cuộc trò chuyện có khả năng diễn ra ở đâu nhất?",
+    explanation: "Người đàn ông hỏi về reservation phòng và chìa khóa phòng -> sảnh lễ tân khách sạn.",
+  },
+  {
+    id: 33,
+    part: "Part 3",
+    groupTitle: "Questions 32–34 refer to the following conversation.",
+    groupId: "32–34",
+    groupTotal: 3,
+    questionText: "33. What problem does the woman mention?",
+    options: {
+      A: "The executive suite is not cleaned yet.",
+      B: "A credit card payment was declined.",
+      C: "The shuttle bus service has been cancelled.",
+      D: "The air conditioning unit is broken.",
+    },
+    correctAnswer: "A",
+    translation: "Người phụ nữ nhắc tới sự cố gì?",
+    explanation: "Nhân viên báo phòng suite chưa dọn dẹp xong.",
+  },
+
+  // --- PART 4: SHORT TALKS (30 câu - Nhóm 3 câu) ---
+  {
+    id: 71,
+    part: "Part 4",
+    groupTitle: "Questions 71–73 refer to the following announcement.",
+    groupId: "71–73",
+    groupTotal: 3,
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    questionText: "71. Who is the speaker most likely addressing?",
+    options: {
+      A: "Factory assembly line workers",
+      B: "New corporate employees at orientation",
+      C: "Passengers on a guided tour bus",
+      D: "Store managers at a sales conference",
+    },
+    correctAnswer: "B",
+    translation: "Người nói đang hướng tới đối tượng nào?",
+    explanation: "Thông báo chào mừng nhân viên mới trong ngày định hướng công ty.",
+  },
+
+  // ================= READING SECTION (PART 5 - 7) =================
+  // --- PART 5: INCOMPLETE SENTENCES (30 câu) ---
   {
     id: 101,
     part: "Part 5",
@@ -109,165 +251,121 @@ const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
     },
     correctAnswer: "A",
     translation: "Hội đồng quản trị phải được thông báo bằng văn bản về những sửa đổi đối với chương trình hưu trí ít nhất 30 ngày trước.",
-    explanation: "Sau giới từ 'of' cần một Danh từ (Noun) đóng vai trò làm tân ngữ. 'revisions' (những sự sửa đổi) là danh từ chính xác.",
-  },
-  // Part 1: Photographs
-  {
-    id: 1,
-    part: "Part 1",
-    questionText: "Look at the photograph and choose the statement that best describes what you see.",
-    imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    options: {
-      A: "Some people are seated around a conference table.",
-      B: "Documents are being filed in the cabinet.",
-      C: "A presentation is being displayed on the monitor.",
-      D: "The office windows are currently being cleaned.",
-    },
-    correctAnswer: "A",
-    transcript: "(A) Some people are seated around a conference table. (B) Documents are being filed in the cabinet. (C) A presentation is being displayed on the monitor. (D) The office windows are currently being cleaned.",
-    translation: "(A) Một số người đang ngồi quanh bàn họp. (B) Tài liệu đang được xếp vào tủ. (C) Một bài thuyết trình đang được chiếu trên màn hình. (D) Cửa sổ văn phòng đang được lau dọn.",
-    explanation: "Trong bức ảnh, các nhân sự đang ngồi xung quanh bàn hội nghị trong phòng họp, phương án (A) miêu tả chính xác nhất hành động chính.",
+    step1: 'Bốn đáp án là các dạng khác nhau của đại từ "revisions" nên cần xét vị trí chỗ trống.',
+    step2: 'Sau giới từ "of" cần danh từ đóng vai trò tân ngữ -> loại động từ revising/revised/revises.',
+    step3: 'Chọn danh từ số nhiều "revisions" (những sự sửa đổi).',
+    explanation: "Sau giới từ 'of' cần danh từ số nhiều 'revisions'.",
   },
   {
-    id: 2,
-    part: "Part 1",
-    questionText: "Look at the photograph and choose the best description.",
-    imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-    options: {
-      A: "A forklift is unloading cargo from a cargo ship.",
-      B: "Boxes and packages are stacked high in a warehouse.",
-      C: "Workers are inspecting conveyor belt machinery.",
-      D: "A delivery van is parked beside the loading dock.",
-    },
-    correctAnswer: "B",
-    transcript: "(A) A forklift is unloading cargo from a cargo ship. (B) Boxes and packages are stacked high in a warehouse. (C) Workers are inspecting conveyor belt machinery. (D) A delivery van is parked beside the loading dock.",
-    translation: "(A) Xe nâng đang bốc dỡ hàng từ tàu chở hàng. (B) Các thùng và kiện hàng được xếp chồng cao trong nhà kho. (C) Công nhân đang kiểm tra băng chuyền máy móc. (D) Xe giao hàng đang đỗ cạnh bến bốc hàng.",
-    explanation: "Trọng tâm bức ảnh thể hiện các thùng carton và kiện hàng xếp gọn gàng thành tầng cao bên trong kho lưu trữ hàng hóa.",
-  },
-  // Part 2: Question - Response
-  {
-    id: 3,
-    part: "Part 2",
-    questionText: "When is the annual budget proposal scheduled to be submitted?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-    options: {
-      A: "Yes, our team approved it yesterday.",
-      B: "By the end of business hours this Friday.",
-      C: "In the main boardroom on the fifth floor.",
-    },
-    correctAnswer: "B",
-    transcript: "Question: When is the annual budget proposal scheduled to be submitted? (A) Yes, our team approved it yesterday. (B) By the end of business hours this Friday. (C) In the main boardroom on the fifth floor.",
-    translation: "Câu hỏi: Khi nào bản đề xuất ngân sách hàng năm dự kiến được nộp? (A) Vâng, nhóm chúng tôi đã phê duyệt nó hôm qua. (B) Trước giờ tan sở thứ Sáu tuần này. (C) Tại phòng họp chính ở tầng năm.",
-    explanation: "Câu hỏi bắt đầu bằng 'When' (Khi nào) hỏi về mốc thời gian, phương án (B) đưa ra thời hạn cụ thể 'By the end of business hours this Friday'. Loại (A) vì câu hỏi có từ để hỏi không trả lời bằng Yes/No.",
-  },
-  {
-    id: 4,
-    part: "Part 2",
-    questionText: "Why hasn't the overseas shipment from Tokyo arrived yet?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
-    options: {
-      A: "Severe weather conditions delayed international flights.",
-      B: "No, we only received forty cartons.",
-      C: "Mr. Sato is the chief logistics coordinator.",
-    },
-    correctAnswer: "A",
-    transcript: "Question: Why hasn't the overseas shipment from Tokyo arrived yet? (A) Severe weather conditions delayed international flights. (B) No, we only received forty cartons. (C) Mr. Sato is the chief logistics coordinator.",
-    translation: "Câu hỏi: Tại sao lô hàng từ Tokyo vẫn chưa đến? (A) Thời tiết khắc nghiệt đã làm hoãn các chuyến bay quốc tế. (B) Không, chúng tôi chỉ nhận được 40 thùng. (C) Ông Sato là điều phối viên hậu cần trưởng.",
-    explanation: "Câu hỏi 'Why' hỏi lý do chậm trễ, phương án (A) giải thích nguyên nhân do điều kiện thời tiết xấu ảnh hưởng chuyến bay chuyển phát.",
-  },
-  // Part 3: Short Conversation
-  {
-    id: 5,
-    part: "Part 3",
-    questionText: "What problem does the woman mention regarding the newly launched client portal?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
-    transcript: "Man: Jessica, have you heard any initial feedback from the beta testing group regarding our new enterprise portal? Woman: Yes, Mark. While the user interface is intuitive, several corporate accounts reported that the billing statement export feature keeps crashing when processing multi-currency files. Man: Oh, that's urgent. I will notify the backend development team immediately.",
-    translation: "Nam: Jessica, bạn đã nhận được phản hồi ban đầu nào từ nhóm thử nghiệm bản beta về cổng doanh nghiệp mới chưa? Nữ: Rồi Mark. Dù giao diện rất trực quan nhưng nhiều tài khoản doanh nghiệp báo rằng tính năng xuất báo cáo hóa đơn bị lỗi sập khi xử lý các tệp đa tiền tệ. Nam: Ồ, việc đó rất khẩn cấp. Tôi sẽ báo đội phát triển backend ngay lập tức.",
-    options: {
-      A: "The subscription pricing was calculated incorrectly.",
-      B: "A billing export function malfunctions with certain files.",
-      C: "The password recovery system is unavailable.",
-      D: "Users are struggling to navigate the dashboard layout.",
-    },
-    correctAnswer: "B",
-    explanation: "Người phụ nữ nói rõ: 'several corporate accounts reported that the billing statement export feature keeps crashing when processing multi-currency files' -> Phương án (B) phản ánh chính xác.",
-  },
-  // Part 5: Incomplete Sentences
-  {
-    id: 6,
+    id: 102,
     part: "Part 5",
-    questionText: "The executive committee will _______ approve the construction timeline once environmental clearances are received.",
+    questionText: "Upon the two founders' retirement, the foundation released a booklet describing ------- earliest projects.",
     options: {
-      A: "formal",
-      B: "formally",
-      C: "formalize",
-      D: "formality",
+      A: "they",
+      B: "them",
+      C: "their",
+      D: "themselves",
     },
-    correctAnswer: "B",
-    translation: "Ủy ban điều hành sẽ chính thức phê duyệt tiến độ xây dựng một khi nhận được giấy phép môi trường.",
-    explanation: "Vị trí chỗ trống nằm giữa trợ động từ 'will' và động từ chính 'approve' -> cần một Trạng từ (Adverb) thể thức '-ly' để bổ nghĩa cho động từ: 'formally'.",
-  },
-  {
-    id: 7,
-    part: "Part 5",
-    questionText: "All employees travelling internationally on corporate business are entitled to full _______ for meal and lodging expenses.",
-    options: {
-      A: "reimbursement",
-      B: "reimburse",
-      C: "reimbursed",
-      D: "reimbursable",
+    optionGlosses: {
+      A: "(pron): họ",
+      B: "(pron): họ (tân ngữ)",
+      C: "(adj sở hữu): của họ",
+      D: "(pron): chính họ",
     },
-    correctAnswer: "A",
-    translation: "Tất cả nhân viên đi công tác quốc tế cho doanh nghiệp đều được hưởng toàn bộ khoản hoàn tiền cho chi phí ăn uống và lưu trú.",
-    explanation: "Sau tính từ 'full' cần một Danh từ (Noun) đóng vai trò tân ngữ của giới từ 'to'. 'Reimbursement' (sự hoàn trả chi phí) là danh từ chính xác.",
+    correctAnswer: "C",
+    translation: "Nhân dịp hai nhà sáng lập nghỉ hưu, quỹ đã phát hành một cuốn sách nhỏ mô tả những dự án đầu tiên của họ.",
+    step1: 'Bốn đáp án là các dạng khác nhau của đại từ "they" nên đây là câu đại từ, cần xét vị trí chỗ trống.',
+    step2: 'Chỗ trống đứng ngay trước cụm danh từ "earliest projects", cần tính từ sở hữu.',
+    step3: 'Chọn tính từ sở hữu "their" (của họ).',
+    explanation: "Đứng trước cụm danh từ 'earliest projects' cần tính từ sở hữu 'their'.",
   },
+
+  // --- PART 6: TEXT COMPLETION (16 câu - Nhóm 4 câu) ---
   {
-    id: 8,
-    part: "Part 5",
-    questionText: "Mr. Henderson demonstrated remarkable leadership _______ the merger transition period last autumn.",
-    options: {
-      A: "during",
-      B: "while",
-      C: "although",
-      D: "because",
-    },
-    correctAnswer: "A",
-    translation: "Ông Henderson đã thể hiện khả năng lãnh đạo xuất sắc trong suốt giai đoạn chuyển giao sáp nhập vào mùa thu năm ngoái.",
-    explanation: "Phía sau là cụm danh từ 'the merger transition period' chỉ một khoảng thời gian cụ thể -> dùng Giới từ 'during'. Các từ 'while', 'although', 'because' là liên từ cần đi kèm mệnh đề (S + V).",
-  },
-  // Part 6: Text Completion
-  {
-    id: 9,
+    id: 131,
     part: "Part 6",
-    passage: "To: All Department Supervisors\nFrom: Facilities Management\nSubject: Scheduled Office Renovations\n\nPlease be advised that the air conditioning filtration system on floors 3 through 6 will undergo maintenance this Saturday. Technicians will work _______ from 8:00 AM to 5:00 PM. Please ensure all personal electronics are unplugged prior to Friday evening.",
-    questionText: "Choose the word that best completes the sentence in the renovation notice.",
+    groupTitle: "Questions 131–134 refer to the following article.",
+    groupId: "131–134",
+    groupTotal: 4,
+    passage: `(March 8)—Clothing rental services, which let customers borrow outfits for a monthly fee instead of buying them, are currently enjoying a boom nationwide. The number of subscribers grew nearly 40% in the past year, and rental racks can now be found in a ------- (131) range of stores, from small boutiques to national department chains.
+
+A major reason for this trend is changing shopper ------- (132) shaped by concern about the waste created by fast fashion. According to Marina Delgado, spokesperson for the Garment Rental Council, the lower monthly fees and larger selection of newer services have helped ------- (133). Ms. Delgado believes that this part of the industry will only continue to grow. ------- (134)`,
+    questionText: "131.",
     options: {
-      A: "continuously",
-      B: "continuous",
-      C: "continuation",
-      D: "continue",
+      A: "distant",
+      B: "wide",
+      C: "frequent",
+      D: "various",
     },
-    correctAnswer: "A",
-    explanation: "Bổ nghĩa cho động từ 'will work' cần trạng từ 'continuously' (làm việc liên tục từ 8:00 đến 17:00).",
-  },
-  // Part 7: Reading Comprehension
-  {
-    id: 10,
-    part: "Part 7",
-    passage: `MEMORANDUM\n\nTo: Regional Sales Representatives\nFrom: Clara Vance, VP of Customer Operations\nDate: October 14\nSubject: Enhanced Client Feedback Initiative\n\nStarting November 1, our organization is instituting a digital survey system to gauge customer satisfaction across our Asia-Pacific retail accounts. Every client who completes a transaction exceeding $5,000 will automatically receive a personalized evaluation link within 48 hours.\n\nRepresentatives whose quarterly accounts maintain an average satisfaction rating of 95% or higher will qualify for the Annual Excellence Incentive bonus. To assist staff with this rollout, our training division has scheduled three interactive webinars next week. Participation in at least one session is mandatory for all account executives.`,
-    bilingualPassage: `BẢN GHI NHỚ\n\nGửi: Các đại diện bán hàng khu vực\nTừ: Clara Vance, Phó Chủ tịch Vận hành Khách hàng\nNgày: 14 tháng 10\nChủ đề: Sáng kiến Tăng cường Phản hồi Khách hàng\n\nBắt đầu từ ngày 1 tháng 11, tổ chức của chúng ta sẽ áp dụng hệ thống khảo sát kỹ thuật số nhằm đo lường mức độ hài lòng của khách hàng tại các tài khoản bán lẻ khu vực Châu Á - Thái Bình Dương. Mỗi khách hàng hoàn tất giao dịch vượt quá 5.000 USD sẽ tự động nhận được đường liên kết đánh giá cá nhân hóa trong vòng 48 giờ.\n\nNhững đại diện có các tài khoản trong quý duy trì mức đánh giá hài lòng trung bình từ 95% trở lên sẽ đủ điều kiện nhận tiền thưởng Khích lệ Xuất sắc Thường niên. Nhằm hỗ trợ nhân viên triển khai chương trình này, bộ phận đào tạo đã lên lịch ba buổi hội thảo trực tuyến vào tuần tới. Việc tham gia ít nhất một buổi là bắt buộc đối với tất cả các chuyên viên quản lý tài khoản.`,
-    evidence: "Representatives whose quarterly accounts maintain an average satisfaction rating of 95% or higher will qualify for the Annual Excellence Incentive bonus.",
-    questionText: "What incentive is offered to representatives with exceptional satisfaction ratings?",
-    options: {
-      A: "Additional paid annual vacation days",
-      B: "A special performance cash bonus",
-      C: "An immediate promotion to senior executive",
-      D: "A complimentary trip to corporate headquarters",
+    optionGlosses: {
+      A: "(adj): xa xôi",
+      B: "(adj): rộng rãi, đa dạng",
+      C: "(adj): thường xuyên",
+      D: "(adj): khác nhau",
     },
     correctAnswer: "B",
-    explanation: "Dẫn chứng trong văn bản ghi rõ: '...will qualify for the Annual Excellence Incentive bonus' (sẽ đủ điều kiện nhận tiền thưởng khuyến khích hàng năm) -> Phương án (B) là đáp án đúng.",
+    translation: "Một phạm vi cửa hàng rộng lớn...",
+    explanation: "Cụm từ cố định 'a wide range of' (một phạm vi rộng/đa dạng).",
+  },
+
+  // --- PART 7: READING COMPREHENSION (54 câu - Nhóm 2-5 câu) ---
+  {
+    id: 147,
+    part: "Part 7",
+    groupTitle: "Questions 147–148 refer to the following notice.",
+    groupId: "147–148",
+    groupTotal: 2,
+    passage: `MEADOWLARK GARDEN CENTRES – HEAD OFFICE
+
+STAFF TRAINING SESSION
+
+Topic: Choosing Stock for the Spring Season
+Presenter: Dana Okonkwo, Okonkwo Nursery Group
+Date: 14 March, 2:00 P.M.
+Location: www.link-room.co.uk (Session Code: 447 210 665)
+
+Attendance is required for anyone who places orders with our growers. The session runs for ninety minutes and will not be recorded. Please e-mail any questions you would like Ms. Okonkwo to answer to training@meadowlark.co.uk by 10 March.`,
+    evidence: "Attendance is required for anyone who places orders with our growers.",
+    questionText: "147. Who will most likely attend the session?",
+    options: {
+      A: "Delivery drivers",
+      B: "Shop-floor assistants",
+      C: "Growers from local nurseries",
+      D: "Employees who buy stock",
+    },
+    optionGlosses: {
+      A: "Tài xế giao hàng",
+      B: "Trợ lý bán hàng tại quầy",
+      C: "Người trồng cây tại nhà vườn địa phương",
+      D: "Nhân viên mua hàng hóa",
+    },
+    correctAnswer: "D",
+    translation: "Ai là người có khả năng nhất sẽ tham gia buổi đào tạo?",
+    explanation: "Việc tham gia là bắt buộc cho bất kỳ ai đặt hàng với các nhà vườn -> Nhân viên mua hàng hóa.",
+  },
+  {
+    id: 148,
+    part: "Part 7",
+    groupTitle: "Questions 147–148 refer to the following notice.",
+    groupId: "147–148",
+    groupTotal: 2,
+    questionText: "148. What are employees asked to do before 10 March?",
+    options: {
+      A: "Send in questions for the presenter",
+      B: "Confirm their attendance with a manager",
+      C: "Register on the company website",
+      D: "Download the training booklet",
+    },
+    optionGlosses: {
+      A: "Gửi câu hỏi cho diễn giả",
+      B: "Xác nhận sự tham gia với quản lý",
+      C: "Đăng ký trên website công ty",
+      D: "Tải xuống tài liệu đào tạo",
+    },
+    correctAnswer: "A",
+    translation: "Nhân viên được yêu cầu làm gì trước ngày 10 tháng 3?",
+    evidence: "Please e-mail any questions you would like Ms. Okonkwo to answer to training@meadowlark.co.uk by 10 March.",
+    explanation: "Thông báo yêu cầu gửi email các câu hỏi cho diễn giả trước 10/3.",
   },
 ];
 
@@ -503,9 +601,25 @@ export default function MockTestsPage() {
   const [practiceAnswers, setPracticeAnswers] = useState<{ [qId: number]: string }>({});
   const [practiceChecked, setPracticeChecked] = useState<{ [qId: number]: boolean }>({});
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
+  // Interactive states for Top Header Bar buttons (Song ngữ, Ghi chú, Annotator, Timer, Ma trận câu hỏi)
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  // States cho Part 1 Audio & Listening Toolbar (Chính xác theo Ảnh Part 1)
+  const [audioSpeed, setAudioSpeed] = useState<"1x" | "1.25x" | "1.5x" | "0.75x">("1x");
+  const [isDictationMode, setIsDictationMode] = useState(false);
+  const [isFlipCardMode, setIsFlipCardMode] = useState(false);
+  const [isAutoPlayNext, setIsAutoPlayNext] = useState(true);
+  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
+  const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
+  const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
+  const [practiceTimerSeconds, setPracticeTimerSeconds] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
+  const [showDetailedExplanation, setShowDetailedExplanation] = useState(true);
+  const [showVocabSection, setShowVocabSection] = useState(true);
+  const [isVocabExpanded, setIsVocabExpanded] = useState(false);
   // Web Audio Sound Effects Synthesizer (SFX chọn đáp án giống Part 5, 6, 7)
     // Web Audio Sound Effects Synthesizer (Chuẩn 100% theo Part 5)
-  const playSfx = (type: "correct" | "wrong" | "click") => {
+  const playSfx = (type?: "correct" | "wrong" | "click") => {
     if (!isSfxEnabled) return; // Im lặng 100% khi tắt nút chuông
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -513,30 +627,16 @@ export default function MockTestsPage() {
       const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      osc.type = "sine";
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      if (type === "correct") {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15); // E5
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
-      } else if (type === "wrong") {
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(450, ctx.currentTime);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.08);
-      }
+      // ĐỒNG BỘ 1 ÂM THANH DUY NHẤT (Single 520Hz Tone) CHO TẤT CẢ THAO TÁC
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
     } catch {
       // Fallback
     }
@@ -781,11 +881,24 @@ export default function MockTestsPage() {
     return () => clearInterval(timer);
   }, [examStarted, examSubmitted, examTimeRemaining]);
 
+    // Timer effect for practice mode
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (practiceModalTest && !isTimerPaused) {
+      interval = setInterval(() => {
+        setPracticeTimerSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [practiceModalTest, isTimerPaused]);
+
   // Mở modal Luyện tập
-  const handleOpenPractice = (test: TestItem) => {
+  const handleOpenPractice = (test: TestItem, initialPartFilter: string | string[] = "ALL") => {
     setPracticeModalTest(test);
+    setPracticeTimerSeconds(0);
+    setIsTimerPaused(false);
     setPracticeCurrentQIndex(0);
-    setPracticePartFilter("ALL");
+    setPracticePartFilter(initialPartFilter);
     setPracticeAnswers({});
     setPracticeChecked({});
     setDictationInput({});
@@ -1618,11 +1731,11 @@ export default function MockTestsPage() {
                         type="button"
                         onClick={() => {
                           const testToRun = modeSelectionTest;
-                          const filterToSet = selectedParts.length === 7 || selectedParts.length === 0 ? "ALL" : (selectedParts[0] || "ALL");
+                          const filterToSet = selectedParts.length === 7 || selectedParts.length === 0
+                            ? "ALL"
+                            : (selectedParts.length === 1 ? selectedParts[0] : selectedParts);
                           setModeSelectionTest(null);
-                          setPracticePartFilter(filterToSet);
-                          setPracticeCurrentQIndex(0);
-                          handleOpenPractice(testToRun);
+                          handleOpenPractice(testToRun, filterToSet);
                         }}
                         className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-2 transition shadow-md hover:shadow-lg cursor-pointer active:scale-95"
                       >
@@ -1770,35 +1883,31 @@ export default function MockTestsPage() {
         </div>
       )}
 
-      {/* 1. MODAL THI THỬ (FULL EXAM SIMULATION MODAL) */}
+      {/* 1. MODAL THI THỬ (FULL EXAM SIMULATION MODAL - FULLSCREEN MATCHING PRACTICE MODE) */}
       {/* ======================================================== */}
       {examModalTest && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 sm:p-3">
-          <div className="bg-white sm:rounded-3xl w-full h-full sm:max-w-6xl sm:max-h-[94vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200 font-sans">
-            {/* Header Modal - Đúng 100% theo Hình 3 */}
-            <div className="bg-blue-600 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md shrink-0 select-none">
+        <div className="fixed inset-0 z-50 bg-white flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans">
+          <div className="bg-white w-full h-full flex flex-col overflow-hidden">
+            {/* Header Modal - Fullscreen Header Matching Practice Mode */}
+            <header className="h-16 bg-blue-600 text-white px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-md select-none">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold">
-                  <Headphones className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-xs sm:text-sm tracking-wide">
-                    {(() => {
-                      const q = activeExamQuestions[examCurrentQIndex];
-                      const part = q ? q.part : "Part 1";
-                      const section = (part === "Part 5" || part === "Part 6" || part === "Part 7") ? "Reading" : "Listening";
-                      return `${section}: Questions ${examCurrentQIndex + 1} of ${activeExamQuestions.length}`;
-                    })()}
-                  </h3>
-                  <p className="text-[11px] text-blue-100 hidden sm:block">
-                    Thi thử TOEIC: {examModalTest.title}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setExamModalTest(null)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Thoát</span>
+                </button>
+
+                <span className="inline-block px-4 py-1.5 rounded-full bg-blue-700/90 border border-blue-400/40 text-white text-xs font-extrabold tracking-wide">
+                  Thi thử TOEIC: {examModalTest.title}
+                </span>
               </div>
 
               {examStarted && !examSubmitted && (
-                <div className="flex items-center gap-2 sm:gap-3">
-                  {/* Nút Audio Chuông Vàng / Trắng mờ (Đúng theo thiết kế Part 5 6 7 khi tắt) */}
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  {/* SFX Bell toggle */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1807,46 +1916,51 @@ export default function MockTestsPage() {
                       setIsPlayingAudio(next);
                       if (next) playSfx("correct");
                       else playSfx("click");
-                      triggerToast(next ? "🔊 Đã bật âm thanh SFX chọn đáp án 👑" : "⏸ Đã tắt âm thanh SFX");
+                      triggerToast(next ? "🔊 Đã bật âm thanh SFX 👑" : "⏸ Đã tắt âm thanh SFX");
                     }}
-                    title={isPlayingAudio ? "Đang bật âm thanh - Bấm để tắt" : "Đang tắt âm thanh - Bấm để bật"}
-                    className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-                      isPlayingAudio
-                        ? "bg-amber-400 text-amber-950 shadow-xs animate-pulse"
-                        : "bg-white/20 text-white hover:bg-white/30"
+                    className={`p-2 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                      isSfxEnabled
+                        ? "bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300/50 animate-pulse"
+                        : "bg-white/15 hover:bg-white/25 text-white/70"
                     }`}
+                    title={isSfxEnabled ? "Tắt hiệu ứng âm thanh" : "Bật hiệu ứng âm thanh"}
                   >
-                    {isPlayingAudio ? <Bell className="w-4 h-4 text-amber-950" /> : <BellOff className="w-4 h-4 text-white" />}
+                    {isSfxEnabled ? <Bell className="w-4 h-4 fill-slate-950" /> : <BellOff className="w-4 h-4" />}
                   </button>
 
-                  <div className="bg-white/20 text-white font-mono font-bold text-xs px-2.5 py-1 rounded-xl">
-                    {Object.keys(examAnswers).length}/{activeExamQuestions.length}
-                  </div>
-
-                  <div className="bg-white/20 text-white font-mono font-bold text-xs px-2.5 py-1 rounded-xl flex items-center gap-1">
+                  {/* Timer button */}
+                  <div className="font-mono text-xs font-bold px-3 py-1.5 rounded-xl bg-white/15 text-white border border-white/20 flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
                     <span>{formatTime(examTimeRemaining)}</span>
                   </div>
 
+                  {/* Answered Counter */}
+                  <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 text-white text-xs font-black shadow-2xs">
+                    ✓ {Object.keys(examAnswers).length}/{activeExamQuestions.length}
+                  </div>
+
+                  {/* Question Grid Modal Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsQuestionGridOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-700/90 hover:bg-blue-800 border border-blue-400/40 text-white text-xs font-extrabold transition cursor-pointer"
+                  >
+                    <Grid className="w-3.5 h-3.5" />
+                    <span>Câu {examCurrentQIndex + 1}/{activeExamQuestions.length}</span>
+                  </button>
+
+                  {/* Submit button */}
                   <button
                     type="button"
                     onClick={handleSubmitExam}
-                    className="bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95 shrink-0"
+                    className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs px-4 py-2 rounded-full shadow-md transition cursor-pointer active:scale-95 flex items-center gap-1.5"
                   >
-                    <Send className="w-3.5 h-3.5 fill-slate-900" />
-                    <span>Submit</span>
+                    <Send className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Nộp bài thi</span>
                   </button>
                 </div>
               )}
-
-              <button
-                type="button"
-                onClick={() => setExamModalTest(null)}
-                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer ml-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            </header>
 
             {/* Body Modal */}
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -1921,12 +2035,23 @@ export default function MockTestsPage() {
                     <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
                       
                       {/* LEFT PANE: Instruction & Content */}
-                      <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white border-r border-slate-200 flex flex-col justify-between space-y-6">
+                      <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
                         <div className="space-y-4">
-                          {/* Instruction header text */}
-                          <p className="text-sm font-bold text-slate-800 leading-relaxed">
+                          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
+                            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                            Yêu cầu bài tập (Instruction)
+                          </div>
+
+                          {/* Tiêu đề nhóm câu cho Part 6 & Part 7 */}
+                          {currentQ && (currentQ.part === "Part 6" || currentQ.part === "Part 7") && (
+                            <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug pb-1">
+                              {currentQ.groupTitle || (currentQ.part === "Part 6" ? "Questions 131–134 refer to the following article." : "Questions 147–148 refer to the following notice.")}
+                            </div>
+                          )}
+
+                          <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
                             {(() => {
-                              if (currentQ.part === "Part 1") return "Select the one statement that best describes what you see in the picture.";
+                              if (currentQ.part === "Part 1") return "Listen to the audio and select the best statement describing the photograph.";
                               if (currentQ.part === "Part 2") return "Listen to the question and select the best response.";
                               if (currentQ.part === "Part 3") return "Listen to the conversation and answer the questions below.";
                               if (currentQ.part === "Part 4") return "Listen to the talk and answer the questions below.";
@@ -1934,29 +2059,29 @@ export default function MockTestsPage() {
                               if (currentQ.part === "Part 6" || currentQ.part === "Part 7") return "Read the passage and answer the questions.";
                               return "Select the best answer to complete the question.";
                             })()}
-                          </p>
+                          </h2>
 
-                          {/* Image for Part 1 */}
-                          {currentQ.imageUrl && (
-                            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3 shadow-xs flex items-center justify-center overflow-hidden max-w-md mx-auto">
+                          {/* Passage text for Part 6 & Part 7 */}
+                          {currentQ && currentQ.passage && (
+                            <div className="bg-white rounded-2xl border border-slate-200 p-4 text-xs font-mono whitespace-pre-line text-slate-800 leading-relaxed shadow-xs">
+                              {currentQ.passage}
+                            </div>
+                          )}
+
+                          {/* Photograph Image for Part 1 */}
+                          {currentQ && currentQ.part === "Part 1" && currentQ.imageUrl && (
+                            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
                               <img
                                 src={currentQ.imageUrl}
-                                alt="Part Illustration"
+                                alt="Photograph"
                                 className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
                               />
                             </div>
                           )}
 
-                          {/* Passage for Reading parts */}
-                          {currentQ.passage && (
-                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-mono whitespace-pre-line text-slate-800 leading-relaxed max-h-72 overflow-y-auto">
-                              {currentQ.passage}
-                            </div>
-                          )}
-
                           {/* Audio player for Listening parts */}
-                          {currentQ.audioUrl && (
-                            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+                          {currentQ && currentQ.audioUrl && (
+                            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
                               <div className="flex items-center justify-between gap-3">
                                 <button
                                   type="button"
@@ -1969,7 +2094,7 @@ export default function MockTestsPage() {
                                   {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                                 </button>
                                 
-                                <div className="flex-1 flex items-center gap-1 h-8 px-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+                                <div className="flex-1 flex items-center gap-1 h-8 px-2 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
                                   {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50].map((h, i) => (
                                     <div
                                       key={i}
@@ -1982,7 +2107,7 @@ export default function MockTestsPage() {
                                 </div>
 
                                 <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
-                                  00:45
+                                  00:24
                                 </span>
                               </div>
                             </div>
@@ -1990,47 +2115,65 @@ export default function MockTestsPage() {
                         </div>
                       </div>
 
-                      {/* RIGHT PANE: Question & Options */}
-                      <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-slate-50/70 flex flex-col justify-between space-y-6">
-                        <div className="space-y-4">
-                          <h3 className="text-base font-bold text-slate-800 tracking-tight">Question</h3>
+                      {/* RIGHT PANE: QUESTION & OPTIONS */}
+                      <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+                        <div className="space-y-5">
+                          <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
+                            {/* Badge Nhóm câu cho Part 6 & Part 7 */}
+                            {currentQ && (currentQ.part === "Part 6" || currentQ.part === "Part 7") && (
+                              <div className="flex items-center gap-2 pb-1">
+                                <span className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold shadow-2xs">
+                                  Nhóm câu {currentQ.groupId || (currentQ.part === "Part 6" ? "131–134" : "147–148")}
+                                </span>
+                                <span className="text-xs text-slate-500 font-semibold">
+                                  ({currentQ.groupTotal || (currentQ.part === "Part 6" ? "4" : "2")} câu hỏi)
+                                </span>
+                              </div>
+                            )}
 
-                          <div className="text-sm font-extrabold text-slate-900 leading-relaxed">
-                            {isPart1or2 ? `${examCurrentQIndex + 1}.` : `${examCurrentQIndex + 1}. ${currentQ.questionText}`}
-                          </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
+                                {currentQ.part} • {currentQ.part === "Part 1" ? "Hình ảnh" : currentQ.part === "Part 2" ? "Hỏi đáp" : currentQ.part === "Part 3" ? "Hội thoại ngắn" : currentQ.part === "Part 4" ? "Bài nói ngắn" : currentQ.part === "Part 5" ? "Điền câu" : currentQ.part === "Part 6" ? "Điền đoạn văn" : currentQ.part === "Part 7" ? "Đọc hiểu" : "Thi thử"}
+                              </span>
+                            </div>
 
-                          {/* Options List */}
-                          <div className="space-y-3 pt-2">
-                            {Object.entries(currentQ.options).map(([optKey, optVal]) => {
-                              if (currentQ.part === "Part 2" && optKey === "D") return null;
+                            <div className="text-base font-extrabold text-slate-900 leading-relaxed">
+                              {currentQ.part === "Part 2" ? `${examCurrentQIndex + 1}. Mark your answer on your answer sheet.` : `${examCurrentQIndex + 1}. ${currentQ.questionText}`}
+                            </div>
 
-                              const isChosen = examAnswers[currentQ.id] === optKey;
+                            {/* OPTIONS LIST */}
+                            <div className="space-y-3">
+                              {Object.entries(currentQ.options).map(([optKey, optVal]) => {
+                                if (currentQ.part === "Part 2" && optKey === "D") return null;
 
-                              return (
-                                <button
-                                  key={optKey}
-                                  type="button"
-                                  onClick={() => {
-                                  if (isSfxEnabled) playSfx("click");
-                                  setExamAnswers((prev) => ({ ...prev, [currentQ.id]: optKey }));
-                                }}
-                                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
-                                    isChosen
-                                      ? "bg-white border-blue-600 text-blue-900 ring-2 ring-blue-500/20 shadow-xs"
-                                      : "bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50 text-slate-800"
-                                  }`}
-                                >
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                                    isChosen ? "border-blue-600 bg-white" : "border-slate-300"
-                                  }`}>
-                                    {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                                  </div>
-                                  <span className="text-sm font-semibold">
-                                    {isPart1or2 ? `(${optKey})` : `(${optKey}) ${optVal}`}
-                                  </span>
-                                </button>
-                              );
-                            })}
+                                const isChosen = examAnswers[currentQ.id] === optKey;
+
+                                return (
+                                  <button
+                                    key={optKey}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSfxEnabled) playSfx("click");
+                                      setExamAnswers((prev) => ({ ...prev, [currentQ.id]: optKey }));
+                                    }}
+                                    className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
+                                      isChosen
+                                        ? "bg-blue-50/80 border-blue-500 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-xs"
+                                        : "bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50 text-slate-800"
+                                    }`}
+                                  >
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                      isChosen ? "border-blue-600 bg-white" : "border-slate-300"
+                                    }`}>
+                                      {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                    </div>
+                                    <span className="text-sm font-semibold">
+                                      ({optKey}) {optVal}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2164,413 +2307,7 @@ export default function MockTestsPage() {
           </div>
         </div>
       )}
-{/* ======================================================== */}
-      {examModalTest && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
-            {/* Header Modal */}
-            <div className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-4 sm:p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-white">
-                  <ClipboardCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base sm:text-lg">
-                    Thi thử TOEIC: {examModalTest.title} (Crack TOEIC {selectedVol.toUpperCase()})
-                  </h3>
-                  <p className="text-xs text-blue-100">
-                    Mô phỏng sát phòng thi chuẩn ETS • Tự động tính điểm sau khi nộp
-                  </p>
-                </div>
-              </div>
 
-              {examStarted && !examSubmitted && (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 text-slate-900 font-mono font-black text-sm shadow-xs">
-                    <Clock className="w-4 h-4 text-slate-900 animate-spin" />
-                    <span>{formatTime(examTimeRemaining)}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSubmitExam}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md transition cursor-pointer"
-                  >
-                    Nộp bài thi
-                  </button>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setExamModalTest(null)}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Body Modal */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-              {/* Nếu chưa bấm bắt đầu thi -> Màn hình chuẩn bị */}
-              {!examStarted && !examSubmitted && (
-                <div className="max-w-2xl mx-auto py-6 space-y-6 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 mx-auto flex items-center justify-center shadow-inner">
-                    <Play className="w-8 h-8 ml-1" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-black text-slate-900">
-                      Sẵn sàng thi thử {examModalTest.title}?
-                    </h2>
-                    <p className="text-sm text-slate-600">
-                      Đề thi bao gồm 2 phần Listening & Reading với hệ thống câu hỏi chuẩn format ETS.
-                    </p>
-                  </div>
-
-                  {/* Lựa chọn thời gian thi */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-3">
-                    <label className="text-xs font-bold text-slate-700 uppercase block">
-                      Chọn thời gian làm bài:
-                    </label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {(
-                        [
-                          { val: "120", label: "Chuẩn 120 phút", desc: "Full Test (200 câu)" },
-                          { val: "60", label: "Rút gọn 60 phút", desc: "Mini Test (100 câu)" },
-                          { val: "30", label: "Tập trung 30 phút", desc: "Speed Test (50 câu)" },
-                        ] as const
-                      ).map((item) => (
-                        <button
-                          key={item.val}
-                          type="button"
-                          onClick={() => setExamDurationType(item.val)}
-                          className={`p-3 rounded-xl border text-center transition cursor-pointer ${
-                            examDurationType === item.val
-                              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                          }`}
-                        >
-                          <p className="font-bold text-xs">{item.label}</p>
-                          <p className={`text-[10px] mt-0.5 ${examDurationType === item.val ? "text-blue-100" : "text-slate-400"}`}>
-                            {item.desc}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-xs text-amber-800 text-left space-y-1">
-                    <p className="font-bold flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4 text-amber-600" /> Lưu ý khi làm bài thi thử:
-                    </p>
-                    <p>• Đồng hồ sẽ bắt đầu đếm ngược ngay khi bấm &quot;Bắt đầu làm bài&quot;.</p>
-                    <p>• Bạn có thể đánh dấu câu hỏi (Flag) để kiểm tra lại trước khi nộp.</p>
-                    <p>• Đáp án và giải thích chi tiết sẽ được hiển thị ngay sau khi nộp bài.</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleStartExamNow}
-                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-500/25 transition cursor-pointer active:scale-98"
-                  >
-                    Bắt đầu làm bài thi ngay
-                  </button>
-                </div>
-              )}
-
-              {/* Nếu đang trong lúc làm bài */}
-              {examStarted && !examSubmitted && (
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Cột 1-3: Câu hỏi & Trả lời */}
-                  <div className="lg:col-span-3 space-y-5">
-                    {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex] && (
-                      <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-5">
-                        {/* Tiêu đề câu hỏi */}
-                        <div className="flex items-center justify-between">
-                          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-bold text-xs">
-                            {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].part} • Câu {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].id} / {SAMPLE_EXAM_QUESTIONS.length}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const qId = SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].id;
-                              setExamFlagged((prev) => ({ ...prev, [qId]: !prev[qId] }));
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                              examFlagged[SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].id]
-                                ? "bg-amber-100 text-amber-700 border border-amber-300"
-                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-                            }`}
-                          >
-                            <Flag className="w-3.5 h-3.5" />
-                            {examFlagged[SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].id] ? "Đã gắn cờ xem lại" : "Gắn cờ câu này"}
-                          </button>
-                        </div>
-
-                        {/* Hình ảnh (nếu Part 1) */}
-                        {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].imageUrl && (
-                          <div className="rounded-xl overflow-hidden border border-slate-200 max-w-md mx-auto shadow-xs">
-                            <img
-                              src={SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].imageUrl}
-                              alt="TOEIC question illustration"
-                              className="w-full h-56 object-cover"
-                            />
-                          </div>
-                        )}
-
-                        {/* Đoạn văn (nếu Part 6 hoặc Part 7) */}
-                        {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].passage && (
-                          <div className="bg-white border border-slate-200 rounded-xl p-4 text-xs font-mono whitespace-pre-line text-slate-700 max-h-60 overflow-y-auto leading-relaxed shadow-inner">
-                            {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].passage}
-                          </div>
-                        )}
-
-                        {/* Âm thanh audio player (nếu có audio) */}
-                        {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].audioUrl && (
-                          <div className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                                className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition cursor-pointer"
-                              >
-                                {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                              </button>
-                              <span className="text-xs font-bold text-slate-700">Audio nghe</span>
-                            </div>
-                            <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
-                              <div className={`h-full bg-blue-600 rounded-full ${isPlayingAudio ? "w-2/3 animate-pulse" : "w-1/4"}`} />
-                            </div>
-                            <span className="text-[11px] text-slate-400 font-mono">00:45</span>
-                          </div>
-                        )}
-
-                        {/* Nội dung câu hỏi */}
-                        <p className="text-sm font-bold text-slate-900 leading-snug">
-                          {SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].questionText}
-                        </p>
-
-                        {/* Danh sách 4 đáp án A/B/C/D */}
-                        <div className="space-y-2.5">
-                          {Object.entries(SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].options).map(([optKey, optVal]) => {
-                            const qId = SAMPLE_EXAM_QUESTIONS[examCurrentQIndex].id;
-                            const isChosen = examAnswers[qId] === optKey;
-
-                            return (
-                              <button
-                                key={optKey}
-                                type="button"
-                                onClick={() => setExamAnswers((prev) => ({ ...prev, [qId]: optKey }))}
-                                className={`w-full text-left p-3.5 rounded-xl border flex items-center gap-3 transition cursor-pointer ${
-                                  isChosen
-                                    ? "bg-blue-50 border-blue-600 text-blue-900 ring-2 ring-blue-500/20"
-                                    : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
-                                }`}
-                              >
-                                <span
-                                  className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                                    isChosen ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {optKey}
-                                </span>
-                                <span className="text-xs font-medium leading-relaxed">{optVal}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Nút Previous / Next câu hỏi */}
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                          <button
-                            type="button"
-                            disabled={examCurrentQIndex === 0}
-                            onClick={() => setExamCurrentQIndex((prev) => Math.max(0, prev - 1))}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition cursor-pointer"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                            Câu trước
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={examCurrentQIndex === SAMPLE_EXAM_QUESTIONS.length - 1}
-                            onClick={() => setExamCurrentQIndex((prev) => Math.min(SAMPLE_EXAM_QUESTIONS.length - 1, prev + 1))}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-700 transition cursor-pointer"
-                          >
-                            Câu tiếp theo
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Cột 4: Bảng điều hướng câu hỏi (Question Palette) */}
-                  <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Danh sách câu hỏi
-                      </h4>
-                      <span className="text-[11px] font-bold text-blue-600">
-                        Đã làm: {Object.keys(examAnswers).length} / {SAMPLE_EXAM_QUESTIONS.length}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-2 max-h-72 overflow-y-auto p-1">
-                      {SAMPLE_EXAM_QUESTIONS.map((q, idx) => {
-                        const isDone = !!examAnswers[q.id];
-                        const isFlag = !!examFlagged[q.id];
-                        const isCurrent = idx === examCurrentQIndex;
-
-                        return (
-                          <button
-                            key={q.id}
-                            type="button"
-                            onClick={() => setExamCurrentQIndex(idx)}
-                            className={`w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center relative transition cursor-pointer ${
-                              isCurrent
-                                ? "ring-2 ring-blue-600 ring-offset-2"
-                                : ""
-                            } ${
-                              isFlag
-                                ? "bg-amber-400 text-slate-900 font-black"
-                                : isDone
-                                ? "bg-blue-600 text-white"
-                                : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                            }`}
-                          >
-                            {q.id}
-                            {isFlag && (
-                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-200 space-y-1.5 text-[11px] text-slate-500">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-md bg-blue-600" />
-                        <span>Đã làm</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-md bg-amber-400" />
-                        <span>Đang gắn cờ xem lại</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-md bg-white border border-slate-300" />
-                        <span>Chưa trả lời</span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleSubmitExam}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
-                    >
-                      Nộp bài & Xem kết quả
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Màn hình kết quả sau khi nộp bài */}
-              {examSubmitted && examResultScore && (
-                <div className="max-w-3xl mx-auto space-y-6">
-                  {/* Card chúc mừng điểm số */}
-                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-xl">
-                    <Trophy className="w-14 h-14 text-amber-300 mx-auto drop-shadow-md animate-bounce" />
-                    <h2 className="text-2xl sm:text-3xl font-black">
-                      Chúc mừng bạn đã hoàn thành bài thi!
-                    </h2>
-                    <p className="text-sm text-blue-100">
-                      Điểm thi đã được lưu tự động vào bảng tiến độ và thẻ đề thi {examModalTest.title}.
-                    </p>
-
-                    <div className="flex items-center justify-center gap-6 pt-4">
-                      <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl">
-                        <p className="text-xs uppercase text-blue-200 font-bold">Listening</p>
-                        <p className="text-2xl font-black">{examResultScore.listening} / 495</p>
-                      </div>
-
-                      <div className="bg-white/25 backdrop-blur-xs px-6 py-4 rounded-2xl ring-2 ring-white/30">
-                        <p className="text-xs uppercase text-amber-200 font-bold">Tổng điểm TOEIC</p>
-                        <p className="text-3xl sm:text-4xl font-black text-amber-300">
-                          {examResultScore.total} / 990
-                        </p>
-                      </div>
-
-                      <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl">
-                        <p className="text-xs uppercase text-blue-200 font-bold">Reading</p>
-                        <p className="text-2xl font-black">{examResultScore.reading} / 495</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Chi tiết đáp án và giải thích từng câu */}
-                  <div className="space-y-4">
-                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                      <FileCheck className="w-5 h-5 text-blue-600" />
-                      Chi tiết đáp án & Giải thích AI từng câu:
-                    </h3>
-
-                    <div className="space-y-4">
-                      {SAMPLE_EXAM_QUESTIONS.map((q) => {
-                        const userAns = examAnswers[q.id];
-                        const isCorrect = userAns === q.correctAnswer;
-
-                        return (
-                          <div
-                            key={q.id}
-                            className={`p-4 rounded-2xl border transition ${
-                              isCorrect ? "bg-emerald-50/50 border-emerald-200" : "bg-rose-50/50 border-rose-200"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-xs text-slate-800">
-                                Câu {q.id} ({q.part})
-                              </span>
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                                  isCorrect ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                                }`}
-                              >
-                                {isCorrect ? "Chính xác ✓" : `Sai ✗ (Bạn chọn: ${userAns || "Bỏ qua"})`}
-                              </span>
-                            </div>
-
-                            <p className="text-xs text-slate-800 font-medium mb-2">{q.questionText}</p>
-
-                            <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 space-y-1">
-                              <p className="font-semibold text-blue-700">
-                                Đáp án đúng: <span className="font-bold">{q.correctAnswer}</span> - {q.options[q.correctAnswer]}
-                              </p>
-                              <p className="text-slate-600">
-                                <span className="font-bold text-slate-700">Giải thích:</span> {q.explanation}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setExamModalTest(null)}
-                      className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition cursor-pointer"
-                    >
-                      Đóng và quay về danh sách đề
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ======================================================== */}
       {/* 2. MODAL LUYỆN TẬP (DUAL-PANE PRACTICE MODAL MATCHING IMAGE 2) */}
@@ -2582,8 +2319,8 @@ export default function MockTestsPage() {
         const isChecked = currentQ ? !!practiceChecked[currentQ.id] : false;
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-3xl w-full max-w-7xl h-[95vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-50 bg-white flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150">
+            <div className="bg-white w-full h-full flex flex-col overflow-hidden">
               
               {/* --- TOP HEADER BAR --- */}
               <header className="h-16 bg-blue-600 text-white px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-md">
@@ -2598,17 +2335,21 @@ export default function MockTestsPage() {
                   </button>
 
                   <span className="inline-block px-4 py-1.5 rounded-full bg-blue-700/90 border border-blue-400/40 text-white text-xs font-extrabold tracking-wide">
-                    {practiceModalTest.title} • {practicePartFilter === "ALL" ? "7 Part" : practicePartFilter}
+                    {practiceModalTest.title}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  {/* 1. NÚT SONG NGỮ */}
                   <button
                     type="button"
-                    onClick={() => setShowBilingualPassage(!showBilingualPassage)}
+                    onClick={() => {
+                      setShowBilingualPassage(!showBilingualPassage);
+                      triggerToast(!showBilingualPassage ? "Bật bản dịch song ngữ tiếng Việt 🌐" : "Tắt bản dịch song ngữ");
+                    }}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                       showBilingualPassage
-                        ? "bg-amber-400 text-slate-900 shadow-xs"
+                        ? "bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300/50"
                         : "bg-white/15 hover:bg-white/25 text-white"
                     }`}
                   >
@@ -2616,44 +2357,397 @@ export default function MockTestsPage() {
                     <span>Song ngữ</span>
                   </button>
 
+                  {/* NÚT DẪN CHỨNG 👑 (Dành riêng cho Part 6 & Part 7 chuẩn theo Ảnh 2) */}
+                  {currentQ && (currentQ.part === "Part 6" || currentQ.part === "Part 7") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEvidence(!showEvidence);
+                        triggerToast(!showEvidence ? "Bật hiển thị Dẫn chứng bài đọc màu vàng 💡" : "Tắt Dẫn chứng bài đọc");
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        showEvidence
+                          ? "bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300/50"
+                          : "bg-white/15 hover:bg-white/25 text-white"
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Dẫn chứng 👑</span>
+                    </button>
+                  )}
+
+                  {/* 2. NÚT GHI CHÚ */}
                   <button
                     type="button"
-                    onClick={() => triggerToast("Tính năng Ghi chú cá nhân")}
-                    className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => setIsNotesModalOpen(true)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      currentQ && practiceUserNotes[currentQ.id]
+                        ? "bg-emerald-400 text-slate-950 font-black shadow-md"
+                        : "bg-white/15 hover:bg-white/25 text-white"
+                    }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Ghi chú</span>
+                    <span className="hidden sm:inline">Ghi chú {currentQ && practiceUserNotes[currentQ.id] ? "✓" : ""}</span>
                   </button>
 
+                  {/* 3. NÚT ANNOTATOR */}
                   <button
                     type="button"
-                    onClick={() => triggerToast("Tính năng Annotator")}
-                    className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => {
+                      setIsAnnotatorActive(!isAnnotatorActive);
+                      triggerToast(!isAnnotatorActive ? "Đã bật công cụ vẽ / đánh dấu Annotator ✏️" : "Tắt công cụ Annotator");
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      isAnnotatorActive
+                        ? "bg-amber-400 text-slate-950 font-black shadow-md"
+                        : "bg-white/15 hover:bg-white/25 text-white"
+                    }`}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Annotator</span>
                   </button>
 
+                  {/* NÚT ĐIỀN TỪ, LẬT TỪ & AUTO (Dành riêng cho Listening chuẩn theo Ảnh Part 1) */}
+                  {currentQ && (currentQ.part === "Part 1" || currentQ.part === "Part 2" || currentQ.part === "Part 3" || currentQ.part === "Part 4") && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDictationMode(!isDictationMode);
+                          triggerToast(!isDictationMode ? "Bật chế độ Điền Từ (Dictation) ✏️" : "Tắt chế độ Điền Từ");
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          isDictationMode
+                            ? "bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300/50"
+                            : "bg-white/15 hover:bg-white/25 text-white"
+                        }`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Điền Từ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsFlipCardMode(!isFlipCardMode);
+                          triggerToast(!isFlipCardMode ? "Bật chế độ Lật Từ (Flashcard) ❇️" : "Tắt chế độ Lật Từ");
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          isFlipCardMode
+                            ? "bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300/50"
+                            : "bg-white/15 hover:bg-white/25 text-white"
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Lật Từ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAutoPlayNext(!isAutoPlayNext);
+                          triggerToast(!isAutoPlayNext ? "Bật Tự động phát câu tiếp (Auto) 🔊" : "Tắt Tự động phát");
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          isAutoPlayNext
+                            ? "bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300/50"
+                            : "bg-white/15 hover:bg-white/25 text-white"
+                        }`}
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>Auto</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* 4. NÚT CHUÔNG SFX */}
                   <button
                     type="button"
-                    className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white transition cursor-pointer"
+                    onClick={() => {
+                      const nextSfx = !isSfxEnabled;
+                      setIsSfxEnabled(nextSfx);
+                      if (nextSfx) playSfx("correct");
+                      triggerToast(nextSfx ? "Âm thanh hiệu ứng: BẬT 🔔" : "Âm thanh hiệu ứng: TẮT 🔕");
+                    }}
+                    className={`p-2 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                      isSfxEnabled
+                        ? "bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300/50 animate-pulse"
+                        : "bg-white/15 hover:bg-white/25 text-white/70"
+                    }`}
+                    title={isSfxEnabled ? "Tắt hiệu ứng âm thanh (Đúng/Sai)" : "Bật hiệu ứng âm thanh (Đúng/Sai)"}
                   >
-                    <Bell className="w-4 h-4" />
+                    {isSfxEnabled ? <Bell className="w-4 h-4 fill-slate-950" /> : <BellOff className="w-4 h-4" />}
                   </button>
 
-                  <span className="font-mono text-xs font-bold bg-white/15 px-3 py-1 rounded-lg">
-                    ⏱ 00:02
-                  </span>
+                  {/* 5. NÚT ĐỒNG HỒ ĐẾM THỜI GIAN & TẠM DỪNG */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTimerPaused(!isTimerPaused);
+                      triggerToast(!isTimerPaused ? "Đã tạm dừng thời gian làm bài ⏱" : "Đã tiếp tục đếm thời gian ⏱");
+                    }}
+                    className={`font-mono text-xs font-bold px-3 py-1.5 rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
+                      isTimerPaused
+                        ? "bg-rose-500 text-white border-rose-400 animate-pulse"
+                        : "bg-white/15 hover:bg-white/25 text-white border-white/20"
+                    }`}
+                    title="Bấm để Tạm dừng / Tiếp tục đếm thời gian"
+                  >
+                    <span>{isTimerPaused ? "⏸" : "⏱"}</span>
+                    <span>
+                      {String(Math.floor(practiceTimerSeconds / 60)).padStart(2, "0")}:
+                      {String(practiceTimerSeconds % 60).padStart(2, "0")}
+                    </span>
+                  </button>
 
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500 text-white text-xs font-black shadow-2xs">
-                    ✓ {Object.keys(practiceChecked).length}/{filteredPracticeQuestions.length}
-                  </span>
+                  {/* 6. NÚT TIẾN ĐỘ / SỐ CÂU ĐÚNG */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const total = filteredPracticeQuestions.length;
+                      const checked = Object.keys(practiceChecked).length;
+                      const correct = Object.entries(practiceChecked).filter(
+                        ([qId]) => practiceAnswers[Number(qId)] === filteredPracticeQuestions.find((q) => q.id === Number(qId))?.correctAnswer
+                      ).length;
+                      const percent = checked > 0 ? Math.round((correct / checked) * 100) : 0;
+                      triggerToast(`Tiến độ: Đã làm ${checked}/${total} câu • Tỷ lệ đúng ${percent}% (Đúng ${correct}/${checked} câu) 🎯`);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-2xs transition cursor-pointer"
+                    title="Bấm để xem thống kê chính xác"
+                  >
+                    ✓ {
+                      Object.entries(practiceChecked).filter(
+                        ([qId]) => practiceAnswers[Number(qId)] === filteredPracticeQuestions.find((q) => q.id === Number(qId))?.correctAnswer
+                      ).length
+                    }/{filteredPracticeQuestions.length}
+                  </button>
 
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-800 text-white text-xs font-bold shadow-2xs font-mono">
-                    Câu {practiceCurrentQIndex + 1}/{filteredPracticeQuestions.length}
-                  </span>
+                  {/* 7. NÚT MA TRẬN CÂU HỎI */}
+                  <button
+                    type="button"
+                    onClick={() => setIsQuestionGridOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-800 hover:bg-blue-900 border border-blue-400/40 text-white text-xs font-extrabold shadow-2xs font-mono transition cursor-pointer"
+                    title="Bấm để mở danh sách toàn bộ câu hỏi"
+                  >
+                    <Grid className="w-3.5 h-3.5" />
+                    <span>Câu {practiceCurrentQIndex + 1}/{filteredPracticeQuestions.length}</span>
+                  </button>
                 </div>
               </header>
+
+              
+              {/* --- ANNOTATOR FLOATING TOOLBAR --- */}
+              {isAnnotatorActive && (
+                <div className="bg-amber-100 border-b border-amber-300 px-6 py-2 flex items-center justify-between shadow-xs select-none text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="font-extrabold text-amber-900 flex items-center gap-1.5">
+                      <Pencil className="w-4 h-4 text-amber-700" />
+                      Công cụ Annotator (Đánh dấu & Tô màu bài viết):
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      {(["yellow", "green", "pink", "blue"] as const).map((color) => {
+                        const colorMap = {
+                          yellow: "bg-yellow-400 border-yellow-500",
+                          green: "bg-emerald-400 border-emerald-500",
+                          pink: "bg-pink-400 border-pink-500",
+                          blue: "bg-sky-400 border-sky-500",
+                        };
+                        return (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => {
+                              setAnnotatorColor(color);
+                              triggerToast(`Đã chọn bút tô màu ${color}`);
+                            }}
+                            className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${colorMap[color]} ${
+                              annotatorColor === color ? "scale-110 ring-2 ring-slate-800" : "opacity-70 hover:opacity-100"
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => triggerToast("Đã tẩy toàn bộ nét vẽ / đánh dấu")}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-bold hover:bg-amber-50 transition cursor-pointer"
+                    >
+                      🧹 Xóa đánh dấu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAnnotatorActive(false)}
+                      className="p-1 rounded-full text-amber-900 hover:bg-amber-200 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MODAL SỔ TAY GHI CHÚ CÁ NHÂN --- */}
+              {isNotesModalOpen && currentQ && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-base text-slate-900">Ghi chú cá nhân</h3>
+                          <p className="text-xs text-slate-500">Câu {currentQ.id} • {currentQ.part}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsNotesModalOpen(false)}
+                        className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <textarea
+                      rows={5}
+                      value={practiceUserNotes[currentQ.id] || ""}
+                      onChange={(e) => setPracticeUserNotes({ ...practiceUserNotes, [currentQ.id]: e.target.value })}
+                      placeholder="Nhập ghi chú hoặc kiến thức cần nhớ cho câu hỏi này tại đây..."
+                      className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
+                    />
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...practiceUserNotes };
+                          delete updated[currentQ.id];
+                          setPracticeUserNotes(updated);
+                          triggerToast("Đã xóa ghi chú của câu hỏi này!");
+                        }}
+                        className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
+                      >
+                        🗑 Xóa ghi chú
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsNotesModalOpen(false)}
+                          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsNotesModalOpen(false);
+                            triggerToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                          }}
+                          className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                        >
+                          💾 Lưu ghi chú
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- MODAL MA TRẬN TOÀN BỘ CÂU HỎI (QUESTION GRID MODAL) --- */}
+              {isQuestionGridOpen && (() => {
+                const questionsList = examModalTest ? activeExamQuestions : filteredPracticeQuestions;
+                const currentQIdx = examModalTest ? examCurrentQIndex : practiceCurrentQIndex;
+                const answersObj = examModalTest ? examAnswers : practiceAnswers;
+
+                return (
+                  <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 font-sans">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <Grid className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-base text-slate-900">Danh sách toàn bộ câu hỏi</h3>
+                            <p className="text-xs text-slate-500">
+                              Đã làm {Object.keys(answersObj).length}/{questionsList.length} câu
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsQuestionGridOpen(false)}
+                          className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {/* Status Legend */}
+                      <div className="flex items-center gap-4 text-xs font-semibold text-slate-600 py-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> Đang xem
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> Đã làm
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-slate-200 inline-block" /> Chưa làm
+                        </span>
+                      </div>
+
+                      {/* Question Grid Buttons */}
+                      <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+                        {questionsList.map((q, idx) => {
+                          const isCurrent = idx === currentQIdx;
+                          const hasAnswered = !!answersObj[q.id];
+
+                          let qBtnStyle = "bg-white border-slate-200 text-slate-700 hover:border-blue-400";
+                          if (isCurrent) {
+                            qBtnStyle = "bg-blue-600 text-white font-extrabold border-blue-600 ring-2 ring-blue-300";
+                          } else if (hasAnswered) {
+                            qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
+                          }
+
+                          return (
+                            <button
+                              key={q.id}
+                              type="button"
+                              onClick={() => {
+                                if (examModalTest) {
+                                  setExamCurrentQIndex(idx);
+                                } else {
+                                  setPracticeCurrentQIndex(idx);
+                                }
+                                setIsQuestionGridOpen(false);
+                              }}
+                              className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
+                            >
+                              <span className="font-extrabold">{idx + 1}</span>
+                              <span className="text-[9px] opacity-80">{q.part}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsQuestionGridOpen(false)}
+                          className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+                        >
+                          Đóng danh sách
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* --- MAIN DUAL PANE PRACTICE AREA --- */}
               <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
@@ -2665,6 +2759,13 @@ export default function MockTestsPage() {
                       <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                       Yêu cầu bài tập (Instruction)
                     </div>
+
+                    {/* Tiêu đề nhóm câu cho Part 6 & Part 7 chuẩn theo Ảnh 1 & 2 */}
+                    {currentQ && (currentQ.part === "Part 6" || currentQ.part === "Part 7") && (
+                      <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug pb-1">
+                        {currentQ.groupTitle || (currentQ.part === "Part 6" ? "Questions 131–134 refer to the following article." : "Questions 147–148 refer to the following notice.")}
+                      </div>
+                    )}
 
                     <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
                       {(() => {
@@ -2697,7 +2798,7 @@ export default function MockTestsPage() {
                     )}
 
                     {/* Photograph Image for Part 1 */}
-                    {currentQ && currentQ.imageUrl && (
+                    {currentQ && currentQ.part === "Part 1" && currentQ.imageUrl && (
                       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
                         <img
                           src={currentQ.imageUrl}
@@ -2707,19 +2808,20 @@ export default function MockTestsPage() {
                       </div>
                     )}
 
-                    {/* Audio player for listening parts */}
+                    {/* Audio player cho các Part Listening chuẩn theo Ảnh Part 1 */}
                     {currentQ && currentQ.audioUrl && (
-                      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+                      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+                        {/* Hàng 1: Nút Play/Pause, Waveform & Dấu mốc thời gian */}
                         <div className="flex items-center justify-between gap-3">
                           <button
                             type="button"
                             onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                            className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shrink-0 cursor-pointer"
+                            className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-sm shrink-0 cursor-pointer"
                           >
-                            {isPlayingAudio ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+                            {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                           </button>
-                          
-                          <div className="flex-1 flex items-center gap-1 h-9 px-3 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+
+                          <div className="flex-1 flex items-center gap-1 h-8 px-2 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
                             {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50, 30, 70, 85, 40].map((h, i) => (
                               <div
                                 key={i}
@@ -2732,7 +2834,56 @@ export default function MockTestsPage() {
                           </div>
 
                           <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
-                            00:00 / 00:00
+                            00:01 / 00:24
+                          </span>
+                        </div>
+
+                        {/* Hàng 2: Bộ Tua lại 3s, Tua đi 5s và Tốc độ phát 1x */}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => triggerToast("Tua lại 3 giây ↺")}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition cursor-pointer"
+                            >
+                              ↺ 3s
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => triggerToast("Tua tới 5 giây ↻")}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition cursor-pointer"
+                            >
+                              ↻ 5s
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const speeds: ("1x" | "1.25x" | "1.5x" | "0.75x")[] = ["1x", "1.25x", "1.5x", "0.75x"];
+                              const nextSpeed = speeds[(speeds.indexOf(audioSpeed) + 1) % speeds.length];
+                              setAudioSpeed(nextSpeed);
+                              triggerToast(`Tốc độ phát âm thanh: ${nextSpeed}`);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition cursor-pointer"
+                          >
+                            {audioSpeed}
+                          </button>
+                        </div>
+
+                        {/* Hàng 3: Hướng dẫn phím tắt bàn phím (Matching Ảnh Part 1) */}
+                        <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 font-medium overflow-x-auto">
+                          <span className="inline-flex items-center gap-1">
+                            <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[10px] text-slate-700">Ctrl</kbd>
+                            Phát/Dừng
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[10px] text-slate-700">Shift</kbd>
+                            Tua lại 3s
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[10px] text-slate-700">1-4</kbd>
+                            Chọn đáp án
                           </span>
                         </div>
                       </div>
@@ -2745,9 +2896,21 @@ export default function MockTestsPage() {
                   {currentQ && (
                     <div className="space-y-5">
                       <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
+                        {/* Badge Nhóm câu cho Part 6 & Part 7 chuẩn theo Ảnh 1 & 2 */}
+                        {currentQ && (currentQ.part === "Part 6" || currentQ.part === "Part 7") && (
+                          <div className="flex items-center gap-2 pb-1">
+                            <span className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold shadow-2xs">
+                              Nhóm câu {currentQ.groupId || (currentQ.part === "Part 6" ? "131–134" : "147–148")}
+                            </span>
+                            <span className="text-xs text-slate-500 font-semibold">
+                              ({currentQ.groupTotal || (currentQ.part === "Part 6" ? "4" : "2")} câu hỏi)
+                            </span>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between gap-2">
                           <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
-                            {currentQ.part} • Nhập môn
+                            {currentQ.part} • {currentQ.part === "Part 1" ? "Hình ảnh" : currentQ.part === "Part 2" ? "Hỏi đáp" : currentQ.part === "Part 3" ? "Hội thoại ngắn" : currentQ.part === "Part 4" ? "Bài nói ngắn" : currentQ.part === "Part 5" ? "Điền câu" : currentQ.part === "Part 6" ? "Điền đoạn văn" : currentQ.part === "Part 7" ? "Đọc hiểu" : "Nhập môn"}
                           </span>
 
                           <div className="flex items-center gap-2">
@@ -2790,7 +2953,7 @@ export default function MockTestsPage() {
                             const isRight = optKey === currentQ.correctAnswer;
                             const isPart1or2 = currentQ.part === "Part 1" || currentQ.part === "Part 2";
 
-                            if (currentQ.part === "Part 2" && optKey === "D") return null;
+                            if ((currentQ.part === "Part 2" || qPart === "Part 2") && optKey === "D") return null;
 
                             let cardStyle = "bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800";
                             let iconNode = (
@@ -2846,11 +3009,223 @@ export default function MockTestsPage() {
                         </div>
                       </div>
 
-                      {/* Explanation container when checked */}
+                      {/* KHUNG GIẢI THÍCH CHI TIẾT VÀ TỪ VỰNG NÊN HỌC CHUẨN THEO ẢNH 2, 3 & 4 */}
                       {isChecked && (
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
-                          <p className="font-bold text-slate-900">Giải thích AI:</p>
-                          <p className="text-slate-700 leading-relaxed">{currentQ.explanation}</p>
+                        <div className="space-y-4 pt-2">
+                          {/* KHUNG 1: GIẢI THÍCH CHI TIẾT */}
+                          <div className="rounded-3xl border border-blue-200/90 bg-blue-50/40 p-5 space-y-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-blue-900 font-extrabold text-sm sm:text-base">
+                                <Sparkles className="w-4 h-4 text-blue-600" />
+                                <span>Giải thích chi tiết</span>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={showDetailedExplanation}
+                                  onChange={(e) => setShowDetailedExplanation(e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                              </label>
+                            </div>
+
+                            {showDetailedExplanation && (
+                              <div className="space-y-3.5 text-xs sm:text-sm text-slate-800 leading-relaxed font-medium pt-1 border-t border-blue-100">
+                                <div>
+                                  <p className="font-bold text-slate-900 mb-0.5">Bước 1: Xác định dạng câu hỏi</p>
+                                  <p className="text-slate-700">
+                                    {currentQ.step1 || 'Bốn đáp án là các dạng khác nhau của đại từ "they" nên đây là câu đại từ, cần xét vị trí chỗ trống.'}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="font-bold text-slate-900 mb-0.5">Bước 2: Phân tích câu để biết chỗ trống cần gì</p>
+                                  <p className="text-slate-700">
+                                    {currentQ.step2 || 'Xét vị trí: chỗ trống đứng ngay trước cụm danh từ "earliest projects" (những dự án đầu tiên), nên cần tính từ sở hữu; loại "they" (A) vì là đại từ chủ ngữ, "them" (B) vì là đại từ tân ngữ và "themselves" (D) vì là đại từ phản thân, đều không đứng trước danh từ.'}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="font-bold text-slate-900 mb-0.5">Bước 3: Chọn đáp án</p>
+                                  <p className="text-slate-700">
+                                    {currentQ.step3 || 'Chọn tính từ sở hữu "their" (của họ).'}
+                                  </p>
+                                </div>
+
+                                {(currentQ.note || currentQ.explanation) && (
+                                  <div className="pt-1 text-slate-600 italic">
+                                    Lưu ý: {currentQ.note || '"their" thay cho "the two founders" (hai nhà sáng lập) ở đầu câu.'}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* KHUNG 2: TỪ VỰNG NÊN HỌC */}
+                          <div className="rounded-3xl border border-amber-200/90 bg-amber-50/40 p-5 space-y-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-amber-950 font-extrabold text-sm sm:text-base">
+                                <BookOpen className="w-4 h-4 text-amber-600" />
+                                <span>Từ vựng nên học</span>
+                              </div>
+
+                              <label className="relative inline-flex items-center cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={showVocabSection}
+                                  onChange={(e) => setShowVocabSection(e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                              </label>
+                            </div>
+
+                            {showVocabSection && (
+                              <div className="space-y-4 pt-1 border-t border-amber-100">
+                                <div className="flex items-center justify-between text-xs pt-1">
+                                  <span className="font-bold text-slate-700">3 từ</span>
+
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsVocabExpanded(!isVocabExpanded)}
+                                      className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>{isVocabExpanded ? "Thu gọn" : "Chi tiết"}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => triggerToast("Đã lưu tất cả 3 từ vựng vào Giỏ từ!")}
+                                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs inline-flex items-center gap-1 transition shadow-xs cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Thêm tất cả (3)</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {[
+                                    {
+                                      word: "founder",
+                                      pos: "n",
+                                      level: "B2",
+                                      usIpa: "/ˈfaʊndər/",
+                                      ukIpa: "/ˈfaʊndə/",
+                                      meaning: "người sáng lập",
+                                      exampleEn: "Upon the two founders' retirement, the foundation released a booklet describing their earliest projects.",
+                                      exampleVi: "Nhân dịp hai nhà sáng lập nghỉ hưu, quỹ đã phát hành một cuốn sách nhỏ mô tả những dự án đầu tiên của họ.",
+                                      collocations: ["company founder – người sáng lập công ty", "founder member – thành viên sáng lập"],
+                                      synonyms: ["creator – người tạo ra"],
+                                    },
+                                    {
+                                      word: "foundation",
+                                      pos: "n",
+                                      level: "B2",
+                                      usIpa: "/faʊnˈdeɪʃn/",
+                                      ukIpa: "/faʊnˈdeɪʃn/",
+                                      meaning: "quỹ",
+                                      exampleEn: "The foundation released a booklet describing their projects.",
+                                      exampleVi: "Quỹ đã phát hành một cuốn sách nhỏ mô tả các dự án.",
+                                      collocations: ["charitable foundation – quỹ từ thiện"],
+                                      synonyms: ["organization – tổ chức"],
+                                    },
+                                    {
+                                      word: "booklet",
+                                      pos: "n",
+                                      level: "B2",
+                                      usIpa: "/ˈbʊklət/",
+                                      ukIpa: "/ˈbʊklət/",
+                                      meaning: "cuốn sách nhỏ",
+                                      exampleEn: "They published an information booklet.",
+                                      exampleVi: "Họ đã xuất bản một cuốn sách thông tin nhỏ.",
+                                      collocations: ["information booklet – cuốn sách nhỏ thông tin"],
+                                      synonyms: ["pamphlet – cuốn sách nhỏ"],
+                                    },
+                                  ].map((vItem, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-xs space-y-3 transition"
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-extrabold text-slate-900 text-base">{vItem.word}</span>
+                                            <span className="italic font-serif text-slate-500 text-xs">{vItem.pos}</span>
+                                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 font-extrabold text-[10px]">
+                                              {vItem.level}
+                                            </span>
+                                          </div>
+
+                                          <div className="text-xs text-slate-600 flex items-center gap-2 font-mono">
+                                            <span>US {vItem.usIpa}</span>
+                                            <button type="button" onClick={() => playSfx("correct")} className="text-blue-600 hover:text-blue-700 cursor-pointer">
+                                              <Volume2 className="w-3.5 h-3.5 inline" />
+                                            </button>
+                                            <span>UK {vItem.ukIpa}</span>
+                                            <button type="button" onClick={() => playSfx("correct")} className="text-blue-600 hover:text-blue-700 cursor-pointer">
+                                              <Volume2 className="w-3.5 h-3.5 inline" />
+                                            </button>
+                                          </div>
+
+                                          <div className="text-xs font-bold text-slate-800">
+                                            {vItem.meaning}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <button
+                                            type="button"
+                                            className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition cursor-pointer"
+                                          >
+                                            <Bookmark className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => triggerToast(`Đã thêm từ "${vItem.word}" vào Giỏ từ!`)}
+                                            className="px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs inline-flex items-center gap-1 transition cursor-pointer"
+                                          >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>Thêm</span>
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {isVocabExpanded && (
+                                        <div className="pt-2 border-t border-slate-100 space-y-2.5 text-xs">
+                                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                                            <p className="text-slate-800 font-medium">{vItem.exampleEn}</p>
+                                            <p className="text-slate-500">{vItem.exampleVi}</p>
+                                          </div>
+
+                                          {vItem.collocations && vItem.collocations.length > 0 && (
+                                            <div className="space-y-1">
+                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider block">CỤM TỪ</span>
+                                              {vItem.collocations.map((col, cIdx) => (
+                                                <p key={cIdx} className="text-slate-700 font-medium pl-1">• {col}</p>
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          {vItem.synonyms && vItem.synonyms.length > 0 && (
+                                            <div className="space-y-1">
+                                              <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider block">ĐỒNG NGHĨA</span>
+                                              {vItem.synonyms.map((syn, sIdx) => (
+                                                <p key={sIdx} className="text-slate-700 font-medium pl-1">• {syn}</p>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
