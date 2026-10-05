@@ -62,7 +62,7 @@ export interface QuestionItem {
 }
 
 // --- CONSTANTS ---
-export const DEFAULT_PARTS: { part: QuestionPart | "ALL"; label: string; desc: string }[] = [
+const DEFAULT_PARTS: { part: QuestionPart | "ALL"; label: string; desc: string }[] = [
   { part: "ALL", label: "Tất cả Part", desc: "Toàn bộ ngân hàng câu hỏi" },
   { part: "Part 1", label: "Part 1", desc: "Mô tả hình ảnh (Photographs)" },
   { part: "Part 2", label: "Part 2", desc: "Hỏi & Đáp (Question - Response)" },
@@ -73,7 +73,7 @@ export const DEFAULT_PARTS: { part: QuestionPart | "ALL"; label: string; desc: s
   { part: "Part 7", label: "Part 7", desc: "Đọc hiểu văn bản (Reading)" },
 ];
 
-export const DEFAULT_SKILLS = [
+const DEFAULT_SKILLS = [
   "Grammar (Ngữ pháp)",
   "Vocabulary (Từ vựng)",
   "Inference (Suy luận)",
