@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function ReadingRedirect() {
-  redirect("/admin/content/reading");
+  redirect("/admin/content/reading-content");
 }
