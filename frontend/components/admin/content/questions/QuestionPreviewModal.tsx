@@ -20,7 +20,7 @@ import {
   Volume2,
   Image as ImageIcon,
 } from "lucide-react";
-import { QuestionItem } from "@/app/admin/content/questions/types";
+import { QuestionItem, VocabItem } from "@/app/admin/content/questions/types";
 
 interface QuestionPreviewModalProps {
   question: QuestionItem | null;
@@ -43,7 +43,6 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
   setAudioSpeed = () => {},
   showToast = () => {},
 }) => {
-  if (!question) return null;
   const [userSelectedOption, setUserSelectedOption] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [showScript, setShowScript] = useState(false);
@@ -51,6 +50,8 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
   const [showVocabSection, setShowVocabSection] = useState(true);
   const [isVocabExpanded, setIsVocabExpanded] = useState(true);
   const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
+
+  if (!question) return null;
 
   const cleanQuestionText = question.questionText.replace(/^[0-9]+\.\s*/, "");
 
@@ -642,7 +643,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                               type="button"
                               onClick={() => {
                                 playSfx("click");
-                                setAddedVocabItems(vocabList.map((v: any) => v.word));
+                                setAddedVocabItems(vocabList.map((v: VocabItem) => v.word));
                                 showToast(`Đã thêm tất cả ${vocabList.length} từ vào sổ từ vựng! ✨`);
                               }}
                               className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1"
@@ -654,7 +655,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                         </div>
 
                         <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                          {vocabList.map((v: any, idx: number) => {
+                          {vocabList.map((v: VocabItem, idx: number) => {
                             const isSaved = addedVocabItems.includes(v.word);
 
                             if (isVocabExpanded) {

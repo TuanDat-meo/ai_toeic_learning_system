@@ -54,7 +54,7 @@ export const ReadingHeader: React.FC<ReadingHeaderProps> = ({
               key={tab.id}
               type="button"
               onClick={() => {
-                setActiveMainTab(tab.id as any);
+                setActiveMainTab(tab.id as "grammar" | "part5" | "part6" | "part7");
                 if (tab.id === "grammar") setActiveSubFilter("all");
               }}
               className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
@@ -91,7 +91,7 @@ export const ReadingHeader: React.FC<ReadingHeaderProps> = ({
             <button
               key={sub.id}
               type="button"
-              onClick={() => setActiveSubFilter(sub.id as any)}
+              onClick={() => setActiveSubFilter(sub.id as "all" | "word_types" | "verbs" | "other_grammar")}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 activeSubFilter === sub.id
                   ? "bg-blue-100 text-blue-800 border border-blue-200"

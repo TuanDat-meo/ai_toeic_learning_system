@@ -104,6 +104,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
 
   React.useEffect(() => {
     if (editingTest) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTestTitle(editingTest.title);
       setTestYear(editingTest.year);
       setTestCategory(editingTest.category);
@@ -116,6 +117,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
 
   React.useEffect(() => {
     if (editingWord) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWordText(editingWord.word);
       setWordIpa(editingWord.ipa);
       setWordPos(editingWord.partOfSpeech);
@@ -535,7 +537,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại</label>
                   <select
                     value={testCategory}
-                    onChange={(e) => setTestCategory(e.target.value as any)}
+                    onChange={(e) => setTestCategory(e.target.value as "2026" | "600_essential" | "2023")}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                   >
                     <option value="2026">ETS 2026</option>

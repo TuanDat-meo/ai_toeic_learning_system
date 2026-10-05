@@ -54,6 +54,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
 
   useEffect(() => {
     if (editingQuestion) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormPart(editingQuestion.part);
       setFormSkill(editingQuestion.skill || DEFAULT_SKILLS[0]);
       setFormDifficulty(editingQuestion.difficulty || "Medium");

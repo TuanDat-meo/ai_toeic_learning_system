@@ -84,7 +84,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1">Phần thi (Phân loại)</label>
               <select
                 value={cardFormCategory}
-                onChange={(e) => setCardFormCategory(e.target.value as any)}
+                onChange={(e) => setCardFormCategory(e.target.value as "grammar" | "part5" | "part6" | "part7")}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
               >
                 <option value="grammar">Ngữ pháp</option>
@@ -110,7 +110,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1">Nhóm con</label>
               <select
                 value={cardFormSubCategory}
-                onChange={(e) => setCardFormSubCategory(e.target.value as any)}
+                onChange={(e) => setCardFormSubCategory(e.target.value as "word_types" | "verbs" | "other_grammar" | "levels" | "by_topic")}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
               >
                 <option value="word_types">Từ loại</option>

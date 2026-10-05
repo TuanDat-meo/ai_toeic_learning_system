@@ -253,8 +253,8 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
             onSave({
               title: formData.get("title") as string,
               englishTitle: formData.get("englishTitle") as string,
-              part: formData.get("part") as any,
-              targetScore: formData.get("targetScore") as any,
+              part: (formData.get("part") as string || "Part 5") as unknown as never,
+              targetScore: (formData.get("targetScore") as string || "All") as unknown as never,
               formula: formData.get("formula") as string,
               summary: formData.get("summary") as string,
             });
@@ -593,6 +593,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentIndex(0);
       setSelectedAnswer(null);
       setIsAnswerChecked(false);

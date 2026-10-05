@@ -182,7 +182,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                       <button
                         key={item.val}
                         type="button"
-                        onClick={() => setExamDurationType(item.val as any)}
+                        onClick={() => setExamDurationType(item.val as "120" | "60" | "30")}
                         className={`p-3 rounded-xl border text-center transition cursor-pointer ${
                           examDurationType === item.val
                             ? "bg-blue-600 text-white border-blue-600 shadow-sm"

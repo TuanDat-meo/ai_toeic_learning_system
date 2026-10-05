@@ -38,7 +38,8 @@ export default function AdminMockTestsPage() {
   // Audio helper SFX
   const playSfx = (type: "correct" | "wrong" | "incorrect" | "click") => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -146,7 +147,7 @@ export default function AdminMockTestsPage() {
 
   // Timers
   useEffect(() => {
-    let timer: any;
+    let timer: ReturnType<typeof setInterval>;
     if (examStarted && !examSubmitted && examTimeRemaining > 0) {
       timer = setInterval(() => {
         setExamTimeRemaining((prev) => prev - 1);
@@ -156,7 +157,7 @@ export default function AdminMockTestsPage() {
   }, [examStarted, examSubmitted, examTimeRemaining]);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval>;
     if (practiceModalTest && !isTimerPaused) {
       interval = setInterval(() => {
         setPracticeTimerSeconds((prev) => prev + 1);
