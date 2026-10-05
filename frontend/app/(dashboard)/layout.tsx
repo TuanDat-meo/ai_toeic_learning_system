@@ -9,9 +9,9 @@ export default function DashboardLayout({
   return (
     <>
       <Sidebar />
-      <div className="pl-72 flex flex-col min-h-screen">
+      <div className="flex min-h-screen flex-col lg:pl-72">
         <Header />
-        <main className="flex-1 pt-16 bg-surface w-full px-space-lg py-space-lg">
+        <main className="w-full flex-1 bg-surface px-4 py-6 pt-20 sm:px-6 lg:px-8">
           {children}
         </main>
       </div>

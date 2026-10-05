@@ -1,3 +1,5 @@
+name: ai_toeic_learning_system
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -15,6 +17,7 @@ services:
   backend:
     build:
       context: ./backend
+    image: ai_toeic_learning_system-backend:latest
     container_name: toeic-backend
     restart: unless-stopped
     ports:
@@ -31,6 +34,9 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    image: ai_toeic_learning_system-frontend:latest
     container_name: toeic-frontend
     restart: unless-stopped
     ports:
@@ -40,3 +46,5 @@ services:
 
 volumes:
   pgdata:
+    external: true
+    name: hethonghotrohoctoeic_pgdata
