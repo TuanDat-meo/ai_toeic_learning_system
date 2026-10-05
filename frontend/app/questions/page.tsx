@@ -1,5 +1,0 @@
-import { redirect } from "next/navigation";
-
-export default function QuestionsRedirect() {
-  redirect("/admin/content/questions-content");
-}

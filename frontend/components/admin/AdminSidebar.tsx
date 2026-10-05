@@ -31,12 +31,12 @@ const navGroups = [
   {
     title: "Nội dung",
     items: [
-      { label: "Từ vựng", href: "/admin/content/vocabulary-content", icon: BookA },
-      { label: "Ngữ pháp", href: "/admin/content/grammar-content", icon: SpellCheck },
-      { label: "Listening", href: "/admin/content/listening-content", icon: Headphones },
-      { label: "Reading", href: "/admin/content/reading-content", icon: BookOpen },
-      { label: "Ngân hàng câu hỏi", href: "/admin/content/questions-content", icon: FileQuestion },
-      { label: "Đề thi thử", href: "/admin/content/mock-tests-content", icon: FileBadge },
+      { label: "Từ vựng", href: "/admin/content/vocabulary", icon: BookA },
+      { label: "Ngữ pháp", href: "/admin/content/grammar", icon: SpellCheck },
+      { label: "Listening", href: "/admin/content/listening", icon: Headphones },
+      { label: "Reading", href: "/admin/content/reading", icon: BookOpen },
+      { label: "Ngân hàng câu hỏi", href: "/admin/content/questions", icon: FileQuestion },
+      { label: "Đề thi thử", href: "/admin/content/mock-tests", icon: FileBadge },
     ],
   },
   {
