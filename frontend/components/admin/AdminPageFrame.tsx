@@ -5,6 +5,7 @@ export type AdminMetric = {
   value: string;
   trend: string;
   tone?: "primary" | "secondary" | "tertiary" | "neutral";
+  icon?: ReactNode;
 };
 
 export function AdminPageFrame({
@@ -56,13 +57,20 @@ export function AdminPageFrame({
                 key={metric.label}
                 className="rounded-[22px] border border-[rgba(116,118,132,0.12)] bg-white p-5 shadow-[0_10px_25px_rgba(15,23,42,0.04)]"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{metric.label}</p>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${tones[metric.tone ?? "neutral"]}`}>
-                    {metric.trend}
-                  </span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{metric.label}</p>
+                    <p className="mt-4 break-words text-[30px] font-bold tracking-[-0.05em] text-slate-900">{metric.value}</p>
+                    <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${tones[metric.tone ?? "neutral"]}`}>
+                      {metric.trend}
+                    </span>
+                  </div>
+                  {metric.icon ? (
+                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[metric.tone ?? "neutral"]}`}>
+                      {metric.icon}
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-4 text-[30px] font-bold tracking-[-0.05em] text-slate-900">{metric.value}</p>
               </div>
             );
           })}
