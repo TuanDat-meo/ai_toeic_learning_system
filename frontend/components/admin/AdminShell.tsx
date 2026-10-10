@@ -9,12 +9,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#f3f5fa]">
-      <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="min-h-screen min-w-0 md:ml-72">
-        <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
-
-        <main className="p-4 md:p-space-xl">{children}</main>
+    <div className="min-h-screen bg-[#f8fafc]">
+      <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
+      <div className="flex min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-76px)]">
+        <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <main className="min-w-0 flex-1 p-4 md:ml-80 md:p-6 xl:p-10">{children}</main>
       </div>
     </div>
   );

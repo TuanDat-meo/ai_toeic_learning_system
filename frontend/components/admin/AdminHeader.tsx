@@ -5,35 +5,33 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   Clock3,
-  LockKeyhole,
   LogOut,
+  KeyRound,
   Menu,
   Mail,
   Search,
   Save,
-  ShieldCheck,
   UserRound,
   X,
 } from "lucide-react";
+import {
+  changePassword,
+  getAccountActivity,
+  getCurrentUser,
+  logoutAllSessions,
+  logout as logoutSession,
+  updateCurrentUserProfile,
+  type AccountActivity,
+} from "@/lib/api/auth";
 
 type AdminProfile = {
   name: string;
   email: string;
 };
 
-type ActivityEntry = {
-  id: string;
-  action: string;
-  detail: string;
-  createdAt: string;
-};
-
-const PROFILE_KEY = "toeic-admin-profile";
-const ACTIVITY_KEY = "toeic-admin-activity";
-
-const defaultProfile: AdminProfile = {
-  name: "Quản trị viên",
-  email: "admin@toeic-ai.vn",
+const emptyProfile: AdminProfile = {
+  name: "",
+  email: "",
 };
 
 const pageNames: Record<string, string> = {
@@ -45,6 +43,10 @@ const pageNames: Record<string, string> = {
   "/admin/content/reading": "Quản lý Reading",
   "/admin/content/questions": "Ngân hàng câu hỏi",
   "/admin/content/mock-tests": "Đề thi thử",
+  "/admin/support/reports": "Phản hồi & Báo lỗi",
+  "/admin/support/announcements": "Quản lý Thông báo",
+  "/admin/billing/subscriptions": "Quản lý Gói cước",
+  "/admin/billing/transactions": "Lịch sử Giao dịch",
   "/admin/ai-review": "Kiểm duyệt AI",
   "/admin/data/import": "Quản lý dữ liệu",
   "/admin/users": "Quản lý người dùng",
@@ -70,36 +72,39 @@ function normalizeSearch(value: string) {
     .replace(/đ/g, "d")
 }
 
-function readActivities(): ActivityEntry[] {
-  try {
-    const stored = localStorage.getItem(ACTIVITY_KEY);
-    const entries: unknown = stored ? JSON.parse(stored) : [];
-    if (!Array.isArray(entries)) return [];
-
-    return entries.filter(
-      (entry): entry is ActivityEntry =>
-        typeof entry?.id === "string" &&
-        typeof entry?.action === "string" &&
-        typeof entry?.detail === "string" &&
-        typeof entry?.createdAt === "string",
-    );
-  } catch {
-    return [];
-  }
+function activityActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    CREATE: "Tạo mới",
+    UPDATE: "Cập nhật",
+    DELETE: "Xóa",
+    DISABLE: "Khóa tài khoản",
+    LOGOUT: "Đăng xuất",
+    REVOKE_SESSIONS: "Đăng xuất tất cả thiết bị",
+  };
+  return labels[action] ?? action;
 }
 
 export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [profile, setProfile] = useState(defaultProfile);
-  const [draft, setDraft] = useState(defaultProfile);
-  const [activities, setActivities] = useState<ActivityEntry[]>([]);
-  const [isReady, setIsReady] = useState(false);
+  const [profile, setProfile] = useState(emptyProfile);
+  const [draft, setDraft] = useState(emptyProfile);
+  const [activities, setActivities] = useState<AccountActivity[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<"profile" | "security" | "activity" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [securityError, setSecurityError] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [logoutAllSaving, setLogoutAllSaving] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const normalizedQuery = normalizeSearch(searchQuery.trim());
   const searchResults = normalizedQuery
     ? Object.entries(pageNames)
@@ -108,41 +113,25 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     : [];
 
   useEffect(() => {
-    let savedProfile = defaultProfile;
-    try {
-      const storedProfile = localStorage.getItem(PROFILE_KEY);
-      if (storedProfile) {
-        const parsed: unknown = JSON.parse(storedProfile);
-        if (
-          typeof parsed === "object" &&
-          parsed !== null &&
-          "name" in parsed &&
-          typeof parsed.name === "string" &&
-          "email" in parsed &&
-          typeof parsed.email === "string"
-        ) {
-          savedProfile = { name: parsed.name, email: parsed.email };
-        }
-      }
-    } catch {
-      localStorage.removeItem(PROFILE_KEY);
-    }
+    let active = true;
 
-    const savedActivities = readActivities();
-    startTransition(() => {
-      setProfile(savedProfile);
-      setDraft(savedProfile);
-      setActivities(savedActivities);
-      setIsReady(true);
-    });
-  }, []);
+    getCurrentUser()
+      .then((user) => {
+        if (!active) return;
+        const currentProfile = { name: user.fullName, email: user.email };
+        startTransition(() => {
+          setProfile(currentProfile);
+          setDraft(currentProfile);
+        });
+      })
+      .catch(() => {
+        if (active) router.replace("/login");
+      });
 
-  useEffect(() => {
-    if (!isReady) return;
-
-    const pageName = pageNames[pathname] ?? "Khu vực quản trị";
-    recordActivity("Truy cập trang", pageName);
-  }, [isReady, pathname]);
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -153,6 +142,19 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function closeOnOutside(event: PointerEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutside);
+    return () => document.removeEventListener("pointerdown", closeOnOutside);
   }, [menuOpen]);
 
   useEffect(() => {
@@ -170,74 +172,105 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     return () => window.removeEventListener("keydown", handleSearchShortcut);
   }, []);
 
-  function recordActivity(action: string, detail: string) {
-    const current = readActivities();
-    const lastEntry = current[0];
-    if (
-      lastEntry?.action === action &&
-      lastEntry.detail === detail &&
-      Date.now() - new Date(lastEntry.createdAt).getTime() < 2000
-    ) {
-      setActivities(current);
-      return;
-    }
-
-    const next = [
-      { id: crypto.randomUUID(), action, detail, createdAt: new Date().toISOString() },
-      ...current,
-    ].slice(0, 30);
-
-    try {
-      localStorage.setItem(ACTIVITY_KEY, JSON.stringify(next));
-    } catch {
-      // Keep the current session usable when browser storage is unavailable.
-    }
-    setActivities(next);
-  }
-
   function openProfile() {
     setDraft(profile);
+    setProfileError("");
     setMenuOpen(false);
     setDialog("profile");
   }
 
-  function saveProfile(event: FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const updated = { name: draft.name.trim(), email: draft.email.trim() };
-    setProfile(updated);
+    setProfileError("");
+    setProfileSaving(true);
     try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
-    } catch {
-      // Keep the updated profile visible for this session.
+      const saved = await updateCurrentUserProfile(draft.name.trim(), draft.email.trim());
+      const updated = { name: saved.fullName, email: saved.email };
+      setProfile(updated);
+      setDraft(updated);
+      setDialog(null);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Không thể cập nhật hồ sơ. Vui lòng thử lại.");
+    } finally {
+      setProfileSaving(false);
     }
-    recordActivity("Cập nhật hồ sơ", updated.name);
-    setDialog(null);
   }
 
-  function openActivity() {
-    setActivities(readActivities());
+  async function openActivity() {
+    setActivities([]);
+    setActivityError("");
+    setActivityLoading(true);
     setMenuOpen(false);
     setDialog("activity");
+    try {
+      setActivities(await getAccountActivity());
+    } catch (error) {
+      setActivityError(error instanceof Error ? error.message : "Không thể tải lịch sử thao tác.");
+    } finally {
+      setActivityLoading(false);
+    }
   }
 
   function openSecurity() {
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    setSecurityError("");
     setMenuOpen(false);
     setDialog("security");
   }
 
-  function logout() {
-    recordActivity("Đăng xuất", profile.email);
-    ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
-    });
-    router.replace("/login");
+  async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSecurityError("");
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setSecurityError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Không thể đổi mật khẩu. Vui lòng thử lại.");
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
+
+  async function handleLogoutAll() {
+    if (!window.confirm("Bạn sẽ đăng xuất khỏi tất cả thiết bị. Tiếp tục?")) return;
+    setLogoutError("");
+    setLogoutAllSaving(true);
+    try {
+      await logoutAllSessions();
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất các thiết bị.");
+    } finally {
+      setLogoutAllSaving(false);
+    }
+  }
+
+  async function handleLogout() {
+    setLogoutError("");
+    try {
+      await logoutSession();
+      ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
+    }
   }
 
   function openSearchResult(href: string) {
     setSearchQuery("");
     setSearchOpen(false);
-    searchInputRef.current?.blur();
     router.push(href);
   }
 
@@ -253,14 +286,18 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu aria-hidden="true" className="h-5 w-5" />
         </button>
 
-        <div className="min-w-0 flex-1 md:flex-none md:w-56">
-          <p className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 md:block">Admin workspace</p>
-          <h1 className="truncate text-sm font-semibold text-slate-900 md:mt-1 md:text-base">
-            {pageNames[pathname] ?? "Khu vực quản trị"}
-          </h1>
+        <div className="flex min-w-0 flex-1 items-center gap-3 md:w-[19rem] md:flex-none">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20">AI</span>
+          <span className="min-w-0">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-bold tracking-tight text-slate-900">TOEIC MASTER</span>
+              <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">PRO</span>
+            </span>
+            <span className="block text-xs font-medium text-slate-400">Admin Workspace</span>
+          </span>
         </div>
 
-        <div className="hidden w-full max-w-xl flex-1 items-center lg:flex">
+        <div className="hidden w-full max-w-xl flex-1 items-center xl:flex">
           <label className="sr-only" htmlFor="admin-search">Tìm kiếm hệ thống</label>
           <div className="relative w-full">
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -268,7 +305,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
               ref={searchInputRef}
               id="admin-search"
               type="search"
-              placeholder="Tìm kiếm hệ thống..."
+              placeholder="Tìm kiếm học viên, bài giảng, mã đề (Ctrl + K)..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               onFocus={() => setSearchOpen(true)}
@@ -309,7 +346,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center">
-          <div className="relative">
+          <div className="relative" ref={profileMenuRef}>
             <button
               type="button"
               aria-expanded={menuOpen}
@@ -330,7 +367,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
             {menuOpen ? (
               <div role="menu" className="absolute right-0 top-full z-40 mt-2 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
                 <div className="border-b border-slate-100 px-4 py-3.5">
-                  <p className="text-sm font-semibold text-slate-900">Quản trị viên</p>
+                  <p className="truncate text-sm font-semibold text-slate-900">{profile.name || "Đang tải tài khoản..."}</p>
                   <p className="mt-1.5 flex items-center gap-2 truncate text-xs text-slate-500">
                     <Mail aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                     {profile.email}
@@ -339,19 +376,25 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                 <div className="p-1.5">
                   <button role="menuitem" type="button" onClick={openProfile} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50">
                     <UserRound aria-hidden="true" className="h-4 w-4 text-slate-500" />
-                    Hồ sơ cá nhân
+                    Chỉnh sửa hồ sơ
                   </button>
+                  <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Bảo mật</p>
                   <button role="menuitem" type="button" onClick={openSecurity} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50">
-                    <LockKeyhole aria-hidden="true" className="h-4 w-4 text-slate-500" />
-                    Bảo mật
+                    <KeyRound aria-hidden="true" className="h-4 w-4 text-slate-500" />
+                    Đổi mật khẩu
                   </button>
+                  <button role="menuitem" type="button" disabled={logoutAllSaving} onClick={handleLogoutAll} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60">
+                    <LogOut aria-hidden="true" className="h-4 w-4 text-slate-500" />
+                    {logoutAllSaving ? "Đang đăng xuất..." : "Đăng xuất tất cả thiết bị"}
+                  </button>
+                  <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Hoạt động gần đây</p>
                   <button role="menuitem" type="button" onClick={openActivity} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50">
                     <Clock3 aria-hidden="true" className="h-4 w-4 text-slate-500" />
-                    Lịch sử thao tác
-                    {activities.length > 0 ? <span className="ml-auto text-xs text-slate-400">{activities.length}</span> : null}
+                    Xem lịch sử thao tác
                   </button>
                   <div className="my-1 border-t border-slate-100" />
-                  <button role="menuitem" type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
+                  {logoutError ? <p role="alert" className="px-3 py-2 text-xs text-rose-700">{logoutError}</p> : null}
+                  <button role="menuitem" type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
                     <LogOut aria-hidden="true" className="h-4 w-4" />
                     Đăng xuất
                   </button>
@@ -371,7 +414,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Tài khoản quản trị</p>
                 <h2 id="admin-dialog-title" className="mt-1 text-lg font-semibold text-slate-900">
-                  {dialog === "profile" ? "Hồ sơ cá nhân" : dialog === "security" ? "Bảo mật" : "Lịch sử thao tác"}
+                  {dialog === "profile" ? "Chỉnh sửa hồ sơ" : dialog === "security" ? "Đổi mật khẩu" : "Lịch sử thao tác"}
                 </h2>
               </div>
               <button type="button" aria-label="Đóng" onClick={() => setDialog(null)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800">
@@ -398,43 +441,51 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                   Email
                   <input required maxLength={120} type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                 </label>
+                {profileError ? <p role="alert" className="text-sm text-rose-700">{profileError}</p> : null}
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                   <button type="button" onClick={() => setDialog(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Hủy</button>
-                  <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">
-                    <Save aria-hidden="true" className="h-4 w-4" /> Lưu hồ sơ
+                  <button type="submit" disabled={profileSaving} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">
+                    <Save aria-hidden="true" className="h-4 w-4" /> {profileSaving ? "Đang lưu..." : "Lưu hồ sơ"}
                   </button>
                 </div>
               </form>
             ) : dialog === "security" ? (
-              <div className="space-y-4 p-5">
-                <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                  <ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-900">Phiên quản trị hiện tại</p>
-                    <p className="mt-1 text-xs leading-5 text-emerald-800">Thông tin phiên được lưu trên trình duyệt này. Đăng xuất sẽ xóa các khóa phiên đã lưu.</p>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 px-4 py-3">
-                  <p className="text-xs font-medium text-slate-500">Tài khoản</p>
-                  <p className="mt-1 truncate text-sm font-medium text-slate-800">{profile.email}</p>
-                </div>
+              <form onSubmit={handlePasswordChange} className="space-y-4 p-5">
+                <p className="text-sm text-slate-600">Đổi mật khẩu cho tài khoản {profile.email}. Bạn sẽ cần đăng nhập lại trên các thiết bị.</p>
+                <label className="block text-sm font-medium text-slate-700">
+                  Mật khẩu hiện tại
+                  <input required maxLength={72} type="password" autoComplete="current-password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Mật khẩu mới
+                  <input required minLength={8} maxLength={72} type="password" autoComplete="new-password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Xác nhận mật khẩu mới
+                  <input required minLength={8} maxLength={72} type="password" autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </label>
+                {securityError ? <p role="alert" className="text-sm text-rose-700">{securityError}</p> : null}
                 <div className="flex justify-end border-t border-slate-100 pt-4">
-                  <button type="button" onClick={logout} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700">
-                    <LogOut aria-hidden="true" className="h-4 w-4" /> Đăng xuất thiết bị này
+                  <button type="submit" disabled={passwordSaving} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">
+                    <KeyRound aria-hidden="true" className="h-4 w-4" /> {passwordSaving ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
                   </button>
                 </div>
-              </div>
+              </form>
             ) : (
               <div className="max-h-[60vh] overflow-y-auto p-5">
-                {activities.length > 0 ? (
+                {activityLoading ? (
+                  <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải lịch sử thao tác...</p>
+                ) : activityError ? (
+                  <p role="alert" className="py-8 text-center text-sm text-rose-700">{activityError}</p>
+                ) : activities.length > 0 ? (
                   <ol className="space-y-0">
                     {activities.map((entry, index) => (
                       <li key={entry.id} className="relative flex gap-3 pb-5 last:pb-0">
                         {index < activities.length - 1 ? <span aria-hidden="true" className="absolute left-[7px] top-4 h-full w-px bg-slate-200" /> : null}
                         <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-blue-500 bg-white" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800">{entry.action}</p>
-                          <p className="mt-0.5 truncate text-xs text-slate-500">{entry.detail}</p>
+                          <p className="text-sm font-medium text-slate-800">{activityActionLabel(entry.action)}</p>
+                          <p className="mt-0.5 truncate text-xs text-slate-500">{entry.summary || entry.entityType}</p>
                           <time dateTime={entry.createdAt} className="mt-1 block text-[11px] text-slate-400">
                             {new Date(entry.createdAt).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}
                           </time>
@@ -446,7 +497,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                   <div className="py-8 text-center">
                     <Clock3 aria-hidden="true" className="mx-auto h-8 w-8 text-slate-300" />
                     <p className="mt-3 text-sm font-medium text-slate-700">Chưa có thao tác nào</p>
-                    <p className="mt-1 text-xs text-slate-500">Các lần truy cập và cập nhật hồ sơ sẽ xuất hiện tại đây.</p>
+                    <p className="mt-1 text-xs text-slate-500">Các thao tác CRUD thực hiện bằng tài khoản này sẽ xuất hiện tại đây.</p>
                   </div>
                 )}
               </div>

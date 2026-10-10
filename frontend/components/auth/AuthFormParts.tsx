@@ -9,12 +9,18 @@ export function PasswordField({
   value,
   onChange,
   compact = false,
+  minLength,
+  maxLength,
+  autoComplete,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   compact?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  autoComplete?: string;
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -29,6 +35,9 @@ export function PasswordField({
           type={visible ? 'text' : 'password'}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          minLength={minLength}
+          maxLength={maxLength}
+          autoComplete={autoComplete}
           required
           className={`auth-input w-full rounded-md border border-outline-variant/70 bg-surface-container-lowest pl-10 pr-10 text-body-md text-on-surface outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 ${compact ? 'h-9 text-[13px]' : 'h-12'}`}
         />
@@ -84,9 +93,9 @@ export function AuthHeading({ title, description, eyebrow }: { title: string; de
   );
 }
 
-export function AuthSubmitButton({ children }: { children: string }) {
+export function AuthSubmitButton({ children, disabled = false }: { children: string; disabled?: boolean }) {
   return (
-    <button type="submit" className="auth-button flex h-12 w-full items-center justify-center gap-2 rounded-md bg-primary px-5 font-label-md text-label-md font-semibold text-white shadow-lg shadow-primary/20 transition hover:bg-primary-container">
+    <button type="submit" disabled={disabled} className="auth-button flex h-12 w-full items-center justify-center gap-2 rounded-md bg-primary px-5 font-label-md text-label-md font-semibold text-white shadow-lg shadow-primary/20 transition hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60">
       {children}<span className="material-symbols-outlined text-[18px]">arrow_forward</span>
     </button>
   );

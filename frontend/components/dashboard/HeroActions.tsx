@@ -11,7 +11,6 @@ export function HeroActions() {
           </span>
           <span className="font-label-sm text-label-sm text-on-surface-variant font-mono">Phiên bản lõi: v1.4.2-prod</span>
         </div>
-        <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight">Bảng điều khiển Tổng quan & Chỉ số Vận hành</h1>
         <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl">
           Theo dõi dữ liệu học tập cá nhân hóa, mô hình Knowledge Tracing (BKT) và chất lượng nội dung sinh bởi Gemini AI trong thời gian thực.
         </p>

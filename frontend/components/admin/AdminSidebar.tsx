@@ -77,24 +77,16 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
         />
       ) : null}
-      <aside className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
-      {/* Header */}
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-100 px-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white shadow-md shadow-blue-500/20">
-          AI
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-bold tracking-tight text-slate-900">TOEIC MASTER</span>
-          <span className="text-[10px] font-medium text-slate-500">Admin Workspace</span>
-        </div>
-        <button type="button" aria-label="Đóng điều hướng" onClick={onClose} className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 md:hidden">
+      <aside className={`fixed left-0 top-16 z-50 flex h-[calc(100dvh-4rem)] w-80 md:top-[76px] md:h-[calc(100dvh-76px)] flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <div className="flex h-12 shrink-0 items-center justify-end border-b border-slate-100 px-4 md:hidden">
+        <button type="button" aria-label="Đóng điều hướng" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
           <X aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-        <nav className="space-y-8">
+      <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+        <nav className="space-y-6">
           {navGroups.map((group) => (
             <div key={group.title} className="space-y-2">
               <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
