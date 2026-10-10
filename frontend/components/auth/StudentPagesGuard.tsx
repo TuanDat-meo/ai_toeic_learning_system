@@ -34,8 +34,8 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
     getCurrentUser()
       .then((user) => {
         if (!active) return;
-        if (user.role !== 'STUDENT') {
-          router.replace(user.role === 'ADMIN' ? '/admin/overview' : '/login');
+        if (user.role === 'ADMIN') {
+          router.replace('/admin/overview');
           return;
         }
         setAuthorized(true);

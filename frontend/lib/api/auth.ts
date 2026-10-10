@@ -7,7 +7,16 @@ export type AuthUser = {
   id: string;
   email: string;
   fullName: string;
-  role: 'ADMIN' | 'STUDENT';
+  role: 'ADMIN' | 'STUDENT' | 'TEACHER';
+};
+
+export type AccountActivity = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string | null;
+  createdAt: string;
 };
 
 export type ManagedUser = AuthUser & {
@@ -104,6 +113,18 @@ export function getCurrentUser() {
 
 export function updateCurrentUserProfile(fullName: string, email: string) {
   return writeAuthRequest<AuthUser & ApiMessage>('PATCH', '/api/auth/me', { fullName, email });
+}
+
+export function getAccountActivity(limit = 50) {
+  return apiRequest<AccountActivity[]>(`/api/auth/activity?limit=${limit}`);
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return postAuthRequest<void>('/api/auth/password/change', { currentPassword, newPassword });
+}
+
+export function logoutAllSessions() {
+  return postAuthRequest<void>('/api/auth/logout-all');
 }
 
 export function login(email: string, password: string) {

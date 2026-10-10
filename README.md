@@ -4,6 +4,90 @@
 
 ---
 
+## Bắt đầu nhanh và hướng dẫn sử dụng
+
+### Yêu cầu
+
+- Docker Desktop có Docker Compose.
+- Git để lấy mã nguồn.
+
+### Chạy toàn bộ hệ thống bằng Docker
+
+Từ thư mục gốc dự án, tạo file cấu hình và volume PostgreSQL:
+
+```bash
+cp .env.example .env
+docker volume create toeic_ai_learning_pgdata
+```
+
+Mở `.env` và đặt thông tin admin khởi tạo để có thể đăng nhập bằng tài khoản mẫu bên dưới:
+
+```dotenv
+BOOTSTRAP_ADMIN_EMAIL=6451071014@st.utc2.edu.vn
+BOOTSTRAP_ADMIN_PASSWORD=123@abc
+BOOTSTRAP_ADMIN_NAME=TOEIC Admin
+```
+
+Trước khi dùng chung hoặc triển khai, hãy thay `JWT_SECRET` trong `.env` bằng một giá trị bí mật riêng. Sau đó khởi động các dịch vụ:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Compose chạy PostgreSQL, Spring Boot backend và Next.js frontend. Flyway tự chạy migration khi backend khởi động; admin bootstrap chỉ được tạo nếu cả email, mật khẩu và tên đã được cấu hình. Nếu email đã tồn tại thì backend giữ nguyên tài khoản hiện có, không đặt lại mật khẩu.
+
+Mở ứng dụng tại:
+
+- Frontend: <http://localhost:3000>
+- Backend: <http://localhost:8080>
+- PostgreSQL từ máy host: `localhost:5433` (trong mạng Docker: `postgres:5432`)
+
+Xem log backend khi cần kiểm tra khởi động:
+
+```bash
+docker compose logs -f backend
+```
+
+Dừng các container mà vẫn giữ dữ liệu database:
+
+```bash
+docker compose down
+```
+
+### Đăng nhập mẫu
+
+Mở <http://localhost:3000/login>:
+
+| Trường | Giá trị |
+| --- | --- |
+| Email | `6451071014@st.utc2.edu.vn` |
+| Mật khẩu | `123@abc` |
+
+Tài khoản này phải tồn tại trong database. Trên database mới, cấu hình ba biến `BOOTSTRAP_ADMIN_*` ở trên rồi khởi động backend để tạo tài khoản ADMIN. Nếu tài khoản đã tồn tại với mật khẩu khác, bootstrap không ghi đè mật khẩu.
+
+### Sử dụng theo vai trò
+
+- **Admin:** sau khi đăng nhập sẽ vào `/admin/overview`. Mục **Người dùng** (`/admin/users`) cho phép tìm kiếm/lọc, phân trang, tạo và sửa tài khoản, đổi vai trò, xuất CSV, khóa hoặc mở khóa tài khoản. Form tạo tài khoản điền sẵn mật khẩu gợi ý `abc@1234`; có thể thay đổi trước khi lưu. Các trang quản trị nội dung, hỗ trợ và hệ thống nằm trong sidebar admin.
+- **Học viên:** sau khi đăng nhập sẽ vào `/dashboard`. Dashboard học tập là không gian dùng chung; các module Từ vựng, Ngữ pháp, Listening, Reading và Thi thử hiện được đánh dấu **Sắp có** trong sidebar học viên.
+- **Giáo viên:** hiện đăng nhập vào cùng dashboard/khu vực học tập với học viên. Dự án chưa có trang hoặc quyền nghiệp vụ riêng cho giáo viên.
+
+Trang đăng ký là `/register`; quên mật khẩu là `/forgot-password`. Tài khoản có thể chỉnh sửa hồ sơ, đổi mật khẩu hoặc đăng xuất từ menu profile ở góc trên. Chỉ role ADMIN được phép gọi API `/api/admin/**`.
+
+### Chạy frontend riêng trong development
+
+Nếu backend và PostgreSQL đã chạy tại các địa chỉ mặc định, frontend có thể chạy riêng:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Mở <http://localhost:3000>. Địa chỉ API frontend đọc từ `NEXT_PUBLIC_API_URL` (mặc định `http://localhost:8080`).
+
+---
+
 ## 1. Giới thiệu
 
 **TOEIC-AI-Learning** là một web application hỗ trợ người học TOEIC theo hướng **cá nhân hóa dựa trên dữ liệu học tập**.
@@ -1313,6 +1397,25 @@ POST /api/v1/admin/import/reading
 GET /api/v1/admin/import/{id}
 ```
 
+### API tài khoản đã triển khai
+
+Các endpoint tài khoản hiện chạy tại `/api` (chưa dùng tiền tố `/api/v1` ở phần API định hướng phía trên). Session dùng cookie HTTP-only; mọi request ghi dữ liệu cần lấy token từ `GET /api/auth/csrf` và gửi lại bằng header được trả về.
+
+```http
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
+POST   /api/auth/logout
+GET    /api/admin/users
+POST   /api/admin/users
+PATCH  /api/admin/users/{userId}
+DELETE /api/admin/users/{userId}
+```
+
+`POST /api/admin/users` nhận `{ "fullName", "email", "password", "role" }`; `PATCH` nhận `{ "fullName", "email", "password?", "role", "status" }`. Vai trò hợp lệ là `ADMIN`, `STUDENT` hoặc `TEACHER`; trạng thái là `ACTIVE` hoặc `DISABLED`. Email phải duy nhất, mật khẩu tối thiểu 8 ký tự. Chỉ admin được truy cập `/api/admin/**`. `DELETE` khóa tài khoản (đặt `DISABLED`) để giữ lịch sử học tập và các bản ghi liên quan; admin không thể tự khóa, tự đổi role/trạng thái hoặc đổi email của phiên đang đăng nhập.
+
+Bảng `users` hiện hữu giữ thông tin tài khoản và constraint role/status; migration `V20` thêm index cho danh sách lọc theo vai trò, trạng thái và ngày tạo; `V23` cho phép role `TEACHER`. Để tạo admin khởi tạo, cấu hình `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` và `BOOTSTRAP_ADMIN_NAME` cho backend trước khi chạy; nếu email đã tồn tại thì không ghi đè tài khoản.
+
 ---
 
 ## 14. Learning Flow
@@ -1687,7 +1790,9 @@ Gemini API được gọi từ Backend và không cần một AI server riêng t
 Ví dụ khởi động:
 
 ```bash
-docker compose up -d
+cp .env.example .env
+docker volume create toeic_ai_learning_pgdata
+docker compose up --build -d
 ```
 
 Development có thể chạy riêng:
@@ -1695,7 +1800,7 @@ Development có thể chạy riêng:
 ```text
 Frontend  → http://localhost:3000
 Backend   → http://localhost:8080
-Postgres  → localhost:5432
+Postgres  → localhost:5433
 ```
 
 ---
