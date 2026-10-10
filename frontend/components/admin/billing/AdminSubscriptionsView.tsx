@@ -554,7 +554,7 @@ export function AdminSubscriptionsView() {
                     onChange={(e) => setEditingPlan({ ...editingPlan, isPopular: e.target.checked })}
                     className="h-4 w-4 rounded border-slate-300 text-blue-600"
                   />
-                  Đánh dấu là gói "Phổ biến nhất"
+                  Đánh dấu là gói &quot;Phổ biến nhất&quot;
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700">
@@ -586,7 +586,7 @@ export function AdminSubscriptionsView() {
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-base font-bold text-slate-900">Xóa gói cước?</h3>
             <p className="mt-2 text-xs text-slate-600">
-              Bạn có chắc chắn muốn xóa gói <span className="font-bold text-slate-900">"{deletingPlan.name}"</span>?
+              Bạn có chắc chắn muốn xóa gói <span className="font-bold text-slate-900">&quot;{deletingPlan.name}&quot;</span>?
             </p>
             <div className="mt-6 flex justify-end gap-2 text-xs">
               <button type="button" onClick={() => setDeletingPlan(null)} className="rounded-xl px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100">

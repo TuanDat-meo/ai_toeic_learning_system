@@ -545,7 +545,7 @@ export function AdminAnnouncementsView() {
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-base font-bold text-slate-900">Xóa thông báo?</h3>
             <p className="mt-2 text-xs text-slate-600">
-              Bạn có chắc chắn muốn xóa thông báo <span className="font-bold text-slate-900">"{deletingItem.title}"</span>?
+              Bạn có chắc chắn muốn xóa thông báo <span className="font-bold text-slate-900">&quot;{deletingItem.title}&quot;</span>?
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={() => setDeletingItem(null)} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
