@@ -8,6 +8,7 @@ import { AuthHeading, AuthSubmitButton, PasswordField } from './AuthFormParts';
 export function ResetPasswordForm({ token }: { token: string }) {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ password?: string; confirmation?: string }>({});
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -15,10 +16,17 @@ export function ResetPasswordForm({ token }: { token: string }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    if (password !== confirmation) {
-      setError('Mật khẩu xác nhận chưa trùng khớp.');
-      return;
-    }
+    const errors: typeof fieldErrors = {};
+    if (!password) errors.password = 'Vui lòng nhập mật khẩu mới.';
+    else if (password.length < 8) errors.password = 'Mật khẩu cần tối thiểu 8 ký tự.';
+    else if (password.length > 72) errors.password = 'Mật khẩu không được vượt quá 72 ký tự.';
+
+    if (!confirmation) errors.confirmation = 'Vui lòng nhập lại mật khẩu mới.';
+    else if (password !== confirmation) errors.confirmation = 'Mật khẩu xác nhận chưa trùng khớp.';
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setSubmitting(true);
     try {
       await resetPassword(token, password);
@@ -45,8 +53,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <PasswordField id="new-password" label="Mật khẩu mới" value={password} onChange={(value) => { setPassword(value); setError(''); }} minLength={8} maxLength={72} autoComplete="new-password" />
-          <PasswordField id="confirm-password" label="Nhập lại mật khẩu mới" value={confirmation} onChange={(value) => { setConfirmation(value); setError(''); }} minLength={8} maxLength={72} autoComplete="new-password" />
+          <PasswordField id="new-password" label="Mật khẩu mới" value={password} onChange={(value) => { setPassword(value); setFieldErrors((prev) => ({ ...prev, password: undefined })); setError(''); }} minLength={8} maxLength={72} autoComplete="new-password" error={fieldErrors.password} />
+          <PasswordField id="confirm-password" label="Nhập lại mật khẩu mới" value={confirmation} onChange={(value) => { setConfirmation(value); setFieldErrors((prev) => ({ ...prev, confirmation: undefined })); setError(''); }} minLength={8} maxLength={72} autoComplete="new-password" error={fieldErrors.confirmation} />
           <p className="text-xs text-on-surface-variant">Mật khẩu cần từ 8 đến 72 ký tự.</p>
           {error ? <p role="alert" aria-live="polite" className="text-sm font-medium text-error">{error}</p> : null}
           <AuthSubmitButton disabled={submitting}>{submitting ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}</AuthSubmitButton>

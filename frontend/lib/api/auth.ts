@@ -83,7 +83,12 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const payload = await response.json().catch(() => null) as ApiMessage | null;
   if (!response.ok) {
-    if (response.status === 401) throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
+    if (response.status === 401) {
+      if (path === '/api/auth/login') {
+        throw new Error(payload?.detail || payload?.message || 'Email hoặc mật khẩu không chính xác.');
+      }
+      throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
+    }
     if (response.status === 403) throw new Error('Bạn không có quyền thực hiện thao tác này.');
     throw new Error(payload?.detail || payload?.message || 'Yêu cầu chưa thể xử lý. Vui lòng thử lại.');
   }
@@ -171,7 +176,7 @@ export function deleteManagedUser(userId: string) {
 }
 
 export function requestPasswordReset(email: string) {
-  return postAuthRequest<{ message: string }>('/api/auth/password/forgot', { email });
+  return postAuthRequest<{ emailExists: boolean; message: string }>('/api/auth/password/forgot', { email });
 }
 
 export function resetPassword(token: string, password: string) {

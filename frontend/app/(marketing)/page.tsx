@@ -1,7 +1,12 @@
+'use client';
+
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MarketingNav } from '@/components/marketing/MarketingNav';
 import { MarketingBrand } from '@/components/marketing/MarketingBrand';
 import { RoadmapPlanner } from '@/components/marketing/RoadmapPlanner';
+import { LoginModal } from '@/components/auth/LoginModal';
 
 const learningSteps = [
   ['01', 'Đánh giá đầu vào', 'Xác định trình độ và mục tiêu điểm của bạn.'],
@@ -9,19 +14,44 @@ const learningSteps = [
   ['03', 'Theo dõi tiến bộ', 'Điều chỉnh kế hoạch sau mỗi lần luyện tập.'],
 ];
 
+function LoginQueryTrigger({ onOpen }: { onOpen: () => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('login') === 'true' || window.location.hash === '#login') {
+      onOpen();
+    }
+  }, [searchParams, onOpen]);
+  return null;
+}
+
 export default function LandingPage() {
+  const router = useRouter();
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  function closeLoginModal() {
+    setIsLoginModalOpen(false);
+    router.replace('/', { scroll: false });
+  }
+
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
+      <Suspense fallback={null}>
+        <LoginQueryTrigger onOpen={() => setIsLoginModalOpen(true)} />
+      </Suspense>
+
       {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-outline-variant/30 bg-surface/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4">
         <MarketingBrand />
         <MarketingNav />
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-          <Link href="/login" className="inline-flex whitespace-nowrap font-label-md text-label-md font-semibold text-on-surface transition-colors hover:text-primary">
-            <span className="hidden sm:inline">Đăng nhập</span>
-            <span className="sm:hidden">Đăng nhập</span>
-          </Link>
+          <button
+            type="button"
+            onClick={() => setIsLoginModalOpen(true)}
+            className="inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-slate-100 hover:text-primary sm:px-4"
+          >
+            <span>Đăng nhập</span>
+          </button>
           <Link href="/register" className="marketing-button inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3.5 font-label-md text-label-md font-semibold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-container sm:px-5">
             <span className="hidden sm:inline">Đăng ký học</span>
             <span className="sm:hidden">Đăng ký</span>
@@ -164,6 +194,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Login Modal */}
+      <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
     </div>
   );
 }

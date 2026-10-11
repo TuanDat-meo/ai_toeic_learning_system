@@ -12,6 +12,7 @@ export function PasswordField({
   minLength,
   maxLength,
   autoComplete,
+  error,
 }: {
   id: string;
   label: string;
@@ -21,12 +22,13 @@ export function PasswordField({
   minLength?: number;
   maxLength?: number;
   autoComplete?: string;
+  error?: string;
 }) {
   const [visible, setVisible] = useState(false);
 
   return (
     <label htmlFor={id} className="block">
-      <span className={`block font-label-md text-label-md font-semibold text-on-surface ${compact ? 'mb-1.5 text-[13px]' : 'mb-2'}`}>{label}</span>
+      <span className={`block font-label-md text-label-md font-semibold text-on-surface ${compact ? 'mb-1.5 text-[13px]' : 'mb-2'}`}>{label} <span className="text-error">*</span></span>
       <span className="relative block">
         <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant">lock</span>
         <input
@@ -39,7 +41,9 @@ export function PasswordField({
           maxLength={maxLength}
           autoComplete={autoComplete}
           required
-          className={`auth-input w-full rounded-md border border-outline-variant/70 bg-surface-container-lowest pl-10 pr-10 text-body-md text-on-surface outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 ${compact ? 'h-9 text-[13px]' : 'h-12'}`}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={`auth-input w-full rounded-md border bg-surface-container-lowest pl-10 pr-10 text-body-md text-on-surface outline-none transition focus:ring-4 ${error ? 'border-error focus:border-error focus:ring-error/10' : 'border-outline-variant/70 focus:border-primary focus:ring-primary/10'} ${compact ? 'h-9 text-[13px]' : 'h-12'}`}
         />
         <button
           type="button"
@@ -50,6 +54,7 @@ export function PasswordField({
           <span className="material-symbols-outlined text-[18px]">{visible ? 'visibility_off' : 'visibility'}</span>
         </button>
       </span>
+      {error && <span id={`${id}-error`} className="mt-1 block text-xs font-medium text-error">{error}</span>}
     </label>
   );
 }
