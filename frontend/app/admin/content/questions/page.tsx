@@ -9,6 +9,7 @@ import { QuestionCardGridView } from "@/components/admin/content/questions/Quest
 import { QuestionPreviewModal } from "@/components/admin/content/questions/QuestionPreviewModal";
 import { QuestionEditModal } from "@/components/admin/content/questions/QuestionEditModal";
 import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
+import { HelpCircle, CheckCircle2, Clock, Layers } from "lucide-react";
 
 
 export default function QuestionsPage() {
@@ -162,6 +163,32 @@ export default function QuestionsPage() {
     }, 1000);
   };
 
+  const publishedCount = questions.filter((q) => q.status === "PUBLISHED").length;
+  const draftCount = questions.filter((q) => q.status === "DRAFT").length;
+
+  const handleExportCsv = () => {
+    const headers = ["Mã câu", "Phần thi", "Kỹ năng", "Độ khó", "Nội dung câu hỏi", "Đáp án đúng", "Trạng thái"];
+    const rows = questions.map((q) => [
+      `"${q.code || q.id}"`,
+      `"${q.part}"`,
+      `"${q.skill}"`,
+      `"${q.difficulty}"`,
+      `"${q.questionText.replace(/"/g, '""')}"`,
+      `"${q.correctAnswer}"`,
+      `"${q.status}"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `toeic_question_bank_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header & Filter Bar */}
@@ -181,6 +208,7 @@ export default function QuestionsPage() {
         selectedCount={selectedIds.length}
         onBulkDelete={() => setBulkDeleteConfirm(true)}
         onOpenCreateModal={openAddModal}
+        onExportCsv={handleExportCsv}
       />
 
       {/* Main Content View */}

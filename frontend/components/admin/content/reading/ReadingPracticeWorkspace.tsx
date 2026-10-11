@@ -1,24 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { ExerciseCardData, SampleQuestion } from "@/app/admin/content/reading/types";
+import { ExerciseCardData, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
 import {
   ArrowLeft,
   Languages,
   FileText,
   Pencil,
-  Bell,
-  BellOff,
   Clock,
   Zap,
-  CheckCircle2,
   Sparkles,
   HelpCircle,
   Star,
   BookOpen,
-  Eye,
   Plus,
-  Bookmark,
   Flag,
   ShoppingBag,
   Search,
@@ -26,6 +21,10 @@ import {
   ChevronRight,
   X,
   Grid,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  Send,
 } from "lucide-react";
 
 interface ReadingPracticeWorkspaceProps {
@@ -49,7 +48,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [energyScore, setEnergyScore] = useState(0);
 
-  const [isBilingual, setIsBilingual] = useState(true);
+  // Default isBilingual = false to prevent answer/translation leakage before selection
+  const [isBilingual, setIsBilingual] = useState(false);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
 
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -58,8 +58,11 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
   const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
   const [showDetailedExplanation, setShowDetailedExplanation] = useState(true);
-  const [showVocabSection, setShowVocabSection] = useState(true);
+
+  // Vocabulary Expansion States
   const [isVocabExpanded, setIsVocabExpanded] = useState(false);
+  const [expandedWords, setExpandedWords] = useState<Record<number, boolean>>({});
+
   const [savedWords, setSavedWords] = useState<string[]>([]);
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Record<string, boolean>>({});
 
@@ -70,7 +73,18 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   const [showWordBasketModal, setShowWordBasketModal] = useState(false);
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [dictQuery, setDictQuery] = useState("");
-  const [dictResult, setDictResult] = useState<{ word: string; meaning: string; ipa: string } | null>(null);
+  const [dictResult, setDictResult] = useState<{ word: string; meaning: string; ipa: string; pos: string } | null>(null);
+
+  // Track answer state for each question in grid
+  const [questionAnswers, setQuestionAnswers] = useState<Record<number, { selected: number; isCorrect: boolean }>>({});
+
+  // Timer effect
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setTimerSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const q: SampleQuestion = card.sampleQuestions[currentQuestionIndex] || card.sampleQuestions[0];
   const totalQ = card.sampleQuestions.length;
@@ -88,32 +102,62 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setIsChecked(true);
 
     const correct = idx === q.correctIndex;
+    setQuestionAnswers((prev) => ({
+      ...prev,
+      [currentQuestionIndex]: { selected: idx, isCorrect: correct },
+    }));
+
     if (correct) {
-      playSfx("correct");
+      if (isSfxEnabled) playSfx("correct");
       setSessionCorrectCount((prev) => prev + 1);
       setEnergyScore((prev) => prev + 10);
       showToast("Chính xác! +10 Năng lượng ⚡");
     } else {
-      playSfx("wrong");
+      if (isSfxEnabled) playSfx("wrong");
       setSessionWrongCount((prev) => prev + 1);
       showToast("Chưa đúng rồi! Hãy xem giải thích chi tiết ở dưới.");
     }
   };
 
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < totalQ - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
+  const jumpToQuestion = (targetIndex: number) => {
+    setCurrentQuestionIndex(targetIndex);
+    const existing = questionAnswers[targetIndex];
+    if (existing !== undefined) {
+      setSelectedOption(existing.selected);
+      setIsChecked(true);
+    } else {
       setSelectedOption(null);
       setIsChecked(false);
+    }
+    setExpandedWords({});
+    setIsVocabExpanded(false);
+    setIsQuestionGridOpen(false);
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < totalQ - 1) {
+      jumpToQuestion(currentQuestionIndex + 1);
     }
   };
 
   const handlePrevQuestion = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1);
-      setSelectedOption(null);
-      setIsChecked(false);
+      jumpToQuestion(currentQuestionIndex - 1);
     }
+  };
+
+  const toggleExpandSingleWord = (idx: number) => {
+    setExpandedWords((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const handleSearchDict = () => {
+    if (!dictQuery.trim()) return;
+    setDictResult({
+      word: dictQuery.trim(),
+      meaning: `Nghĩa tiếng Việt của "${dictQuery.trim()}": Từ vựng quan trọng TOEIC.`,
+      ipa: `/${dictQuery.trim().toLowerCase()}/`,
+      pos: "từ vựng",
+    });
   };
 
   return (
@@ -124,7 +168,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           <button
             type="button"
             onClick={() => {
-              playSfx("click");
+              if (isSfxEnabled) playSfx("click");
               onClose();
             }}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all cursor-pointer"
@@ -133,7 +177,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             <span>Thoát</span>
           </button>
 
-          <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">
+          <h1 className="text-base sm:text-lg font-bold tracking-tight text-white line-clamp-1">
             {card.title}
           </h1>
         </div>
@@ -143,7 +187,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             type="button"
             onClick={() => {
               setIsBilingual(!isBilingual);
-              playSfx("click");
+              if (isSfxEnabled) playSfx("click");
               showToast(isBilingual ? "Đã tắt hiển thị song ngữ" : "Đã bật dịch song ngữ Tiếng Việt 👑");
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
@@ -174,19 +218,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           >
             <Pencil className="w-3.5 h-3.5 text-blue-600" />
             <span className="hidden md:inline">Annotator</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsSfxEnabled(!isSfxEnabled);
-              showToast(isSfxEnabled ? "Đã tắt âm thanh" : "Đã bật âm thanh hiệu ứng SFX 🔊");
-            }}
-            className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-              isSfxEnabled ? "bg-amber-400 text-amber-950" : "bg-white/20 text-white"
-            }`}
-          >
-            {isSfxEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
           </button>
 
           <div className="flex items-center gap-1.5">
@@ -311,7 +342,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 {q.question}
               </div>
 
-              {isBilingual && q.bilingual && (
+              {(isChecked || isBilingual) && q.bilingual && (
                 <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 text-xs sm:text-sm font-semibold leading-relaxed shadow-xs space-y-1">
                   <div className="font-bold text-blue-700 flex items-center gap-1.5">
                     <Languages className="w-4 h-4 text-blue-600" />
@@ -365,7 +396,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                           ({optLetter}) {optVal}
                         </span>
                       </div>
-                      {q.optionMeanings && q.optionMeanings[optIdx] && (
+                      {(isChecked || isBilingual) && q.optionMeanings && q.optionMeanings[optIdx] && (
                         <p className="text-xs text-slate-500 font-normal pl-8">
                           {q.optionMeanings[optIdx]}
                         </p>
@@ -411,6 +442,201 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                     </div>
                   )}
                 </div>
+
+                {/* VOCABULARY SECTION */}
+                {(() => {
+                  const effectiveVocabList: VocabItem[] = (q.vocabList && q.vocabList.length > 0)
+                    ? q.vocabList
+                    : (q.options ? q.options.map((opt, idx) => {
+                        const clean = opt.replace(/^[A-D]\.\s*/, "").replace(/[.,!?;:]/g, "").trim();
+                        return {
+                          word: clean || `Option ${String.fromCharCode(65 + idx)}`,
+                          pos: "từ vựng",
+                          level: "TOEIC",
+                          ipa: `/${(clean || "option").toLowerCase()}/`,
+                          meaning: (q.optionMeanings && q.optionMeanings[idx]) || `Phương án chọn (${String.fromCharCode(65 + idx)})`,
+                          example: {
+                            en: `Review the usage of "${clean || opt}" in English tests.`,
+                            vi: `Ôn tập cách dùng của "${clean || opt}" trong các bài thi TOEIC.`,
+                          },
+                        };
+                      }) : [
+                        {
+                          word: "requirement",
+                          pos: "n",
+                          level: "B2",
+                          ipa: "/rɪˈkwaɪərmənt/",
+                          meaning: "yêu cầu, điều kiện",
+                          example: { en: "All candidates must fulfill the requirements.", vi: "Tất cả ứng viên phải đáp ứng các yêu cầu." },
+                        }
+                      ]);
+
+                  return (
+                    <div className="rounded-3xl border border-amber-200 bg-amber-50/40 p-5 space-y-4 shadow-2xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm sm:text-base">
+                          <BookOpen className="w-4 h-4 text-amber-600" />
+                          <span>Từ vựng trọng tâm ({effectiveVocabList.length} từ)</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextState = !isVocabExpanded;
+                              setIsVocabExpanded(nextState);
+                              const newExpanded: Record<number, boolean> = {};
+                              effectiveVocabList.forEach((_, idx) => {
+                                newExpanded[idx] = nextState;
+                              });
+                              setExpandedWords(newExpanded);
+                            }}
+                            className="px-3 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition cursor-pointer flex items-center gap-1 border border-amber-300"
+                          >
+                            {isVocabExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            <span>{isVocabExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả"}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allWords = effectiveVocabList.map((v) => v.word);
+                              setSavedWords((prev) => Array.from(new Set([...prev, ...allWords])));
+                              showToast(`Đã lưu tất cả ${allWords.length} từ vào giỏ từ vựng! 🛍️`);
+                            }}
+                            className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Lưu tất cả vào giỏ</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 pt-1 border-t border-amber-100">
+                        {effectiveVocabList.map((v, idx) => {
+                          const isSaved = savedWords.includes(v.word);
+                          const isExpanded = !!expandedWords[idx] || isVocabExpanded;
+
+                          return (
+                            <div
+                              key={idx}
+                              className="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-2xs space-y-3 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-extrabold text-sm text-slate-900">{v.word}</span>
+                                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">{v.pos}</span>
+                                  {v.level && <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{v.level}</span>}
+                                  {v.ipa && <span className="text-slate-400 font-mono text-[11px]">{v.ipa}</span>}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandSingleWord(idx)}
+                                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border border-blue-200"
+                                  >
+                                    <Search className="w-3 h-3" />
+                                    <span>{isExpanded ? "Thu gọn" : "🔍 Xem chi tiết"}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSaved) {
+                                        setSavedWords((prev) => prev.filter((w) => w !== v.word));
+                                        showToast(`Đã xóa "${v.word}" khỏi giỏ từ`);
+                                      } else {
+                                        setSavedWords((prev) => [...prev, v.word]);
+                                        showToast(`Đã lưu "${v.word}" vào giỏ từ! 🛍️`);
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                      isSaved
+                                        ? "bg-amber-500 text-white"
+                                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    {isSaved ? "Đã lưu ✓" : "+ Lưu từ"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <p className="font-bold text-slate-800 text-xs sm:text-sm">{v.meaning}</p>
+
+                              {/* EXPANDED DETAILS */}
+                              {isExpanded && (
+                                <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
+                                  {v.example && (
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
+                                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
+                                        <p className="font-semibold text-slate-900">&quot;{v.example.en}&quot;</p>
+                                        <p className="text-slate-600 italic">{v.example.vi}</p>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {v.collocations && v.collocations.length > 0 && (
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp (Collocations):</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {v.collocations.map((col, cIdx) => (
+                                          <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                            <strong>{col.en}</strong>: {col.vi}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {v.synonyms && v.synonyms.length > 0 && (
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-emerald-800 text-[11px] uppercase tracking-wider">Từ đồng nghĩa (Synonyms):</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {v.synonyms.map((syn, sIdx) => (
+                                          <span key={sIdx} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                                            <strong>{syn.en}</strong>: {syn.vi}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {v.antonyms && v.antonyms.length > 0 && (
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-rose-800 text-[11px] uppercase tracking-wider">Từ trái nghĩa (Antonyms):</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {v.antonyms.map((ant, aIdx) => (
+                                          <span key={aIdx} className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-xs">
+                                            <strong>{ant.en}</strong>: {ant.vi}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {v.wordFamily && v.wordFamily.length > 0 && (
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-purple-800 text-[11px] uppercase tracking-wider">Họ từ (Word Family):</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {v.wordFamily.map((wf, wIdx) => (
+                                          <span key={wIdx} className="px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-200 text-purple-900 text-xs">
+                                            <strong>{wf.word}</strong> <span className="text-purple-600 font-semibold">({wf.pos})</span>: {wf.meaning}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -477,6 +703,404 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           </button>
         </div>
       </footer>
+
+      {/* NOTES MODAL */}
+      {isNotesModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Ghi chú cá nhân</h3>
+                  <p className="text-xs text-slate-500">Câu {currentQuestionIndex + 1} • {card.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNotesModalOpen(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <textarea
+              rows={5}
+              value={practiceUserNotes[currentQuestionIndex] || ""}
+              onChange={(e) => setPracticeUserNotes({ ...practiceUserNotes, [currentQuestionIndex]: e.target.value })}
+              placeholder="Nhập ghi chú hoặc kiến thức cần nhớ cho câu hỏi này..."
+              className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
+            />
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = { ...practiceUserNotes };
+                  delete updated[currentQuestionIndex];
+                  setPracticeUserNotes(updated);
+                  showToast("Đã xóa ghi chú của câu hỏi này!");
+                }}
+                className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer flex items-center gap-1"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Xóa ghi chú</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNotesModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNotesModalOpen(false);
+                    showToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                  }}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                >
+                  Lưu ghi chú
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUESTION GRID MODAL */}
+      {isQuestionGridOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <Grid className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Danh sách toàn bộ câu hỏi</h3>
+                  <p className="text-xs text-slate-500">
+                    Đã làm {Object.keys(questionAnswers).length}/{totalQ} câu
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuestionGridOpen(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+              {card.sampleQuestions.map((_, idx) => {
+                const isCurrent = idx === currentQuestionIndex;
+                const ansInfo = questionAnswers[idx];
+
+                let qBtnStyle = "bg-white border-slate-200 text-slate-700 hover:border-blue-400";
+                if (isCurrent) {
+                  qBtnStyle = "bg-blue-600 text-white font-extrabold border-blue-600 ring-2 ring-blue-300";
+                } else if (ansInfo !== undefined) {
+                  if (ansInfo.isCorrect) qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
+                  else qBtnStyle = "bg-rose-500 text-white font-bold border-rose-500";
+                }
+
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => jumpToQuestion(idx)}
+                    className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
+                  >
+                    <span className="font-extrabold">{idx + 1}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsQuestionGridOpen(false)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+              >
+                Đóng danh sách
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HELP MODAL */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Trợ lý AI - Hỏi bài</h3>
+                  <p className="text-xs text-slate-500">Giải đáp thắc mắc câu {currentQuestionIndex + 1}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHelpModal(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <p className="font-bold text-slate-800">Nội dung câu hỏi:</p>
+              <p className="text-slate-600 italic">&quot;{q.question}&quot;</p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="font-bold text-slate-800">Gợi ý từ Trợ lý AI:</p>
+              <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                <li>Hãy kiểm tra từ loại của vị trí cần điền.</li>
+                <li>Quan sát các từ đứng ngay trước và ngay sau khoảng trống.</li>
+                <li>Xem lại phần giải thích chi tiết khi đã chọn đáp án.</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowHelpModal(false)}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer"
+              >
+                Đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT MODAL */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <Flag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Báo lỗi câu hỏi</h3>
+                  <p className="text-xs text-slate-500">Báo cáo sự cố cho câu {currentQuestionIndex + 1}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700">Loại sự cố:</label>
+              <select
+                value={reportCategory}
+                onChange={(e) => setReportCategory(e.target.value)}
+                className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-blue-500"
+              >
+                <option value="Sai đáp án">Sai đáp án</option>
+                <option value="Lỗi dịch nghĩa">Lỗi dịch nghĩa Tiếng Việt</option>
+                <option value="Nội dung không rõ ràng">Nội dung không rõ ràng</option>
+                <option value="Lỗi chính tả / Ngữ pháp">Lỗi chính tả / Ngữ pháp</option>
+                <option value="Khác">Khác</option>
+              </select>
+
+              <label className="block text-xs font-bold text-slate-700">Mô tả chi tiết:</label>
+              <textarea
+                rows={4}
+                value={reportText}
+                onChange={(e) => setReportText(e.target.value)}
+                placeholder="Nhập chi tiết lỗi bạn gặp phải..."
+                className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 outline-none focus:border-blue-500 resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportText("");
+                  showToast("Cảm ơn bạn! Báo cáo lỗi đã được gửi đến ban quản trị. 🚩");
+                }}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Gửi báo cáo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WORD BASKET MODAL */}
+      {showWordBasketModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[80vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Giỏ từ vựng cá nhân</h3>
+                  <p className="text-xs text-slate-500">Đã lưu {savedWords.length} từ vựng</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWordBasketModal(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {savedWords.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 space-y-2">
+                <ShoppingBag className="w-10 h-10 mx-auto opacity-40" />
+                <p className="text-xs font-semibold">Giỏ từ vựng của bạn đang trống.</p>
+                <p className="text-[11px] text-slate-400">Hãy nhấn &quot;+ Lưu từ&quot; ở các câu hỏi để ôn tập lại sau.</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2 p-1">
+                {savedWords.map((w, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <span className="font-bold text-slate-800 text-sm">{w}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSavedWords((prev) => prev.filter((item) => item !== w));
+                        showToast(`Đã xóa "${w}" khỏi giỏ từ`);
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              {savedWords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSavedWords([]);
+                    showToast("Đã Xóa tất cả từ vựng trong giỏ!");
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
+                >
+                  Xóa tất cả
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowWordBasketModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer ml-auto"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DICTIONARY MODAL */}
+      {showDictionaryModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                  <Search className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Tra từ điển nhanh</h3>
+                  <p className="text-xs text-slate-500">Tra cứu từ vựng Tiếng Anh - Tiếng Việt</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDictionaryModal(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={dictQuery}
+                onChange={(e) => setDictQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearchDict()}
+                placeholder="Nhập từ cần tra (ví dụ: applicant, schedule...)"
+                className="flex-1 p-3 rounded-xl border border-slate-200 text-xs text-slate-800 outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={handleSearchDict}
+                className="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer"
+              >
+                Tra từ
+              </button>
+            </div>
+
+            {dictResult && (
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-blue-950">{dictResult.word}</span>
+                  <span className="text-slate-500 font-mono">{dictResult.ipa}</span>
+                  <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold uppercase">{dictResult.pos}</span>
+                </div>
+                <p className="font-semibold text-slate-800">{dictResult.meaning}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDictionaryModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

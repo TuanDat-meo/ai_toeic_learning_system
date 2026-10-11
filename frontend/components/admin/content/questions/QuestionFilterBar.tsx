@@ -56,33 +56,35 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              Ngân Hàng Câu Hỏi TOEIC
-            </h1>
-            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-blue-100 text-blue-700">
-              ETS Standard
-            </span>
-          </div>
-          <p className="text-slate-500 text-xs font-medium mt-1">
+      {/* Header Banner - Image 1 Style */}
+      <header className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-xs font-medium text-slate-400">
+            Trang chủ <span className="px-1.5">/</span> Quản lý nội dung <span className="px-1.5">/</span>{" "}
+            <span className="font-semibold text-blue-700">Ngân hàng câu hỏi</span>
+          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[30px]">
+            Ngân Hàng Câu Hỏi TOEIC
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
             Quản lý toàn bộ câu hỏi Part 1 - Part 7, lời giải thích chi tiết, bộ từ vựng và xem trước tương tác.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+            ETS Standard
+          </span>
           <button
             type="button"
             onClick={() => {
               playSfx("click");
               showToast("Vui lòng chọn tệp CSV để nhập dữ liệu câu hỏi!");
             }}
-            className="px-4 py-2.5 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition cursor-pointer flex items-center gap-2"
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
           >
-            <FileUp className="w-4 h-4 text-slate-500" />
-            <span>Nhập CSV</span>
+            <FileUp size={16} className="text-slate-500" aria-hidden="true" />
+            Nhập CSV
           </button>
 
           <button
@@ -91,10 +93,10 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
               playSfx("click");
               onExportCsv();
             }}
-            className="px-4 py-2.5 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition cursor-pointer flex items-center gap-2"
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
           >
-            <FileDown className="w-4 h-4 text-slate-500" />
-            <span>Xuất Excel</span>
+            <FileDown size={16} className="text-slate-500" aria-hidden="true" />
+            Xuất Excel
           </button>
 
           <button
@@ -103,13 +105,13 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
               playSfx("click");
               onOpenCreateModal();
             }}
-            className="px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer flex items-center gap-2 shadow-md shadow-blue-500/20 active:scale-95"
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>Tạo câu hỏi</span>
+            <Plus size={16} aria-hidden="true" />
+            Tạo câu hỏi
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Part Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar select-none">
@@ -137,9 +139,9 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
 
       {/* Filter Toolbar */}
       <div className="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Search Box */}
-          <div className="relative w-full md:w-80">
+          <div className="relative w-full lg:w-72 xl:w-80">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -150,13 +152,13 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
             />
           </div>
 
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Filter Dropdowns & View Mode */}
+          <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto no-scrollbar w-full lg:w-auto">
             {/* Skill Select */}
             <select
               value={selectedSkill}
               onChange={(e) => setSelectedSkill(e.target.value)}
-              className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
+              className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
             >
               <option value="">Tất cả kỹ năng</option>
               {DEFAULT_SKILLS.map((sk) => (
@@ -170,7 +172,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
             <select
               value={selectedDifficulty}
               onChange={(e) => setSelectedDifficulty(e.target.value)}
-              className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
+              className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
             >
               <option value="">Tất cả độ khó</option>
               <option value="Easy">Lv.1 Dễ (Easy)</option>
@@ -182,7 +184,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
+              className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
             >
               <option value="">Tất cả trạng thái</option>
               <option value="PUBLISHED">Đã xuất bản</option>
@@ -190,7 +192,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
             </select>
 
             {/* View Mode Toggle */}
-            <div className="flex items-center p-1 rounded-2xl bg-slate-100 border border-slate-200/80">
+            <div className="shrink-0 flex items-center p-1 rounded-2xl bg-slate-100 border border-slate-200/80">
               <button
                 type="button"
                 onClick={() => {

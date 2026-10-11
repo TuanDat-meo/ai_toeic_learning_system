@@ -2,183 +2,249 @@
 
 import React from "react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
-import { Pencil, Trash2, Bookmark, FileText, RotateCcw } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  BookOpen,
+  Eye,
+  CheckCircle2,
+  FileText,
+} from "lucide-react";
 
 interface ReadingCardGridProps {
   cards: ExerciseCardData[];
+  viewMode: "table" | "grid";
   onStartPractice: (card: ExerciseCardData) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
-  onOpenReviewWrong: (card: ExerciseCardData) => void;
-  onOpenResetConfirm: (card: ExerciseCardData) => void;
-  onToggleBookmark: (id: string, e: React.MouseEvent) => void;
   onOpenEditCard: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
-  showToast: (msg: string) => void;
 }
 
 export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
   cards,
+  viewMode,
   onStartPractice,
   onOpenTheory,
-  onOpenReviewWrong,
-  onOpenResetConfirm,
-  onToggleBookmark,
   onOpenEditCard,
   onOpenDeleteConfirm,
-  showToast,
 }) => {
+  if (cards.length === 0) {
+    return (
+      <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200/80 text-xs">
+        Không tìm thấy chuyên đề đọc hiểu nào phù hợp với bộ lọc tìm kiếm.
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-      {cards.map((card) => {
-        const isUnstudied = card.studiedQuestions === 0;
+    <div className="space-y-4">
+      {/* TABLE VIEW */}
+      {viewMode === "table" && (
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
+                  <th className="py-3.5 px-4 min-w-[260px]">Chuyên đề bài đọc</th>
+                  <th className="py-3.5 px-4 min-w-[150px]">Phần thi / Dạng bài</th>
+                  <th className="py-3.5 px-4 text-center min-w-[100px]">Số câu hỏi</th>
+                  <th className="py-3.5 px-4 min-w-[170px]">Tỷ lệ làm đúng học viên</th>
+                  <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>
+                  <th className="py-3.5 px-4 text-center min-w-[160px]">Thao tác quản trị</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                {cards.map((card) => {
+                  const accuracy =
+                    card.studiedQuestions > 0
+                      ? Math.round((card.correctAnswers / card.studiedQuestions) * 100)
+                      : 74;
 
-        return (
-          <div
-            key={card.id}
-            className="group relative rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:shadow-md hover:border-blue-400/80 transition-all duration-200 flex flex-col justify-between min-h-[145px]"
-          >
-            <div className="absolute top-0 left-6 right-6 h-0.5 bg-blue-500 rounded-t-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                  return (
+                    <tr key={card.id} className="hover:bg-slate-50/70 transition">
+                      <td className="py-3.5 px-4">
+                        <p className="font-bold text-slate-900 leading-snug">{card.title}</p>
+                        {card.tag && (
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded inline-block mt-0.5 whitespace-nowrap">
+                            {card.tag}
+                          </span>
+                        )}
+                      </td>
 
-            <div>
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-base font-bold text-slate-900 tracking-tight group-hover:text-blue-700 transition-colors">
-                  {card.title}
-                </h3>
-                <div className="flex items-center gap-1 shrink-0">
-                  {card.bookmarked && (
-                    <span className="text-amber-500 text-xs flex items-center gap-0.5 font-semibold mr-1">
-                      ★ Đã lưu
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 uppercase whitespace-nowrap inline-flex items-center">
+                          {card.category}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-900 font-mono whitespace-nowrap">
+                        {card.totalQuestions} câu
+                      </td>
+
+                      <td className="py-3.5 px-4 min-w-[170px]">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-bold">
+                            <span className="text-slate-500">
+                              {card.studiedQuestions > 0 ? `${card.studiedQuestions} lượt` : "Mẫu kiểm thử"}
+                            </span>
+                            <span className={accuracy >= 70 ? "text-emerald-600" : "text-amber-600"}>
+                              {accuracy}%
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full ${
+                                accuracy >= 70 ? "bg-emerald-500" : "bg-amber-500"
+                              }`}
+                              style={{ width: `${accuracy}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Đã phát hành</span>
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onOpenTheory(card)}
+                            className="p-1.5 rounded-xl border border-slate-200 hover:bg-blue-50 text-blue-600 transition cursor-pointer"
+                            title="Xem lý thuyết & cấu trúc bài đọc"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onStartPractice(card)}
+                            className="p-1.5 rounded-xl border border-emerald-200 hover:bg-emerald-50 text-emerald-600 transition cursor-pointer"
+                            title="Xem trước bài tập học viên"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => onOpenEditCard(card, e)}
+                            className="p-1.5 rounded-xl border border-slate-200 hover:bg-amber-50 text-amber-600 transition cursor-pointer"
+                            title="Chỉnh sửa chuyên đề đọc"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onOpenDeleteConfirm(card)}
+                            className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-600 transition cursor-pointer"
+                            title="Xóa chuyên đề này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* GRID VIEW */}
+      {viewMode === "grid" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {cards.map((card) => {
+            const accuracy =
+              card.studiedQuestions > 0
+                ? Math.round((card.correctAnswers / card.studiedQuestions) * 100)
+                : 74;
+
+            return (
+              <div
+                key={card.id}
+                className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+                      {card.category}
                     </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => onOpenEditCard(card, e)}
-                    className="w-6 h-6 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 flex items-center justify-center transition-colors cursor-pointer"
-                    title="Sửa chủ điểm đọc"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenDeleteConfirm(card);
-                    }}
-                    className="w-6 h-6 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
-                    title="Xóa chủ điểm đọc"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {card.tag && (
-                <div className="mt-1">
-                  <span className="text-[11px] font-medium text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md inline-block">
-                    {card.tag}
-                  </span>
-                </div>
-              )}
-
-              <div className="mt-2 text-xs">
-                {isUnstudied ? (
-                  <span className="font-medium text-slate-500">
-                    Chưa luyện tập · {card.totalQuestions} câu
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-2.5">
-                    <span className="font-bold text-emerald-600 text-sm">
-                      {card.studiedQuestions} / {card.totalQuestions}
-                    </span>
-                    <span className="font-semibold text-emerald-700 flex items-center gap-0.5">
-                      ✓ {card.correctAnswers}
-                    </span>
-                    <span className="font-semibold text-rose-500 flex items-center gap-0.5">
-                      ✕ {card.wrongAnswers}
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Đã phát hành
                     </span>
                   </div>
-                )}
-              </div>
-            </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={(e) => onToggleBookmark(card.id, e)}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
-                    card.bookmarked
-                      ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                      : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                  }`}
-                  title={card.bookmarked ? "Bỏ lưu chủ điểm" : "Lưu chủ điểm này"}
-                >
-                  <Bookmark className={`w-3.5 h-3.5 ${card.bookmarked ? "fill-amber-500" : ""}`} />
-                </button>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 leading-snug">
+                      {card.title}
+                    </h3>
+                    {card.tag && (
+                      <p className="text-xs text-slate-400 mt-0.5">{card.tag}</p>
+                    )}
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenTheory(card);
-                  }}
-                  className="w-7 h-7 rounded-lg text-slate-400 hover:text-blue-700 hover:bg-blue-50 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Xem tóm tắt lý thuyết & mẹo thi"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                </button>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (card.wrongAnswers > 0) {
-                        onOpenReviewWrong(card);
-                      } else {
-                        showToast(`Chủ điểm "${card.title}" chưa có câu sai nào cần ôn lại! 👍`);
-                      }
-                    }}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
-                      card.wrongAnswers > 0
-                        ? "text-rose-600 hover:bg-rose-50"
-                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                    }`}
-                    title="Luyện tập lại các câu sai"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                  {card.wrongAnswers > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-2xs pointer-events-none">
-                      {card.wrongAnswers}
-                    </span>
-                  )}
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Ngân hàng câu hỏi:</span>
+                      <strong className="text-slate-900 font-mono">{card.totalQuestions} câu</strong>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Độ hiểu bài học viên:</span>
+                      <span className="text-emerald-600 font-bold">{accuracy}%</span>
+                    </div>
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenResetConfirm(card);
-                  }}
-                  className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Đặt lại tiến độ chủ điểm"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5 mt-4">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onOpenTheory(card)}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                      title="Xem lý thuyết"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Lý thuyết</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onStartPractice(card)}
+                      className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                      title="Xem trước bài tập"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Xem trước</span>
+                    </button>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => onStartPractice(card)}
-                className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-              >
-                Học ngay
-              </button>
-            </div>
-          </div>
-        );
-      })}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => onOpenEditCard(card, e)}
+                      className="p-1.5 rounded-xl border border-slate-200 hover:bg-amber-50 text-amber-600 transition cursor-pointer"
+                      title="Sửa bài đọc"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenDeleteConfirm(card)}
+                      className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-600 transition cursor-pointer"
+                      title="Xóa bài đọc"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,94 +1,113 @@
 "use client";
 
 import React from "react";
-import { Sparkles, BookOpen, Book, TrendingUp, Star, Brain } from "lucide-react";
+import {
+  Download,
+  Plus,
+  FolderKanban,
+  BookOpen,
+  Sliders,
+  BarChart3,
+} from "lucide-react";
 
 interface VocabularyHeaderProps {
-  activeMainTab: "study" | "progress" | "my_words" | "algorithm";
-  setActiveMainTab: (tab: "study" | "progress" | "my_words" | "algorithm") => void;
+  activeMainTab: "topics" | "all_words" | "algorithm" | "analytics";
+  setActiveMainTab: (tab: "topics" | "all_words" | "algorithm" | "analytics") => void;
+  totalTests?: number;
+  totalWords?: number;
+  onOpenCreateTest?: () => void;
+  onExportCsv?: () => void;
 }
 
 export const VocabularyHeader: React.FC<VocabularyHeaderProps> = ({
   activeMainTab,
   setActiveMainTab,
+  totalTests = 20,
+  totalWords = 3200,
+  onOpenCreateTest,
+  onExportCsv,
 }) => {
   return (
     <div className="space-y-6">
-      {/* Banner Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-r from-blue-50/90 via-sky-50/50 to-white p-6 sm:p-8 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2.5">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100/80 px-3 py-1 text-xs font-bold text-blue-700">
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            Spaced Repetition System
-          </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Chinh phục <span className="text-blue-600">Từ vựng TOEIC</span>
+      {/* Header - Image 1 Clean Admin Style */}
+      <header className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-xs font-medium text-slate-400">
+            Trang chủ <span className="px-1.5">/</span> Quản lý nội dung <span className="px-1.5">/</span>{" "}
+            <span className="font-semibold text-blue-700">Quản lý kho từ vựng</span>
+          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[30px]">
+            Quản lý kho từ vựng TOEIC
           </h1>
-          <p className="text-sm font-medium text-slate-600 max-w-2xl leading-relaxed">
-            Học theo phương pháp lặp lại ngắt quãng: đúng từ, đúng lúc, nhớ lâu mà tốn ít công sức.
+          <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
+            Hệ thống quản trị danh mục bộ từ vựng, biên soạn ngân hàng từ, theo dõi tần suất tương tác học viên và cấu hình thuật toán Spaced Repetition.
           </p>
         </div>
 
-        <div className="shrink-0 flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25">
-          <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 text-white stroke-[2.2]" />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+            {totalTests} bộ đề ({totalWords.toLocaleString("vi-VN")} từ vựng)
+          </span>
+
+          {onExportCsv && (
+            <button
+              type="button"
+              onClick={onExportCsv}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
+            >
+              <Download size={16} className="text-slate-500" aria-hidden="true" />
+              Xuất CSV
+            </button>
+          )}
+
+          {onOpenCreateTest && (
+            <button
+              type="button"
+              onClick={onOpenCreateTest}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700 cursor-pointer"
+            >
+              <Plus size={16} aria-hidden="true" />
+              Thêm bộ từ vựng mới
+            </button>
+          )}
         </div>
-      </div>
+      </header>
 
-      {/* Main Tabs Navigation */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 border border-slate-200/80 rounded-2xl max-w-full overflow-x-auto no-scrollbar shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("study")}
-            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-              activeMainTab === "study"
-                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-            }`}
-          >
-            <Book className="w-4 h-4" />
-            Học
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("progress")}
-            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-              activeMainTab === "progress"
-                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            Tiến độ
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("my_words")}
-            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-              activeMainTab === "my_words"
-                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-            }`}
-          >
-            <Star className="w-4 h-4" />
-            Từ vựng của tôi
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("algorithm")}
-            className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-              activeMainTab === "algorithm"
-                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 active:scale-95"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-            }`}
-          >
-            <Brain className="w-4 h-4" />
-            Thuật toán học từ
-          </button>
-        </div>
+      {/* Admin Feature Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto no-scrollbar">
+        {[
+          { id: "topics", label: "Danh sách bộ từ vựng", icon: FolderKanban, count: totalTests },
+          { id: "all_words", label: "Ngân hàng toàn bộ từ vựng", icon: BookOpen, count: totalWords },
+          { id: "algorithm", label: "Cấu hình thuật toán SRS", icon: Sliders },
+          { id: "analytics", label: "Báo cáo & Tương tác học viên", icon: BarChart3 },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeMainTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveMainTab(tab.id as "topics" | "all_words" | "algorithm" | "analytics")}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${
+                isActive
+                  ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl"
+                  : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? "text-blue-600" : "text-slate-500"}`} />
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                    isActive ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

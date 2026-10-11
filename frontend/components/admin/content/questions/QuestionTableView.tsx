@@ -32,7 +32,7 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider select-none">
+          <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider select-none whitespace-nowrap">
             <tr>
               <th className="py-4 px-4 text-center w-10">
                 <input
@@ -42,13 +42,13 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                   className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
               </th>
-              <th className="py-4 px-4 w-24">Mã câu</th>
-              <th className="py-4 px-4 w-24">Part</th>
-              <th className="py-4 px-6">Nội dung câu hỏi</th>
-              <th className="py-4 px-4 w-32">Kỹ năng</th>
-              <th className="py-4 px-4 w-24">Độ khó</th>
-              <th className="py-4 px-4 w-28">Trạng thái</th>
-              <th className="py-4 px-4 text-right w-28">Thao tác</th>
+              <th className="py-4 px-4 min-w-[90px]">Mã câu</th>
+              <th className="py-4 px-4 min-w-[90px]">Part</th>
+              <th className="py-4 px-6 min-w-[280px]">Nội dung câu hỏi</th>
+              <th className="py-4 px-4 min-w-[130px]">Kỹ năng</th>
+              <th className="py-4 px-4 min-w-[100px]">Độ khó</th>
+              <th className="py-4 px-4 min-w-[130px]">Trạng thái</th>
+              <th className="py-4 px-4 text-right min-w-[120px]">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-150 text-slate-700">
@@ -69,7 +69,7 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                     }`}
                   >
                     {/* Select Checkbox */}
-                    <td className="py-4 px-4 text-center">
+                    <td className="py-4 px-4 text-center whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -79,13 +79,13 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                     </td>
 
                     {/* Question Code */}
-                    <td className="py-4 px-4 font-mono font-bold text-slate-900">
+                    <td className="py-4 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
                       {q.code || q.id}
                     </td>
 
                     {/* Part Badge */}
-                    <td className="py-4 px-4 font-bold text-slate-900">
-                      <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 text-[11px] font-extrabold border border-slate-200">
+                    <td className="py-4 px-4 font-bold text-slate-900 whitespace-nowrap">
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 text-[11px] font-extrabold border border-slate-200 whitespace-nowrap inline-flex items-center">
                         {q.part}
                       </span>
                     </td>
@@ -117,16 +117,16 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                     </td>
 
                     {/* Skill Badge */}
-                    <td className="py-4 px-4">
-                      <span className="text-slate-600 font-semibold text-[11px]">
+                    <td className="py-4 px-4 whitespace-nowrap">
+                      <span className="text-slate-600 font-semibold text-[11px] whitespace-nowrap">
                         {q.skill}
                       </span>
                     </td>
 
                     {/* Difficulty Badge */}
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-4 whitespace-nowrap">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold whitespace-nowrap inline-flex items-center ${
                           q.difficulty === "Easy"
                             ? "bg-emerald-100 text-emerald-800"
                             : q.difficulty === "Hard"
@@ -139,9 +139,9 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                     </td>
 
                     {/* Status Badge */}
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-4 whitespace-nowrap">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold whitespace-nowrap inline-flex items-center ${
                           q.status === "PUBLISHED"
                             ? "bg-blue-100 text-blue-800"
                             : "bg-slate-100 text-slate-600"
@@ -152,7 +152,7 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                     </td>
 
                     {/* Action Buttons */}
-                    <td className="py-4 px-4 text-right">
+                    <td className="py-4 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"

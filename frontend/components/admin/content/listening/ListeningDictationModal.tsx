@@ -1,7 +1,25 @@
 "use client";
 
-import React from "react";
-import { ArrowLeft, Clock, Zap, Pause, Play, Bookmark, FileText, Lock, BookOpen, Volume2, Flag, ShoppingBag, Grid } from "lucide-react";
+import React, { useState } from "react";
+import {
+  ArrowLeft,
+  Clock,
+  Zap,
+  Pause,
+  Play,
+  Bookmark,
+  FileText,
+  Lock,
+  BookOpen,
+  Volume2,
+  Flag,
+  ShoppingBag,
+  Grid,
+  Sparkles,
+  Search,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
 
 interface ListeningDictationModalProps {
@@ -36,7 +54,6 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   dictationModalCard,
   setDictationModalCard,
   activeDictationQIndex,
-  dictationUserInputs,
   dictationChecked,
   dictationSubTab,
   setDictationSubTab,
@@ -58,13 +75,55 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   playAudio,
   triggerToast,
 }) => {
+  const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
+
   const q = dictationModalCard.questions[activeDictationQIndex];
+
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.playbackRate = parseFloat(audioSpeed) || 1.0;
+      audioRef.current.play().catch(() => setIsPlayingAudio(false));
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlayingAudio, audioSpeed, setIsPlayingAudio]);
+
+  React.useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlayingAudio(false);
+  }, [activeDictationQIndex, setIsPlayingAudio]);
+
   if (!q) return null;
 
   const isChecked = !!dictationChecked[q.id];
   const isFlagged = flaggedReviewIds.includes(q.id);
   const words = q.fullTranscript.split(" ");
   const totalWords = words.length;
+
+  const vocabItems = q.vocabList || [
+    {
+      word: "climb",
+      pos: "v",
+      level: "B1",
+      ipa: "/klaɪm/",
+      meaning: "leo, trèo",
+      example: { en: "He's climbing a ladder.", vi: "Anh ấy đang leo lên một chiếc thang." },
+    },
+    {
+      word: "ladder",
+      pos: "n",
+      level: "B1",
+      ipa: "/ˈlædər/",
+      meaning: "chiếc thang",
+      example: { en: "The ladder is leaning against the wall.", vi: "Chiếc thang đang tựa vào tường." },
+    },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 bg-[#f8fafc] flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans text-slate-800">
@@ -160,6 +219,13 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                   </div>
                   <div className="absolute left-[28%] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-md" />
                 </div>
+
+                <audio
+                  ref={audioRef}
+                  src={q?.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
+                  onEnded={() => setIsPlayingAudio(false)}
+                  className="hidden"
+                />
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <button
@@ -381,14 +447,34 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                   </div>
                 </div>
               </div>
+
+              {/* DETAILED EXPLANATION FOR DICTATION MODE */}
+              {(isChecked || revealedWordCount >= totalWords) && (q.explanation || q.trapNote) && (
+                <div className="bg-white rounded-3xl border border-blue-200/90 p-6 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-blue-900 font-extrabold text-sm sm:text-base">
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    <span>Giải thích chi tiết bài nghe</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                    {q.explanation}
+                  </p>
+                  {q.trapNote && (
+                    <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                      ⚠️ <strong>Bẫy cần tránh:</strong> {q.trapNote}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* KHỐI BÊN PHẢI (COL 5): TỪ VỰNG NÊN HỌC */}
             <div className="lg:col-span-5 space-y-5">
               <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs min-h-[380px] flex flex-col justify-between">
-                <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
-                  <BookOpen className="w-4 h-4 text-blue-600" />
-                  <h3 className="font-extrabold text-sm text-slate-900">Từ vựng nên học</h3>
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <BookOpen className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-extrabold text-sm text-slate-900">Từ vựng nên học ({vocabItems.length} từ)</h3>
+                  </div>
                 </div>
 
                 {!isChecked && revealedWordCount < totalWords ? (
@@ -396,28 +482,59 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                     <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center shadow-2xs">
                       <Lock className="w-6 h-6 stroke-[2.2]" />
                     </div>
-                    <h4 className="font-bold text-sm text-slate-800">Chép xong câu để xem 1 từ nên học</h4>
+                    <h4 className="font-bold text-sm text-slate-800">Chép xong câu để xem từ vựng nên học</h4>
                     <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
                       Từ vựng nằm ngay trong câu, hiện sớm sẽ lộ đáp án.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4 pt-4 flex-1">
-                    <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-100 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-base text-blue-950">photograph</span>
-                        <button
-                          type="button"
-                          onClick={() => playAudio("photograph")}
-                          className="p-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition cursor-pointer"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <p className="text-xs font-mono font-medium text-slate-500">/ˈfəʊtəɡrɑːf/</p>
-                      <p className="text-xs font-bold text-slate-700">n. bức ảnh, bức hình</p>
-                      <p className="text-xs text-slate-500 italic pt-1">Ví dụ: A man is holding a photograph.</p>
-                    </div>
+                    {vocabItems.map((v, idx) => {
+                      const isExpanded = !!expandedVocab[v.word];
+
+                      return (
+                        <div key={idx} className="p-4 rounded-2xl bg-blue-50/80 border border-blue-100 space-y-2.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-base text-blue-950">{v.word}</span>
+                              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">{v.pos}</span>
+                              {v.level && <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{v.level}</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => playAudio(v.word)}
+                                className="p-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition cursor-pointer"
+                              >
+                                <Volume2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedVocab((prev) => ({ ...prev, [v.word]: !prev[v.word] }))}
+                                className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 font-bold transition cursor-pointer flex items-center gap-1"
+                              >
+                                <Search className="w-3 h-3" />
+                                <span>{isExpanded ? "Thu gọn" : "🔍 Xem chi tiết"}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-xs font-mono font-medium text-slate-500">{v.ipa}</p>
+                          <p className="text-xs font-bold text-slate-800">{v.meaning}</p>
+
+                          {isExpanded && v.example && (
+                            <div className="p-2.5 rounded-xl bg-white border border-blue-100 text-slate-800 space-y-0.5 pt-2">
+                              <p className="font-semibold text-blue-950">
+                                &quot;{typeof v.example === "string" ? v.example : v.example.en}&quot;
+                              </p>
+                              {typeof v.example === "object" && v.example.vi && (
+                                <p className="text-slate-600 italic">{v.example.vi}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

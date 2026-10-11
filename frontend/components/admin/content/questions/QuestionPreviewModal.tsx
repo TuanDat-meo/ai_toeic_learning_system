@@ -50,6 +50,30 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
   const [showVocabSection, setShowVocabSection] = useState(true);
   const [isVocabExpanded, setIsVocabExpanded] = useState(true);
   const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
+  const [localIsPlayingAudio, setLocalIsPlayingAudio] = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if (!audioRef.current) return;
+    if (localIsPlayingAudio) {
+      audioRef.current.play().catch(() => setLocalIsPlayingAudio(false));
+    } else {
+      audioRef.current.pause();
+    }
+  }, [localIsPlayingAudio]);
+
+  const [prevQuestionId, setPrevQuestionId] = React.useState(question?.id);
+  if (question?.id !== prevQuestionId) {
+    setPrevQuestionId(question?.id);
+    setLocalIsPlayingAudio(false);
+  }
+
+  React.useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  }, [question?.id]);
 
   if (!question) return null;
 
@@ -299,17 +323,23 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
             {/* Trình phát Audio nếu có (Part 1 - Part 4) */}
             {question.audioUrl && (
               <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-xs">
+                <audio
+                  ref={audioRef}
+                  src={question.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
+                  onEnded={() => setLocalIsPlayingAudio(false)}
+                  className="hidden"
+                />
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => {
                         playSfx("click");
-                        playAudio(question.audioUrl!);
+                        setLocalIsPlayingAudio(!localIsPlayingAudio);
                       }}
-                      className="w-12 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition cursor-pointer"
+                      className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition cursor-pointer"
                     >
-                      {isPlayingAudio ? (
+                      {localIsPlayingAudio ? (
                         <Pause className="w-6 h-6 fill-white" />
                       ) : (
                         <Play className="w-6 h-6 ml-0.5 fill-white" />

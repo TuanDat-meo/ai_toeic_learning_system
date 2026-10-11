@@ -6,8 +6,6 @@ import {
   Languages,
   FileText,
   Pencil,
-  Bell,
-  BellOff,
   Clock,
   Zap,
   Sparkles,
@@ -24,6 +22,9 @@ import {
   Grid,
   ChevronRight,
   X,
+  ChevronDown,
+  ChevronUp,
+  Plus,
 } from "lucide-react";
 import { LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
 
@@ -91,7 +92,29 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
   const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
-  const [addedVocabItems] = useState<string[]>([]);
+  const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
+
+  const [expandedVocabWords, setExpandedVocabWords] = useState<Record<string, boolean>>({});
+  const [isAllVocabExpanded, setIsAllVocabExpanded] = useState(false);
+
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.play().catch(() => setIsPlayingAudio(false));
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlayingAudio, setIsPlayingAudio]);
+
+  React.useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlayingAudio(false);
+  }, [activeQuizQIndex, setIsPlayingAudio]);
 
   const currentQ = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
 
@@ -123,16 +146,59 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const isAllGroupAnswered = isGroupMode && quizModalCard.questions.every((q) => !!quizSelectedOption[q.id]);
 
   const combinedVocabItems = (() => {
-    const map = new Map<string, { word: string; pos: string; level: string; ipa: string; meaning: string }>();
+    const map = new Map<
+      string,
+      {
+        word: string;
+        pos: string;
+        level: string;
+        ipa: string;
+        meaning: string;
+        example?: { en: string; vi: string };
+        collocations?: { en: string; vi: string }[];
+        synonyms?: { en: string; vi: string }[];
+        antonyms?: { en: string; vi: string }[];
+        wordFamily?: { word: string; pos: string; meaning: string }[];
+      }
+    >();
     quizModalCard.questions.forEach((q) => {
       const list = q.vocabList || [
-        { word: "pottery", pos: "n", level: "B2", ipa: "/ˈpɑːtəri/", meaning: "xưởng gốm" },
-        { word: "demonstrate", pos: "v", level: "B2", ipa: "/ˈdemənstreɪt/", meaning: "trình diễn" },
+        {
+          word: "pottery",
+          pos: "n",
+          level: "B2",
+          ipa: "/ˈpɑːtəri/",
+          meaning: "xưởng gốm",
+          example: { en: "They visited a traditional pottery studio.", vi: "Họ đã ghé thăm một xưởng gốm truyền thống." },
+          collocations: [{ en: "pottery class", vi: "lớp học làm gốm" }],
+        },
+        {
+          word: "demonstrate",
+          pos: "v",
+          level: "B2",
+          ipa: "/ˈdemənstreɪt/",
+          meaning: "trình diễn, hướng dẫn",
+          example: { en: "The instructor will demonstrate the procedure.", vi: "Người hướng dẫn sẽ trình diễn quy trình." },
+        },
       ];
       list.forEach((item) => map.set(item.word, item));
     });
     return Array.from(map.values());
   })();
+
+  const toggleExpandSingleWord = (word: string) => {
+    setExpandedVocabWords((prev) => ({ ...prev, [word]: !prev[word] }));
+  };
+
+  const toggleExpandAllVocab = () => {
+    const nextState = !isAllVocabExpanded;
+    setIsAllVocabExpanded(nextState);
+    const newMap: Record<string, boolean> = {};
+    combinedVocabItems.forEach((v) => {
+      newMap[v.word] = nextState;
+    });
+    setExpandedVocabWords(newMap);
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col h-screen overflow-hidden font-sans text-slate-900 animate-in fade-in duration-150">
@@ -148,7 +214,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
             <span>Thoát</span>
           </button>
 
-          <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">
+          <h1 className="text-base sm:text-lg font-bold tracking-tight text-white line-clamp-1">
             {quizModalCard.title}
           </h1>
         </div>
@@ -185,88 +251,59 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
             <span className="hidden md:inline">Annotator</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              const next = !isSfxEnabled;
-              setIsSfxEnabled(next);
-              if (!next) {
-                setIsPlayingAudio(false);
-                if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                  window.speechSynthesis.cancel();
-                }
-              } else {
-                playSfx("correct");
-              }
-              triggerToast(next ? "🔊 Đã bật âm thanh 🔔" : "🔕 Đã tắt toàn bộ âm thanh (Im lặng)");
-            }}
-            className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-              isSfxEnabled
-                ? "bg-amber-400 text-amber-950 shadow-xs"
-                : "bg-white/20 text-white hover:bg-white/30"
-            }`}
-            title={isSfxEnabled ? "Đang bật âm thanh - Bấm để tắt" : "Đang tắt âm thanh - Bấm để bật"}
-          >
-            {isSfxEnabled ? <Bell className="w-4 h-4 text-amber-950" /> : <BellOff className="w-4 h-4 text-white" />}
-          </button>
-
           <div className="flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-bold shadow-2xs">
               <Clock className="w-3.5 h-3.5" />
-              00:02
+              01:30
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/90 text-white text-xs font-extrabold shadow-2xs">
               <Zap className="w-3.5 h-3.5 fill-white" />
-              0
+              +50 XP
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/90 text-white text-xs font-extrabold shadow-2xs">
-              ✓ {quizModalCard.correctCount}/{quizModalCard.totalQuestions}
-            </span>
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-700 text-white text-xs font-bold shadow-2xs font-mono">
+            <button
+              type="button"
+              onClick={() => setIsQuestionGridOpen(true)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-2xs font-mono transition cursor-pointer"
+            >
               Câu {activeQuizQIndex + 1}/{quizModalCard.questions.length}
-            </span>
+            </button>
           </div>
         </div>
       </header>
 
-      {/* ANNOTATOR TOOLBAR */}
+      {/* ANNOTATOR BAR */}
       {isAnnotatorActive && (
         <div className="bg-amber-100 border-b border-amber-300 px-6 py-2 flex items-center justify-between shadow-xs select-none text-xs">
           <div className="flex items-center gap-3">
             <span className="font-extrabold text-amber-900 flex items-center gap-1.5">
               <Pencil className="w-4 h-4 text-amber-700" />
-              Công cụ Annotator (Đánh dấu & Tô màu bài viết):
+              Công cụ Bút vẽ Highlighting:
             </span>
             <div className="flex items-center gap-1.5">
-              {(["yellow", "green", "pink", "blue"] as const).map((color) => {
-                const colorMap = {
-                  yellow: "bg-yellow-400 border-yellow-500",
-                  green: "bg-emerald-400 border-emerald-500",
-                  pink: "bg-pink-400 border-pink-500",
-                  blue: "bg-sky-400 border-sky-500",
-                };
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => {
-                      setAnnotatorColor(color);
-                      triggerToast(`Đã chọn bút tô màu ${color}`);
-                    }}
-                    className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${colorMap[color]} ${
-                      annotatorColor === color ? "scale-110 ring-2 ring-slate-800" : "opacity-70 hover:opacity-100"
-                    }`}
-                  />
-                );
-              })}
+              {(["yellow", "green", "pink", "blue"] as const).map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setAnnotatorColor(color)}
+                  className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
+                    color === "yellow"
+                      ? "bg-yellow-400 border-yellow-500"
+                      : color === "green"
+                      ? "bg-emerald-400 border-emerald-500"
+                      : color === "pink"
+                      ? "bg-pink-400 border-pink-500"
+                      : "bg-sky-400 border-sky-500"
+                  } ${annotatorColor === color ? "scale-110 ring-2 ring-slate-800" : "opacity-70"}`}
+                />
+              ))}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => triggerToast("Đã tẩy toàn bộ nét vẽ / đánh dấu")}
-              className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-bold hover:bg-amber-50 transition cursor-pointer"
+              onClick={() => triggerToast("Đã xóa tất cả nét vẽ")}
+              className="px-3 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold transition cursor-pointer"
             >
               🧹 Xóa đánh dấu
             </button>
@@ -447,15 +484,26 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                   {/* Audio Player Box */}
                   <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+                    <audio
+                      ref={audioRef}
+                      src={currentQ?.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
+                      onEnded={() => setIsPlayingAudio(false)}
+                      className="hidden"
+                    />
                     <div className="flex items-center justify-between gap-3">
                       <button
                         type="button"
                         onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                        className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shrink-0 cursor-pointer"
+                        className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
+                        title={isPlayingAudio ? "Tạm dừng" : "Phát audio"}
                       >
-                        {isPlayingAudio ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+                        {isPlayingAudio ? (
+                          <Pause className="w-6 h-6 fill-white" />
+                        ) : (
+                          <Play className="w-6 h-6 ml-0.5 fill-white" />
+                        )}
                       </button>
-                      
+
                       <div className="flex-1 flex items-center gap-1 h-9 px-3 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
                         {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50, 30, 70, 85, 40].map((h, i) => (
                           <div
@@ -463,10 +511,14 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                             className={`flex-1 rounded-full transition-all duration-300 ${
                               isPlayingAudio ? "bg-blue-600 animate-pulse" : "bg-slate-300"
                             }`}
-                            style={{ height: `${h}%` }}
+                            style={{ height: `${isPlayingAudio ? Math.max(25, (h * ((i % 4) + 1)) % 100) : h}%` }}
                           />
                         ))}
                       </div>
+
+                      <span className="font-mono text-xs font-bold text-slate-600 shrink-0 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                        00:15 / 00:45
+                      </span>
                     </div>
                   </div>
 
@@ -604,34 +656,111 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                 })}
                               </div>
                             )}
+
+                            {/* EXPLANATION BOX FOR GROUP MODE */}
+                            {isChecked && (qItem.explanation || qItem.trapNote) && (
+                              <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 text-xs space-y-2">
+                                <div className="font-extrabold text-blue-900 flex items-center gap-1.5">
+                                  <Sparkles className="w-4 h-4 text-blue-600" />
+                                  <span>Giải thích chi tiết câu {idx + 1}:</span>
+                                </div>
+                                <p className="text-slate-800 font-medium leading-relaxed">{qItem.explanation}</p>
+                                {qItem.trapNote && (
+                                  <p className="text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-semibold">
+                                    ⚠️ <strong>Bẫy cần tránh:</strong> {qItem.trapNote}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
 
+                    {/* VOCABULARY SECTION FOR GROUP MODE */}
                     {isAllGroupAnswered && combinedVocabItems.length > 0 && (
-                      <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-3 mt-6">
-                        <div className="flex items-center justify-between">
+                      <div className="bg-amber-50/70 border border-amber-200/90 rounded-3xl p-5 space-y-4 mt-6">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
                             <BookOpen className="w-4 h-4 text-amber-600" />
-                            <span>Từ vựng nên học ({combinedVocabItems.length} từ)</span>
+                            <span>Từ vựng trọng tâm bài nghe ({combinedVocabItems.length} từ)</span>
                           </div>
+
+                          <button
+                            type="button"
+                            onClick={toggleExpandAllVocab}
+                            className="px-3 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition cursor-pointer flex items-center gap-1 border border-amber-300"
+                          >
+                            {isAllVocabExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            <span>{isAllVocabExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả"}</span>
+                          </button>
                         </div>
-                        <div className="space-y-2 max-h-56 overflow-y-auto">
-                          {combinedVocabItems.map((v, vIdx) => (
-                            <div key={vIdx} className="p-2 rounded-xl bg-white border border-amber-200 flex items-center justify-between text-xs">
-                              <div>
-                                <span className="font-bold text-slate-900">{v.word}</span> - <span className="text-slate-600">{v.meaning}</span>
+
+                        <div className="space-y-3">
+                          {combinedVocabItems.map((v, vIdx) => {
+                            const isExpanded = !!expandedVocabWords[v.word] || isAllVocabExpanded;
+
+                            return (
+                              <div key={vIdx} className="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-2xs space-y-3 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-extrabold text-sm text-slate-900">{v.word}</span>
+                                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">{v.pos}</span>
+                                    {v.level && <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{v.level}</span>}
+                                    {v.ipa && <span className="text-slate-400 font-mono text-[11px]">{v.ipa}</span>}
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => playAudio(v.word)}
+                                      className="p-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition cursor-pointer"
+                                    >
+                                      <Volume2 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandSingleWord(v.word)}
+                                      className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border border-blue-200"
+                                    >
+                                      <Search className="w-3 h-3" />
+                                      <span>{isExpanded ? "Thu gọn" : "🔍 Xem chi tiết"}</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <p className="font-bold text-slate-800">{v.meaning}</p>
+
+                                {isExpanded && (
+                                  <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
+                                    {v.example && (
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
+                                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
+                                          <p className="font-semibold text-slate-900">&quot;{v.example.en}&quot;</p>
+                                          <p className="text-slate-600 italic">{v.example.vi}</p>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {v.collocations && v.collocations.length > 0 && (
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {v.collocations.map((col, cIdx) => (
+                                            <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                              <strong>{col.en}</strong>: {col.vi}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => playAudio(v.word)}
-                                className="p-1 text-blue-600 hover:text-blue-800"
-                              >
-                                <Volume2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -668,7 +797,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                       </div>
 
                       <div className="text-base font-extrabold text-slate-900">
-                        {activeQuizQIndex + 1}.
+                        {activeQuizQIndex + 1}. {q.question}
                       </div>
 
                       {q.options && (() => {
@@ -682,11 +811,12 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                           entries = entries.filter(([optKey]) => optKey !== "D");
                         }
 
+                        const isChecked = !!quizAnswerChecked[q.id];
+
                         return (
                           <div className="space-y-3">
                             {entries.map(([optKey, optVal]) => {
                               const isChosen = quizSelectedOption[q.id] === optKey;
-                              const isChecked = !!quizAnswerChecked[q.id];
                               const isRight = optKey === q.correctAnswer;
                               const optTrans = q.optionTranslations ? q.optionTranslations[optKey] : "";
 
@@ -736,6 +866,147 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                         );
                       })()}
                     </div>
+
+                    {/* DETAILED EXPLANATION & VOCAB SECTION FOR SINGLE QUESTION MODE (PART 1 & 2) */}
+                    {quizAnswerChecked[q.id] && (
+                      <div className="space-y-4 pt-2">
+                        {/* EXPLANATION BOX */}
+                        <div className="rounded-3xl border border-blue-200/90 bg-blue-50/40 p-5 space-y-3 shadow-2xs">
+                          <div className="flex items-center gap-2 text-blue-900 font-extrabold text-sm sm:text-base">
+                            <Sparkles className="w-4 h-4 text-blue-600" />
+                            <span>Giải thích chi tiết & Bẫy cần tránh</span>
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                            {q.explanation || "Phân tích câu hỏi và đối chiếu nội dung bài nghe."}
+                          </p>
+                          {q.trapNote && (
+                            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                              ⚠️ <strong>Bẫy cần tránh:</strong> {q.trapNote}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* VOCABULARY SECTION */}
+                        {(() => {
+                          const singleVocabList = (q.vocabList && q.vocabList.length > 0)
+                            ? q.vocabList
+                            : (q.options ? Object.entries(q.options).map(([optKey, optVal]) => {
+                                const clean = optVal.replace(/^[A-D]\.\s*/, "").replace(/[.,!?;:]/g, "").trim();
+                                return {
+                                  word: clean || `Option (${optKey})`,
+                                  pos: "từ vựng",
+                                  level: "TOEIC",
+                                  ipa: `/${(clean || "option").toLowerCase()}/`,
+                                  meaning: (q.optionTranslations && q.optionTranslations[optKey]) || `Đáp án lựa chọn (${optKey})`,
+                                  example: {
+                                    en: `Listen carefully to "${clean || optVal}" in TOEIC audio.`,
+                                    vi: `Luyện nghe kỹ cụm từ "${clean || optVal}" trong bài nghe TOEIC.`,
+                                  },
+                                  collocations: undefined as { en: string; vi: string }[] | undefined,
+                                };
+                              }) : []);
+
+                          if (singleVocabList.length === 0) return null;
+
+                          return (
+                            <div className="rounded-3xl border border-amber-200 bg-amber-50/40 p-5 space-y-4 shadow-2xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm">
+                                  <BookOpen className="w-4 h-4 text-amber-600" />
+                                  <span>Từ vựng trọng tâm bài nghe ({singleVocabList.length} từ)</span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextState = !isAllVocabExpanded;
+                                    setIsAllVocabExpanded(nextState);
+                                    const newMap: Record<string, boolean> = {};
+                                    singleVocabList.forEach((v) => {
+                                      newMap[v.word] = nextState;
+                                    });
+                                    setExpandedVocabWords(newMap);
+                                  }}
+                                  className="px-3 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition cursor-pointer flex items-center gap-1 border border-amber-300"
+                                >
+                                  {isAllVocabExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  <span>{isAllVocabExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả"}</span>
+                                </button>
+                              </div>
+
+                              <div className="space-y-3">
+                                {singleVocabList.map((v, idx) => {
+                                  const isExpanded = !!expandedVocabWords[v.word] || isAllVocabExpanded;
+
+                                  return (
+                                    <div key={idx} className="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-2xs space-y-3 text-xs">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-extrabold text-sm text-slate-900">{v.word}</span>
+                                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">{v.pos}</span>
+                                          {v.level && <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{v.level}</span>}
+                                          {v.ipa && <span className="text-slate-400 font-mono text-[11px]">{v.ipa}</span>}
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => playAudio(v.word)}
+                                            className="p-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition cursor-pointer"
+                                          >
+                                            <Volume2 className="w-3.5 h-3.5" />
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleExpandSingleWord(v.word)}
+                                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border border-blue-200"
+                                          >
+                                            <Search className="w-3 h-3" />
+                                            <span>{isExpanded ? "Thu gọn" : "🔍 Xem chi tiết"}</span>
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <p className="font-bold text-slate-800">{v.meaning}</p>
+
+                                      {isExpanded && (
+                                        <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
+                                          {v.example && (
+                                            <div className="space-y-1">
+                                              <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
+                                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
+                                                <p className="font-semibold text-slate-900">&quot;{typeof v.example === "string" ? v.example : v.example.en}&quot;</p>
+                                                {typeof v.example === "object" && v.example.vi && (
+                                                  <p className="text-slate-600 italic">{v.example.vi}</p>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {v.collocations && v.collocations.length > 0 && (
+                                            <div className="space-y-1">
+                                              <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {v.collocations.map((col, cIdx) => (
+                                                  <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                                    <strong>{col.en}</strong>: {col.vi}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

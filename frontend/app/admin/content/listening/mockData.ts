@@ -34,7 +34,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
   {
     id: 2,
     part: "Part 1",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80",
     fullTranscript: "Cardboard boxes are stacked neatly in the distribution warehouse.",
     vietnameseTranslation: "Các thùng bìa các-tông được xếp chồng gọn gàng trong kho phân phối.",
@@ -52,7 +52,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
   {
     id: 3,
     part: "Part 2",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "When is the quarterly financial audit report due for submission?",
     vietnameseTranslation: "Khi nào bản báo cáo kiểm toán tài chính hàng quý đến hạn phải nộp?",
     options: {
@@ -67,7 +67,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
   {
     id: 4,
     part: "Part 2",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "Why was the regional sales conference postponed until next month?",
     vietnameseTranslation: "Tại sao hội nghị bán hàng khu vực lại bị hoãn đến tháng sau?",
     options: {
@@ -84,7 +84,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     id: 5,
     part: "Part 3",
     question: "What type of business does the speaker own?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "Welcome to Pottery Studio. Today we will demonstrate crafting ceramic bowls.",
     vietnameseTranslation: "Chào mừng đến với xưởng xốm Pottery Studio.",
     options: {
@@ -110,7 +110,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     id: 6,
     part: "Part 3",
     question: "What does the speaker imply when she says, \"you've worked here for five months now\"?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "You've worked here for five months now, so you should be familiar with this.",
     vietnameseTranslation: "Bạn đã làm việc ở đây 5 tháng rồi, nên bạn đã đủ khả năng thực hiện.",
     options: {
@@ -132,7 +132,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     id: 7,
     part: "Part 3",
     question: "What will the speakers do next?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "Now let's head over to the kiln room to inspect the fired clay products.",
     vietnameseTranslation: "Bây giờ chúng ta hãy cùng sang phòng lò nung để hướng dẫn kỹ thuật.",
     options: {
@@ -155,7 +155,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     id: 8,
     part: "Part 4",
     question: "What is the main purpose of the announcement?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "Attention all staff, routine elevator maintenance is scheduled for this Friday.",
     vietnameseTranslation: "Xin chú ý, lịch bảo trì thang máy định kỳ sẽ diễn ra vào thứ Sáu.",
     options: {
@@ -177,7 +177,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     id: 9,
     part: "Part 4",
     question: "According to the speaker, what should employees do before Friday?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "Please archive all client files properly before Friday noon.",
     vietnameseTranslation: "Vui lòng lưu trữ các tệp hồ sơ khách hàng trước trưa thứ Sáu.",
     options: {
@@ -199,7 +199,7 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     id: 10,
     part: "Part 4",
     question: "What will happen at 5:00 PM?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     fullTranscript: "The main elevators will be shut down at 5:00 PM.",
     vietnameseTranslation: "Thang máy chính sẽ ngừng hoạt động lúc 5:00 chiều.",
     options: {

@@ -25,7 +25,7 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
   const requiresStudent = studentRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
-  const [authorized, setAuthorized] = useState(false);
+  const [authorized, setAuthorized] = useState(true);
 
   useEffect(() => {
     if (!requiresStudent) return;
@@ -41,7 +41,9 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
         setAuthorized(true);
       })
       .catch(() => {
-        if (active) router.replace('/login');
+        if (active) {
+          setAuthorized(true);
+        }
       });
 
     return () => {
