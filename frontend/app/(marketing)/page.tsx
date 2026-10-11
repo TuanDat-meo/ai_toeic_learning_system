@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { MarketingNav } from '@/components/marketing/MarketingNav';
 import { MarketingBrand } from '@/components/marketing/MarketingBrand';
 import { RoadmapPlanner } from '@/components/marketing/RoadmapPlanner';
@@ -10,6 +11,7 @@ const learningSteps = [
 ];
 
 export default function LandingPage() {
+  redirect('/admin/overview');
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
       {/* Navbar */}

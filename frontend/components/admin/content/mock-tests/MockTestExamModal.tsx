@@ -4,8 +4,6 @@ import React from "react";
 import { TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
 import {
   ArrowLeft,
-  Bell,
-  BellOff,
   Clock,
   Grid,
   Send,
@@ -71,6 +69,25 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
   onSubmitExam,
   onOpenQuestionGrid,
 }) => {
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.play().catch(() => setIsPlayingAudio(false));
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlayingAudio, setIsPlayingAudio]);
+
+  React.useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlayingAudio(false);
+  }, [examCurrentQIndex, setIsPlayingAudio]);
+
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans">
       <div className="bg-white w-full h-full flex flex-col overflow-hidden">
@@ -93,27 +110,6 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
 
           {examStarted && !examSubmitted && (
             <div className="flex items-center gap-2 sm:gap-2.5">
-              {/* SFX Bell toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !isSfxEnabled;
-                  setIsSfxEnabled(next);
-                  setIsPlayingAudio(next);
-                  if (next) playSfx("correct");
-                  else playSfx("click");
-                  triggerToast(next ? "🔊 Đã bật âm thanh SFX 👑" : "⏸ Đã tắt âm thanh SFX");
-                }}
-                className={`p-2 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
-                  isSfxEnabled
-                    ? "bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300/50 animate-pulse"
-                    : "bg-white/15 hover:bg-white/25 text-white/70"
-                }`}
-                title={isSfxEnabled ? "Tắt hiệu ứng âm thanh" : "Bật hiệu ứng âm thanh"}
-              >
-                {isSfxEnabled ? <Bell className="w-4 h-4 fill-slate-950" /> : <BellOff className="w-4 h-4" />}
-              </button>
-
               {/* Timer button */}
               <div className="font-mono text-xs font-bold px-3 py-1.5 rounded-xl bg-white/15 text-white border border-white/20 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
@@ -260,7 +256,13 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                       )}
 
                       {currentQ && currentQ.audioUrl && (
-                        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+                        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+                          <audio
+                            ref={audioRef}
+                            src={currentQ.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
+                            onEnded={() => setIsPlayingAudio(false)}
+                            className="hidden"
+                          />
                           <div className="flex items-center justify-between gap-3">
                             <button
                               type="button"
@@ -268,25 +270,30 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                                 setIsPlayingAudio(!isPlayingAudio);
                                 triggerToast(isPlayingAudio ? "⏸ Đã tạm dừng âm thanh bài nghe" : "🔊 Đã phát âm thanh bài nghe");
                               }}
-                              className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shrink-0 cursor-pointer"
+                              className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
+                              title={isPlayingAudio ? "Tạm dừng" : "Phát audio"}
                             >
-                              {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                              {isPlayingAudio ? (
+                                <Pause className="w-6 h-6 fill-white" />
+                              ) : (
+                                <Play className="w-6 h-6 ml-0.5 fill-white" />
+                              )}
                             </button>
 
-                            <div className="flex-1 flex items-center gap-1 h-8 px-2 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                              {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50].map((h, i) => (
+                            <div className="flex-1 flex items-center gap-1 h-9 px-3 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                              {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50, 30, 70, 85, 40].map((h, i) => (
                                 <div
                                   key={i}
                                   className={`flex-1 rounded-full transition-all duration-300 ${
                                     isPlayingAudio ? "bg-blue-600 animate-pulse" : "bg-slate-300"
                                   }`}
-                                  style={{ height: `${isPlayingAudio ? Math.max(20, (h * (i % 3 + 1)) % 100) : h}%` }}
+                                  style={{ height: `${isPlayingAudio ? Math.max(25, (h * ((i % 4) + 1)) % 100) : h}%` }}
                                 />
                               ))}
                             </div>
 
-                            <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
-                              00:24
+                            <span className="font-mono text-xs font-bold text-slate-600 shrink-0 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                              00:15 / 00:45
                             </span>
                           </div>
                         </div>

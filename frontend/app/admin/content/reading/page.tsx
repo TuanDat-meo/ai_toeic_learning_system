@@ -1,22 +1,41 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Sparkles } from "lucide-react";
+import {
+  Sparkles,
+  BookOpen,
+  FileText,
+  Clock,
+  TrendingUp,
+  Layers,
+} from "lucide-react";
 
 import { ExerciseCardData } from "./types";
 import { INITIAL_CARDS } from "./mockData";
 
-import { ReadingHeader } from "@/components/admin/content/reading/ReadingHeader";
+import {
+  ReadingHeader,
+  ReadingAdminTab,
+} from "@/components/admin/content/reading/ReadingHeader";
 import { ReadingCardGrid } from "@/components/admin/content/reading/ReadingCardGrid";
+import {
+  ReadingPassageBankView,
+  ReadingAnalyticsView,
+  ReadingCurriculumView,
+} from "@/components/admin/content/reading/ReadingViews";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingCreateCardModal } from "@/components/admin/content/reading/ReadingCreateCardModal";
-import { ReadingDeleteCardModal, ReadingResetModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
+import { ReadingDeleteCardModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
-  const [activeMainTab, setActiveMainTab] = useState<"grammar" | "part5" | "part6" | "part7">("grammar");
-  const [activeSubFilter, setActiveSubFilter] = useState<"all" | "word_types" | "verbs" | "other_grammar">("all");
+  const [activeMainTab, setActiveMainTab] = useState<ReadingAdminTab>("reading_units");
+  const [selectedCategory, setSelectedCategory] = useState<
+    "all" | "grammar" | "part5" | "part6" | "part7"
+  >("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   // State Workspace
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
@@ -34,7 +53,9 @@ export default function ReadingLearningPage() {
   // Web Audio Sound Effects Synthesizer
   const playSfx = (type?: "correct" | "wrong" | "click") => {
     try {
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
@@ -55,8 +76,6 @@ export default function ReadingLearningPage() {
 
   // Modals state
   const [theoryCard, setTheoryCard] = useState<ExerciseCardData | null>(null);
-  const [reviewWrongCard, setReviewWrongCard] = useState<ExerciseCardData | null>(null);
-  const [resetCardConfirm, setResetCardConfirm] = useState<ExerciseCardData | null>(null);
   const [deleteCardConfirm, setDeleteCardConfirm] = useState<ExerciseCardData | null>(null);
   const [showCreateCardModal, setShowCreateCardModal] = useState(false);
   const [editingCard, setEditingCard] = useState<ExerciseCardData | null>(null);
@@ -64,7 +83,9 @@ export default function ReadingLearningPage() {
   // Form State
   const [cardFormTitle, setCardFormTitle] = useState("");
   const [cardFormCategory, setCardFormCategory] = useState<"grammar" | "part5" | "part6" | "part7">("grammar");
-  const [cardFormSubCategory, setCardFormSubCategory] = useState<"word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types">("word_types");
+  const [cardFormSubCategory, setCardFormSubCategory] = useState<
+    "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types"
+  >("word_types");
   const [cardFormTag, setCardFormTag] = useState("");
   const [cardFormTotalQuestions, setCardFormTotalQuestions] = useState(50);
   const [cardFormTheorySummary, setCardFormTheorySummary] = useState("");
@@ -74,26 +95,21 @@ export default function ReadingLearningPage() {
   // Filtered Cards
   const filteredCards = useMemo(() => {
     return cards.filter((c) => {
-      if (c.category !== activeMainTab) return false;
-      if (activeMainTab === "grammar" && activeSubFilter !== "all") {
-        return c.subCategory === activeSubFilter;
-      }
-      return true;
+      const matchCategory =
+        selectedCategory === "all" || c.category === selectedCategory;
+      const matchSearch =
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.tag && c.tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchCategory && matchSearch;
     });
-  }, [cards, activeMainTab, activeSubFilter]);
+  }, [cards, selectedCategory, searchQuery]);
 
   // Handlers
   const handleOpenCreateCard = () => {
     setEditingCard(null);
     setCardFormTitle("");
-    setCardFormCategory(activeMainTab);
-    setCardFormSubCategory(
-      activeMainTab === "grammar"
-        ? (activeSubFilter === "all" ? "word_types" : activeSubFilter)
-        : activeMainTab === "part5"
-        ? "levels"
-        : "text_types"
-    );
+    setCardFormCategory("grammar");
+    setCardFormSubCategory("word_types");
     setCardFormTag("");
     setCardFormTotalQuestions(50);
     setCardFormTheorySummary("");
@@ -111,22 +127,19 @@ export default function ReadingLearningPage() {
     setCardFormTag(card.tag || "");
     setCardFormTotalQuestions(card.totalQuestions);
     setCardFormTheorySummary(card.theory?.summary || "");
-    setCardFormTheoryRules((card.theory?.rules || []).join("\n"));
+    setCardFormTheoryRules(card.theory?.rules?.join("\n") || "");
     setCardFormTheoryExample(card.theory?.example || "");
     setShowCreateCardModal(true);
   };
 
   const handleSaveCard = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cardFormTitle.trim()) {
-      alert("Vui lòng nhập tên chủ điểm!");
-      return;
-    }
+    if (!cardFormTitle.trim()) return;
 
     const rulesArr = cardFormTheoryRules
       .split("\n")
       .map((r) => r.trim())
-      .filter(Boolean);
+      .filter((r) => r.length > 0);
 
     if (editingCard) {
       setCards((prev) =>
@@ -140,15 +153,15 @@ export default function ReadingLearningPage() {
                 tag: cardFormTag.trim() || undefined,
                 totalQuestions: cardFormTotalQuestions,
                 theory: {
-                  summary: cardFormTheorySummary.trim() || c.theory?.summary || "Tóm tắt ngữ pháp và mẹo thi TOEIC Reading.",
-                  rules: rulesArr.length > 0 ? rulesArr : (c.theory?.rules || ["Nắm chắc dấu hiệu nhận biết."]),
-                  example: cardFormTheoryExample.trim() || c.theory?.example || "Example sentence for TOEIC reading practice.",
+                  summary: cardFormTheorySummary.trim() || c.theory?.summary || "",
+                  rules: rulesArr.length > 0 ? rulesArr : c.theory?.rules || [],
+                  example: cardFormTheoryExample.trim() || c.theory?.example || "",
                 },
               }
             : c
         )
       );
-      showToast(`Đã cập nhật chủ điểm "${cardFormTitle}"! 💾`);
+      showToast(`Đã cập nhật chuyên đề "${cardFormTitle}"! 💾`);
     } else {
       const newId = `reading-${cards.length + 1}-${Date.now().toString().slice(-4)}`;
       const newCard: ExerciseCardData = {
@@ -177,35 +190,50 @@ export default function ReadingLearningPage() {
             explanation: "Trước danh từ 'review' cần một tính từ ('thorough').",
             steps: [
               { title: "Bước 1: Phân tích cú pháp", desc: "Mạo từ 'a' + [Tính từ] + Danh từ 'review'." },
-              { title: "Bước 2: Chọn từ loại", desc: "Thorough là tính từ chỉ sự kỹ lưỡng, thấu đáo." }
+              { title: "Bước 2: Chọn từ loại", desc: "Thorough là tính từ chỉ sự kỹ lưỡng, thấu đáo." },
             ],
             vocabList: [
-              { word: "thorough", pos: "adj", level: "B2", ipa: "/ˈθɜːrəʊ/", meaning: "kỹ lưỡng, thấu đáo" }
-            ]
+              { word: "thorough", pos: "adj", level: "B2", ipa: "/ˈθɜːrəʊ/", meaning: "kỹ lưỡng, thấu đáo" },
+            ],
           },
         ],
       };
       setCards((prev) => [newCard, ...prev]);
-      showToast(`Đã thêm chủ điểm "${newCard.title}" thành công! 🎉`);
+      showToast(`Đã thêm chuyên đề "${newCard.title}" thành công! 🎉`);
     }
     setShowCreateCardModal(false);
   };
 
-  const handleToggleBookmark = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCards((prev) =>
-      prev.map((c) => {
-        if (c.id === id) {
-          const next = !c.bookmarked;
-          showToast(next ? `Đã lưu chủ điểm "${c.title}" vào mục yêu thích! 📌` : `Đã bỏ lưu chủ điểm "${c.title}"`);
-          return { ...c, bookmarked: next };
-        }
-        return c;
-      })
-    );
+  const handleConfirmDelete = () => {
+    if (!deleteCardConfirm) return;
+    setCards((prev) => prev.filter((c) => c.id !== deleteCardConfirm.id));
+    showToast(`Đã xóa chuyên đề "${deleteCardConfirm.title}"`);
+    setDeleteCardConfirm(null);
   };
 
-  // Render Full Screen Workspace if Practice Started
+  const handleExportCsv = () => {
+    const headers = ["ID", "Tên chuyên đề", "Phần thi", "Thẻ gắn", "Số câu hỏi", "Trạng thái"];
+    const rows = cards.map((c) => [
+      `"${c.id}"`,
+      `"${c.title.replace(/"/g, '""')}"`,
+      `"${c.category}"`,
+      `"${c.tag || ""}"`,
+      c.totalQuestions,
+      `"PUBLISHED"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `toeic_reading_curriculum_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Render Full Screen Workspace if Practice Started (Preview Mode)
   if (activePracticeCard) {
     return (
       <ReadingPracticeWorkspace
@@ -218,7 +246,7 @@ export default function ReadingLearningPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]/90 p-4 sm:p-6 lg:p-8 space-y-7 max-w-7xl mx-auto font-sans text-slate-800">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Toast notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce">
@@ -231,23 +259,40 @@ export default function ReadingLearningPage() {
       <ReadingHeader
         activeMainTab={activeMainTab}
         setActiveMainTab={setActiveMainTab}
-        activeSubFilter={activeSubFilter}
-        setActiveSubFilter={setActiveSubFilter}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        totalCardsCount={cards.length}
         onOpenCreateCard={handleOpenCreateCard}
+        onExportCsv={handleExportCsv}
       />
 
-      {/* Card Grid */}
-      <ReadingCardGrid
-        cards={filteredCards}
-        onStartPractice={(card) => setActivePracticeCard(card)}
-        onOpenTheory={(card) => setTheoryCard(card)}
-        onOpenReviewWrong={(card) => setActivePracticeCard(card)}
-        onOpenResetConfirm={(card) => setResetCardConfirm(card)}
-        onToggleBookmark={handleToggleBookmark}
-        onOpenEditCard={handleOpenEditCard}
-        onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
-        showToast={showToast}
-      />
+      {/* Main Tab Content Switching */}
+      {activeMainTab === "reading_units" && (
+        <ReadingCardGrid
+          cards={filteredCards}
+          viewMode={viewMode}
+          onStartPractice={(card) => setActivePracticeCard(card)}
+          onOpenTheory={(card) => setTheoryCard(card)}
+          onOpenEditCard={handleOpenEditCard}
+          onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
+        />
+      )}
+
+      {activeMainTab === "passages" && (
+        <ReadingPassageBankView />
+      )}
+
+      {activeMainTab === "reading_analytics" && (
+        <ReadingAnalyticsView />
+      )}
+
+      {activeMainTab === "curriculum" && (
+        <ReadingCurriculumView />
+      )}
 
       {/* Modals */}
       {theoryCard && (
@@ -255,6 +300,14 @@ export default function ReadingLearningPage() {
           card={theoryCard}
           onClose={() => setTheoryCard(null)}
           onStartPractice={(card) => setActivePracticeCard(card)}
+        />
+      )}
+
+      {deleteCardConfirm && (
+        <ReadingDeleteCardModal
+          card={deleteCardConfirm}
+          onClose={() => setDeleteCardConfirm(null)}
+          onConfirmDelete={handleConfirmDelete}
         />
       )}
 
@@ -279,34 +332,6 @@ export default function ReadingLearningPage() {
           setCardFormTheoryExample={setCardFormTheoryExample}
           onSaveCard={handleSaveCard}
           onClose={() => setShowCreateCardModal(false)}
-        />
-      )}
-
-      {deleteCardConfirm && (
-        <ReadingDeleteCardModal
-          card={deleteCardConfirm}
-          onClose={() => setDeleteCardConfirm(null)}
-          onConfirmDelete={() => {
-            setCards((prev) => prev.filter((c) => c.id !== deleteCardConfirm.id));
-            showToast(`Đã xóa chủ điểm "${deleteCardConfirm.title}"! 🗑️`);
-            setDeleteCardConfirm(null);
-          }}
-        />
-      )}
-
-      {resetCardConfirm && (
-        <ReadingResetModal
-          card={resetCardConfirm}
-          onClose={() => setResetCardConfirm(null)}
-          onConfirmReset={() => {
-            setCards((prev) =>
-              prev.map((c) =>
-                c.id === resetCardConfirm.id ? { ...c, studiedQuestions: 0, correctAnswers: 0, wrongAnswers: 0 } : c
-              )
-            );
-            showToast(`Đã đặt lại tiến độ học của "${resetCardConfirm.title}"! 🔄`);
-            setResetCardConfirm(null);
-          }}
         />
       )}
     </div>

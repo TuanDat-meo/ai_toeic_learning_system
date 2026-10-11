@@ -25,7 +25,7 @@ export const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
     part: "Part 1",
     questionText: "Look at the photograph and choose the best description.",
     imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: {
       A: "Some people are seated around a conference table.",
       B: "Documents are being filed in the cabinet.",
@@ -43,7 +43,7 @@ export const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
     id: 7,
     part: "Part 2",
     questionText: "When is the annual budget proposal scheduled to be submitted?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: {
       A: "Yes, our team approved it yesterday.",
       B: "By the end of business hours this Friday.",
@@ -58,7 +58,7 @@ export const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
     id: 8,
     part: "Part 2",
     questionText: "Why hasn't the overseas shipment from Tokyo arrived yet?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: {
       A: "Severe weather conditions delayed international flights.",
       B: "No, we only received forty cartons.",
@@ -76,7 +76,7 @@ export const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
     groupTitle: "Questions 32–34 refer to the following conversation.",
     groupId: "32–34",
     groupTotal: 3,
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     questionText: "32. Where does the conversation most likely take place?",
     options: {
       A: "At an electronics retail store",
@@ -119,7 +119,7 @@ export const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
     groupTitle: "Questions 71–73 refer to the following announcement.",
     groupId: "71–73",
     groupTotal: 3,
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     questionText: "71. Who is the speaker most likely addressing?",
     options: {
       A: "Factory assembly line workers",

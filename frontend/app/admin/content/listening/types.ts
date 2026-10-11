@@ -17,6 +17,11 @@ export interface DictationQuestion {
     level: string;
     ipa: string;
     meaning: string;
+    example?: { en: string; vi: string };
+    collocations?: { en: string; vi: string }[];
+    synonyms?: { en: string; vi: string }[];
+    antonyms?: { en: string; vi: string }[];
+    wordFamily?: { word: string; pos: string; meaning: string }[];
   }[];
 }
 

@@ -1,17 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, FolderKanban, BookOpen, CheckCircle2, TrendingUp } from "lucide-react";
 import { WordItem, TestItem } from "./types";
 import { SAMPLE_WORDS, INITIAL_TESTS } from "./mockData";
 import { VocabularyHeader } from "@/components/admin/content/vocabulary/VocabularyHeader";
 import { VocabularyTestGrid } from "@/components/admin/content/vocabulary/VocabularyTestGrid";
-import { VocabularyProgressView, VocabularyStarredView, VocabularyAlgorithmView } from "@/components/admin/content/vocabulary/VocabularyViews";
+import {
+  VocabularyAllWordsView,
+  VocabularyAlgorithmConfigView,
+  VocabularyAnalyticsView,
+} from "@/components/admin/content/vocabulary/VocabularyViews";
 import { VocabularyModals } from "@/components/admin/content/vocabulary/VocabularyModals";
 
 export default function VocabularyLearningPage() {
-  const [activeMainTab, setActiveMainTab] = useState<"study" | "progress" | "my_words" | "algorithm">("study");
-  const [activeSubCategory, setActiveSubCategory] = useState<"2026" | "600_essential" | "2023">("2026");
+  const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "algorithm" | "analytics">("topics");
+  const [activeSubCategory, setActiveSubCategory] = useState<"all" | "2026" | "600_essential" | "2023">("all");
   const [tests, setTests] = useState<TestItem[]>(INITIAL_TESTS);
 
   // Toast state
@@ -34,7 +38,13 @@ export default function VocabularyLearningPage() {
 
   // Audio synthesis
   const playAudio = (text: string) => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window && text.trim()) {
+    if (!text.trim()) return;
+    if (text.startsWith("http://") || text.startsWith("https://")) {
+      const audio = new Audio(text);
+      audio.play().catch(() => {});
+      return;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "en-US";
@@ -43,7 +53,32 @@ export default function VocabularyLearningPage() {
     }
   };
 
-  const starredWords = SAMPLE_WORDS.filter((w) => w.starred);
+  const totalWordsCount = tests.reduce((sum, t) => sum + (t.words?.length || t.wordCount), 0);
+
+  // Export CSV
+  const handleExportCsv = () => {
+    const csvRows = [
+      ["ID", "Tên bộ từ", "Năm / Danh mục", "Số lượng từ", "Trạng thái"],
+      ...tests.map((t) => [
+        t.id,
+        `"${t.title.replace(/"/g, '""')}"`,
+        t.year,
+        t.wordCount,
+        "Đang xuất bản",
+      ]),
+    ];
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      csvRows.map((e) => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `danh_sach_bo_tu_vung_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Đã xuất danh sách bộ từ vựng ra file CSV thành công! 📊");
+  };
 
   // Test CRUD
   const handleSaveTestForm = (title: string, year: string, category: "2026" | "600_essential" | "2023") => {
@@ -93,18 +128,18 @@ export default function VocabularyLearningPage() {
       const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
       setWordListModalTest(updatedTest);
       setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
-      showToast(`Đã cập nhật từ "${w.word}"! 💾`);
+      showToast(`Đã cập nhật từ vựng "${w.word}"! 💾`);
+      setEditingWord(null);
     } else {
       const newWord: WordItem = {
         id: `w-${Date.now()}`,
         ...w,
-        ipa: w.ipa || `/${w.word.toLowerCase()}/`,
       };
       const updatedWords = [newWord, ...wordListModalTest.words];
       const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
       setWordListModalTest(updatedTest);
       setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
-      showToast(`Đã thêm từ "${newWord.word}" vào bộ từ vựng! 🎉`);
+      showToast(`Đã thêm từ vựng "${w.word}" vào bộ! 🎉`);
     }
     setShowAddWordModal(false);
   };
@@ -121,14 +156,22 @@ export default function VocabularyLearningPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]/90 p-4 sm:p-6 lg:p-8 space-y-7 max-w-7xl mx-auto">
-      <VocabularyHeader activeMainTab={activeMainTab} setActiveMainTab={setActiveMainTab} />
+      {/* Header Admin */}
+      <VocabularyHeader
+        activeMainTab={activeMainTab}
+        setActiveMainTab={setActiveMainTab}
+        totalTests={tests.length}
+        totalWords={totalWordsCount}
+        onOpenCreateTest={() => setShowCreateTestModal(true)}
+        onExportCsv={handleExportCsv}
+      />
 
-      {activeMainTab === "study" && (
+      {/* Tab 1: Danh sách bộ từ vựng */}
+      {activeMainTab === "topics" && (
         <VocabularyTestGrid
           tests={tests}
           activeSubCategory={activeSubCategory}
           setActiveSubCategory={setActiveSubCategory}
-          onOpenCreateTest={() => setShowCreateTestModal(true)}
           onOpenEditTest={(t, e) => {
             if (e) e.stopPropagation();
             setEditingTest(t);
@@ -138,18 +181,32 @@ export default function VocabularyLearningPage() {
             setDeleteTestConfirm(t);
           }}
           onOpenWordList={setWordListModalTest}
-          onOpenFlashcards={setFlashcardModalTest}
-          onOpenGame={setGameModalTest}
+          onOpenPreview={setFlashcardModalTest}
         />
       )}
 
-      {activeMainTab === "progress" && <VocabularyProgressView />}
-
-      {activeMainTab === "my_words" && (
-        <VocabularyStarredView words={starredWords} playAudio={playAudio} />
+      {/* Tab 2: Ngân hàng toàn bộ từ vựng */}
+      {activeMainTab === "all_words" && (
+        <VocabularyAllWordsView
+          words={SAMPLE_WORDS}
+          playAudio={playAudio}
+          onOpenAddWord={() => {
+            setEditingWord(null);
+            setShowAddWordModal(true);
+          }}
+          onOpenEditWord={(w) => {
+            setEditingWord(w);
+            setShowAddWordModal(true);
+          }}
+          onDeleteWord={setDeleteWordConfirm}
+        />
       )}
 
-      {activeMainTab === "algorithm" && <VocabularyAlgorithmView />}
+      {/* Tab 3: Cấu hình thuật toán SRS */}
+      {activeMainTab === "algorithm" && <VocabularyAlgorithmConfigView />}
+
+      {/* Tab 4: Báo cáo & Tương tác học viên */}
+      {activeMainTab === "analytics" && <VocabularyAnalyticsView />}
 
       {/* Modals Container */}
       <VocabularyModals
