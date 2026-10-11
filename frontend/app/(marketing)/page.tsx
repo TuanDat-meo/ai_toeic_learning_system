@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MarketingNav } from '@/components/marketing/MarketingNav';
@@ -27,6 +27,7 @@ function LoginQueryTrigger({ onOpen }: { onOpen: () => void }) {
 export default function LandingPage() {
   const router = useRouter();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
 
   function closeLoginModal() {
     setIsLoginModalOpen(false);
@@ -36,7 +37,7 @@ export default function LandingPage() {
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
       <Suspense fallback={null}>
-        <LoginQueryTrigger onOpen={() => setIsLoginModalOpen(true)} />
+        <LoginQueryTrigger onOpen={openLoginModal} />
       </Suspense>
 
       {/* Navbar */}

@@ -91,9 +91,9 @@ public class AuthController {
 
     @PostMapping("/password/forgot")
     ForgotPasswordResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        boolean emailExists = passwordResetService.requestReset(request.email());
-        return new ForgotPasswordResponse(emailExists,
-                emailExists ? "Mã xác thực đã được gửi đến email của bạn." : "Email này chưa được đăng ký.");
+        passwordResetService.requestReset(request.email());
+        return new ForgotPasswordResponse(
+                "Nếu email đã đăng ký, mã xác thực sẽ được gửi đến hộp thư của bạn.");
     }
 
     @PostMapping("/password/reset")
@@ -181,6 +181,6 @@ public class AuthController {
             @NotBlank @Size(min = 8, max = 72) String password) { }
     record AuthUser(String id, String email, String fullName, String role) { }
     record RegisterResponse(String message) { }
-    record ForgotPasswordResponse(boolean emailExists, String message) { }
+    record ForgotPasswordResponse(String message) { }
     record PasswordResetResponse(String message) { }
 }

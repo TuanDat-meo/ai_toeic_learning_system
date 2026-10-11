@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { requestPasswordReset, resetPassword } from '@/lib/api/auth';
+import { useEnterToSubmitAuthForm } from './useEnterToSubmitAuthForm';
 import {
   Mail,
   KeyRound,
@@ -23,15 +24,16 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_TTL_SECONDS = 2 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
-export function ForgotPasswordForm({ initialToken = '' }: { initialToken?: string }) {
+export function ForgotPasswordForm() {
   const router = useRouter();
+  useEnterToSubmitAuthForm();
 
   // Wizard Step: 1 = Email, 2 = OTP, 3 = New Password, 4 = Success
-  const [step, setStep] = useState<number>(initialToken ? 3 : 1);
+  const [step, setStep] = useState(1);
 
   // Form states
   const [email, setEmail] = useState('');
-  const [otpCode, setOtpCode] = useState(initialToken);
+  const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +49,6 @@ export function ForgotPasswordForm({ initialToken = '' }: { initialToken?: strin
     confirmPassword?: string;
   }>({});
   const [resendSuccess, setResendSuccess] = useState('');
-  const [googleNotice, setGoogleNotice] = useState(false);
 
   // OTP Countdown Timer (matches the backend's 2-minute default)
   const [countdown, setCountdown] = useState(OTP_TTL_SECONDS);
@@ -113,11 +114,7 @@ export function ForgotPasswordForm({ initialToken = '' }: { initialToken?: strin
 
     setSubmitting(true);
     try {
-      const result = await requestPasswordReset(trimmedEmail);
-      if (!result.emailExists) {
-        setFieldErrors((prev) => ({ ...prev, email: result.message || 'Email này chưa được đăng ký.' }));
-        return;
-      }
+      await requestPasswordReset(trimmedEmail);
       setFieldErrors((prev) => ({ ...prev, email: undefined }));
       setStep(2);
       setCountdown(OTP_TTL_SECONDS);
@@ -320,34 +317,6 @@ export function ForgotPasswordForm({ initialToken = '' }: { initialToken?: strin
             </button>
           </form>
 
-          {/* Google Auth Placeholder Note */}
-          <div className="mt-6 border-t border-slate-100 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                setGoogleNotice(true);
-                setTimeout(() => setGoogleNotice(false), 4000);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335" />
-              </svg>
-              <span>Khôi phục nhanh bằng Google</span>
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                Sắp ra mắt
-              </span>
-            </button>
-            {googleNotice && (
-              <p className="mt-2 text-center text-xs text-amber-700 animate-in fade-in">
-                ⚡ Đăng nhập & khôi phục bằng Google sẽ được hỗ trợ trong phiên bản kế tiếp!
-              </p>
-            )}
-          </div>
-
           <div className="mt-5 text-center text-xs">
             <Link href="/?login=true" className="font-semibold text-primary transition hover:underline">
               ← Quay lại đăng nhập
@@ -364,7 +333,7 @@ export function ForgotPasswordForm({ initialToken = '' }: { initialToken?: strin
               Nhập mã xác thực OTP
             </h2>
             <p className="mt-1 text-xs text-on-surface-variant sm:text-sm">
-              Mã xác thực đã được gửi tới email: <strong className="text-on-surface">{email}</strong>
+              Nếu email đã đăng ký, mã xác thực sẽ được gửi tới: <strong className="text-on-surface">{email}</strong>
             </p>
             <button
               type="button"

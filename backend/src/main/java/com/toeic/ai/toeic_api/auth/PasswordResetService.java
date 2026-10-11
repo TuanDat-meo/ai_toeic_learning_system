@@ -14,7 +14,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
@@ -51,7 +50,7 @@ public class PasswordResetService {
     }
 
     @Transactional
-    public boolean requestReset(String email) {
+    public void requestReset(String email) {
         List<Account> accounts = jdbcTemplate.query(
                 "SELECT id, email, full_name FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'",
                 (rs, rowNum) -> new Account(
@@ -60,10 +59,18 @@ public class PasswordResetService {
                         rs.getString("full_name")),
                 email.trim());
         if (accounts.isEmpty()) {
-            return false;
+            return;
         }
 
         Account account = accounts.getFirst();
+        Boolean recentlyRequested = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM password_reset_tokens "
+                        + "WHERE user_id = ? AND created_at > now() - interval '30 seconds')",
+                Boolean.class, account.id());
+        if (Boolean.TRUE.equals(recentlyRequested)) {
+            return;
+        }
+
         String otp = generateOtp();
         String tokenHash = hashToken(otp);
         jdbcTemplate.update(
@@ -86,22 +93,16 @@ public class PasswordResetService {
             jdbcTemplate.update("UPDATE password_reset_tokens SET used_at = now() WHERE user_id = ?", account.id());
             LOGGER.warn("Unable to deliver a password reset email.", exception);
         }
-        return true;
     }
 
     @Transactional
     public void resetPassword(String token, String password) {
         String tokenHash = hashToken(token);
-        List<ResetToken> tokens;
-        try {
-            tokens = jdbcTemplate.query(
-                    "SELECT user_id FROM password_reset_tokens "
-                            + "WHERE token_hash = ? AND used_at IS NULL AND expires_at > now() FOR UPDATE",
-                    (rs, rowNum) -> new ResetToken(rs.getObject("user_id", UUID.class)),
-                    tokenHash);
-        } catch (EmptyResultDataAccessException exception) {
-            throw invalidToken();
-        }
+        List<ResetToken> tokens = jdbcTemplate.query(
+                "SELECT user_id FROM password_reset_tokens "
+                        + "WHERE token_hash = ? AND used_at IS NULL AND expires_at > now() FOR UPDATE",
+                (rs, rowNum) -> new ResetToken(rs.getObject("user_id", UUID.class)),
+                tokenHash);
         if (tokens.isEmpty()) {
             throw invalidToken();
         }

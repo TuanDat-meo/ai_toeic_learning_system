@@ -16,12 +16,15 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.toeic.ai.toeic_api.user.UserAccountService;
+import com.toeic.ai.toeic_api.auth.GoogleLoginSuccessHandler;
 
 @Configuration
 public class SecurityConfig {
@@ -50,7 +53,9 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, UserAccountService userAccountService,
             AccountStatusFilter accountStatusFilter,
-            SecurityContextRepository contextRepository, CorsConfigurationSource corsConfigurationSource) throws Exception {
+            SecurityContextRepository contextRepository, CorsConfigurationSource corsConfigurationSource,
+            ObjectProvider<ClientRegistrationRepository> clientRegistrationRepositories,
+            GoogleLoginSuccessHandler googleLoginSuccessHandler) throws Exception {
         http
                 .userDetailsService(userAccountService)
                 .securityContext(context -> context.securityContextRepository(contextRepository))
@@ -58,11 +63,17 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
-                            "/api/auth/password/forgot", "/api/auth/password/reset").permitAll()
+                            "/api/auth/password/forgot", "/api/auth/password/reset",
+                            "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .anyRequest().permitAll());
-                http.addFilterAfter(accountStatusFilter, SecurityContextHolderFilter.class);
+        if (clientRegistrationRepositories.getIfAvailable() != null) {
+            http.oauth2Login(oauth -> oauth
+                    .successHandler(googleLoginSuccessHandler)
+                    .failureHandler(googleLoginSuccessHandler));
+        }
+        http.addFilterAfter(accountStatusFilter, SecurityContextHolderFilter.class);
         return http.build();
     }
 

@@ -5,12 +5,11 @@ import { Download } from 'lucide-react';
 import {
   createManagedUser,
   deleteManagedUser,
-  getCurrentUser,
   listManagedUsers,
   updateManagedUser,
-  type AuthUser,
   type ManagedUser,
-} from '@/lib/api/auth';
+} from '@/lib/api/admin';
+import { getCurrentUser, type AuthUser } from '@/lib/api/auth';
 import { UserFormModal } from './UserFormModal';
 import { UserManagementTable } from './UserManagementTable';
 import { UserManagementToolbar } from './UserManagementToolbar';

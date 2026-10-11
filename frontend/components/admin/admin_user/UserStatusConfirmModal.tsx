@@ -1,7 +1,7 @@
 'use client';
 
 import { LoaderCircle, X } from 'lucide-react';
-import type { ManagedUser } from '@/lib/api/auth';
+import type { ManagedUser } from '@/lib/api/admin';
 
 export function UserStatusConfirmModal({
   user,
