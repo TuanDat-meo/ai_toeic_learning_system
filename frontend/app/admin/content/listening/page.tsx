@@ -15,7 +15,12 @@ import {
   INITIAL_PART4_LEVELS,
   INITIAL_PART4_CATEGORIES,
 } from "./mockData";
-import { ListeningHeader } from "@/components/admin/content/listening/ListeningHeader";
+import { ListeningHeader, ListeningAdminTab } from "@/components/admin/content/listening/ListeningHeader";
+import {
+  ListeningAudioAssetsView,
+  ListeningAccentMatrixView,
+} from "@/components/admin/content/listening/ListeningViews";
+import { Headphones, FileAudio, Users, Award, TrendingUp, Layers } from "lucide-react";
 import { ListeningDictationTab } from "@/components/admin/content/listening/ListeningDictationTab";
 import { ListeningPartTab } from "@/components/admin/content/listening/ListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
@@ -33,6 +38,7 @@ import {
 
 export default function ListeningPage() {
   // --- STATES CHÍNH ---
+  const [activeAdminTab, setActiveAdminTab] = useState<ListeningAdminTab>("listening_units");
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
   const [selectedYear, setSelectedYear] = useState<"2026" | "2024" | "2023" | "2022">("2026");
 
@@ -81,8 +87,13 @@ export default function ListeningPage() {
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
   const playAudio = (text: string) => {
-    if (!isSfxEnabled) return;
-    if (typeof window !== "undefined" && "speechSynthesis" in window && text.trim()) {
+    if (!isSfxEnabled || !text.trim()) return;
+    if (text.startsWith("http://") || text.startsWith("https://")) {
+      const audio = new Audio(text);
+      audio.play().catch(() => {});
+      return;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "en-US";
@@ -386,8 +397,29 @@ export default function ListeningPage() {
     return groups;
   }, [filteredDictationCards]);
 
+  const handleExportCsv = () => {
+    const headers = ["ID", "Tên bài", "Phần thi", "Cấp độ/Chủ đề", "Số câu hỏi", "Trạng thái"];
+    const rows = [
+      ...dictationCards.map((c) => [c.id, `"Test ${c.testNumber} - ${c.part}"`, `"${c.part}"`, `"${c.year}"`, c.totalQuestions, `"PUBLISHED"`]),
+      ...part1Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
+      ...part2Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
+      ...part3Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
+      ...part4Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
+    ];
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `toeic_listening_curriculum_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc]/90 p-4 sm:p-6 lg:p-8 space-y-7 max-w-7xl mx-auto font-sans text-slate-800">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Toast notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce">
@@ -397,91 +429,123 @@ export default function ListeningPage() {
       )}
 
       {/* HEADER BANNER & MAIN TABS */}
-      <ListeningHeader activeTab={activeTab} setActiveTab={setActiveTab} />
+      <ListeningHeader
+        activeAdminTab={activeAdminTab}
+        setActiveAdminTab={setActiveAdminTab}
+        activePartTab={activeTab}
+        setActivePartTab={setActiveTab}
+        onOpenCreate={() => {
+          if (activeTab === "dictation") {
+            handleOpenAddDictation();
+          } else if (activeTab === "part1") {
+            handleOpenAddLevel("Part 1");
+          } else if (activeTab === "part2") {
+            handleOpenAddLevel("Part 2");
+          } else if (activeTab === "part3") {
+            handleOpenAddLevel("Part 3");
+          } else if (activeTab === "part4") {
+            handleOpenAddLevel("Part 4");
+          }
+        }}
+        onExportCsv={handleExportCsv}
+      />
 
-      {/* TAB CONTENT 1: NGHE CHÉP */}
-      {activeTab === "dictation" && (
-        <ListeningDictationTab
-          selectedYear={selectedYear}
-          setSelectedYear={setSelectedYear}
-          flaggedReviewIds={flaggedReviewIds}
-          testsGrouped={testsGrouped}
-          handleOpenAddDictation={handleOpenAddDictation}
-          handleOpenEditDictation={handleOpenEditDictation}
-          setDeleteDictationConfirm={setDeleteDictationConfirm}
-          setVocabBagModalData={setVocabBagModalData}
-          setTheoryModalData={setTheoryModalData}
-          handleOpenDictationPractice={handleOpenDictationPractice}
-          setShowReviewQuestionsModal={setShowReviewQuestionsModal}
-        />
+      {/* ADMIN TABS ROUTING */}
+      {activeAdminTab === "listening_units" && (
+        <>
+          {/* TAB CONTENT 1: NGHE CHÉP */}
+          {activeTab === "dictation" && (
+            <ListeningDictationTab
+              selectedYear={selectedYear}
+              setSelectedYear={setSelectedYear}
+              flaggedReviewIds={flaggedReviewIds}
+              testsGrouped={testsGrouped}
+              handleOpenAddDictation={handleOpenAddDictation}
+              handleOpenEditDictation={handleOpenEditDictation}
+              setDeleteDictationConfirm={setDeleteDictationConfirm}
+              setVocabBagModalData={setVocabBagModalData}
+              setTheoryModalData={setTheoryModalData}
+              handleOpenDictationPractice={handleOpenDictationPractice}
+              setShowReviewQuestionsModal={setShowReviewQuestionsModal}
+            />
+          )}
+
+          {/* TAB CONTENT 2: PART 1 */}
+          {activeTab === "part1" && (
+            <ListeningPartTab
+              part="Part 1"
+              levels={part1Levels}
+              categories={part1Categories}
+              categorySectionTitle="Theo dạng tranh"
+              categorySectionSubtitle="Cùng bộ câu ở trên, chia theo bức tranh mô tả gì."
+              handleOpenAddLevel={handleOpenAddLevel}
+              handleOpenEditLevel={handleOpenEditLevel}
+              setDeleteLevelConfirm={setDeleteLevelConfirm}
+              setVocabBagModalData={setVocabBagModalData}
+              setTheoryModalData={setTheoryModalData}
+              handleOpenQuizPractice={handleOpenQuizPractice}
+            />
+          )}
+
+          {/* TAB CONTENT 3: PART 2 */}
+          {activeTab === "part2" && (
+            <ListeningPartTab
+              part="Part 2"
+              levels={part2Levels}
+              categories={part2Categories}
+              categorySectionTitle="Theo dạng câu hỏi"
+              categorySectionSubtitle="Phân loại câu hỏi Wh-, Yes/No, Lựa chọn và bẫy gián tiếp."
+              handleOpenAddLevel={handleOpenAddLevel}
+              handleOpenEditLevel={handleOpenEditLevel}
+              setDeleteLevelConfirm={setDeleteLevelConfirm}
+              setVocabBagModalData={setVocabBagModalData}
+              setTheoryModalData={setTheoryModalData}
+              handleOpenQuizPractice={handleOpenQuizPractice}
+            />
+          )}
+
+          {/* TAB CONTENT 4: PART 3 */}
+          {activeTab === "part3" && (
+            <ListeningPartTab
+              part="Part 3"
+              levels={part3Levels}
+              categories={part3Categories}
+              categorySectionTitle="Theo chủ đề hội thoại"
+              categorySectionSubtitle="Công sở, dịch vụ, hội thoại 3 người và bài đọc kèm sơ đồ."
+              handleOpenAddLevel={handleOpenAddLevel}
+              handleOpenEditLevel={handleOpenEditLevel}
+              setDeleteLevelConfirm={setDeleteLevelConfirm}
+              setVocabBagModalData={setVocabBagModalData}
+              setTheoryModalData={setTheoryModalData}
+              handleOpenQuizPractice={handleOpenQuizPractice}
+            />
+          )}
+
+          {/* TAB CONTENT 5: PART 4 */}
+          {activeTab === "part4" && (
+            <ListeningPartTab
+              part="Part 4"
+              levels={part4Levels}
+              categories={part4Categories}
+              categorySectionTitle="Theo dạng bài nói"
+              categorySectionSubtitle="Thông báo ga tàu, hộp thư thoại, bản tin thời tiết & bài phát biểu."
+              handleOpenAddLevel={handleOpenAddLevel}
+              handleOpenEditLevel={handleOpenEditLevel}
+              setDeleteLevelConfirm={setDeleteLevelConfirm}
+              setVocabBagModalData={setVocabBagModalData}
+              setTheoryModalData={setTheoryModalData}
+              handleOpenQuizPractice={handleOpenQuizPractice}
+            />
+          )}
+        </>
       )}
 
-      {/* TAB CONTENT 2: PART 1 */}
-      {activeTab === "part1" && (
-        <ListeningPartTab
-          part="Part 1"
-          levels={part1Levels}
-          categories={part1Categories}
-          categorySectionTitle="Theo dạng tranh"
-          categorySectionSubtitle="Cùng bộ câu ở trên, chia theo bức tranh mô tả gì."
-          handleOpenAddLevel={handleOpenAddLevel}
-          handleOpenEditLevel={handleOpenEditLevel}
-          setDeleteLevelConfirm={setDeleteLevelConfirm}
-          setVocabBagModalData={setVocabBagModalData}
-          setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={handleOpenQuizPractice}
-        />
+      {activeAdminTab === "audio_assets" && (
+        <ListeningAudioAssetsView />
       )}
 
-      {/* TAB CONTENT 3: PART 2 */}
-      {activeTab === "part2" && (
-        <ListeningPartTab
-          part="Part 2"
-          levels={part2Levels}
-          categories={part2Categories}
-          categorySectionTitle="Theo dạng câu hỏi"
-          categorySectionSubtitle="Phân loại câu hỏi Wh-, Yes/No, Lựa chọn và bẫy gián tiếp."
-          handleOpenAddLevel={handleOpenAddLevel}
-          handleOpenEditLevel={handleOpenEditLevel}
-          setDeleteLevelConfirm={setDeleteLevelConfirm}
-          setVocabBagModalData={setVocabBagModalData}
-          setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={handleOpenQuizPractice}
-        />
-      )}
-
-      {/* TAB CONTENT 4: PART 3 */}
-      {activeTab === "part3" && (
-        <ListeningPartTab
-          part="Part 3"
-          levels={part3Levels}
-          categories={part3Categories}
-          categorySectionTitle="Theo chủ đề hội thoại"
-          categorySectionSubtitle="Công sở, dịch vụ, hội thoại 3 người và bài đọc kèm sơ đồ."
-          handleOpenAddLevel={handleOpenAddLevel}
-          handleOpenEditLevel={handleOpenEditLevel}
-          setDeleteLevelConfirm={setDeleteLevelConfirm}
-          setVocabBagModalData={setVocabBagModalData}
-          setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={handleOpenQuizPractice}
-        />
-      )}
-
-      {/* TAB CONTENT 5: PART 4 */}
-      {activeTab === "part4" && (
-        <ListeningPartTab
-          part="Part 4"
-          levels={part4Levels}
-          categories={part4Categories}
-          categorySectionTitle="Theo dạng bài nói"
-          categorySectionSubtitle="Thông báo ga tàu, hộp thư thoại, bản tin thời tiết & bài phát biểu."
-          handleOpenAddLevel={handleOpenAddLevel}
-          handleOpenEditLevel={handleOpenEditLevel}
-          setDeleteLevelConfirm={setDeleteLevelConfirm}
-          setVocabBagModalData={setVocabBagModalData}
-          setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={handleOpenQuizPractice}
-        />
+      {activeAdminTab === "accent_matrix" && (
+        <ListeningAccentMatrixView />
       )}
 
       {/* WORKSPACE MODALS */}

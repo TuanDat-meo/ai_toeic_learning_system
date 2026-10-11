@@ -9,8 +9,6 @@ import {
   FileText,
   Pencil,
   Volume2,
-  Bell,
-  BellOff,
   Grid,
   HelpCircle,
   Star,
@@ -26,6 +24,8 @@ import {
   X,
   Pause,
   Play,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface MockTestPracticeModalProps {
@@ -125,6 +125,26 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
   const qPart = currentQ ? currentQ.part : "Part 1";
   const chosenOpt = currentQ ? practiceAnswers[currentQ.id] : undefined;
   const isChecked = currentQ ? !!practiceChecked[currentQ.id] : false;
+  const [expandedWords, setExpandedWords] = React.useState<Record<string, boolean>>({});
+
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.play().catch(() => setIsPlayingAudio(false));
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlayingAudio, setIsPlayingAudio]);
+
+  React.useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlayingAudio(false);
+  }, [practiceCurrentQIndex, setIsPlayingAudio]);
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150">
@@ -267,25 +287,6 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                 </button>
               </>
             )}
-
-            {/* SFX Bell */}
-            <button
-              type="button"
-              onClick={() => {
-                const nextSfx = !isSfxEnabled;
-                setIsSfxEnabled(nextSfx);
-                if (nextSfx) playSfx("correct");
-                triggerToast(nextSfx ? "Âm thanh hiệu ứng: BẬT 🔔" : "Âm thanh hiệu ứng: TẮT 🔕");
-              }}
-              className={`p-2 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
-                isSfxEnabled
-                  ? "bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300/50 animate-pulse"
-                  : "bg-white/15 hover:bg-white/25 text-white/70"
-              }`}
-              title={isSfxEnabled ? "Tắt hiệu ứng âm thanh (Đúng/Sai)" : "Bật hiệu ứng âm thanh (Đúng/Sai)"}
-            >
-              {isSfxEnabled ? <Bell className="w-4 h-4 fill-slate-950" /> : <BellOff className="w-4 h-4" />}
-            </button>
 
             {/* Timer */}
             <button
@@ -599,30 +600,41 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
               )}
 
               {currentQ && currentQ.audioUrl && (
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+                <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+                  <audio
+                    ref={audioRef}
+                    src={currentQ.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
+                    onEnded={() => setIsPlayingAudio(false)}
+                    className="hidden"
+                  />
                   <div className="flex items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                      className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-sm shrink-0 cursor-pointer"
+                      className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
+                      title={isPlayingAudio ? "Tạm dừng" : "Phát audio"}
                     >
-                      {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                      {isPlayingAudio ? (
+                        <Pause className="w-6 h-6 fill-white" />
+                      ) : (
+                        <Play className="w-6 h-6 ml-0.5 fill-white" />
+                      )}
                     </button>
 
-                    <div className="flex-1 flex items-center gap-1 h-8 px-2 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="flex-1 flex items-center gap-1 h-9 px-3 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
                       {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50, 30, 70, 85, 40].map((h, i) => (
                         <div
                           key={i}
                           className={`flex-1 rounded-full transition-all duration-300 ${
                             isPlayingAudio ? "bg-blue-600 animate-pulse" : "bg-slate-300"
                           }`}
-                          style={{ height: `${isPlayingAudio ? Math.max(20, (h * (i % 3 + 1)) % 100) : h}%` }}
+                          style={{ height: `${isPlayingAudio ? Math.max(25, (h * ((i % 4) + 1)) % 100) : h}%` }}
                         />
                       ))}
                     </div>
 
-                    <span className="font-mono text-xs font-bold text-slate-600 shrink-0">
-                      00:01 / 00:24
+                    <span className="font-mono text-xs font-bold text-slate-600 shrink-0 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                      00:15 / 00:45
                     </span>
                   </div>
                 </div>
@@ -767,29 +779,145 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
 
                     {showDetailedExplanation && (
                       <div className="space-y-3.5 text-xs sm:text-sm text-slate-800 leading-relaxed font-medium pt-1 border-t border-blue-100">
-                        <div>
-                          <p className="font-bold text-slate-900 mb-0.5">Bước 1: Xác định dạng câu hỏi</p>
-                          <p className="text-slate-700">
-                            {currentQ.step1 || 'Bốn đáp án là các dạng khác nhau của đại từ "they" nên đây là câu đại từ, cần xét vị trí chỗ trống.'}
-                          </p>
-                        </div>
+                        {currentQ.explanation ? (
+                          <p className="text-slate-800 font-medium">{currentQ.explanation}</p>
+                        ) : (
+                          <>
+                            <div>
+                              <p className="font-bold text-slate-900 mb-0.5">Bước 1: Xác định dạng câu hỏi</p>
+                              <p className="text-slate-700">
+                                {currentQ.step1 || 'Phân tích ngữ nghĩa và từ loại của các lựa chọn A, B, C, D.'}
+                              </p>
+                            </div>
 
-                        <div>
-                          <p className="font-bold text-slate-900 mb-0.5">Bước 2: Phân tích câu để biết chỗ trống cần gì</p>
-                          <p className="text-slate-700">
-                            {currentQ.step2 || 'Xét vị trí: chỗ trống đứng ngay trước cụm danh từ "earliest projects", cần tính từ sở hữu.'}
-                          </p>
-                        </div>
+                            <div>
+                              <p className="font-bold text-slate-900 mb-0.5">Bước 2: Phân tích ngữ cảnh câu hỏi</p>
+                              <p className="text-slate-700">
+                                {currentQ.step2 || 'Xét ngữ cảnh và vị trí chỗ trống trong bài thi thử.'}
+                              </p>
+                            </div>
 
-                        <div>
-                          <p className="font-bold text-slate-900 mb-0.5">Bước 3: Chọn đáp án</p>
-                          <p className="text-slate-700">
-                            {currentQ.step3 || 'Chọn tính từ sở hữu "their" (của họ).'}
-                          </p>
-                        </div>
+                            <div>
+                              <p className="font-bold text-slate-900 mb-0.5">Bước 3: Chọn đáp án chính xác</p>
+                              <p className="text-slate-700">
+                                {currentQ.step3 || `Đáp án đúng là (${currentQ.correctAnswer}).`}
+                              </p>
+                            </div>
+                          </>
+                        )}
+
+                        {currentQ.note && (
+                          <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                            ⚠️ <strong>Ghi chú quan trọng:</strong> {currentQ.note}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+
+                  {/* VOCABULARY SECTION FOR MOCK TEST */}
+                  {(() => {
+                    const vocabList = currentQ.vocabList || (test.keyVocab ? test.keyVocab.map((k) => ({
+                      word: k.word,
+                      pos: k.pos,
+                      level: "TOEIC",
+                      ipa: k.ipa,
+                      meaning: k.meaning,
+                      example: { en: k.example, vi: "Ví dụ trong ngữ cảnh bài thi." },
+                      collocations: undefined as { en: string; vi: string }[] | undefined,
+                    })) : []);
+
+                    if (vocabList.length === 0) return null;
+
+                    return (
+                      <div className="rounded-3xl border border-amber-200 bg-amber-50/40 p-5 space-y-4 shadow-2xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm sm:text-base">
+                            <BookOpen className="w-4 h-4 text-amber-600" />
+                            <span>Từ vựng trọng tâm bài thi ({vocabList.length} từ)</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextState = !isVocabExpanded;
+                              setIsVocabExpanded(nextState);
+                              const newMap: Record<string, boolean> = {};
+                              vocabList.forEach((v) => {
+                                newMap[v.word] = nextState;
+                              });
+                              setExpandedWords(newMap);
+                            }}
+                            className="px-3 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition cursor-pointer flex items-center gap-1 border border-amber-300"
+                          >
+                            {isVocabExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            <span>{isVocabExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả"}</span>
+                          </button>
+                        </div>
+
+                        <div className="space-y-3 pt-1 border-t border-amber-100">
+                          {vocabList.map((v, idx) => {
+                            const isExpanded = !!expandedWords[v.word] || isVocabExpanded;
+
+                            return (
+                              <div key={idx} className="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-2xs space-y-3 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-extrabold text-sm text-slate-900">{v.word}</span>
+                                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">{v.pos}</span>
+                                    {v.level && <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">{v.level}</span>}
+                                    {v.ipa && <span className="text-slate-400 font-mono text-[11px]">{v.ipa}</span>}
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedWords((prev) => ({ ...prev, [v.word]: !prev[v.word] }))}
+                                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border border-blue-200"
+                                  >
+                                    <Search className="w-3 h-3" />
+                                    <span>{isExpanded ? "Thu gọn" : "🔍 Xem chi tiết"}</span>
+                                  </button>
+                                </div>
+
+                                <p className="font-bold text-slate-800">{v.meaning}</p>
+
+                                {isExpanded && (
+                                  <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
+                                    {v.example && (
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
+                                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
+                                          <p className="font-semibold text-slate-900">
+                                            &quot;{typeof v.example === "string" ? v.example : v.example.en}&quot;
+                                          </p>
+                                          {typeof v.example === "object" && v.example.vi && (
+                                            <p className="text-slate-600 italic">{v.example.vi}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {v.collocations && v.collocations.length > 0 && (
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {v.collocations.map((col, cIdx) => (
+                                            <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                              <strong>{col.en}</strong>: {col.vi}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

@@ -1,15 +1,29 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Sparkles } from "lucide-react";
+import {
+  BookOpen,
+  Users,
+  Award,
+  Clock,
+  Sparkles,
+  Layers,
+  CheckCircle2,
+} from "lucide-react";
 
 import { TestItem, PracticeQuestion } from "./types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "./mockData";
 
-import { MockTestHeader } from "@/components/admin/content/mock-tests/MockTestHeader";
+import {
+  MockTestHeader,
+  MockTestAdminTab,
+} from "@/components/admin/content/mock-tests/MockTestHeader";
 import { MockTestCardGrid } from "@/components/admin/content/mock-tests/MockTestCardGrid";
-import { MockTestProgressView } from "@/components/admin/content/mock-tests/MockTestProgressView";
-import { MockTestModeModal } from "@/components/admin/content/mock-tests/MockTestModeModal";
+import {
+  MockTestSubmissionsView,
+  MockTestScoreConversionView,
+  MockTestCollectionsView,
+} from "@/components/admin/content/mock-tests/MockTestViews";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
 import { MockTestHistoryModal } from "@/components/admin/content/mock-tests/MockTestHistoryModal";
@@ -20,8 +34,12 @@ import { MockTestCreateModal } from "@/components/admin/content/mock-tests/MockT
 
 export default function AdminMockTestsPage() {
   // State quản lý tab & danh sách đề thi
-  const [activeMainTab, setActiveMainTab] = useState<"study" | "progress">("study");
+  const [activeMainTab, setActiveMainTab] = useState<MockTestAdminTab>("tests");
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2">("vol1");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterDifficulty, setFilterDifficulty] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+
   const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
   const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
 
@@ -31,14 +49,16 @@ export default function AdminMockTestsPage() {
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
-      setToastMessage(null);
-    }, 2800);
+      setToastMessage(null), 2800;
+    });
   };
 
   // Audio helper SFX
   const playSfx = (type: "correct" | "wrong" | "incorrect" | "click") => {
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -70,12 +90,6 @@ export default function AdminMockTestsPage() {
       // AudioContext fallback
     }
   };
-
-  // State Modal chọn chế độ
-  const [modeSelectionTest, setModeSelectionTest] = useState<TestItem | null>(null);
-  const [selectedModeTab, setSelectedModeTab] = useState<"exam" | "practice">("practice");
-  const [selectedParts, setSelectedParts] = useState<string[]>(["Part 1"]);
-  const [activeExamParts, setActiveExamParts] = useState<string[]>([]);
 
   // State Thi thử (Exam Mode)
   const [examModalTest, setExamModalTest] = useState<TestItem | null>(null);
@@ -131,19 +145,13 @@ export default function AdminMockTestsPage() {
   // Filtered Tests
   const currentTests = selectedVol === "vol1" ? testsVol1 : testsVol2;
 
-  // Active Questions for Exam & Practice
-  const activeExamQuestions = useMemo(() => {
-    if (activeExamParts.length === 0) return SAMPLE_EXAM_QUESTIONS;
-    return SAMPLE_EXAM_QUESTIONS.filter((q) => activeExamParts.includes(q.part));
-  }, [activeExamParts]);
-
-  const filteredPracticeQuestions = useMemo(() => {
-    if (practicePartFilter === "ALL") return SAMPLE_EXAM_QUESTIONS;
-    if (Array.isArray(practicePartFilter)) {
-      return SAMPLE_EXAM_QUESTIONS.filter((q) => (practicePartFilter as string[]).includes(q.part));
-    }
-    return SAMPLE_EXAM_QUESTIONS.filter((q) => q.part === practicePartFilter);
-  }, [practicePartFilter]);
+  const filteredCurrentTests = useMemo(() => {
+    return currentTests.filter((t) => {
+      const matchSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchDiff = filterDifficulty === "ALL" || t.difficulty === filterDifficulty;
+      return matchSearch && matchDiff;
+    });
+  }, [currentTests, searchQuery, filterDifficulty]);
 
   // Timers
   useEffect(() => {
@@ -190,7 +198,16 @@ export default function AdminMockTestsPage() {
 
     if (editingTest) {
       const updateFn = (list: TestItem[]) =>
-        list.map((t) => (t.id === editingTest.id ? { ...t, title: testFormTitle.trim(), volId: testFormVolId, difficulty: testFormDifficulty } : t));
+        list.map((t) =>
+          t.id === editingTest.id
+            ? {
+                ...t,
+                title: testFormTitle.trim(),
+                volId: testFormVolId,
+                difficulty: testFormDifficulty,
+              }
+            : t
+        );
       if (editingTest.volId === "vol1") setTestsVol1(updateFn);
       else setTestsVol2(updateFn);
       triggerToast(`Đã cập nhật thông tin đề thi "${testFormTitle}"! 💾`);
@@ -205,207 +222,180 @@ export default function AdminMockTestsPage() {
         score: null,
         listeningScore: null,
         readingScore: null,
-        status: "Chưa luyện tập",
+        status: "Mới tạo - Chưa thi",
         completedAt: null,
         historyAttempts: [],
-        keyVocab: [
-          { word: "commence", ipa: "/kəˈmens/", pos: "v", meaning: "Bắt đầu, khởi động chương trình", example: "The test will commence at 9:00 AM sharp." },
-          { word: "adhere", ipa: "/ədˈhɪr/", pos: "v", meaning: "Tuân thủ chặt chẽ theo quy định", example: "All test-takers must adhere to the examination rules." },
-        ],
+        keyVocab: [],
       };
       if (testFormVolId === "vol1") setTestsVol1((prev) => [...prev, newTest]);
       else setTestsVol2((prev) => [...prev, newTest]);
-      triggerToast(`Đã thêm đề thi "${newTest.title}" thành công! 🎉`);
+      triggerToast(`Đã thêm mới đề "${testFormTitle}" thành công! ✨`);
     }
     setShowCreateTestModal(false);
   };
 
   const handleConfirmDeleteTest = () => {
     if (!deleteConfirmTest) return;
-    if (deleteConfirmTest.volId === "vol1") {
-      setTestsVol1((prev) => prev.filter((t) => t.id !== deleteConfirmTest.id));
-    } else {
-      setTestsVol2((prev) => prev.filter((t) => t.id !== deleteConfirmTest.id));
-    }
-    triggerToast(`Đã xóa đề thi "${deleteConfirmTest.title}"! 🗑`);
+    const deleteFn = (list: TestItem[]) => list.filter((t) => t.id !== deleteConfirmTest.id);
+    if (deleteConfirmTest.volId === "vol1") setTestsVol1(deleteFn);
+    else setTestsVol2(deleteFn);
+    triggerToast(`Đã xóa đề thi "${deleteConfirmTest.title}"`);
     setDeleteConfirmTest(null);
+  };
+
+  const handleSelectMode = (test: TestItem, mode: "exam" | "practice") => {
+    if (mode === "exam") {
+      setExamModalTest(test);
+      setExamStarted(false);
+      setExamSubmitted(false);
+      setExamAnswers({});
+      setExamCurrentQIndex(0);
+      setExamResultScore(null);
+      setExamTimeRemaining(120 * 60);
+    } else {
+      setPracticeModalTest(test);
+      setPracticeCurrentQIndex(0);
+      setPracticeAnswers({});
+      setPracticeChecked({});
+      setPracticeTimerSeconds(0);
+      setIsTimerPaused(false);
+    }
   };
 
   const handleStartExamNow = () => {
     setExamStarted(true);
-    setExamSubmitted(false);
-    setExamAnswers({});
-    setExamCurrentQIndex(0);
-    setExamTimeRemaining(parseInt(examDurationType, 10) * 60);
-    triggerToast("Bắt đầu tính giờ thi thử TOEIC! Chúc bạn làm bài tốt 🍀");
+    const secs =
+      examDurationType === "120" ? 120 * 60 : examDurationType === "60" ? 60 * 60 : 30 * 60;
+    setExamTimeRemaining(secs);
+    triggerToast("Bắt đầu tính giờ thi thử!");
   };
 
   const handleSubmitExam = () => {
-    let correctCount = 0;
-    activeExamQuestions.forEach((q) => {
-      if (examAnswers[q.id] === q.correctAnswer) correctCount++;
+    setExamSubmitted(true);
+    let correct = 0;
+    SAMPLE_EXAM_QUESTIONS.forEach((q) => {
+      if (examAnswers[q.id] === q.correctAnswer) correct++;
     });
 
-    const totalQ = activeExamQuestions.length;
-    const ratio = totalQ > 0 ? correctCount / totalQ : 0;
-    const totalScore = Math.round(ratio * 990);
-    const listeningScore = Math.round(totalScore * 0.52);
-    const readingScore = totalScore - listeningScore;
+    const scaledListening = Math.min(495, Math.round((correct / SAMPLE_EXAM_QUESTIONS.length) * 490) + 10);
+    const scaledReading = Math.min(495, Math.round((correct / SAMPLE_EXAM_QUESTIONS.length) * 480) + 15);
+    const totalScore = scaledListening + scaledReading;
 
-    const result = { total: totalScore, listening: listeningScore, reading: readingScore, correctCount };
+    const result = {
+      total: totalScore,
+      listening: scaledListening,
+      reading: scaledReading,
+      correctCount: correct,
+    };
     setExamResultScore(result);
-    setExamSubmitted(true);
+    playSfx("correct");
 
     if (examModalTest) {
-      const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-      const newAttempt = {
-        id: Date.now().toString(),
-        date: `Hôm nay, ${nowStr}`,
-        duration: `${Math.floor((parseInt(examDurationType, 10) * 60 - examTimeRemaining) / 60)} phút`,
-        score: totalScore,
-        listening: listeningScore,
-        reading: readingScore,
-        correctCount,
-        totalCount: totalQ,
-      };
-
-      const updateList = (prevList: TestItem[]) =>
-        prevList.map((t) =>
+      const updateFn = (list: TestItem[]) =>
+        list.map((t) =>
           t.id === examModalTest.id
             ? {
                 ...t,
                 score: totalScore,
-                listeningScore,
-                readingScore,
-                status: `Đã làm hôm nay (${totalScore}/990)`,
-                completedAt: `Hôm nay, ${nowStr}`,
-                historyAttempts: [newAttempt, ...t.historyAttempts],
+                listeningScore: scaledListening,
+                readingScore: scaledReading,
+                status: `Đã hoàn thành (${totalScore}/990)`,
+                completedAt: "Vừa xong",
               }
             : t
         );
-
-      if (examModalTest.volId === "vol1") setTestsVol1(updateList);
-      else setTestsVol2(updateList);
+      if (examModalTest.volId === "vol1") setTestsVol1(updateFn);
+      else setTestsVol2(updateFn);
     }
-
-    if (isSfxEnabled) playSfx("correct");
-    triggerToast(`Đã nộp bài! Bạn đạt ${totalScore}/990 điểm TOEIC 🏆`);
+    triggerToast("Đã nộp bài và hoàn thành chấm điểm! 🎉");
   };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const handleExportCsv = () => {
+    const headers = ["ID", "Tên đề thi", "Bộ sưu tập", "Độ khó", "Điểm TB", "Trạng thái"];
+    const rows = [...testsVol1, ...testsVol2].map((t) => [
+      t.id,
+      `"${t.title.replace(/"/g, '""')}"`,
+      `"${t.volId}"`,
+      `"${t.difficulty}"`,
+      t.score || 650,
+      `"PUBLISHED"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `toeic_mock_tests_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]/90 p-4 sm:p-6 lg:p-8 space-y-7 max-w-7xl mx-auto font-sans text-slate-800">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce">
-          <Sparkles className="w-5 h-5 text-amber-300" />
-          <span className="font-semibold text-sm">{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Header Banner & Main Mode Switchers */}
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header and Filter Toolbar */}
       <MockTestHeader
         activeMainTab={activeMainTab}
         setActiveMainTab={setActiveMainTab}
         selectedVol={selectedVol}
         setSelectedVol={setSelectedVol}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        filterDifficulty={filterDifficulty}
+        setFilterDifficulty={setFilterDifficulty}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         vol1Count={testsVol1.length}
         vol2Count={testsVol2.length}
         onOpenCreateTest={handleOpenCreateTest}
+        onExportCsv={handleExportCsv}
       />
 
-      {/* Study Tab */}
-      {activeMainTab === "study" && (
+      {/* Main Tab Content Switching */}
+      {activeMainTab === "tests" && (
         <MockTestCardGrid
-          tests={currentTests}
+          tests={filteredCurrentTests}
+          viewMode={viewMode}
           onEditTest={handleOpenEditTest}
           onConfirmDeleteTest={setDeleteConfirmTest}
-          onOpenHistory={(test) => setHistoryModalTest(test)}
-          onOpenRedo={(test) => {
-            setExamModalTest(test);
-            handleStartExamNow();
-          }}
-          onOpenTranscript={(test) => setTranscriptModalTest(test)}
-          onOpenVocab={(test) => setVocabModalTest(test)}
-          onSelectMode={(test, mode) => {
-            setModeSelectionTest(test);
-            setSelectedModeTab(mode);
-          }}
+          onOpenTranscript={setTranscriptModalTest}
+          onOpenVocab={setVocabModalTest}
+          onSelectMode={handleSelectMode}
         />
       )}
 
-      {/* Progress Tab */}
-      {activeMainTab === "progress" && (
-        <MockTestProgressView
-          currentTests={currentTests}
-          savedVocabBagCount={savedVocabBag.length}
-          onGoToStudyTab={() => setActiveMainTab("study")}
+      {activeMainTab === "submissions" && (
+        <MockTestSubmissionsView tests={[...testsVol1, ...testsVol2]} />
+      )}
+
+      {activeMainTab === "score_conversion" && (
+        <MockTestScoreConversionView />
+      )}
+
+      {activeMainTab === "collections" && (
+        <MockTestCollectionsView
+          vol1Count={testsVol1.length}
+          vol2Count={testsVol2.length}
+          onNavigateToTests={(volId) => {
+            setSelectedVol(volId);
+            setActiveMainTab("tests");
+          }}
         />
       )}
 
       {/* Modals */}
-      {modeSelectionTest && (
-        <MockTestModeModal
-          test={modeSelectionTest}
-          selectedModeTab={selectedModeTab}
-          setSelectedModeTab={setSelectedModeTab}
-          selectedParts={selectedParts}
-          setSelectedParts={setSelectedParts}
-          onClose={() => setModeSelectionTest(null)}
-          onStartFullTest={() => {
-            const target = modeSelectionTest;
-            setModeSelectionTest(null);
-            setActiveExamParts([]);
-            setExamDurationType("120");
-            setExamModalTest(target);
-            handleStartExamNow();
-          }}
-          onStartListeningTest={() => {
-            const target = modeSelectionTest;
-            setModeSelectionTest(null);
-            setActiveExamParts(["Part 1", "Part 2", "Part 3", "Part 4"]);
-            setExamDurationType("60");
-            setExamModalTest(target);
-            handleStartExamNow();
-          }}
-          onStartReadingTest={() => {
-            const target = modeSelectionTest;
-            setModeSelectionTest(null);
-            setActiveExamParts(["Part 5", "Part 6", "Part 7"]);
-            setExamDurationType("60");
-            setExamModalTest(target);
-            handleStartExamNow();
-          }}
-          onStartPartTest={(parts) => {
-            const target = modeSelectionTest;
-            setModeSelectionTest(null);
-            setActiveExamParts(parts);
-            setExamModalTest(target);
-            handleStartExamNow();
-          }}
-          onStartPractice={(part) => {
-            const target = modeSelectionTest;
-            setModeSelectionTest(null);
-            setPracticePartFilter(part);
-            setPracticeCurrentQIndex(0);
-            setPracticeAnswers({});
-            setPracticeChecked({});
-            setPracticeTimerSeconds(0);
-            setPracticeModalTest(target);
-          }}
-        />
-      )}
-
       {examModalTest && (
         <MockTestExamModal
           test={examModalTest}
-          activeExamQuestions={activeExamQuestions}
-          activeExamParts={activeExamParts}
+          activeExamQuestions={SAMPLE_EXAM_QUESTIONS}
+          activeExamParts={[]}
           examDurationType={examDurationType}
           setExamDurationType={setExamDurationType}
           examStarted={examStarted}
@@ -433,7 +423,7 @@ export default function AdminMockTestsPage() {
       {practiceModalTest && (
         <MockTestPracticeModal
           test={practiceModalTest}
-          filteredPracticeQuestions={filteredPracticeQuestions}
+          filteredPracticeQuestions={SAMPLE_EXAM_QUESTIONS}
           practiceCurrentQIndex={practiceCurrentQIndex}
           setPracticeCurrentQIndex={setPracticeCurrentQIndex}
           practiceAnswers={practiceAnswers}
@@ -486,7 +476,17 @@ export default function AdminMockTestsPage() {
           onClearHistory={(testId) => {
             const clearFn = (prev: TestItem[]) =>
               prev.map((t) =>
-                t.id === testId ? { ...t, score: null, listeningScore: null, readingScore: null, status: "Chưa luyện tập", completedAt: null, historyAttempts: [] } : t
+                t.id === testId
+                  ? {
+                      ...t,
+                      score: null,
+                      listeningScore: null,
+                      readingScore: null,
+                      status: "Chưa luyện tập",
+                      completedAt: null,
+                      historyAttempts: [],
+                    }
+                  : t
               );
             if (historyModalTest.volId === "vol1") setTestsVol1(clearFn);
             else setTestsVol2(clearFn);

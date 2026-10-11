@@ -1,10 +1,26 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import {
+  BookOpen,
+  HelpCircle,
+  TrendingUp,
+  AlertTriangle,
+  Layers,
+  Sparkles,
+} from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
-import { GrammarFilterBar } from "@/components/admin/content/grammar/GrammarFilterBar";
+import {
+  GrammarFilterBar,
+  GrammarAdminTab,
+} from "@/components/admin/content/grammar/GrammarFilterBar";
 import { GrammarTopicList } from "@/components/admin/content/grammar/GrammarTopicList";
+import {
+  GrammarQuestionBankView,
+  GrammarTrapsMatrixView,
+  GrammarCurriculumConfigView,
+} from "@/components/admin/content/grammar/GrammarViews";
 import {
   GrammarTopicDetailModal,
   GrammarTopicEditModal,
@@ -15,10 +31,12 @@ import {
 
 export default function AdminGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
-  const [activeMainTab, setActiveMainTab] = useState<"topics" | "progress" | "starred" | "rules">("topics");
+  const [activeMainTab, setActiveMainTab] = useState<GrammarAdminTab>("topics");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPart, setFilterPart] = useState<string>("ALL");
   const [filterScore, setFilterScore] = useState<string>("ALL");
+  const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
 
   // Modals state
@@ -46,67 +64,32 @@ export default function AdminGrammarPage() {
       const matchPart =
         filterPart === "ALL" ||
         (filterPart === "Part 5" && (t.part === "Part 5" || t.part === "Part 5 & 6")) ||
-        (filterPart === "Part 6" && (t.part === "Part 6" || t.part === "Part 5 & 6"));
+        (filterPart === "Part 6" && (t.part === "Part 6" || t.part === "Part 5 & 6")) ||
+        (filterPart === "Part 5 & 6" && t.part === "Part 5 & 6");
 
       const matchScore = filterScore === "ALL" || t.targetScore === filterScore;
+      const matchStatus = filterStatus === "ALL" || t.status === filterStatus;
 
-      const matchTab =
-        activeMainTab === "topics"
-          ? true
-          : activeMainTab === "starred"
-          ? t.bookmarked
-          : activeMainTab === "progress"
-          ? t.studiedCount > 0
-          : true;
-
-      return matchSearch && matchPart && matchScore && matchTab;
+      return matchSearch && matchPart && matchScore && matchStatus;
     });
-  }, [topics, searchQuery, filterPart, filterScore, activeMainTab]);
+  }, [topics, searchQuery, filterPart, filterScore, filterStatus]);
 
   // Statistics
   const totalTopicsCount = topics.length;
-  const studiedTopicsCount = topics.filter((t) => t.studiedCount > 0).length;
-  const starredTopicsCount = topics.filter((t) => t.bookmarked).length;
+  const totalQuestionsCount = useMemo(() => {
+    return topics.reduce((acc, t) => acc + t.questions.length, 0);
+  }, [topics]);
 
-  // Actions
-  const toggleBookmark = (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setTopics((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, bookmarked: !t.bookmarked } : t))
-    );
-  };
+  const totalTrapsCount = useMemo(() => {
+    return topics.reduce((acc, t) => acc + t.traps.length, 0);
+  }, [topics]);
 
+  // Preview / Student Simulation Quiz Trigger
   const startTopicQuiz = (topic: GrammarTopicItem) => {
     if (topic.questions.length === 0) return;
     setActiveTopicForQuiz(topic);
-    setQuizTitle(`Luyện Tập: ${topic.title} (${topic.code})`);
+    setQuizTitle(`Xem trước bài kiểm tra: ${topic.title} (${topic.code})`);
     setQuizQuestions(topic.questions);
-    setQuizActive(true);
-  };
-
-  const startMasterQuiz = () => {
-    const allQuestions: GrammarQuestionItem[] = [];
-    topics.forEach((t) => allQuestions.push(...t.questions));
-    if (allQuestions.length === 0) return;
-
-    const shuffled = [...allQuestions].sort(() => 0.5 - Math.random()).slice(0, 10);
-    setActiveTopicForQuiz(null);
-    setQuizTitle("Luyện Tập Ngẫu Nhiên (10 câu)");
-    setQuizQuestions(shuffled);
-    setQuizActive(true);
-  };
-
-  const startSelectedTopicsQuiz = () => {
-    const selectedQuestions: GrammarQuestionItem[] = [];
-    topics
-      .filter((t) => selectedTopicIds.includes(t.id))
-      .forEach((t) => selectedQuestions.push(...t.questions));
-    if (selectedQuestions.length === 0) return;
-
-    const shuffled = [...selectedQuestions].sort(() => 0.5 - Math.random());
-    setActiveTopicForQuiz(null);
-    setQuizTitle(`Ôn Tập ${selectedTopicIds.length} Chủ Điểm Đã Chọn (${shuffled.length} câu)`);
-    setQuizQuestions(shuffled);
     setQuizActive(true);
   };
 
@@ -140,7 +123,7 @@ export default function AdminGrammarPage() {
         englishTitle: topicData.englishTitle || "",
         part: topicData.part || "Part 5",
         targetScore: topicData.targetScore || "500-750",
-        status: "PUBLISHED",
+        status: topicData.status || "PUBLISHED",
         summary: topicData.summary || "",
         formula: topicData.formula || "",
         signalWords: topicData.signalWords || [],
@@ -169,8 +152,63 @@ export default function AdminGrammarPage() {
     setDeleteConfirmTopic(null);
   };
 
+  // Bulk operations
+  const handleBulkPublish = () => {
+    setTopics((prev) =>
+      prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "PUBLISHED" } : t))
+    );
+    setSelectedTopicIds([]);
+  };
+
+  const handleBulkDraft = () => {
+    setTopics((prev) =>
+      prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "DRAFT" } : t))
+    );
+    setSelectedTopicIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    setTopics((prev) => prev.filter((t) => !selectedTopicIds.includes(t.id)));
+    setSelectedTopicIds([]);
+  };
+
+  // CSV Export
+  const handleExportCsv = () => {
+    const headers = [
+      "Mã chuyên đề",
+      "Tên tiếng Việt",
+      "Tên tiếng Anh",
+      "Phần thi",
+      "Target Band",
+      "Số câu hỏi",
+      "Số bẫy đề",
+      "Trạng thái",
+    ];
+    const rows = topics.map((t) => [
+      `"${t.code}"`,
+      `"${t.title.replace(/"/g, '""')}"`,
+      `"${t.englishTitle.replace(/"/g, '""')}"`,
+      `"${t.part}"`,
+      `"${t.targetScore}"`,
+      t.questions.length,
+      t.traps.length,
+      `"${t.status}"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `toeic_grammar_curriculum_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header and Filter Toolbar */}
       <GrammarFilterBar
         activeMainTab={activeMainTab}
         setActiveMainTab={setActiveMainTab}
@@ -180,49 +218,60 @@ export default function AdminGrammarPage() {
         setFilterPart={setFilterPart}
         filterScore={filterScore}
         setFilterScore={setFilterScore}
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         totalTopicsCount={totalTopicsCount}
-        studiedTopicsCount={studiedTopicsCount}
-        starredTopicsCount={starredTopicsCount}
+        totalQuestionsCount={totalQuestionsCount}
         selectedTopicIds={selectedTopicIds}
-        onOpenCreateModal={() => setShowCreateModal(true)}
-        onStartMasterQuiz={startMasterQuiz}
-        onStartSelectedTopicsQuiz={startSelectedTopicsQuiz}
-        onBulkStar={() => {
-          setTopics((prev) =>
-            prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, bookmarked: true } : t))
-          );
-          setSelectedTopicIds([]);
+        onOpenCreateModal={() => {
+          setEditTopicItem(null);
+          setShowCreateModal(true);
         }}
-        onBulkResetProgress={() => {
-          setTopics((prev) =>
-            prev.map((t) =>
-              selectedTopicIds.includes(t.id)
-                ? { ...t, studiedCount: 0, correctCount: 0, wrongCount: 0 }
-                : t
-            )
-          );
-          setSelectedTopicIds([]);
-        }}
+        onExportCsv={handleExportCsv}
+        onBulkPublish={handleBulkPublish}
+        onBulkDraft={handleBulkDraft}
+        onBulkDelete={handleBulkDelete}
       />
 
-      <GrammarTopicList
-        topics={filteredTopics}
-        selectedTopicIds={selectedTopicIds}
-        onToggleSelectTopic={(id) =>
-          setSelectedTopicIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
-        }
-        onSelectAllTopics={() =>
-          setSelectedTopicIds(
-            selectedTopicIds.length === filteredTopics.length ? [] : filteredTopics.map((t) => t.id)
-          )
-        }
-        onToggleBookmark={toggleBookmark}
-        onOpenTheoryModal={setTheoryTopic}
-        onStartQuiz={startTopicQuiz}
-        onOpenEditTopic={setEditTopicItem}
-        onOpenAddQuestion={setAddQuestionTopic}
-        onOpenDeleteTopic={setDeleteConfirmTopic}
-      />
+      {/* Main Tab Content Switching */}
+      {activeMainTab === "topics" && (
+        <GrammarTopicList
+          topics={filteredTopics}
+          viewMode={viewMode}
+          selectedTopicIds={selectedTopicIds}
+          onToggleSelectTopic={(id) =>
+            setSelectedTopicIds((prev) =>
+              prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+            )
+          }
+          onSelectAllTopics={() =>
+            setSelectedTopicIds(
+              selectedTopicIds.length === filteredTopics.length
+                ? []
+                : filteredTopics.map((t) => t.id)
+            )
+          }
+          onOpenTheoryModal={setTheoryTopic}
+          onStartQuiz={startTopicQuiz}
+          onOpenEditTopic={setEditTopicItem}
+          onOpenAddQuestion={setAddQuestionTopic}
+          onOpenDeleteTopic={setDeleteConfirmTopic}
+        />
+      )}
+
+      {activeMainTab === "questions" && (
+        <GrammarQuestionBankView topics={topics} />
+      )}
+
+      {activeMainTab === "traps_matrix" && (
+        <GrammarTrapsMatrixView topics={topics} />
+      )}
+
+      {activeMainTab === "curriculum" && (
+        <GrammarCurriculumConfigView topicsCount={totalTopicsCount} />
+      )}
 
       {/* Modals */}
       <GrammarTopicDetailModal

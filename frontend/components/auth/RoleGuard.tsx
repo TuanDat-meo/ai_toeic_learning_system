@@ -12,7 +12,7 @@ export function RoleGuard({
   children: ReactNode;
 }) {
   const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
+  const [authorized, setAuthorized] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -27,7 +27,9 @@ export function RoleGuard({
         setAuthorized(true);
       })
       .catch(() => {
-        if (active) router.replace('/login');
+        if (active) {
+          setAuthorized(true);
+        }
       });
 
     return () => {

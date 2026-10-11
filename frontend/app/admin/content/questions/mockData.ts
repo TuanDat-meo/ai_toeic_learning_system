@@ -30,7 +30,7 @@ export const INITIAL_QUESTIONS: QuestionItem[] = [
     part: "Part 1",
     questionText: "Look at the photograph and choose the statement that best describes what you see:",
     imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-    audioUrl: "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: [
       { id: "A", text: "She is hanging a whiteboard on the wall.", isCorrect: false },
       { id: "B", text: "She is working at a computer workstation.", isCorrect: true },
@@ -70,7 +70,7 @@ export const INITIAL_QUESTIONS: QuestionItem[] = [
     code: "P2-015",
     part: "Part 2",
     questionText: "Audio Prompt: Where should I file the newly approved shipment invoices?",
-    audioUrl: "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: [
       { id: "A", text: "In the filing cabinet next to the reception desk.", isCorrect: true },
       { id: "B", text: "Yes, the delivery arrived yesterday afternoon.", isCorrect: false },
@@ -88,7 +88,7 @@ export const INITIAL_QUESTIONS: QuestionItem[] = [
     code: "P2-016",
     part: "Part 2",
     questionText: "Audio Prompt: Has Mr. Kim finalized the contract negotiation with the Japanese supplier?",
-    audioUrl: "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: [
       { id: "A", text: "At the Tokyo international airport.", isCorrect: false },
       { id: "B", text: "He is still reviewing the final terms.", isCorrect: true },
@@ -110,7 +110,7 @@ export const INITIAL_QUESTIONS: QuestionItem[] = [
     passage:
       "Man: Hello, Ms. Gomez. Did the shipment of replacement toner cartridges arrive from the supplier yet?\nWoman: No, unfortunately. The logistics rep called and said the delivery truck was delayed due to the highway snowstorm.\nMan: Oh no. We need those cartridges for printing the annual conference booklets this afternoon.\nWoman: Don't worry. I will borrow two cartridges from the accounting department on the third floor.",
     questionText: "What does the woman offer to do to solve the immediate problem?",
-    audioUrl: "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: [
       { id: "A", text: "Cancel the annual conference", isCorrect: false },
       { id: "B", text: "Borrow supplies from another department", isCorrect: true },
@@ -133,7 +133,7 @@ export const INITIAL_QUESTIONS: QuestionItem[] = [
     passage:
       "Attention all passengers on flight VN-302 to Tokyo Narita. Due to scheduled runway maintenance, boarding will be delayed by thirty minutes. Please remain seated near Gate 14 until gate agents begin boarding group A.",
     questionText: "What is the main purpose of the airport announcement?",
-    audioUrl: "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     options: [
       { id: "A", text: "To announce a flight departure delay", isCorrect: true },
       { id: "B", text: "To report a lost piece of baggage", isCorrect: false },
