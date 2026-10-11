@@ -1,4 +1,5 @@
-import type { AuthUser, ManagedUser } from '@/lib/api/auth';
+import type { AuthUser } from '@/lib/api/auth';
+import type { ManagedUser } from '@/lib/api/admin';
 
 export type UserDraft = {
   fullName: string;

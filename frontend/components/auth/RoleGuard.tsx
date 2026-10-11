@@ -12,7 +12,7 @@ export function RoleGuard({
   children: ReactNode;
 }) {
   const router = useRouter();
-  const [authorized, setAuthorized] = useState(true);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -24,12 +24,10 @@ export function RoleGuard({
           router.replace(user.role === 'ADMIN' ? '/admin/overview' : '/dashboard');
           return;
         }
-        setAuthorized(true);
+        setChecking(false);
       })
       .catch(() => {
-        if (active) {
-          setAuthorized(true);
-        }
+        if (active) router.replace('/?login=true');
       });
 
     return () => {
@@ -37,7 +35,7 @@ export function RoleGuard({
     };
   }, [role, router]);
 
-  if (!authorized) {
+  if (checking) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-surface px-4">
         <p role="status" className="text-sm text-on-surface-variant">Đang xác thực tài khoản...</p>

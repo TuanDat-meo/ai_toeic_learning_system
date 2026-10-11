@@ -25,7 +25,7 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
   const requiresStudent = studentRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
-  const [authorized, setAuthorized] = useState(true);
+  const [authorizedPath, setAuthorizedPath] = useState('');
 
   useEffect(() => {
     if (!requiresStudent) return;
@@ -38,21 +38,19 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
           router.replace('/admin/overview');
           return;
         }
-        setAuthorized(true);
+        setAuthorizedPath(pathname);
       })
       .catch(() => {
-        if (active) {
-          setAuthorized(true);
-        }
+        if (active) router.replace('/?login=true');
       });
 
     return () => {
       active = false;
     };
-  }, [requiresStudent, router]);
+  }, [pathname, requiresStudent, router]);
 
   if (!requiresStudent) return children;
-  if (!authorized) {
+  if (requiresStudent && authorizedPath !== pathname) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-surface px-4">
         <p role="status" className="text-sm text-on-surface-variant">Đang xác thực tài khoản...</p>

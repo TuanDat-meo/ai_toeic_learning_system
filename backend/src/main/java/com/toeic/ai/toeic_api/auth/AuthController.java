@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import org.springframework.http.HttpStatus;
@@ -89,9 +90,10 @@ public class AuthController {
     }
 
     @PostMapping("/password/forgot")
-    PasswordResetResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+    ForgotPasswordResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         passwordResetService.requestReset(request.email());
-        return new PasswordResetResponse("Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu sẽ được gửi.");
+        return new ForgotPasswordResponse(
+                "Nếu email đã đăng ký, mã xác thực sẽ được gửi đến hộp thư của bạn.");
     }
 
     @PostMapping("/password/reset")
@@ -175,9 +177,10 @@ public class AuthController {
         record RegisterRequest(@NotBlank @Size(min = 2, max = 255) String fullName, @NotBlank @Email @Size(max = 255) String email,
             @NotBlank @Size(min = 8, max = 72) String password) { }
         record ForgotPasswordRequest(@NotBlank @Email @Size(max = 255) String email) { }
-        record ResetPasswordRequest(@NotBlank @Size(max = 128) String token,
+    record ResetPasswordRequest(@NotBlank @Pattern(regexp = "\\d{6}") String token,
             @NotBlank @Size(min = 8, max = 72) String password) { }
     record AuthUser(String id, String email, String fullName, String role) { }
     record RegisterResponse(String message) { }
-        record PasswordResetResponse(String message) { }
+    record ForgotPasswordResponse(String message) { }
+    record PasswordResetResponse(String message) { }
 }
