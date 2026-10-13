@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/api/auth';
+import { getStudentAnnouncements } from '@/lib/api/support';
 
 const navigationItems = [
   { label: 'Tổng quan', href: '/dashboard', icon: House, color: 'text-sky-400' },
@@ -43,6 +44,7 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
   const [logoutError, setLogoutError] = useState('');
   const [currentHash, setCurrentHash] = useState('');
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
@@ -50,6 +52,34 @@ export function Header() {
   useEffect(() => {
     getCurrentUser().then(setUser).catch(() => router.replace('/login'));
   }, [router]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'STUDENT') {
+      setUnreadAnnouncementCount(0);
+      return;
+    }
+
+    let active = true;
+    const refreshUnreadCount = async () => {
+      try {
+        const announcements = await getStudentAnnouncements();
+        if (active) setUnreadAnnouncementCount(announcements.filter((item) => !item.isRead).length);
+      } catch {
+        if (active) setUnreadAnnouncementCount(0);
+      }
+    };
+
+    void refreshUnreadCount();
+    const interval = window.setInterval(() => void refreshUnreadCount(), 30_000);
+    window.addEventListener('focus', refreshUnreadCount);
+    window.addEventListener('announcement-read-updated', refreshUnreadCount);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshUnreadCount);
+      window.removeEventListener('announcement-read-updated', refreshUnreadCount);
+    };
+  }, [user, pathname]);
 
   useEffect(() => {
     const syncHash = () => setCurrentHash(window.location.hash.slice(1));
@@ -160,9 +190,10 @@ export function Header() {
           <summary
             aria-label="Mở menu tài khoản"
             title={user?.fullName ?? 'Tài khoản'}
-            className="flex size-10 cursor-pointer list-none items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary transition hover:border-primary/40 hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden"
+            className="relative flex size-10 cursor-pointer list-none items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary transition hover:border-primary/40 hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden"
           >
             {user?.fullName.split(/\s+/).slice(-1)[0]?.slice(0, 1).toUpperCase() ?? <UserRound className="size-5" aria-hidden="true" />}
+            {unreadAnnouncementCount > 0 && <span aria-label={`${unreadAnnouncementCount} thông báo chưa đọc`} className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[9px] font-extrabold leading-none text-white shadow-sm">{unreadAnnouncementCount > 9 ? '9+' : unreadAnnouncementCount}</span>}
           </summary>
           <div className="absolute right-0 top-[calc(100%+10px)] z-50 max-h-[min(78vh,42rem)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-1.5 text-on-surface shadow-xl shadow-slate-900/10">
             <div className="border-b border-outline-variant/40 px-3 py-3.5">
@@ -182,7 +213,11 @@ export function Header() {
               <ProfileStat icon={Snowflake} value="—" label="điểm" iconClassName="text-cyan-600" />
             </div>
 
-            <MenuItem icon={Bell} label="Thông báo" trailing="Chưa có" disabled />
+            <Link href="/notifications" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
+              <Bell className="size-4 text-primary" aria-hidden="true" />
+              <span className="flex-1">Thông báo</span>
+              {unreadAnnouncementCount > 0 && <span aria-label={`${unreadAnnouncementCount} chưa đọc`} className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</span>}
+            </Link>
             <MenuItem icon={UserRound} label="Thông tin cá nhân" disabled />
 
             <div className="my-1 border-t border-outline-variant/40" />

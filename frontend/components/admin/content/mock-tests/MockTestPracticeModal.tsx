@@ -2,6 +2,8 @@
 
 import React from "react";
 import { TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 import {
   ArrowLeft,
   Languages,
@@ -16,7 +18,6 @@ import {
   Eye,
   Plus,
   Bookmark,
-  Flag,
   ShoppingBag,
   Search,
   ChevronLeft,
@@ -121,7 +122,26 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
   triggerToast,
   onClose,
 }) => {
-  const currentQ = filteredPracticeQuestions[practiceCurrentQIndex] || filteredPracticeQuestions[0];
+  const baseQuestion = filteredPracticeQuestions[practiceCurrentQIndex] || filteredPracticeQuestions[0];
+  const questionRef = baseQuestion ? `MOCK-${test.id}-${baseQuestion.id}` : "";
+  const [questionCorrectionState, setQuestionCorrectionState] = React.useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!questionRef) return () => { active = false; };
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [questionRef]);
+  const questionCorrection = questionCorrectionState?.ref === questionRef ? questionCorrectionState.value : null;
+  const currentQ = baseQuestion && questionCorrection ? {
+    ...baseQuestion,
+    questionText: questionCorrection.questionText || baseQuestion.questionText,
+    options: Array.isArray(questionCorrection.options)
+      ? Object.fromEntries(questionCorrection.options.map((option, index) => [String.fromCharCode(65 + index), option]))
+      : questionCorrection.options || baseQuestion.options,
+    correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+    passage: questionCorrection.passage || baseQuestion.passage,
+  } : baseQuestion;
   const qPart = currentQ ? currentQ.part : "Part 1";
   const chosenOpt = currentQ ? practiceAnswers[currentQ.id] : undefined;
   const isChecked = currentQ ? !!practiceChecked[currentQ.id] : false;
@@ -927,13 +947,11 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
         {/* BOTTOM NAV */}
         <footer className="h-14 bg-white border-t border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
           <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
-            >
-              <Flag className="w-3.5 h-3.5 text-rose-500" />
-              <span>Báo lỗi</span>
-            </button>
+            {currentQ && <QuestionErrorReportButton source="MOCK_TEST"
+              questionRef={`MOCK-${test.id}-${currentQ.id}`}
+              relatedContent={`${test.title} · ${currentQ.part} · Câu ${practiceCurrentQIndex + 1}`}
+              questionSnapshot={{ questionText: currentQ.questionText, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, passage: currentQ.passage, audioUrl: currentQ.audioUrl, part: currentQ.part }}
+              compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />}
 
             <button
               type="button"
