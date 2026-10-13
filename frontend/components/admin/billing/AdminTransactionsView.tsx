@@ -2,27 +2,19 @@
 
 import { useEffect, useState } from "react";
 import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  CreditCard,
-  DollarSign,
   Download,
   Eye,
   FileCheck,
-  Filter,
-  QrCode,
   Receipt,
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldCheck,
   X,
 } from "lucide-react";
-import { AdminPageFrame, type AdminMetric } from "@/components/admin/AdminPageFrame";
 import {
+  confirmTransaction,
   getTransactions,
-  saveTransactions,
+  refundTransaction,
   type PaymentMethod,
   type Transaction,
   type TransactionStatus,
@@ -30,6 +22,12 @@ import {
 
 const formatVnd = (amount: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
+
+const formatDateTime = (value?: string) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("vi-VN");
+};
 
 const statusBadges: Record<TransactionStatus, { label: string; className: string }> = {
   SUCCESS: { label: "Thành công", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -54,21 +52,37 @@ export function AdminTransactionsView() {
 
   const [activeReceipt, setActiveReceipt] = useState<Transaction | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [savingTransactionId, setSavingTransactionId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!activeReceipt) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setActiveReceipt(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [activeReceipt]);
+
   async function loadData() {
     setLoading(true);
+    setErrorMsg("");
     try {
       setTransactions(await getTransactions());
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Không thể tải dữ liệu giao dịch.");
     } finally {
       setLoading(false);
     }
   }
-
   function showFeedback(msg: string) {
+    setErrorMsg("");
     setFeedbackMsg(msg);
     setTimeout(() => setFeedbackMsg(""), 4000);
   }
@@ -89,77 +103,42 @@ export function AdminTransactionsView() {
     return matchesSearch && matchesMethod && matchesStatus;
   });
 
-  const totalRevenue = transactions
-    .filter((t) => t.status === "SUCCESS")
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const successCount = transactions.filter((t) => t.status === "SUCCESS").length;
-  const pendingCount = transactions.filter((t) => t.status === "PENDING").length;
-  const successRate = Math.round((successCount / (transactions.length || 1)) * 100);
-
-  const metrics: AdminMetric[] = [
-    {
-      label: "Tổng doanh thu thực nhận",
-      value: formatVnd(totalRevenue),
-      trend: "Giao dịch đã khớp",
-      tone: "tertiary",
-      icon: <DollarSign className="h-5 w-5 text-emerald-600" />,
-    },
-    {
-      label: "Giao dịch thành công",
-      value: successCount.toString(),
-      trend: `${successRate}% tỷ lệ thành công`,
-      tone: "secondary",
-      icon: <CheckCircle2 className="h-5 w-5 text-blue-600" />,
-    },
-    {
-      label: "Giao dịch chờ xử lý",
-      value: pendingCount.toString(),
-      trend: pendingCount > 0 ? "Cần đối soát" : "Đã sạch",
-      tone: pendingCount > 0 ? "primary" : "neutral",
-      icon: <Clock className="h-5 w-5 text-amber-600" />,
-    },
-    {
-      label: "Tổng lượt giao dịch",
-      value: transactions.length.toString(),
-      trend: "Lịch sử đơn hàng",
-      tone: "neutral",
-      icon: <Receipt className="h-5 w-5 text-slate-600" />,
-    },
-  ];
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageTransactions = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   async function handleConfirmPayment(tx: Transaction) {
-    const updated = transactions.map((t) =>
-      t.id === tx.id
-        ? ({
-            ...t,
-            status: "SUCCESS" as const,
-            paidAt: new Date().toISOString(),
-            note: "Xác nhận thanh toán thủ công bởi Admin",
-          })
-        : t
-    );
-    setTransactions(updated);
-    await saveTransactions(updated);
-    showFeedback(`Đã xác nhận thanh toán thành công cho đơn ${tx.orderCode}`);
+    if (savingTransactionId) return;
+    setErrorMsg("");
+    setSavingTransactionId(tx.id);
+    try {
+      const updated = await confirmTransaction(tx.id);
+      setTransactions((current) => current.map((transaction) => transaction.id === tx.id ? updated : transaction));
+      setActiveReceipt((current) => current?.id === tx.id ? updated : current);
+      showFeedback("Đã xác nhận thanh toán thành công cho đơn " + tx.orderCode);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Không thể lưu xác nhận thanh toán. Vui lòng thử lại.");
+    } finally {
+      setSavingTransactionId(null);
+    }
   }
 
   async function handleRefund(tx: Transaction) {
-    if (!confirm(`Xác nhận hoàn tiền cho giao dịch ${tx.transactionCode} (${formatVnd(tx.amount)})?`)) return;
-    const updated = transactions.map((t) =>
-      t.id === tx.id
-        ? ({
-            ...t,
-            status: "REFUNDED" as const,
-            note: "Đã hoàn tiền theo yêu cầu khách hàng",
-          })
-        : t
-    );
-    setTransactions(updated);
-    await saveTransactions(updated);
-    showFeedback(`Đã hoàn tiền cho giao dịch ${tx.transactionCode}`);
+    if (savingTransactionId) return;
+    if (!confirm("Ghi nhận giao dịch này đã được hoàn tiền " + tx.transactionCode + " (" + formatVnd(tx.amount) + ")?")) return;
+    setErrorMsg("");
+    setSavingTransactionId(tx.id);
+    try {
+      const updated = await refundTransaction(tx.id);
+      setTransactions((current) => current.map((transaction) => transaction.id === tx.id ? updated : transaction));
+      setActiveReceipt((current) => current?.id === tx.id ? updated : current);
+      showFeedback("Đã ghi nhận hoàn tiền cho giao dịch " + tx.transactionCode);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Không thể lưu trạng thái hoàn tiền. Vui lòng thử lại.");
+    } finally {
+      setSavingTransactionId(null);
+    }
   }
-
   function exportCsv() {
     const escapeCsv = (val: string) => `"${val.replaceAll('"', '""')}"`;
     const rows = [
@@ -187,163 +166,148 @@ export function AdminTransactionsView() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   return (
-    <AdminPageFrame
-      title="Lịch sử Giao dịch & Nhật ký Thanh toán"
-      subtitle="Theo dõi chi tiết các đơn đặt hàng gói cước VIP, tra cứu mã giao dịch, cổng thanh toán và xác nhận thủ công."
-      metrics={metrics}
-    >
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <main className="space-y-6">
+      <header className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-xs font-medium text-slate-400">
+            Trang chủ <span className="px-1.5">/</span> Hệ thống <span className="px-1.5">/</span>{" "}
+            <span className="font-semibold text-blue-700">Giao dịch</span>
+          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[30px]">Quản lý giao dịch</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
+            Theo dõi thanh toán, đối soát trạng thái và tra cứu hóa đơn của học viên.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+            {loading ? "Đang tải..." : `${transactions.length.toLocaleString("vi-VN")} giao dịch`}
+          </span>
+        </div>
+      </header>
+
+      <div className="space-y-6">
+        <section aria-label="Tìm kiếm và lọc giao dịch" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Danh sách Giao dịch</h2>
-            <p className="text-xs text-slate-500">Hiển thị {filtered.length} trên tổng số {transactions.length} giao dịch</p>
+            <h2 className="text-sm font-semibold text-slate-900">Danh sách giao dịch thanh toán</h2>
+            <p className="mt-1 text-xs text-slate-500">Tra cứu và đối soát các khoản thanh toán của học viên.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={exportCsv}
-              disabled={filtered.length === 0}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-xs"
-            >
-              <Download className="h-4 w-4" /> Xuất CSV
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={exportCsv} disabled={loading || filtered.length === 0} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <Download className="h-4 w-4" />
+              Xuất CSV
             </button>
-            <button
-              type="button"
-              onClick={() => void loadData()}
-              disabled={loading}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-blue-600" : ""}`} /> Làm mới
+            <button type="button" onClick={() => void loadData()} disabled={loading} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-blue-600" : ""}`} />
+              Làm mới
             </button>
           </div>
         </div>
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm mã TX, HD, tên, email..."
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value as typeof methodFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
-          >
-            <option value="ALL">Tất cả cổng thanh toán</option>
-            <option value="MOMO">Ví MoMo</option>
-            <option value="VNPAY">VNPAY QR</option>
-            <option value="BANK_TRANSFER">Chuyển khoản VietQR</option>
-            <option value="CREDIT_CARD">Thẻ ATM / Visa</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="SUCCESS">Thành công</option>
-            <option value="PENDING">Chờ thanh toán</option>
-            <option value="FAILED">Thất bại</option>
-            <option value="REFUNDED">Đã hoàn tiền</option>
-          </select>
+        <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 lg:grid-cols-[auto_minmax(200px,1fr)_220px_auto] lg:items-center">
+          <nav aria-label="Lọc theo trạng thái giao dịch" className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {(["ALL", "SUCCESS", "PENDING", "FAILED", "REFUNDED"] as const).map((status) => {
+            const label = status === "ALL" ? "Tất cả" : statusBadges[status].label;
+            const count = status === "ALL" ? transactions.length : transactions.filter((transaction) => transaction.status === status).length;
+            const selected = statusFilter === status;
+            return <button key={status} type="button" onClick={() => { setStatusFilter(status); setPage(1); }} aria-pressed={selected} className={"inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition " + (selected ? "border-blue-200 bg-blue-50 text-blue-700" : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50")}>{label}<span className="text-[10px] opacity-70">{loading ? "—" : count.toLocaleString("vi-VN")}</span></button>;
+          })}
+          </nav>
+          <label className="relative min-w-0"><span className="sr-only">Tìm giao dịch theo mã, học viên hoặc gói học</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" /><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Tìm mã giao dịch, đơn hàng, học viên..." className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
+          <label><span className="sr-only">Lọc theo cổng thanh toán</span><select value={methodFilter} onChange={(event) => { setMethodFilter(event.target.value as typeof methodFilter); setPage(1); }} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"><option value="ALL">Tất cả cổng thanh toán</option><option value="MOMO">Ví MoMo</option><option value="VNPAY">VNPAY QR</option><option value="BANK_TRANSFER">Chuyển khoản VietQR</option><option value="CREDIT_CARD">Thẻ ATM / Visa</option></select></label>
+          <p aria-live="polite" className="text-right text-xs text-slate-500 lg:whitespace-nowrap">
+            {loading ? "Đang tải..." : <><strong className="font-semibold text-slate-700">{filtered.length.toLocaleString("vi-VN")}</strong> / {transactions.length.toLocaleString("vi-VN")} giao dịch</>}
+          </p>
         </div>
-
-        {feedbackMsg && (
-          <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
-            {feedbackMsg}
-          </div>
-        )}
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+        {feedbackMsg && <div role="status" className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-800">{feedbackMsg}</div>}
+        {errorMsg ? <div role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-800">{errorMsg}<button type="button" onClick={() => void loadData()} className="ml-2 underline">Thử lại</button></div> : null}
+      </section>
+      <section aria-label="Danh sách giao dịch" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.03)]">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[950px] text-left text-xs">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+          <table className="w-full min-w-[1200px] border-collapse text-left [&_th]:border-b [&_th]:border-r [&_th]:border-slate-200 [&_th:last-child]:border-r-0 [&_td]:border-b [&_td]:border-r [&_td]:border-slate-100 [&_td:last-child]:border-r-0 [&_tbody_tr:last-child_td]:border-b-0">
+            <thead className="bg-slate-50 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3.5">Mã Giao dịch & Đơn hàng</th>
-                <th className="px-4 py-3.5">Khách hàng / Học viên</th>
-                <th className="px-4 py-3.5">Gói cước</th>
-                <th className="px-4 py-3.5">Số tiền</th>
-                <th className="px-4 py-3.5">Cổng thanh toán</th>
-                <th className="px-4 py-3.5">Trạng thái</th>
-                <th className="px-4 py-3.5">Thời gian</th>
-                <th className="px-4 py-3.5 text-right">Thao tác</th>
+                <th scope="col" className="px-4 py-4">Mã giao dịch &amp; đơn hàng</th>
+                <th scope="col" className="px-4 py-4">Khách hàng / Học viên</th>
+                <th scope="col" className="px-4 py-4">Gói cước</th>
+                <th scope="col" className="px-4 py-4">Số tiền</th>
+                <th scope="col" className="px-4 py-4">Cổng thanh toán</th>
+                <th scope="col" className="px-4 py-4">Trạng thái</th>
+                <th scope="col" className="px-4 py-4">Thời gian</th>
+                <th scope="col" className="px-5 py-4">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((t) => {
+            <tbody>
+              {loading ? Array.from({ length: 4 }, (_, index) => (
+                <tr key={index}>
+                  <td colSpan={8} className="px-4 py-5">
+                    <div className="h-4 max-w-sm animate-pulse rounded bg-slate-100" />
+                  </td>
+                </tr>
+              )) : pageTransactions.map((t) => {
                 const st = statusBadges[t.status] || statusBadges.PENDING;
                 const pm = methodLabels[t.paymentMethod] || { label: t.paymentMethod };
 
                 return (
-                  <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <span className="font-mono font-bold text-blue-700 block">{t.transactionCode}</span>
-                      <span className="font-mono text-[11px] text-slate-400">Đơn: #{t.orderCode}</span>
+                  <tr key={t.id} className="transition hover:bg-blue-50/30">
+                    <td className="px-4 py-4">
+                      <span className="block font-mono text-xs font-semibold text-blue-700">{t.transactionCode}</span>
+                      <span className="mt-1 block font-mono text-xs text-slate-500">Đơn: #{t.orderCode}</span>
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <p className="font-bold text-slate-900">{t.userName}</p>
-                      <p className="text-[11px] text-slate-400">{t.userEmail}</p>
+                    <td className="px-4 py-4">
+                      <p className="text-sm font-semibold text-slate-900">{t.userName}</p>
+                      <p className="mt-1 text-xs text-slate-500">{t.userEmail}</p>
                     </td>
 
-                    <td className="px-4 py-3.5 font-semibold text-slate-800">{t.planName}</td>
+                    <td className="px-4 py-4 text-sm font-medium text-slate-800">{t.planName}</td>
 
-                    <td className="px-4 py-3.5 font-mono font-extrabold text-blue-700">
+                    <td className="px-4 py-4 text-center font-mono text-sm font-semibold text-slate-900">
                       {formatVnd(t.amount)}
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-700">
+                    <td className="px-4 py-4 text-center">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                         {pm.label}
                       </span>
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${st.className}`}>
+                    <td className="px-4 py-4 text-center">
+                      <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold ${st.className}`}>
                         {st.label}
                       </span>
                     </td>
 
-                    <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
-                      {new Date(t.createdAt).toLocaleString("vi-VN", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-600">
+                      <p><span className="text-slate-400">Tạo:</span> {formatDateTime(t.createdAt)}</p>
+                      {t.paidAt ? <p className="mt-1 text-emerald-700"><span className="text-emerald-600">Thanh toán:</span> {formatDateTime(t.paidAt)}</p> : null}
                     </td>
 
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => setActiveReceipt(t)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 font-semibold text-blue-700 hover:bg-blue-100 transition"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-50 hover:text-blue-700"
                           title="Xem hóa đơn chi tiết"
+                          aria-label={`Xem hóa đơn ${t.transactionCode}`}
                         >
-                          <Eye className="h-3.5 w-3.5" /> Hóa đơn
+                          <Eye className="h-4 w-4" aria-hidden="true" />
                         </button>
 
                         {t.status === "PENDING" && (
                           <button
                             type="button"
                             onClick={() => void handleConfirmPayment(t)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1 font-semibold text-white hover:bg-emerald-700 transition"
+                            disabled={savingTransactionId !== null}
+                            className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-wait disabled:opacity-60"
                             title="Xác nhận thanh toán thành công"
                           >
-                            <FileCheck className="h-3.5 w-3.5" /> Duyệt
+                            {savingTransactionId === t.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
+                            {savingTransactionId === t.id ? "Đang lưu" : "Duyệt"}
                           </button>
                         )}
 
@@ -351,10 +315,12 @@ export function AdminTransactionsView() {
                           <button
                             type="button"
                             onClick={() => void handleRefund(t)}
-                            className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                            title="Hoàn tiền"
+                            disabled={savingTransactionId !== null}
+                            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-wait disabled:opacity-50"
+                            title="Ghi nhận đã hoàn tiền"
+                            aria-label={`Hoàn tiền giao dịch ${t.transactionCode}`}
                           >
-                            <RotateCcw className="h-3.5 w-3.5" />
+                            {savingTransactionId === t.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                           </button>
                         )}
                       </div>
@@ -363,37 +329,101 @@ export function AdminTransactionsView() {
                 );
               })}
 
-              {!loading && filtered.length === 0 && (
+              {!loading && !errorMsg && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-xs text-slate-500">
-                    Không tìm thấy lịch sử giao dịch phù hợp.
+                  <td colSpan={8} className="px-4 py-14 text-center">
+                    <div className="mx-auto flex max-w-md flex-col items-center">
+                      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+                        <Receipt className="h-5 w-5" />
+                      </span>
+                      <p className="mt-3 text-sm font-semibold text-slate-800">
+                        {transactions.length === 0 ? "Chưa có giao dịch nào" : "Không tìm thấy giao dịch phù hợp"}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {transactions.length === 0
+                          ? "Chưa có giao dịch nào được ghi nhận trong hệ thống."
+                          : "Thử thay đổi từ khóa hoặc bộ lọc để xem thêm kết quả."}
+                      </p>
+                      {transactions.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearch("");
+                            setMethodFilter("ALL");
+                            setStatusFilter("ALL");
+                            setPage(1);
+                          }}
+                          className="mt-3 rounded-lg px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        >
+                          Xóa bộ lọc
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-      </div>
+        {!loading && filtered.length > 0 ? (
+          <footer className="flex flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+              <span>
+                Hiển thị{" "}
+                <strong className="font-semibold text-slate-700">
+                  {((currentPage - 1) * pageSize + 1).toLocaleString("vi-VN")}–{Math.min(currentPage * pageSize, filtered.length).toLocaleString("vi-VN")}
+                </strong>{" "}
+                trên {filtered.length.toLocaleString("vi-VN")} giao dịch
+              </span>
+              <label className="inline-flex items-center gap-2">
+                Số dòng
+                <select
+                  aria-label="Số giao dịch mỗi trang"
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(1);
+                  }}
+                  className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </label>
+            </div>
+            <nav aria-label="Chuyển trang giao dịch" className="flex items-center gap-2 self-end sm:self-auto">
+              <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="h-9 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                Trước
+              </button>
+              <span aria-live="polite" className="min-w-20 text-center text-xs text-slate-500">Trang {currentPage} / {pageCount}</span>
+              <button type="button" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= pageCount} className="h-9 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                Sau
+              </button>
+            </nav>
+          </footer>
+        ) : null}
+      </section>
 
       {activeReceipt && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          role="presentation" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[2px]"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setActiveReceipt(null);
           }}
         >
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in duration-200">
+          <div role="dialog" aria-modal="true" aria-labelledby="transaction-receipt-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl animate-in zoom-in duration-200 sm:p-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-xs">
                   TOEIC
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Hóa đơn Thanh toán</h3>
+                  <h3 id="transaction-receipt-title" className="text-base font-extrabold text-slate-900">Chi tiết giao dịch</h3>
                   <p className="text-[11px] font-mono text-slate-400">TOEIC Master Billing System</p>
                 </div>
               </div>
-              <button type="button" onClick={() => setActiveReceipt(null)} className="text-slate-400 hover:text-slate-600">
+              <button type="button" onClick={() => setActiveReceipt(null)} aria-label="Đóng hóa đơn" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -421,7 +451,21 @@ export function AdminTransactionsView() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Cổng thanh toán:</span>
-                <span className="font-mono font-bold text-slate-800">{methodLabels[activeReceipt.paymentMethod]?.label}</span>
+                <span className="font-mono font-bold text-slate-800">{methodLabels[activeReceipt.paymentMethod]?.label ?? activeReceipt.paymentMethod}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Ngày tạo:</span>
+                <span className="text-right font-medium text-slate-700">{formatDateTime(activeReceipt.createdAt)}</span>
+              </div>
+              {activeReceipt.paidAt ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Ngày thanh toán:</span>
+                  <span className="text-right font-medium text-slate-700">{formatDateTime(activeReceipt.paidAt)}</span>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+                <span className="text-slate-500">Mã tham chiếu:</span>
+                <span className="break-all text-right font-mono text-slate-700">{activeReceipt.id}</span>
               </div>
               <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-sm">
                 <span className="font-bold text-slate-900">Tổng thanh toán:</span>
@@ -450,6 +494,7 @@ export function AdminTransactionsView() {
           </div>
         </div>
       )}
-    </AdminPageFrame>
+      </div>
+    </main>
   );
 }

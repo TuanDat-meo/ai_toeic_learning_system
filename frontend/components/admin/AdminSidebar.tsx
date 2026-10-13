@@ -49,7 +49,7 @@ const navGroups = [
   {
     title: "Doanh thu",
     items: [
-      { label: "Gói cước", href: "/admin/billing/subscriptions", icon: CreditCard },
+      { label: "Gói học", href: "/admin/billing/subscriptions", icon: CreditCard },
       { label: "Giao dịch", href: "/admin/billing/transactions", icon: Receipt },
     ],
   },

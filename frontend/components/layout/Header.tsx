@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { BookOpen, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { BookOpen, CreditCard, LogOut } from 'lucide-react';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/api/auth';
 
 export function Header() {
@@ -33,6 +34,14 @@ export function Header() {
       <div className="hidden text-sm text-on-surface-variant lg:block">Không gian học tập</div>
 
       <div className="flex items-center gap-3">
+        <Link
+          href="/billing"
+          aria-label="Gói học và thanh toán"
+          title="Gói học và thanh toán"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary lg:hidden"
+        >
+          <CreditCard size={18} aria-hidden="true" />
+        </Link>
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#123c43] text-sm font-semibold text-white" aria-hidden="true">
           {user?.fullName.split(/\s+/).slice(-1)[0]?.slice(0, 1).toUpperCase() ?? 'HV'}
         </div>
