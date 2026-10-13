@@ -105,6 +105,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
     correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
     explanation: questionCorrection.explanation || baseQuestion.explanation,
   } : baseQuestion;
+  const resolvedAudioUrl = q?.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3";
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
@@ -226,7 +227,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
             <div className="lg:col-span-7 space-y-5">
               {/* THẺ 1: SÓNG ÂM & BỘ ĐIỀU KHIỂN AUDIO (CLICK-TO-SEEK, REWIND, FAST FORWARD) */}
               <AudioWaveformPlayer
-                audioUrl={q?.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3"}
+                audioUrl={resolvedAudioUrl}
                 isPlaying={isPlayingAudio}
                 onPlayPauseChange={(playing) => setIsPlayingAudio(playing)}
                 showSpeedControl={true}
@@ -482,7 +483,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
             <QuestionErrorReportButton source="LISTENING"
               questionRef={questionRef}
               relatedContent={`${q.part} · Test ${dictationModalCard.testNumber} · Câu ${activeDictationQIndex + 1}`}
-              questionSnapshot={{ questionText: q.question || q.fullTranscript, options: q.options, correctAnswer: q.correctAnswer, explanation: q.explanation, transcript: q.fullTranscript, audioUrl: q.audioUrl, part: q.part }}
+              questionSnapshot={{ questionText: q.question || q.fullTranscript, options: q.options, correctAnswer: q.correctAnswer, explanation: q.explanation, transcript: q.fullTranscript, imageUrl: q.imageUrl, audioUrl: resolvedAudioUrl, part: q.part }}
               compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
             <button

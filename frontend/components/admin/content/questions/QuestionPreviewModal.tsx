@@ -845,7 +845,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
           {question && <QuestionErrorReportButton source="QUESTION_BANK"
             questionRef={`QUESTION_BANK-${question.id}`}
             relatedContent={`${question.part} · ${question.code || question.id}`}
-            questionSnapshot={{ questionText: question.questionText, options: Object.fromEntries(question.options.map((option) => [option.id, option.text])), correctAnswer: question.correctAnswer, explanation: question.explanation, passage: question.passage, part: question.part }}
+            questionSnapshot={{ questionText: question.questionText, options: Object.fromEntries(question.options.map((option) => [option.id, option.text])), correctAnswer: question.correctAnswer, explanation: question.explanation, passage: question.passage, imageUrl: question.imageUrl, audioUrl: question.audioUrl, part: question.part }}
             onSubmitted={(ticket) => showToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />}
 
           <div className="flex items-center gap-2">

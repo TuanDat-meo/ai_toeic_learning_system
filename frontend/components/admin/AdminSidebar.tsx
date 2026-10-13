@@ -11,6 +11,7 @@ import {
   FileQuestion,
   FileBadge,
   MessageSquareWarning,
+  MessageCircle,
   Megaphone,
   CreditCard,
   Receipt,
@@ -43,6 +44,7 @@ const navGroups = [
     title: "Chăm sóc",
     items: [
       { label: "Phản hồi & Báo lỗi", href: "/admin/support/reports", icon: MessageSquareWarning },
+      { label: "Tin nhắn hỗ trợ", href: "/admin/support/chat", icon: MessageCircle },
       { label: "Thông báo", href: "/admin/support/announcements", icon: Megaphone },
     ],
   },

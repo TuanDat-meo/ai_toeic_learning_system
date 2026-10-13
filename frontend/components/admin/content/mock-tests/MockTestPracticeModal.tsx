@@ -906,7 +906,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
             {currentQ && <QuestionErrorReportButton source="MOCK_TEST"
               questionRef={`MOCK-${test.id}-${currentQ.id}`}
               relatedContent={`${test.title} · ${currentQ.part} · Câu ${practiceCurrentQIndex + 1}`}
-              questionSnapshot={{ questionText: currentQ.questionText, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, passage: currentQ.passage, audioUrl: currentQ.audioUrl, part: currentQ.part }}
+              questionSnapshot={{ questionText: currentQ.questionText, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, passage: currentQ.passage, imageUrl: currentQ.imageUrl, audioUrl: currentQ.audioUrl, part: currentQ.part }}
               compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />}
 
             <button

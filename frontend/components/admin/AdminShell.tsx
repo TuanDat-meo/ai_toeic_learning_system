@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { StudentChatBubble } from "@/components/layout/StudentChatBubble";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,6 +20,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
+      <StudentChatBubble />
     </div>
   );
 }
