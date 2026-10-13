@@ -7,6 +7,7 @@ import { MarketingNav } from '@/components/marketing/MarketingNav';
 import { MarketingBrand } from '@/components/marketing/MarketingBrand';
 import { RoadmapPlanner } from '@/components/marketing/RoadmapPlanner';
 import { LoginModal } from '@/components/auth/LoginModal';
+import { GoogleAuthErrorModal } from '@/components/auth/GoogleAuthErrorModal';
 
 const learningSteps = [
   ['01', 'Đánh giá đầu vào', 'Xác định trình độ và mục tiêu điểm của bạn.'],
@@ -24,20 +25,35 @@ function LoginQueryTrigger({ onOpen }: { onOpen: () => void }) {
   return null;
 }
 
+function GoogleAuthErrorQueryTrigger({ onErrorChange }: { onErrorChange: (errorCode: string | null) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    onErrorChange(searchParams.get('authError'));
+  }, [searchParams, onErrorChange]);
+  return null;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
 
-  function closeLoginModal() {
+  const closeLoginModal = useCallback(() => {
     setIsLoginModalOpen(false);
     router.replace('/', { scroll: false });
-  }
+  }, [router]);
+
+  const closeGoogleAuthError = useCallback(() => {
+    setGoogleAuthError(null);
+    router.replace('/', { scroll: false });
+  }, [router]);
 
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
       <Suspense fallback={null}>
         <LoginQueryTrigger onOpen={openLoginModal} />
+        <GoogleAuthErrorQueryTrigger onErrorChange={setGoogleAuthError} />
       </Suspense>
 
       {/* Navbar */}
@@ -198,6 +214,7 @@ export default function LandingPage() {
 
       {/* Login Modal */}
       <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
+      <GoogleAuthErrorModal errorCode={googleAuthError} onClose={closeGoogleAuthError} />
     </div>
   );
 }

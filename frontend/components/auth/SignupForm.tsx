@@ -366,7 +366,7 @@ export function SignupForm() {
 
         <button
           type="button"
-          onClick={startGoogleLogin}
+          onClick={() => startGoogleLogin('signup')}
           className="mt-2.5 relative flex h-9 w-full items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
         >
           <GoogleIcon />

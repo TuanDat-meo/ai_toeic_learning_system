@@ -68,6 +68,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
+                            "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
                             "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
