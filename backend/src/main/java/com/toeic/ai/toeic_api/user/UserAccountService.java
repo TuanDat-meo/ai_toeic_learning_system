@@ -128,10 +128,7 @@ public class UserAccountService implements UserDetailsService {
         Integer matches = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM users WHERE lower(email) = lower(?)", Integer.class, normalizedEmail);
         if (matches == null || matches == 0) {
-            byte[] randomBytes = new byte[48];
-            new SecureRandom().nextBytes(randomBytes);
-            String generatedPassword = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-            create(fullName, normalizedEmail, generatedPassword, "STUDENT");
+            createGoogleStudent(fullName, normalizedEmail);
         }
 
         UserDetails account = loadUserByUsername(normalizedEmail);
@@ -139,6 +136,30 @@ public class UserAccountService implements UserDetailsService {
             throw new IllegalArgumentException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
         }
         return account;
+    }
+
+    @Transactional
+    public UserDetails registerGoogleAccount(String fullName, String email) {
+        String normalizedEmail = normalizeEmail(email);
+        Integer matches = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM users WHERE lower(email) = lower(?)", Integer.class, normalizedEmail);
+        if (matches != null && matches > 0) {
+            throw new EmailAlreadyRegisteredException();
+        }
+
+        UserDetails account = createGoogleStudent(fullName, normalizedEmail);
+        if (!account.isEnabled()) {
+            throw new IllegalArgumentException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
+        }
+        return account;
+    }
+
+    private UserDetails createGoogleStudent(String fullName, String normalizedEmail) {
+        byte[] randomBytes = new byte[48];
+        new SecureRandom().nextBytes(randomBytes);
+        String generatedPassword = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+        create(fullName, normalizedEmail, generatedPassword, "STUDENT");
+        return loadUserByUsername(normalizedEmail);
     }
 
     @Transactional
