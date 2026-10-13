@@ -1,7 +1,7 @@
 'use client';
 
 import { Ban, Check, LoaderCircle, Pencil, UsersRound } from 'lucide-react';
-import type { ManagedUser } from '@/lib/api/auth';
+import type { ManagedUser } from '@/lib/api/admin';
 import { formatUserDate } from './userManagement';
 
 export function UserManagementTable({

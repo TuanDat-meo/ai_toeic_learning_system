@@ -12,7 +12,6 @@ import {
   Lock,
   BookOpen,
   Volume2,
-  Flag,
   ShoppingBag,
   Grid,
   Sparkles,
@@ -25,6 +24,8 @@ import {
 } from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ListeningDictationModalProps {
   dictationModalCard: DictationCardData;
@@ -83,7 +84,27 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
   const [isLocalQuestionGridOpen, setIsLocalQuestionGridOpen] = useState(false);
 
-  const q = dictationModalCard.questions[activeDictationQIndex];
+  const baseQuestion = dictationModalCard.questions[activeDictationQIndex];
+  const questionRef = baseQuestion ? `DICTATION-${dictationModalCard.id}-${baseQuestion.id}` : "";
+  const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!questionRef) return () => { active = false; };
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [questionRef]);
+  const questionCorrection = questionCorrectionState?.ref === questionRef ? questionCorrectionState.value : null;
+  const correctionOptions = Array.isArray(questionCorrection?.options)
+    ? Object.fromEntries(questionCorrection.options.map((option, index) => [String.fromCharCode(65 + index), option]))
+    : questionCorrection?.options || baseQuestion?.options;
+  const q = baseQuestion && questionCorrection ? {
+    ...baseQuestion,
+    question: questionCorrection.questionText || baseQuestion.question,
+    fullTranscript: questionCorrection.questionText || baseQuestion.fullTranscript,
+    options: correctionOptions,
+    correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+  } : baseQuestion;
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
@@ -458,14 +479,11 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
         {/* 3. FOOTER THANH ĐIỀU HƯỚNG BÊN DƯỚI */}
         <footer className="h-14 bg-white border-t border-slate-200/90 px-6 sm:px-8 flex items-center justify-between shrink-0 shadow-lg select-none">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => triggerToast("Đã nhận phản hồi báo lỗi từ bạn!")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-            >
-              <Flag className="w-3.5 h-3.5 text-slate-500" />
-              <span>Báo lỗi</span>
-            </button>
+            <QuestionErrorReportButton source="LISTENING"
+              questionRef={questionRef}
+              relatedContent={`${q.part} · Test ${dictationModalCard.testNumber} · Câu ${activeDictationQIndex + 1}`}
+              questionSnapshot={{ questionText: q.question || q.fullTranscript, options: q.options, correctAnswer: q.correctAnswer, explanation: q.explanation, transcript: q.fullTranscript, audioUrl: q.audioUrl, part: q.part }}
+              compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
             <button
               type="button"

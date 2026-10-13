@@ -6,15 +6,14 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.sql.Timestamp;
-import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
@@ -29,12 +28,11 @@ import org.springframework.http.HttpStatus;
 public class PasswordResetService {
     private static final Logger LOGGER = LoggerFactory.getLogger(PasswordResetService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final String INVALID_TOKEN_MESSAGE = "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.";
+    private static final String INVALID_TOKEN_MESSAGE = "Mã xác thực không hợp lệ hoặc đã hết hạn.";
 
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
-    private final String frontendUrl;
     private final Duration tokenTtl;
     private final String mailFrom;
 
@@ -42,13 +40,11 @@ public class PasswordResetService {
             JdbcTemplate jdbcTemplate,
             PasswordEncoder passwordEncoder,
             JavaMailSender mailSender,
-            @Value("${app.password-reset.frontend-url:http://localhost:3000}") String frontendUrl,
             @Value("${app.password-reset.token-ttl:PT30M}") Duration tokenTtl,
             @Value("${app.mail.from:no-reply@toeic-ai.local}") String mailFrom) {
         this.jdbcTemplate = jdbcTemplate;
         this.passwordEncoder = passwordEncoder;
         this.mailSender = mailSender;
-        this.frontendUrl = frontendUrl.replaceAll("/+$", "");
         this.tokenTtl = tokenTtl;
         this.mailFrom = mailFrom;
     }
@@ -67,8 +63,16 @@ public class PasswordResetService {
         }
 
         Account account = accounts.getFirst();
-        String token = generateToken();
-        String tokenHash = hashToken(token);
+        Boolean recentlyRequested = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM password_reset_tokens "
+                        + "WHERE user_id = ? AND created_at > now() - interval '30 seconds')",
+                Boolean.class, account.id());
+        if (Boolean.TRUE.equals(recentlyRequested)) {
+            return;
+        }
+
+        String otp = generateOtp();
+        String tokenHash = hashToken(otp);
         jdbcTemplate.update(
                 "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?) "
                         + "ON CONFLICT (user_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, "
@@ -80,9 +84,8 @@ public class PasswordResetService {
         message.setTo(account.email());
         message.setSubject("Đặt lại mật khẩu TOEIC AI");
         message.setText("Xin chào " + account.fullName() + ",\n\n"
-                + "Sử dụng liên kết sau để đặt lại mật khẩu (liên kết có hiệu lực trong "
-                + tokenTtl.toMinutes() + " phút):\n"
-                + frontendUrl + "/reset-password?token=" + token + "\n\n"
+                + "Mã OTP đặt lại mật khẩu của bạn là: " + otp + "\n"
+                + "Mã có hiệu lực trong " + tokenTtl.toMinutes() + " phút.\n\n"
                 + "Nếu bạn không yêu cầu thao tác này, hãy bỏ qua email này.");
         try {
             mailSender.send(message);
@@ -95,16 +98,11 @@ public class PasswordResetService {
     @Transactional
     public void resetPassword(String token, String password) {
         String tokenHash = hashToken(token);
-        List<ResetToken> tokens;
-        try {
-            tokens = jdbcTemplate.query(
-                    "SELECT user_id FROM password_reset_tokens "
-                            + "WHERE token_hash = ? AND used_at IS NULL AND expires_at > now() FOR UPDATE",
-                    (rs, rowNum) -> new ResetToken(rs.getObject("user_id", UUID.class)),
-                    tokenHash);
-        } catch (EmptyResultDataAccessException exception) {
-            throw invalidToken();
-        }
+        List<ResetToken> tokens = jdbcTemplate.query(
+                "SELECT user_id FROM password_reset_tokens "
+                        + "WHERE token_hash = ? AND used_at IS NULL AND expires_at > now() FOR UPDATE",
+                (rs, rowNum) -> new ResetToken(rs.getObject("user_id", UUID.class)),
+                tokenHash);
         if (tokens.isEmpty()) {
             throw invalidToken();
         }
@@ -115,10 +113,8 @@ public class PasswordResetService {
         jdbcTemplate.update("UPDATE password_reset_tokens SET used_at = now() WHERE user_id = ?", userId);
     }
 
-    private String generateToken() {
-        byte[] bytes = new byte[32];
-        SECURE_RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    private String generateOtp() {
+        return String.format(Locale.ROOT, "%06d", SECURE_RANDOM.nextInt(1_000_000));
     }
 
     private String hashToken(String token) {

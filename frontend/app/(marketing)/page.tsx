@@ -1,8 +1,15 @@
+'use client';
+
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { MarketingNav } from '@/components/marketing/MarketingNav';
 import { MarketingBrand } from '@/components/marketing/MarketingBrand';
 import { RoadmapPlanner } from '@/components/marketing/RoadmapPlanner';
+import { LoginModal } from '@/components/auth/LoginModal';
+import { getAvailableLearningPlans, type SubscriptionPlan } from '@/lib/api/billing';
+import { LEARNING_CAPABILITIES } from '@/lib/learning-capabilities';
+import { GoogleAuthErrorModal } from '@/components/auth/GoogleAuthErrorModal';
 
 const learningSteps = [
   ['01', 'Đánh giá đầu vào', 'Xác định trình độ và mục tiêu điểm của bạn.'],
@@ -10,20 +17,93 @@ const learningSteps = [
   ['03', 'Theo dõi tiến bộ', 'Điều chỉnh kế hoạch sau mỗi lần luyện tập.'],
 ];
 
+function LoginQueryTrigger({ onOpen }: { onOpen: () => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('login') === 'true' || window.location.hash === '#login') {
+      onOpen();
+    }
+  }, [searchParams, onOpen]);
+  return null;
+}
+
+function GoogleAuthErrorQueryTrigger({ onErrorChange }: { onErrorChange: (errorCode: string | null) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    onErrorChange(searchParams.get('authError'));
+  }, [searchParams, onErrorChange]);
+  return null;
+}
+
 export default function LandingPage() {
-  redirect('/admin/overview');
+  const router = useRouter();
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [learningPlans, setLearningPlans] = useState<SubscriptionPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+  const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
+  const loadLearningPlans = useCallback(async () => {
+    setPlansLoading(true);
+    setPlansError(false);
+    try {
+      setLearningPlans(await getAvailableLearningPlans());
+    } catch {
+      setPlansError(true);
+    } finally {
+      setPlansLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getAvailableLearningPlans()
+      .then((plans) => {
+        if (!cancelled) setLearningPlans(plans);
+      })
+      .catch(() => {
+        if (!cancelled) setPlansError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPlansLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const closeLoginModal = useCallback(() => {
+    setIsLoginModalOpen(false);
+    router.replace('/', { scroll: false });
+  }, [router]);
+
+  const closeGoogleAuthError = useCallback(() => {
+    setGoogleAuthError(null);
+    router.replace('/', { scroll: false });
+  }, [router]);
+
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
+      <Suspense fallback={null}>
+        <LoginQueryTrigger onOpen={openLoginModal} />
+        <GoogleAuthErrorQueryTrigger onErrorChange={setGoogleAuthError} />
+      </Suspense>
+
       {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-outline-variant/30 bg-surface/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4">
         <MarketingBrand />
         <MarketingNav />
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-          <Link href="/login" className="inline-flex whitespace-nowrap font-label-md text-label-md font-semibold text-on-surface transition-colors hover:text-primary">
-            <span className="hidden sm:inline">Đăng nhập</span>
-            <span className="sm:hidden">Đăng nhập</span>
-          </Link>
+          <button
+            type="button"
+            onClick={() => setIsLoginModalOpen(true)}
+            className="inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-slate-100 hover:text-primary sm:px-4"
+          >
+            <span>Đăng nhập</span>
+          </button>
           <Link href="/register" className="marketing-button inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3.5 font-label-md text-label-md font-semibold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-container sm:px-5">
             <span className="hidden sm:inline">Đăng ký học</span>
             <span className="sm:hidden">Đăng ký</span>
@@ -149,7 +229,16 @@ export default function LandingPage() {
 
         {/* Plans */}
         <section id="pricing" className="border-y border-outline-variant/20 bg-surface-container-lowest px-4 py-16 sm:px-6 sm:py-20 lg:py-24">
-          <div className="mx-auto max-w-7xl"><div className="mx-auto max-w-2xl text-center"><span className="font-label-sm text-label-sm font-semibold uppercase tracking-[0.12em] text-primary">Chọn cách bắt đầu</span><h2 className="mt-3 font-headline-lg text-headline-lg font-bold">Gói học theo nhu cầu</h2><p className="mt-4 font-body-md text-body-md text-on-surface-variant">Bắt đầu với lộ trình cơ bản, sau đó nâng cấp khi bạn cần học sâu và tăng tốc.</p></div><div className="mx-auto mt-10 grid max-w-6xl gap-6 lg:grid-cols-3"><div className="flex flex-col rounded-2xl border border-outline-variant/30 bg-surface p-7"><h3 className="font-headline-md text-headline-md font-bold">Cơ bản</h3><p className="mt-2 min-h-10 font-body-md text-body-md text-on-surface-variant">Lộ trình định hướng trong 30 ngày.</p><p className="mt-5 text-3xl font-bold text-primary">Miễn phí</p><ul className="mt-6 flex-1 space-y-3 font-body-md text-body-md text-on-surface-variant"><li>✓ Chọn mục tiêu và trình độ</li><li>✓ Lộ trình cơ bản 30 ngày</li><li>✓ Đánh giá đầu vào</li></ul><Link href="/register" className="mt-8 inline-flex h-11 w-full items-center justify-center rounded-lg border border-primary px-5 font-label-md text-label-md font-semibold text-primary transition hover:bg-primary/5">Đăng ký tài khoản</Link></div><div className="flex flex-col rounded-2xl border-2 border-primary bg-primary p-7 text-white shadow-xl shadow-primary/20"><span className="w-fit rounded-full bg-tertiary-fixed px-3 py-1 font-label-sm text-label-sm font-bold text-on-tertiary-fixed">Phù hợp nhất</span><h3 className="mt-5 font-headline-md text-headline-md font-bold">Nâng cao</h3><p className="mt-2 min-h-10 font-body-md text-body-md text-white/75">Học sâu hơn với bài luyện thích ứng.</p><p className="mt-5 text-3xl font-bold">Theo gói</p><ul className="mt-6 flex-1 space-y-3 font-body-md text-body-md text-white/80"><li>✓ Lộ trình theo mục tiêu điểm</li><li>✓ Bài luyện theo skill yếu</li><li>✓ Giải thích câu sai bằng AI</li></ul><Link href="/register" className="mt-8 inline-flex h-11 w-full items-center justify-center rounded-lg bg-white px-5 font-label-md text-label-md font-semibold text-primary transition hover:bg-primary-fixed">Đăng ký nâng cao</Link></div><div className="flex flex-col rounded-2xl border border-tertiary/30 bg-on-surface p-7 text-white shadow-xl"><span className="w-fit rounded-full bg-tertiary-fixed px-3 py-1 font-label-sm text-label-sm font-bold text-on-tertiary-fixed">Toàn diện</span><h3 className="mt-5 font-headline-md text-headline-md font-bold">Premium</h3><p className="mt-2 min-h-10 font-body-md text-body-md text-white/75">Tối đa hóa khả năng chạm mục tiêu cao.</p><p className="mt-5 text-3xl font-bold">Gói cao cấp</p><ul className="mt-6 flex-1 space-y-3 font-body-md text-body-md text-white/80"><li>✓ Mock Test và Post-test</li><li>✓ Phân tích tiến bộ chi tiết</li><li>✓ Hỗ trợ AI chuyên sâu</li></ul><Link href="/register" className="mt-8 inline-flex h-11 w-full items-center justify-center rounded-lg bg-white px-5 font-label-md text-label-md font-semibold text-on-surface transition hover:bg-tertiary-fixed">Đăng ký Premium</Link></div></div></div>
+          <div className="mx-auto max-w-7xl"><div className="mx-auto max-w-2xl text-center"><span className="font-label-sm text-label-sm font-semibold uppercase tracking-[0.12em] text-primary">Chọn cách bắt đầu</span><h2 className="mt-3 font-headline-lg text-headline-lg font-bold">Gói học theo nhu cầu</h2><p className="mt-4 font-body-md text-body-md text-on-surface-variant">Các gói được cập nhật từ hệ thống quản lý gói học.</p></div>
+            {plansLoading ? <p role="status" className="mt-10 text-center text-sm text-on-surface-variant">Đang tải gói học…</p> : plansError ? <div className="mt-10 text-center"><p role="alert" className="text-sm text-on-surface-variant">Chưa tải được danh sách gói học.</p><button type="button" onClick={() => void loadLearningPlans()} className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary">Thử lại</button></div> : learningPlans.length === 0 ? <p className="mt-10 text-center text-sm text-on-surface-variant">Hiện chưa có gói học được phát hành.</p> : <div className="mx-auto mt-10 grid max-w-6xl gap-6 md:grid-cols-2 xl:grid-cols-3">{learningPlans.map((plan) => <article key={plan.id} className={`flex flex-col rounded-2xl border p-7 ${plan.isPopular ? 'border-2 border-primary bg-primary text-white shadow-xl shadow-primary/20' : 'border-outline-variant/30 bg-surface text-on-surface'}`}>
+              <div className="flex flex-wrap gap-2"><span className={`w-fit rounded-full px-3 py-1 font-label-sm text-label-sm font-bold ${plan.planCategory === 'PROMOTION' ? 'bg-violet-100 text-violet-800' : plan.isPopular ? 'bg-white/15 text-white' : 'bg-surface-container text-on-surface-variant'}`}>{plan.planCategory === 'PROMOTION' ? 'Ưu đãi' : plan.planCategory === 'FREE' ? 'Free' : plan.planCategory === 'PREMIUM' ? 'Premium' : 'Pro'}</span>{plan.isPopular ? <span className="w-fit rounded-full bg-tertiary-fixed px-3 py-1 font-label-sm text-label-sm font-bold text-on-tertiary-fixed">{plan.badgeTag || 'Phổ biến'}</span> : null}</div>
+              <h3 className="mt-4 font-headline-md text-headline-md font-bold">{plan.name}</h3><p className={`mt-2 min-h-10 font-body-md text-body-md ${plan.isPopular ? 'text-white/75' : 'text-on-surface-variant'}`}>{plan.badgeTag || 'Quyền học theo gói đã chọn.'}</p>
+              <p className="mt-5 text-3xl font-bold">{plan.promotionalPrice === 0 ? 'Miễn phí' : new Intl.NumberFormat('vi-VN').format(plan.promotionalPrice) + ' ₫'}</p>{plan.originalPrice > plan.promotionalPrice ? <p className={`mt-1 text-sm line-through ${plan.isPopular ? 'text-white/60' : 'text-on-surface-variant'}`}>{new Intl.NumberFormat('vi-VN').format(plan.originalPrice)} ₫</p> : null}
+              <p className={`mt-2 text-sm ${plan.isPopular ? 'text-white/75' : 'text-on-surface-variant'}`}>{plan.billingCycle === 'LIFETIME' ? 'Không hết hạn' : `${plan.durationDays} ngày kể từ khi mua thành công`}</p>
+              <ul className={`mt-6 flex-1 space-y-3 font-body-md text-body-md ${plan.isPopular ? 'text-white/85' : 'text-on-surface-variant'}`}>{plan.capabilityKeys.map((key) => <li key={key}>✓ {LEARNING_CAPABILITIES.find((item) => item.key === key)?.label ?? key}</li>)}</ul>
+              <Link href="/register" className={`mt-8 inline-flex h-11 w-full items-center justify-center rounded-lg px-5 font-label-md text-label-md font-semibold transition ${plan.isPopular ? 'bg-white text-primary hover:bg-primary-fixed' : 'border border-primary text-primary hover:bg-primary/5'}`}>Đăng ký tài khoản</Link>
+            </article>)}</div>}
+          </div>
         </section>
 
       </main>
@@ -166,6 +255,10 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Login Modal */}
+      <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
+      <GoogleAuthErrorModal errorCode={googleAuthError} onClose={closeGoogleAuthError} />
     </div>
   );
 }

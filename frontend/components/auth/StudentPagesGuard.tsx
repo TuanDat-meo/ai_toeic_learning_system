@@ -2,10 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { getCurrentUser } from '@/lib/api/auth';
+import { getCurrentUser, getLearningOnboardingStatus } from '@/lib/api/auth';
 
 const studentRoutes = [
   '/dashboard',
+  '/billing',
+  '/onboarding',
   '/vocabulary',
   '/reading',
   '/grammar',
@@ -25,34 +27,71 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
   const requiresStudent = studentRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
-  const [authorized, setAuthorized] = useState(true);
+  const [authorizedPath, setAuthorizedPath] = useState('');
+  const [authorizationError, setAuthorizationError] = useState<{ path: string; message: string } | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!requiresStudent) return;
 
     let active = true;
-    getCurrentUser()
-      .then((user) => {
+    async function authorizeStudentRoute() {
+      try {
+        const user = await getCurrentUser();
         if (!active) return;
         if (user.role === 'ADMIN') {
           router.replace('/admin/overview');
           return;
         }
-        setAuthorized(true);
-      })
-      .catch(() => {
-        if (active) {
-          setAuthorized(true);
+        if (user.role === 'STUDENT') {
+          const onboarding = await getLearningOnboardingStatus();
+          if (!active) return;
+          if (onboarding.state.completed && pathname === '/onboarding') {
+            router.replace('/dashboard');
+            return;
+          }
         }
-      });
+        setAuthorizationError(null);
+        setAuthorizedPath(pathname);
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof Error && error.message === 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.') {
+          router.replace('/?login=true');
+          return;
+        }
+        setAuthorizationError({
+          path: pathname,
+          message: error instanceof Error ? error.message : 'Không thể xác minh hồ sơ học tập.',
+        });
+      }
+    }
+
+    void authorizeStudentRoute();
 
     return () => {
       active = false;
     };
-  }, [requiresStudent, router]);
+  }, [pathname, requiresStudent, retryCount, router]);
 
   if (!requiresStudent) return children;
-  if (!authorized) {
+  if (authorizationError?.path === pathname) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-4">
+        <p role="alert" className="max-w-md text-center text-sm text-on-surface-variant">{authorizationError.message}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthorizationError(null);
+            setRetryCount((count) => count + 1);
+          }}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary"
+        >
+          Thử lại
+        </button>
+      </main>
+    );
+  }
+  if (requiresStudent && authorizedPath !== pathname) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-surface px-4">
         <p role="status" className="text-sm text-on-surface-variant">Đang xác thực tài khoản...</p>

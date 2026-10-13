@@ -39,7 +39,7 @@ class AuthRequestValidationTest {
         assertThat(validator.validate(new AuthController.RegisterRequest("Nguyen Van A", "a@example.com", "password123")))
                 .isEmpty();
         assertThat(validator.validate(new AuthController.ForgotPasswordRequest("a@example.com"))).isEmpty();
-        assertThat(validator.validate(new AuthController.ResetPasswordRequest("secure-token", "password123")))
+        assertThat(validator.validate(new AuthController.ResetPasswordRequest("123456", "password123")))
                 .isEmpty();
     }
 

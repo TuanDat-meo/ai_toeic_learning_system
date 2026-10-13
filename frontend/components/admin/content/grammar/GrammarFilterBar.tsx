@@ -12,7 +12,6 @@ import {
   LayoutGrid,
   List,
   CheckCircle2,
-  FileSpreadsheet,
 } from "lucide-react";
 
 export type GrammarAdminTab = "topics" | "questions" | "traps_matrix" | "curriculum";

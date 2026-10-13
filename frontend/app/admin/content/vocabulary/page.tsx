@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sparkles, FolderKanban, BookOpen, CheckCircle2, TrendingUp } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { WordItem, TestItem } from "./types";
 import { SAMPLE_WORDS, INITIAL_TESTS } from "./mockData";
 import { VocabularyHeader } from "@/components/admin/content/vocabulary/VocabularyHeader";

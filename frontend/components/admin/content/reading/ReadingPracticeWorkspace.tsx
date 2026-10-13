@@ -13,7 +13,6 @@ import {
   HelpCircle,
   Star,
   Plus,
-  Flag,
   ShoppingBag,
   Search,
   ChevronLeft,
@@ -30,6 +29,8 @@ import {
   FolderPlus,
 } from "lucide-react";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ReadingPracticeWorkspaceProps {
   card: ExerciseCardData;
@@ -156,10 +157,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpQuestion, setHelpQuestion] = useState<SampleQuestion | null>(null);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportQuestion, setReportQuestion] = useState<SampleQuestion | null>(null);
-  const [reportCategory, setReportCategory] = useState("Sai đáp án");
-  const [reportText, setReportText] = useState("");
   const [showWordBasketModal, setShowWordBasketModal] = useState(false);
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [dictQuery, setDictQuery] = useState("");
@@ -187,6 +184,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   }, []);
 
   const totalQuestionsCount = card.sampleQuestions.length;
+  const currentGroupFirstQuestion: SampleQuestion = currentGroup?.questions?.[0]?.question || card.sampleQuestions[0];
+  const questionRef = `READING-${card.id}-${currentGroupFirstQuestion?.questionNum || currentGroupIndex + 1}`;
 
   const formatTimer = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -1103,17 +1102,11 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       {/* BOTTOM NAV */}
       <footer className="h-14 bg-white border-t border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setReportQuestion(currentGroup.questions[0].question);
-              setShowReportModal(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
-          >
-            <Flag className="w-3.5 h-3.5 text-rose-500" />
-            <span>Báo lỗi</span>
-          </button>
+          <QuestionErrorReportButton source="READING"
+            questionRef={questionRef}
+            relatedContent={`${card.title} · Đoạn ${currentGroupIndex + 1} (Câu ${currentGroupFirstQuestion?.questionNum || currentGroupIndex + 1})`}
+            questionSnapshot={{ questionText: currentGroupFirstQuestion?.question || "", options: currentGroupFirstQuestion?.options || [], correctAnswer: String.fromCharCode(65 + (currentGroupFirstQuestion?.correctIndex ?? 0)), explanation: currentGroupFirstQuestion?.explanation, passage: card.passageText || card.title, part: card.category }}
+            compact onSubmitted={(ticket) => showToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
           <button
             type="button"
@@ -1314,80 +1307,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         </div>
       )}
 
-      {/* REPORT MODAL */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                  <Flag className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">Báo lỗi câu hỏi</h3>
-                  <p className="text-xs text-slate-500">Báo cáo sự cố cho đoạn {currentGroupIndex + 1}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowReportModal(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-slate-700">Loại sự cố:</label>
-              <select
-                value={reportCategory}
-                onChange={(e) => setReportCategory(e.target.value)}
-                className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-blue-500"
-              >
-                <option value="Sai đáp án">Sai đáp án</option>
-                <option value="Lỗi dịch nghĩa">Lỗi dịch nghĩa Tiếng Việt</option>
-                <option value="Nội dung không rõ ràng">Nội dung không rõ ràng</option>
-                <option value="Lỗi chính tả / Ngữ pháp">Lỗi chính tả / Ngữ pháp</option>
-                <option value="Khác">Khác</option>
-              </select>
-
-              <label className="block text-xs font-bold text-slate-700">Mô tả chi tiết:</label>
-              <textarea
-                rows={4}
-                value={reportText}
-                onChange={(e) => setReportText(e.target.value)}
-                placeholder="Nhập chi tiết lỗi bạn gặp phải..."
-                className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 outline-none focus:border-blue-500 resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowReportModal(false)}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs transition cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!reportText.trim()) {
-                    showToast("Vui lòng nhập mô tả lỗi!");
-                    return;
-                  }
-                  setShowReportModal(false);
-                  setReportText("");
-                  showToast("Cảm ơn bạn! Báo cáo sự cố đã được gửi tới đội ngũ học thuật. 🛡️");
-                }}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer"
-              >
-                Gửi báo cáo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* WORD BASKET MODAL */}
       {showWordBasketModal && (

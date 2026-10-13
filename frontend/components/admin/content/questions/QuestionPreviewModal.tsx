@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { QuestionItem, VocabItem } from "@/app/admin/content/questions/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface QuestionPreviewModalProps {
   question: QuestionItem | null;
@@ -35,7 +37,7 @@ interface QuestionPreviewModalProps {
 }
 
 export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
-  question,
+  question: baseQuestion,
   onClose,
   playSfx = () => {},
   playAudio = () => {},
@@ -44,6 +46,26 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
   setAudioSpeed = () => {},
   showToast = () => {},
 }) => {
+  const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!baseQuestion) return () => { active = false; };
+    const questionRef = `QUESTION_BANK-${baseQuestion.id}`;
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [baseQuestion]);
+  const questionCorrection = questionCorrectionState?.ref === `QUESTION_BANK-${baseQuestion?.id}` ? questionCorrectionState.value : null;
+  const correctionOptions = questionCorrection?.options;
+  const question = baseQuestion && questionCorrection ? {
+    ...baseQuestion,
+    questionText: questionCorrection.questionText || baseQuestion.questionText,
+    options: correctionOptions && !Array.isArray(correctionOptions)
+      ? Object.entries(correctionOptions).map(([id, text]) => ({ id, text, isCorrect: id === (questionCorrection.correctAnswer || baseQuestion.correctAnswer) }))
+      : baseQuestion.options,
+    correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+    passage: questionCorrection.passage || baseQuestion.passage,
+  } : baseQuestion;
   const [userSelectedOption, setUserSelectedOption] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [showScript, setShowScript] = useState(false);
@@ -820,16 +842,11 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
 
         {/* Footer Modal */}
         <footer className="h-14 bg-white border-t border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
-          <button
-            type="button"
-            onClick={() => {
-              playSfx("click");
-              showToast("Đã ghi nhận phản hồi về câu hỏi này!");
-            }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition cursor-pointer"
-          >
-            <span>Báo lỗi câu hỏi</span>
-          </button>
+          {question && <QuestionErrorReportButton source="QUESTION_BANK"
+            questionRef={`QUESTION_BANK-${question.id}`}
+            relatedContent={`${question.part} · ${question.code || question.id}`}
+            questionSnapshot={{ questionText: question.questionText, options: Object.fromEntries(question.options.map((option) => [option.id, option.text])), correctAnswer: question.correctAnswer, explanation: question.explanation, passage: question.passage, part: question.part }}
+            onSubmitted={(ticket) => showToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />}
 
           <div className="flex items-center gap-2">
             <button

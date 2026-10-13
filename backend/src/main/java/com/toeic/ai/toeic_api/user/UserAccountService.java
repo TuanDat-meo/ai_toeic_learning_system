@@ -3,6 +3,8 @@ package com.toeic.ai.toeic_api.user;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.security.SecureRandom;
+import java.util.Base64;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -118,6 +120,46 @@ public class UserAccountService implements UserDetailsService {
     @Transactional
     public ManagedUser registerStudent(String fullName, String email, String password) {
         return create(fullName, email, password, "STUDENT");
+    }
+
+    @Transactional
+    public UserDetails findOrCreateGoogleAccount(String fullName, String email) {
+        String normalizedEmail = normalizeEmail(email);
+        Integer matches = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM users WHERE lower(email) = lower(?)", Integer.class, normalizedEmail);
+        if (matches == null || matches == 0) {
+            createGoogleStudent(fullName, normalizedEmail);
+        }
+
+        UserDetails account = loadUserByUsername(normalizedEmail);
+        if (!account.isEnabled()) {
+            throw new IllegalArgumentException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
+        }
+        return account;
+    }
+
+    @Transactional
+    public UserDetails registerGoogleAccount(String fullName, String email) {
+        String normalizedEmail = normalizeEmail(email);
+        Integer matches = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM users WHERE lower(email) = lower(?)", Integer.class, normalizedEmail);
+        if (matches != null && matches > 0) {
+            throw new EmailAlreadyRegisteredException();
+        }
+
+        UserDetails account = createGoogleStudent(fullName, normalizedEmail);
+        if (!account.isEnabled()) {
+            throw new IllegalArgumentException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
+        }
+        return account;
+    }
+
+    private UserDetails createGoogleStudent(String fullName, String normalizedEmail) {
+        byte[] randomBytes = new byte[48];
+        new SecureRandom().nextBytes(randomBytes);
+        String generatedPassword = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+        create(fullName, normalizedEmail, generatedPassword, "STUDENT");
+        return loadUserByUsername(normalizedEmail);
     }
 
     @Transactional

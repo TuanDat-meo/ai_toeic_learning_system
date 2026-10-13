@@ -3,11 +3,6 @@
 import React, { useState, useMemo } from "react";
 import {
   Sparkles,
-  BookOpen,
-  FileText,
-  Clock,
-  TrendingUp,
-  Layers,
 } from "lucide-react";
 
 import { ExerciseCardData } from "./types";
@@ -51,7 +46,7 @@ export default function ReadingLearningPage() {
   };
 
   // Web Audio Sound Effects Synthesizer
-  const playSfx = (type?: "correct" | "wrong" | "click") => {
+  const playSfx = () => {
     try {
       const AudioContextClass =
         window.AudioContext ||

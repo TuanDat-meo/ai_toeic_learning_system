@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { LearningOnboardingPrompt } from "@/components/learning/LearningOnboardingPrompt";
 import {
   BookOpen,
   Brain,
@@ -270,6 +271,9 @@ export default function Home() {
           </span>
         </div>
       </header>
+
+      {/* Onboarding Goal Banner if not yet completed */}
+      <LearningOnboardingPrompt />
 
       {/* 1. KHUNG CHỈ SỐ CÁ NHÂN (METRICS CARDS) */}
       <section aria-labelledby="metrics-title">

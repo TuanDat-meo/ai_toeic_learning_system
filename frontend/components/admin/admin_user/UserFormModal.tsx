@@ -21,7 +21,7 @@ import {
   CheckCircle2,
   Circle,
 } from 'lucide-react';
-import type { ManagedUser } from '@/lib/api/auth';
+import type { ManagedUser } from '@/lib/api/admin';
 import { emptyUserDraft, validateUserDraft, type UserDraft, type UserFieldErrors } from './userManagement';
 
 export function UserFormModal({

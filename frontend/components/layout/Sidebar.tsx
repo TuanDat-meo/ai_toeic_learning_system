@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Brain, ClipboardCheck, Headphones, House, ListChecks } from 'lucide-react';
+import { BookOpen, Brain, ClipboardCheck, CreditCard, Headphones, House, ListChecks } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
 
   const isDashboard = pathname === '/dashboard' || pathname === '/';
+  const isBilling = pathname === '/billing' || pathname.startsWith('/billing/');
 
   const modules = [
     { label: 'Từ vựng', icon: BookOpen, href: '/vocabulary', available: true },
@@ -32,18 +33,36 @@ export function Sidebar() {
       <nav aria-label="Điều hướng học tập" className="flex-1 space-y-6 px-4 py-6">
         <div>
           <p className="px-3 text-xs font-semibold uppercase text-on-surface-variant">Cá nhân</p>
-          <Link
-            href="/dashboard"
-            aria-current={isDashboard ? 'page' : undefined}
-            className={`mt-2 flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-              isDashboard
-                ? 'bg-[#123c43]/10 text-[#123c43] font-semibold'
-                : 'text-on-surface hover:bg-[#123c43]/10 hover:text-[#123c43] active:bg-[#123c43]/15'
-            }`}
-          >
-            <House size={18} aria-hidden="true" />
-            <span>Tổng quan</span>
-          </Link>
+          <ul className="mt-2 space-y-1">
+            <li>
+              <Link
+                href="/dashboard"
+                aria-current={isDashboard ? 'page' : undefined}
+                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isDashboard
+                    ? 'bg-[#123c43] text-white'
+                    : 'text-on-surface-variant hover:bg-surface-container'
+                }`}
+              >
+                <House size={18} aria-hidden="true" />
+                <span>Tổng quan</span>
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/billing"
+                aria-current={isBilling ? 'page' : undefined}
+                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isBilling
+                    ? 'bg-[#123c43] text-white'
+                    : 'text-on-surface-variant hover:bg-surface-container'
+                }`}
+              >
+                <CreditCard size={18} aria-hidden="true" />
+                <span>Gói học &amp; thanh toán</span>
+              </Link>
+            </li>
+          </ul>
         </div>
         <div>
           <p className="px-3 text-xs font-semibold uppercase text-on-surface-variant">Lộ trình TOEIC</p>
@@ -58,8 +77,8 @@ export function Sidebar() {
                       aria-current={active ? 'page' : undefined}
                       className={`flex items-center justify-between gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                         active
-                          ? 'bg-[#123c43]/10 text-[#123c43] font-semibold'
-                          : 'text-on-surface hover:bg-[#123c43]/10 hover:text-[#123c43] active:bg-[#123c43]/15'
+                          ? 'bg-[#123c43] text-white font-semibold'
+                          : 'text-on-surface-variant hover:bg-surface-container'
                       }`}
                     >
                       <span className="flex items-center gap-3">

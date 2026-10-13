@@ -19,7 +19,8 @@ import {
 import { AdminPageFrame, type AdminMetric } from "@/components/admin/AdminPageFrame";
 import {
   getReports,
-  saveReports,
+  updateSupportReport,
+  deleteSupportReport,
   type SupportReport,
   type SupportReportCategory,
   type SupportReportPriority,
@@ -48,6 +49,59 @@ const priorityBadges: Record<SupportReportPriority, { label: string; className: 
   LOW: { label: "Thấp", className: "bg-slate-50 text-slate-500 border border-slate-200" },
 };
 
+function snapshotString(snapshot: Record<string, unknown>, key: string) {
+  const value = snapshot[key];
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
+}
+
+function snapshotOptions(snapshot: Record<string, unknown>): [string, string][] {
+  const options = snapshot.options;
+  if (Array.isArray(options)) {
+    return options.map((value, index) => [String.fromCharCode(65 + index), String(value ?? "")]);
+  }
+  if (options && typeof options === "object") {
+    return Object.entries(options as Record<string, unknown>).map(([key, value]) => [key, String(value ?? "")]);
+  }
+  return [];
+}
+
+function QuestionSnapshotCard({ title, snapshot }: { title: string; snapshot: Record<string, unknown> }) {
+  const question = snapshotString(snapshot, "questionText") || snapshotString(snapshot, "question") || snapshotString(snapshot, "text");
+  const answer = snapshotString(snapshot, "correctAnswer").toUpperCase();
+  const options = snapshotOptions(snapshot);
+  const explanation = snapshotString(snapshot, "explanation");
+  const passage = snapshotString(snapshot, "passage");
+  const transcript = snapshotString(snapshot, "transcript");
+  const part = snapshotString(snapshot, "part");
+  const audioUrl = snapshotString(snapshot, "audioUrl");
+
+  return (
+    <section className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-xs font-bold text-slate-900">{title}</h4>
+        <div className="flex items-center gap-2">
+          {part && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700">{part}</span>}
+          {snapshotString(snapshot, "questionRef") && <span className="font-mono text-[10px] text-slate-500">{snapshotString(snapshot, "questionRef")}</span>}
+        </div>
+      </div>
+      {passage && <div className="mb-3 rounded-lg bg-slate-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Đoạn văn / ngữ cảnh</p><p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{passage}</p></div>}
+      {question ? <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-slate-900">{question}</p> : <p className="text-xs italic text-slate-500">Ticket không lưu nội dung câu hỏi.</p>}
+      {options.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {options.map(([key, value]) => {
+          const isAnswer = key.toUpperCase() === answer;
+          return <div key={key} className={`rounded-lg border px-3 py-2 text-xs ${isAnswer ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700"}`}>
+            <span className="mr-2 font-bold">{key}.</span>{value}{isAnswer && <span className="ml-2 text-[10px] font-bold text-emerald-700">ĐÁP ÁN ĐANG LƯU</span>}
+          </div>;
+        })}
+      </div>}
+      {answer && options.length === 0 && <p className="mt-3 text-xs font-semibold text-emerald-700">Đáp án đang lưu: {answer}</p>}
+      {explanation && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Giải thích hiện tại</p><p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{explanation}</p></div>}
+      {transcript && <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Transcript</p><p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{transcript}</p></div>}
+      {audioUrl && <a href={audioUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-blue-700 underline">Mở audio đính kèm</a>}
+    </section>
+  );
+}
+
 export function AdminSupportReportsView() {
   const [reports, setReports] = useState<SupportReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +114,13 @@ export function AdminSupportReportsView() {
   const [replyText, setReplyText] = useState("");
   const [replyStatus, setReplyStatus] = useState<SupportReportStatus>("RESOLVED");
   const [deletingReport, setDeletingReport] = useState<SupportReport | null>(null);
+  const [applyCorrection, setApplyCorrection] = useState(false);
+  const [correctionQuestionText, setCorrectionQuestionText] = useState("");
+  const [correctionOptionsText, setCorrectionOptionsText] = useState("{}");
+  const [correctionAnswer, setCorrectionAnswer] = useState("");
+  const [correctionExplanation, setCorrectionExplanation] = useState("");
+  const [correctionPassage, setCorrectionPassage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
@@ -142,36 +203,55 @@ export function AdminSupportReportsView() {
     setActiveReport(report);
     setReplyText(report.adminReply || "");
     setReplyStatus(report.status === "PENDING" ? "RESOLVED" : report.status);
+    setApplyCorrection(false);
+    const snapshot = report.correction || report.questionSnapshot || {};
+    setCorrectionQuestionText(String(snapshot.questionText || ""));
+    setCorrectionOptionsText(JSON.stringify(snapshot.options || {}, null, 2));
+    setCorrectionAnswer(String(snapshot.correctAnswer || ""));
+    setCorrectionExplanation(String(snapshot.explanation || ""));
+    setCorrectionPassage(String(snapshot.passage || ""));
   }
 
   async function handleSendReply() {
     if (!activeReport) return;
-    const updated = reports.map((r) => {
-      if (r.id === activeReport.id) {
-        return {
-          ...r,
-          adminReply: replyText.trim(),
-          status: replyStatus,
-          repliedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+    setSaving(true);
+    try {
+      let correction: Record<string, unknown> | undefined;
+      if (applyCorrection) {
+        let options: unknown;
+        try { options = JSON.parse(correctionOptionsText); }
+        catch { throw new Error("Phương án phải là JSON hợp lệ, ví dụ {\"A\":\"...\",\"B\":\"...\"}."); }
+        if (!correctionQuestionText.trim() || !correctionAnswer.trim()) {
+          throw new Error("Nội dung câu hỏi và đáp án đúng là bắt buộc để cập nhật bộ câu hỏi.");
+        }
+        if (!options || typeof options !== "object") throw new Error("Danh sách phương án phải là JSON dạng object hoặc array.");
+        correction = { questionText: correctionQuestionText.trim(), options, correctAnswer: correctionAnswer.trim(), explanation: correctionExplanation.trim(), passage: correctionPassage.trim() };
       }
-      return r;
-    });
-
-    setReports(updated);
-    await saveReports(updated);
-    setActiveReport(null);
-    showFeedback(`Đã phản hồi Ticket ${activeReport.ticketCode} thành công!`);
+      const updatedReport = await updateSupportReport(activeReport.id, {
+        status: replyStatus,
+        adminReply: replyText.trim(),
+        ...(correction ? { correction } : {}),
+      });
+      setReports((current) => current.map((report) => report.id === updatedReport.id ? updatedReport : report));
+      setActiveReport(null);
+      showFeedback(`Đã cập nhật Ticket ${updatedReport.ticketCode}.`);
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : "Không thể cập nhật ticket.", true);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleDeleteConfirm() {
     if (!deletingReport) return;
-    const updated = reports.filter((r) => r.id !== deletingReport.id);
-    setReports(updated);
-    await saveReports(updated);
-    setDeletingReport(null);
-    showFeedback(`Đã xóa Ticket ${deletingReport.ticketCode}`);
+    try {
+      await deleteSupportReport(deletingReport.id);
+      setReports((current) => current.filter((report) => report.id !== deletingReport.id));
+      setDeletingReport(null);
+      showFeedback(`Đã xóa Ticket ${deletingReport.ticketCode}`);
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : "Không thể xóa ticket.", true);
+    }
   }
 
   function exportCsv() {
@@ -445,6 +525,17 @@ export function AdminSupportReportsView() {
                 )}
               </div>
 
+              {activeReport.questionSnapshot ? (
+                <QuestionSnapshotCard title="Câu hỏi và đáp án tại thời điểm học viên báo cáo" snapshot={activeReport.questionSnapshot} />
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-slate-600">
+                  Ticket này không có ảnh chụp câu hỏi. Mã tham chiếu: <span className="font-mono font-semibold">{activeReport.questionRef || "Không được cung cấp"}</span>
+                </div>
+              )}
+              {activeReport.correction && (
+                <QuestionSnapshotCard title="Nội dung sửa đã lưu trước đó" snapshot={activeReport.correction} />
+              )}
+
               <div className="space-y-3">
                 <label className="block text-xs font-bold text-slate-800">
                   Nội dung phản hồi cho học viên
@@ -456,6 +547,22 @@ export function AdminSupportReportsView() {
                   placeholder="Nhập nội dung giải đáp, câu trả lời hoặc hướng dẫn khắc phục..."
                   className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
+
+                {activeReport.category === "QUESTION_ERROR" && activeReport.questionRef && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                      <input type="checkbox" checked={applyCorrection} onChange={(event) => setApplyCorrection(event.target.checked)} />
+                      Lưu nội dung sửa vào bộ câu hỏi dùng chung
+                    </label>
+                    {applyCorrection && <>
+                      <textarea aria-label="Nội dung câu hỏi đã sửa" rows={2} value={correctionQuestionText} onChange={(event) => setCorrectionQuestionText(event.target.value)} placeholder="Nội dung câu hỏi sau khi sửa" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
+                      <textarea aria-label="Các phương án sau khi sửa (JSON)" rows={4} value={correctionOptionsText} onChange={(event) => setCorrectionOptionsText(event.target.value)} placeholder={'{"A":"...","B":"..."}'} className="w-full rounded-lg border border-slate-200 p-2 font-mono text-xs" />
+                      <input aria-label="Đáp án đúng sau khi sửa" value={correctionAnswer} onChange={(event) => setCorrectionAnswer(event.target.value)} placeholder="Đáp án đúng (A/B/C/D)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
+                      <textarea aria-label="Giải thích sau khi sửa" rows={2} value={correctionExplanation} onChange={(event) => setCorrectionExplanation(event.target.value)} placeholder="Giải thích sau khi sửa" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
+                      <textarea aria-label="Đoạn văn sau khi sửa" rows={3} value={correctionPassage} onChange={(event) => setCorrectionPassage(event.target.value)} placeholder="Đoạn văn liên quan (nếu có)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
+                    </>}
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                   <div>
@@ -482,10 +589,11 @@ export function AdminSupportReportsView() {
                     </button>
                     <button
                       type="button"
+                      disabled={saving}
                       onClick={() => void handleSendReply()}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
                     >
-                      <Send className="h-3.5 w-3.5" /> Gửi phản hồi
+                      <Send className="h-3.5 w-3.5" /> {saving ? "Đang lưu..." : "Gửi phản hồi"}
                     </button>
                   </div>
                 </div>

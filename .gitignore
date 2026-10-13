@@ -3,16 +3,24 @@ data/
 database/
 scripts/
 
-# Dependencies & Build artifacts
+# Environment files
+.env
+.env.*
+!.env.example
+.env*.local
+
+# Build and dependency artifacts
 node_modules/
+frontend/node_modules/
 .next/
+frontend/.next/
 out/
 build/
 dist/
+backend/target/
 *.tsbuildinfo
 
-# Environment and logs
-.env*.local
+# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*

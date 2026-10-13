@@ -15,7 +15,6 @@ import {
   Star,
   BookOpen,
   HelpCircle,
-  Flag,
   ShoppingBag,
   Search,
   ChevronLeft,
@@ -28,6 +27,8 @@ import {
 } from "lucide-react";
 import { LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ListeningQuizModalProps {
   quizModalCard: LevelCategoryCardData;
@@ -102,7 +103,25 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     setIsPlayingAudio(false);
   }, [activeQuizQIndex, setIsPlayingAudio]);
 
-  const currentQ = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
+  const baseQuestion = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
+  const questionRef = `LISTENING-${quizModalCard.id}-${baseQuestion.id}`;
+  const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [questionRef]);
+  const questionCorrection = questionCorrectionState?.ref === questionRef ? questionCorrectionState.value : null;
+  const correctionOptions = Array.isArray(questionCorrection?.options)
+    ? Object.fromEntries(questionCorrection.options.map((option, index) => [String.fromCharCode(65 + index), option]))
+    : questionCorrection?.options || baseQuestion.options;
+  const currentQ: DictationQuestion = questionCorrection ? {
+    ...baseQuestion,
+    question: questionCorrection.questionText || baseQuestion.question,
+    options: correctionOptions,
+    correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+  } : baseQuestion;
 
   const updateCardStats = (q: DictationQuestion, chosen: string) => {
     const isCorrect = chosen === q.correctAnswer;
@@ -1014,14 +1033,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
       {/* BOTTOM NAVIGATION BAR */}
       <footer className="h-14 bg-white border-t border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => triggerToast("Đã nhận phản hồi báo lỗi từ bạn!")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
-          >
-            <Flag className="w-3.5 h-3.5 text-rose-500" />
-            <span>Báo lỗi</span>
-          </button>
+          <QuestionErrorReportButton source="LISTENING"
+            questionRef={questionRef}
+            relatedContent={`${quizModalCard.part} · ${quizModalCard.title} · Câu ${activeQuizQIndex + 1}`}
+            questionSnapshot={{ questionText: currentQ.question || currentQ.fullTranscript, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, audioUrl: currentQ.audioUrl, part: currentQ.part }}
+            compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
           <button
             type="button"
