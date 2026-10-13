@@ -72,6 +72,7 @@ public class SecurityConfig {
                             "/api/auth/password/forgot", "/api/auth/password/reset",
                             "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/billing/**").hasRole("STUDENT")
+                        .requestMatchers("/api/learning-profile/**").hasRole("STUDENT")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .anyRequest().permitAll());
@@ -94,7 +95,7 @@ public class SecurityConfig {
             }
         }
         configuration.setAllowedOrigins(origins);
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Accept", "Content-Type", "X-CSRF-TOKEN"));
         configuration.setAllowCredentials(true);
 

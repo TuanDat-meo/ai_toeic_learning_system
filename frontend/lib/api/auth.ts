@@ -16,8 +16,41 @@ export type AccountActivity = {
   createdAt: string;
 };
 
+export type LearningOnboardingPayload = {
+  targetScore: number;
+  examDate: string | null;
+  learningReason: 'CAREER' | 'STUDY' | 'TRAVEL' | 'PERSONAL';
+  currentLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | null;
+  recentScore: number | null;
+  dailyStudyMinutes: number | null;
+  studyDays: number[];
+  interests: ('LISTENING' | 'READING' | 'VOCABULARY' | 'GRAMMAR' | 'MOCK_TESTS')[];
+};
+
+export type LearningOnboardingDraft = Omit<LearningOnboardingPayload, 'learningReason' | 'targetScore'> & {
+  targetScore: number | null;
+  learningReason: LearningOnboardingPayload['learningReason'] | null;
+  currentStep: number;
+};
+
+export type LearningOnboardingState = LearningOnboardingDraft & {
+  completed: boolean;
+};
+
 export function getCurrentUser() {
   return apiRequest<AuthUser>('/api/auth/me');
+}
+
+export function getLearningOnboardingStatus() {
+  return apiRequest<{ state: LearningOnboardingState }>('/api/learning-profile/onboarding/status');
+}
+
+export function completeLearningOnboarding(payload: LearningOnboardingPayload) {
+  return postAuthRequest<void>('/api/learning-profile/onboarding', payload);
+}
+
+export function saveLearningOnboardingDraft(draft: LearningOnboardingDraft) {
+  return writeAuthRequest<void>('PUT', '/api/learning-profile/onboarding/draft', draft);
 }
 
 export function updateCurrentUserProfile(fullName: string, email: string) {
