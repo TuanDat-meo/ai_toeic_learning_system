@@ -21,6 +21,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
+import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 
 interface ListeningDictationModalProps {
   dictationModalCard: DictationCardData;
@@ -79,23 +80,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
   const q = dictationModalCard.questions[activeDictationQIndex];
 
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-
   React.useEffect(() => {
-    if (!audioRef.current) return;
-    if (isPlayingAudio) {
-      audioRef.current.playbackRate = parseFloat(audioSpeed) || 1.0;
-      audioRef.current.play().catch(() => setIsPlayingAudio(false));
-    } else {
-      audioRef.current.pause();
-    }
-  }, [isPlayingAudio, audioSpeed, setIsPlayingAudio]);
-
-  React.useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
     setIsPlayingAudio(false);
   }, [activeDictationQIndex, setIsPlayingAudio]);
 
@@ -198,112 +183,20 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* KHỐI BÊN TRÁI (COL 7): AUDIO WAVEFORM & KHUNG ĐỤC LỖ */}
             <div className="lg:col-span-7 space-y-5">
-              {/* THẺ 1: SÓNG ÂM & BỘ ĐIỀU KHIỂN AUDIO */}
-              <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-                <div className="w-full h-16 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between px-6 relative overflow-hidden">
-                  <div className="flex items-center justify-between w-full h-10 gap-1.5">
-                    {Array.from({ length: 42 }).map((_, idx) => {
-                      const heights = [20, 35, 60, 40, 85, 50, 30, 95, 45, 25, 75, 90, 35, 65, 40];
-                      const h = heights[idx % heights.length];
-                      const isPlayed = idx < 12;
-                      return (
-                        <span
-                          key={idx}
-                          style={{ height: `${h}%` }}
-                          className={`w-1.5 rounded-full transition-all ${
-                            isPlayed ? "bg-blue-500" : "bg-slate-200"
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="absolute left-[28%] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-md" />
-                </div>
-
-                <audio
-                  ref={audioRef}
-                  src={q?.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
-                  onEnded={() => setIsPlayingAudio(false)}
-                  className="hidden"
-                />
-
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playSfx("click");
-                      setReplayCount((r) => r + 1);
-                    }}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-                  >
-                    <span>Phát lại</span>
-                    <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-700 text-[10px] flex items-center justify-center font-mono">
-                      {replayCount}
-                    </span>
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        triggerToast("Đã lùi 2 giây");
-                      }}
-                      className="w-8 h-8 rounded-full border border-slate-200/90 hover:bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
-                    >
-                      &lt;
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        setIsPlayingAudio(!isPlayingAudio);
-                      }}
-                      className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md shadow-blue-500/25 transition cursor-pointer active:scale-95"
-                    >
-                      {isPlayingAudio ? (
-                        <Pause className="w-5 h-5 fill-white" />
-                      ) : (
-                        <Play className="w-5 h-5 ml-0.5 fill-white" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        triggerToast("Đã tới 2 giây");
-                      }}
-                      className="w-8 h-8 rounded-full border border-slate-200/90 hover:bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
-                    >
-                      &gt;
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        const nextSpeed = audioSpeed === "1.0" ? "0.8" : audioSpeed === "0.8" ? "1.2" : "1.0";
-                        setAudioSpeed(nextSpeed);
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      {audioSpeed}x
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        triggerToast("Đã kích hoạt chế độ Tự lập");
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      Tự lập
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* THẺ 1: SÓNG ÂM & BỘ ĐIỀU KHIỂN AUDIO (CLICK-TO-SEEK, REWIND, FAST FORWARD) */}
+              <AudioWaveformPlayer
+                audioUrl={q?.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3"}
+                isPlaying={isPlayingAudio}
+                onPlayPauseChange={(playing) => setIsPlayingAudio(playing)}
+                showSpeedControl={true}
+                showReplayButton={true}
+                replayCount={replayCount}
+                onReplayClick={() => {
+                  playSfx("click");
+                  setReplayCount((r) => r + 1);
+                }}
+                title={`Bài chép chính tả • Câu ${activeDictationQIndex + 1}`}
+              />
 
               {/* THẺ 2: KHUNG ĐỤC LỖ TỪ VỰNG & NÚT LẬT TỪ */}
               <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">

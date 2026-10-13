@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { QuestionItem, VocabItem } from "@/app/admin/content/questions/types";
+import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 
 interface QuestionPreviewModalProps {
   question: QuestionItem | null;
@@ -51,29 +52,12 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
   const [isVocabExpanded, setIsVocabExpanded] = useState(true);
   const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
   const [localIsPlayingAudio, setLocalIsPlayingAudio] = useState(false);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-
-  React.useEffect(() => {
-    if (!audioRef.current) return;
-    if (localIsPlayingAudio) {
-      audioRef.current.play().catch(() => setLocalIsPlayingAudio(false));
-    } else {
-      audioRef.current.pause();
-    }
-  }, [localIsPlayingAudio]);
 
   const [prevQuestionId, setPrevQuestionId] = React.useState(question?.id);
   if (question?.id !== prevQuestionId) {
     setPrevQuestionId(question?.id);
     setLocalIsPlayingAudio(false);
   }
-
-  React.useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-  }, [question?.id]);
 
   if (!question) return null;
 
@@ -296,11 +280,11 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                 <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                   Hình ảnh câu hỏi (Part 1):
                 </span>
-                <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-xs">
+                <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100/70 p-2 shadow-xs flex items-center justify-center">
                   <img
                     src={question.imageUrl}
                     alt="Question visual"
-                    className="w-full h-auto object-cover max-h-80"
+                    className="w-auto max-w-full max-h-80 rounded-xl object-contain"
                   />
                 </div>
               </div>
@@ -322,62 +306,14 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
 
             {/* Trình phát Audio nếu có (Part 1 - Part 4) */}
             {question.audioUrl && (
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-xs">
-                <audio
-                  ref={audioRef}
-                  src={question.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
-                  onEnded={() => setLocalIsPlayingAudio(false)}
-                  className="hidden"
-                />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        setLocalIsPlayingAudio(!localIsPlayingAudio);
-                      }}
-                      className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition cursor-pointer"
-                    >
-                      {localIsPlayingAudio ? (
-                        <Pause className="w-6 h-6 fill-white" />
-                      ) : (
-                        <Play className="w-6 h-6 ml-0.5 fill-white" />
-                      )}
-                    </button>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">Bấm nghe âm thanh câu hỏi</p>
-                      <p className="text-[11px] text-slate-400">Nghe lại nhiều lần nếu cần</p>
-                    </div>
-                  </div>
-
-                  <span className="font-mono text-xs font-bold text-slate-600 shrink-0">00:15</span>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                  <span className="text-xs font-bold text-slate-600">Tốc độ phát:</span>
-                  <div className="flex items-center gap-2">
-                    {(["0.8", "1.0", "1.2"] as const).map((spd) => (
-                      <button
-                        key={spd}
-                        type="button"
-                        onClick={() => {
-                          playSfx("click");
-                          setAudioSpeed(spd);
-                          showToast(`Đã đổi tốc độ phát sang ${spd}x`);
-                        }}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          audioSpeed === spd
-                            ? "bg-blue-600 text-white shadow-xs"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
-                      >
-                        {spd}x
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <AudioWaveformPlayer
+                audioUrl={question.audioUrl}
+                isPlaying={localIsPlayingAudio}
+                onPlayPauseChange={(playing) => setLocalIsPlayingAudio(playing)}
+                showSpeedControl={true}
+                showReplayButton={true}
+                title={`Audio bài thi • ${question.part}`}
+              />
             )}
           </div>
 

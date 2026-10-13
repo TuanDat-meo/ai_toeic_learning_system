@@ -1,33 +1,440 @@
 import { GrammarTopicItem } from "./types";
 
 export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
+  // --- CHỦ ĐIỂM 1 (MỚI - ETS 2024): ĐẠI TỪ & TÍNH TỪ SỞ HỮU ---
+  {
+    id: "g-pronouns-2024",
+    code: "PRO-2024",
+    title: "Đại Từ & Tính Từ Sở Hữu (ETS 2024)",
+    englishTitle: "Pronouns & Possessive Forms in ETS 2024",
+    part: "Part 5 & 6",
+    targetScore: "350-500",
+    status: "PUBLISHED",
+    summary: "Nhóm câu hỏi xuất hiện liên tục trong các đề ETS 2024 (chiếm 3-5 câu/đề), kiểm tra chức năng chủ ngữ (S), tân ngữ (O), tính từ sở hữu (Possessive Adj + Noun), đại từ sở hữu và đại từ phản thân.",
+    formula: "S + V + O | Tính từ sở hữu (my/your/his/her/its/our/their) + Noun | by + myself/himself/themselves",
+    signalWords: ["career experiences", "own", "by oneself", "on one's own", "colleagues", "efforts", "supervisors"],
+    traps: [
+      "Bẫy chọn đại từ tân ngữ (him/them) thay vì tính từ sở hữu (his/their) khi phía sau chỗ trống có một cụm danh từ (ví dụ: 'spoke about _______ career experiences' -> his).",
+      "Bẫy đại từ phản thân: 'by himself = on his own' (tự mình). Đại từ phản thân cũng có thể đứng ngay sau chủ ngữ hoặc cuối câu để nhấn mạnh.",
+      "Bẫy nhầm lẫn 'its' (của nó - tính từ sở hữu) với 'it's' (viết tắt của it is / it has).",
+      "Đại từ sở hữu (mine, hers, theirs, ours) đứng một mình thay thế cho [Tính từ sở hữu + Danh từ] và KHÔNG đi kèm danh từ phía sau."
+    ],
+    examples: [
+      {
+        sentence: "Former Sendai Company CEO Ken Nakata spoke about his career experiences.",
+        translation: "Cựu Giám đốc điều hành Công ty Sendai Ken Nakata đã nói về những kinh nghiệm nghề nghiệp của mình.",
+        analysis: "Chỗ trống đứng trước cụm danh từ 'career experiences' -> bắt buộc dùng tính từ sở hữu 'his'."
+      },
+      {
+        sentence: "The marketing director prepared the entire annual presentation by herself.",
+        translation: "Giám đốc tiếp thị đã tự mình chuẩn bị toàn bộ bài thuyết trình hàng năm.",
+        analysis: "'by herself' = tự bản thân cô ấy làm, không cần trợ giúp."
+      }
+    ],
+    questions: [
+      {
+        id: "pro24-q1",
+        part: "Part 5",
+        questionText: "Former Sendai Company CEO Ken Nakata spoke about _______ career experiences at the international business conference.",
+        options: {
+          A: "he",
+          B: "his",
+          C: "him",
+          D: "himself"
+        },
+        correctAnswer: "B",
+        explanation: "Phía sau chỗ trống là cụm danh từ 'career experiences' (các kinh nghiệm nghề nghiệp), đóng vai trò tân ngữ của giới từ 'about'. Do đó, chỗ trống cần một tính từ sở hữu (his) để bổ nghĩa cho danh từ phía sau.",
+        trapNote: "Tránh chọn (C) 'him' vì sau giới từ nếu đã có danh từ đi kèm thì bắt buộc phải là tính từ sở hữu chứ không phải đại từ tân ngữ.",
+        translation: "Cựu Giám đốc điều hành Công ty Sendai Ken Nakata đã nói về những trải nghiệm nghề nghiệp của mình tại hội nghị kinh doanh quốc tế.",
+        difficulty: "350-500"
+      },
+      {
+        id: "pro24-q2",
+        part: "Part 5",
+        questionText: "Board members reviewed the quarterly expenditure report and compared _______ with the projected annual figures.",
+        options: {
+          A: "it",
+          B: "its",
+          C: "itself",
+          D: "they"
+        },
+        correctAnswer: "A",
+        explanation: "Động từ 'compared' cần một đại từ tân ngữ thay thế cho danh từ số ít 'the quarterly expenditure report' ở vế trước -> chọn 'it'.",
+        trapNote: "Không chọn 'its' vì không có danh từ nào theo sau chỗ trống.",
+        translation: "Các thành viên hội đồng quản trị đã xem xét báo cáo chi tiêu hàng quý và so sánh nó với các số liệu dự kiến hàng năm.",
+        difficulty: "350-500"
+      },
+      {
+        id: "pro24-q3",
+        part: "Part 5",
+        questionText: "The lead architect designed the commercial complex almost entirely by _______, earning widespread acclaim.",
+        options: {
+          A: "he",
+          B: "him",
+          C: "himself",
+          D: "his"
+        },
+        correctAnswer: "C",
+        explanation: "Cụm 'by + reflexive pronoun' (by himself / by herself) mang nghĩa 'tự mình làm'. Chủ ngữ 'The lead architect' (kiến trúc sư trưởng) kết hợp với 'by' -> chọn 'himself'.",
+        trapNote: "Ghi nhớ cấu trúc 'by oneself = on one's own'.",
+        translation: "Kiến trúc sư trưởng đã thiết kế khu phức hợp thương mại gần như hoàn toàn bởi chính bản thân ông, nhận được sự hoan nghênh rộng rãi.",
+        difficulty: "500-750"
+      },
+      {
+        id: "pro24-q4",
+        part: "Part 6",
+        questionText: "Employees wishing to update _______ direct deposit information must submit form HR-12 before the 25th of this month.",
+        options: {
+          A: "they",
+          B: "them",
+          C: "their",
+          D: "themselves"
+        },
+        correctAnswer: "C",
+        explanation: "Phía sau chỗ trống là cụm danh từ 'direct deposit information' (thông tin chuyển khoản trực tiếp). Vị trí này cần tính từ sở hữu 'their' bổ nghĩa cho danh từ.",
+        trapNote: "Không chọn 'themselves' vì không có giới từ 'by' và phía sau có danh từ.",
+        translation: "Những nhân viên muốn cập nhật thông tin chuyển khoản trực tiếp của họ phải nộp mẫu đơn HR-12 trước ngày 25 tháng này.",
+        difficulty: "350-500"
+      }
+    ],
+    studiedCount: 4,
+    correctCount: 4,
+    wrongCount: 0,
+    bookmarked: true
+  },
+
+  // --- CHỦ ĐIỂM 2 (MỚI - ETS 2024): NHẬN DIỆN VỊ TRÍ TỪ LOẠI ---
+  {
+    id: "g-word-forms-2024",
+    code: "POS-2024",
+    title: "Quy Tắc Vị Trí Từ Loại (Danh - Tính - Động - Trạng)",
+    englishTitle: "Parts of Speech & Word Formation in ETS 2024",
+    part: "Part 5 & 6",
+    targetScore: "350-500",
+    status: "PUBLISHED",
+    summary: "Dạng bài tập chiếm tỷ trọng lớn nhất Part 5 ETS 2024 (khoảng 8-10 câu/đề). Đòi hỏi nhận diện vị trí chỗ trống trong câu thông qua các thành phần bao quanh mà không cần dịch nghĩa toàn câu.",
+    formula: "a/an/the + (Adv) + Adj + Noun | Be/Link Verb + Adj | Verb + Object + Adv | Adv + Verb",
+    signalWords: ["completely", "significantly", "promptly", "successful", "efficiently", "proposal", "approval"],
+    traps: [
+      "Bẫy danh từ có đuôi '-al': proposal (bản đề xuất), approval (sự phê duyệt), representative (người đại diện), arrival (sự đến), renewal (sự gia hạn) là DANH TỪ chứ KHÔNG phải Tính từ.",
+      "Bẫy tính từ có đuôi '-ly': friendly (thân thiện), costly (tốn kém), timely (kịp thời), orderly (ngăn nắp) là TÍNH TỪ chứ KHÔNG phải Trạng từ.",
+      "Bẫy trạng từ đứng giữa trợ động từ và động từ chính: S + have/has + [ADV] + V3/ed (ví dụ: has successfully completed).",
+      "Bẫy đứng trước danh từ: Khi chỗ trống đứng trước một Danh từ, thông thường cần một Tính từ bổ nghĩa, trừ trường hợp danh từ ghép (compound noun)."
+    ],
+    examples: [
+      {
+        sentence: "The committee conducted a thorough review of the financial proposal.",
+        translation: "Ủy ban đã tiến hành một cuộc đánh giá kỹ lưỡng về bản đề xuất tài chính.",
+        analysis: "'a + thorough (Adj) + review (Noun)' và 'proposal' là Danh từ kết thúc bằng đuôi -al."
+      },
+      {
+        sentence: "Flight passengers must respond promptly to the boarding announcement.",
+        translation: "Hành khách đi máy bay phải phản hồi nhanh chóng trước thông báo lên máy bay.",
+        analysis: "Động từ 'respond' được bổ nghĩa bởi trạng từ 'promptly' (đuôi -ly)."
+      }
+    ],
+    questions: [
+      {
+        id: "pos24-q1",
+        part: "Part 5",
+        questionText: "The city council reached a _______ decision regarding the budget allocation for local road repairs.",
+        options: {
+          A: "unanimous",
+          B: "unanimously",
+          C: "unanimity",
+          D: "unanimousness"
+        },
+        correctAnswer: "A",
+        explanation: "Vị trí giữa mạo từ 'a' và danh từ 'decision' cần một Tính từ (Adj) để bổ nghĩa cho danh từ đó -> chọn 'unanimous' (nhất trí, đồng thuận).",
+        trapNote: "Cấu trúc: Mạo từ (a/an/the) + Tính từ + Danh từ.",
+        translation: "Hội đồng thành phố đã đạt được một quyết định nhất trí liên quan đến việc phân bổ ngân sách sửa chữa đường bộ địa phương.",
+        difficulty: "350-500"
+      },
+      {
+        id: "pos24-q2",
+        part: "Part 5",
+        questionText: "Technicians worked _______ throughout the evening to restore electrical power to the hospital.",
+        options: {
+          A: "tireless",
+          B: "tirelessly",
+          C: "tirelessness",
+          D: "tired"
+        },
+        correctAnswer: "B",
+        explanation: "Sau nội động từ 'worked', cần một trạng từ chỉ cách thức (Adverb) để bổ nghĩa cho động từ hành động -> chọn 'tirelessly' (một cách không mệt mỏi).",
+        trapNote: "Đuôi '-ly' chỉ trạng từ cách thức bổ nghĩa cho động từ 'worked'.",
+        translation: "Các kỹ thuật viên đã làm việc không mệt mỏi suốt buổi tối để khôi phục nguồn điện cho bệnh viện.",
+        difficulty: "350-500"
+      },
+      {
+        id: "pos24-q3",
+        part: "Part 5",
+        questionText: "The executive committee will review the revised funding _______ during tomorrow's scheduled session.",
+        options: {
+          A: "propose",
+          B: "proposal",
+          C: "proposing",
+          D: "proposed"
+        },
+        correctAnswer: "B",
+        explanation: "Sau cụm 'the revised funding' cần một Danh từ chính đóng vai trò tân ngữ cho ngoại động từ 'review' -> chọn 'proposal' (bản đề xuất).",
+        trapNote: "Cẩn thận bẫy đuôi '-al' trong 'proposal' là Danh từ, không phải Tính từ.",
+        translation: "Ủy ban điều hành sẽ xem xét bản đề xuất tài trợ đã sửa đổi trong phiên họp dự kiến vào ngày mai.",
+        difficulty: "500-750"
+      },
+      {
+        id: "pos24-q4",
+        part: "Part 5",
+        questionText: "Customer service agents are instructed to handle all inquiries _______ and politely.",
+        options: {
+          A: "professional",
+          B: "professionally",
+          C: "profession",
+          D: "professionalism"
+        },
+        correctAnswer: "B",
+        explanation: "Liên từ 'and' nối hai từ cùng từ loại. Phía sau 'and' là trạng từ 'politely' (lịch sự), do đó chỗ trống đứng trước cũng bắt buộc phải là một trạng từ -> chọn 'professionally'.",
+        trapNote: "Quy tắc song hành (Parallel structure) với liên từ 'and': Adv and Adv.",
+        translation: "Các nhân viên chăm sóc khách hàng được hướng dẫn xử lý mọi thắc mắc một cách chuyên nghiệp và lịch sự.",
+        difficulty: "350-500"
+      }
+    ],
+    studiedCount: 4,
+    correctCount: 4,
+    wrongCount: 0,
+    bookmarked: true
+  },
+
+  // --- CHỦ ĐIỂM 3 (MỚI - ETS 2024): PHÂN TỪ V-ING & V-ED ---
+  {
+    id: "g-participles-2024",
+    code: "PAR-2024",
+    title: "Phân Từ V-ing & V-ed Trong ETS 2024",
+    englishTitle: "Participles (Present & Past) in ETS 2024",
+    part: "Part 5 & 6",
+    targetScore: "500-750",
+    status: "PUBLISHED",
+    summary: "Điểm ngữ pháp phân loại học viên đạt điểm cao (650+) trong ETS 2024. Phân từ được dùng làm tính từ đứng trước danh từ, hoặc rút gọn mệnh đề trạng ngữ / quan hệ.",
+    formula: "V-ing + N (bản chất/chủ động) vs V-ed + N (bị động/kết quả) | V-ing/V-ed..., S + V + O",
+    signalWords: ["connecting flight", "demanding client", "damaged goods", "revised budget", "attached document", "existing policy"],
+    traps: [
+      "Bẫy phân biệt V-ing và V-ed: Nếu danh từ là đối tượng tự thực hiện hành động -> dùng V-ing (e.g. rising costs, existing regulations). Nếu danh từ chịu tác động -> dùng V-ed (e.g. reduced rates, customized solutions).",
+      "Bẫy rút gọn mệnh đề trạng ngữ: Xét chủ ngữ của vế chính. Nếu chủ ngữ tự làm hành động -> dùng V-ing đầu câu; nếu chủ ngữ bị tác động -> dùng V-ed đầu câu.",
+      "Cụm tính từ phân từ cố định hay gặp trong ETS: 'detailed instructions', 'preferred method', 'leading provider', 'rewarding experience'."
+    ],
+    examples: [
+      {
+        sentence: "Passengers taking a connecting flight should proceed directly to Gate 12.",
+        translation: "Hành khách đi chuyến bay nối chuyến nên đi thẳng tới Cổng số 12.",
+        analysis: "'connecting flight' (chuyến bay chuyển tiếp) là cụm phân từ V-ing đóng vai trò tính từ cố định."
+      },
+      {
+        sentence: "Please return the completed survey form in the enclosed self-addressed envelope.",
+        translation: "Vui lòng gửi lại phiếu khảo sát đã điền đầy đủ trong phong bì có sẵn địa chỉ đính kèm.",
+        analysis: "'completed survey' (bị động - đã được điền) và 'enclosed envelope' (được đính kèm)."
+      }
+    ],
+    questions: [
+      {
+        id: "par24-q1",
+        part: "Part 5",
+        questionText: "Passengers who will be taking a _______ flight must report to Terminal 2 upon arrival in Chicago.",
+        options: {
+          A: "connectivity",
+          B: "connects",
+          C: "connect",
+          D: "connecting"
+        },
+        correctAnswer: "D",
+        explanation: "Chỗ trống đứng trước danh từ 'flight' cần một phân từ hiện tại (V-ing) đóng vai trò tính từ chỉ tính chất -> chọn 'connecting' (chuyến bay nối tiếp/kết nối). Cụm 'connecting flight' là cụm cố định cực kỳ phổ biến trong đề ETS.",
+        trapNote: "Không chọn danh từ 'connectivity' vì không tạo thành danh từ ghép hợp nghĩa.",
+        translation: "Hành khách đi chuyến bay nối chuyến phải có mặt tại Nhà ga số 2 khi đến Chicago.",
+        difficulty: "500-750"
+      },
+      {
+        id: "par24-q2",
+        part: "Part 5",
+        questionText: "The _______ warranty covers replacement parts and labor costs for up to twenty-four months.",
+        options: {
+          A: "extend",
+          B: "extended",
+          C: "extending",
+          D: "extension"
+        },
+        correctAnswer: "B",
+        explanation: "Trước danh từ 'warranty' (gói bảo hành) cần một quá khứ phân từ V-ed mang nghĩa bị động (gói bảo hành đã được gia hạn) -> chọn 'extended'. Cụm 'extended warranty' là bảo hành mở rộng.",
+        trapNote: "Cụm danh từ 'extended warranty' là thuật ngữ thương mại kinh điển trong đề thi TOEIC.",
+        translation: "Gói bảo hành mở rộng bao gồm các linh kiện thay thế và chi phí nhân công trong thời hạn lên đến 24 tháng.",
+        difficulty: "500-750"
+      },
+      {
+        id: "par24-q3",
+        part: "Part 5",
+        questionText: "_______ by strong consumer demand in Asia, quarterly electronics exports reached an all-time high.",
+        options: {
+          A: "Drive",
+          B: "Drives",
+          C: "Driven",
+          D: "Driving"
+        },
+        correctAnswer: "C",
+        explanation: "Rút gọn mệnh đề trạng ngữ chỉ nguyên nhân thể bị động: (Because they were driven by...) -> rút gọn thành 'Driven by...'. Có giới từ 'by' chỉ tác nhân thể bị động.",
+        trapNote: "Sự xuất hiện của 'by' là tín hiệu quan trọng cho thấy câu mang nghĩa bị động -> chọn V-ed/V3 (Driven).",
+        translation: "Được thúc đẩy bởi nhu cầu tiêu dùng mạnh mẽ tại châu Á, kim ngạch xuất khẩu đồ điện tử hàng quý đã đạt mức cao nhất mọi thời đại.",
+        difficulty: "750+"
+      },
+      {
+        id: "par24-q4",
+        part: "Part 6",
+        questionText: "Enclosed is the _______ itinerary outlining our visit to the Tokyo manufacturing plant.",
+        options: {
+          A: "revise",
+          B: "revised",
+          C: "revising",
+          D: "revision"
+        },
+        correctAnswer: "B",
+        explanation: "Trước danh từ 'itinerary' (lịch trình) cần phân từ V-ed chỉ đối tượng đã được chỉnh sửa xong -> chọn 'revised' (lịch trình đã sửa đổi).",
+        trapNote: "Bẫy danh từ 'revision' không dùng làm tính từ bổ nghĩa cho 'itinerary'.",
+        translation: "Đính kèm là lịch trình đã sửa đổi phác thảo chuyến thăm của chúng tôi tới nhà máy sản xuất Tokyo.",
+        difficulty: "500-750"
+      }
+    ],
+    studiedCount: 4,
+    correctCount: 3,
+    wrongCount: 1,
+    bookmarked: false
+  },
+
+  // --- CHỦ ĐIỂM 4 (MỚI - ETS 2024): LIÊN TỪ TƯƠNG QUAN & CẶP TỪ NỐI ---
+  {
+    id: "g-correlative-conjunctions-2024",
+    code: "COR-2024",
+    title: "Liên Từ Tương Quan & Cặp Từ Nối (ETS 2024)",
+    englishTitle: "Correlative Conjunctions in ETS 2024",
+    part: "Part 5",
+    targetScore: "500-750",
+    status: "PUBLISHED",
+    summary: "Các cặp liên từ đi liền nhau để kết nối hai thành phần ngữ pháp tương đương. Khi nhận ra một vế của cặp từ, ta có thể chọn ngay đáp án vế còn lại trong vòng 3 giây.",
+    formula: "Both A and B | Either A or B | Neither A nor B | Not only A but also B | Whether A or B",
+    signalWords: ["both...and", "either...or", "neither...nor", "not only...but also", "whether...or", "as well as"],
+    traps: [
+      "Bẫy ghép sai cặp: Dùng 'neither...or' (sai) thay vì 'neither...nor', hoặc 'either...and' (sai) thay vì 'either...or'.",
+      "Bẫy chia động từ: Với 'Either A or B' và 'Neither A nor B', động từ chia theo danh từ B đứng gần nó nhất (chứ KHÔNG chia theo A).",
+      "Với 'Both A and B', động từ LUÔN LUÔN chia ở dạng số nhiều."
+    ],
+    examples: [
+      {
+        sentence: "The promotion is available to both existing subscribers and new applicants.",
+        translation: "Chương trình ưu đãi áp dụng cho cả người đăng ký hiện tại và người nộp đơn mới.",
+        analysis: "Cặp từ 'both ... and ...' nối 2 cụm danh từ tương đương."
+      },
+      {
+        sentence: "You may submit your expense claim either online or by postal mail.",
+        translation: "Bạn có thể nộp yêu cầu thanh toán chi phí bằng hình thức trực tuyến hoặc qua đường bưu điện.",
+        analysis: "'either ... or ...' diễn tả sự lựa chọn 1 trong 2."
+      }
+    ],
+    questions: [
+      {
+        id: "cor24-q1",
+        part: "Part 5",
+        questionText: "The new regional warehouse facility is _______ spacious and conveniently located near major highways.",
+        options: {
+          A: "either",
+          B: "both",
+          C: "neither",
+          D: "whether"
+        },
+        correctAnswer: "B",
+        explanation: "Quan sát vế sau có liên từ 'and' kết nối hai tính từ 'spacious' và 'conveniently located'. Cặp liên từ đi với 'and' là 'both ... and' (cả ... và ...) -> chọn 'both'.",
+        trapNote: "Cặp từ: 'both A and B'; 'either' đi với 'or'; 'neither' đi với 'nor'.",
+        translation: "Cơ sở nhà kho khu vực mới vừa rộng rãi vừa có vị trí thuận tiện gần các tuyến đường cao tốc chính.",
+        difficulty: "350-500"
+      },
+      {
+        id: "cor24-q2",
+        part: "Part 5",
+        questionText: "Applicants may choose to take the qualification assessment either in person _______ via our secure online platform.",
+        options: {
+          A: "and",
+          B: "nor",
+          C: "or",
+          D: "but"
+        },
+        correctAnswer: "C",
+        explanation: "Phía trước có từ 'either'. Cặp liên từ tương quan bắt buộc là 'either ... or ...' (hoặc ... hoặc ...) -> chọn 'or'.",
+        trapNote: "Chỉ mất 2 giây: Thấy 'either' tìm ngay 'or'.",
+        translation: "Các ứng viên có thể chọn làm bài đánh giá năng lực trực tiếp hoặc thông qua nền tảng trực tuyến bảo mật của chúng tôi.",
+        difficulty: "350-500"
+      },
+      {
+        id: "cor24-q3",
+        part: "Part 5",
+        questionText: "Neither the marketing director _______ the sales representatives were available to attend the impromptu client meeting.",
+        options: {
+          A: "or",
+          B: "nor",
+          C: "and",
+          D: "also"
+        },
+        correctAnswer: "B",
+        explanation: "Đầu câu xuất hiện 'Neither'. Cặp liên từ tương quan tương ứng là 'neither ... nor ...' (cả ... và ... đều không) -> chọn 'nor'.",
+        trapNote: "Tuyệt đối không nhầm 'neither ... or'. Nhớ mẹo: Chữ 'n' đi với chữ 'n' (Neither đi với Nor).",
+        translation: "Cả giám đốc tiếp thị lẫn các đại diện bán hàng đều không có mặt để tham dự cuộc họp khách hàng đột xuất.",
+        difficulty: "500-750"
+      },
+      {
+        id: "cor24-q4",
+        part: "Part 5",
+        questionText: "The automated payment system is not only reliable _______ remarkably cost-effective for small enterprises.",
+        options: {
+          A: "as well as",
+          B: "and also",
+          C: "but also",
+          D: "or else"
+        },
+        correctAnswer: "C",
+        explanation: "Cấu trúc tương quan 'not only A but also B' (không những A mà còn B) -> chọn 'but also'.",
+        trapNote: "Đôi khi 'also' có thể được lược bỏ nhưng 'but' là bắt buộc.",
+        translation: "Hệ thống thanh toán tự động không những đáng tin cậy mà còn đem lại hiệu quả chi phí rõ rệt cho các doanh nghiệp nhỏ.",
+        difficulty: "500-750"
+      }
+    ],
+    studiedCount: 4,
+    correctCount: 4,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  // --- CÁC CHỦ ĐIỂM NGỮ PHÁP TIẾP THEO (ĐÃ ĐƯỢC CẬP NHẬT CHUẨN ĐỀ THI ETS 2024) ---
   {
     id: "g-present-perfect",
     code: "PPT-01",
-    title: "Thì Hiện Tại Hoàn Thành",
+    title: "Thì Hiện Tại Hoàn Thành (ETS 2024)",
     englishTitle: "Present Perfect Tense",
     part: "Part 5 & 6",
     targetScore: "500-750",
     status: "PUBLISHED",
-    summary: "Diễn tả hành động bắt đầu trong quá khứ và vẫn tiếp diễn ở hiện tại, hoặc vừa mới hoàn tất để lại kết quả.",
+    summary: "Diễn tả hành động bắt đầu trong quá khứ và vẫn tiếp diễn ở hiện tại, hoặc vừa mới hoàn tất để lại kết quả trong các thông báo doanh nghiệp ETS 2024.",
     formula: "S + have/has + V3/ed + O",
     signalWords: ["since + mốc thời gian", "for + khoảng thời gian", "already", "yet", "recently", "just", "so far", "over the past decade"],
     traps: [
       "Bẫy nhầm lẫn 'since' (mốc) và 'for' (khoảng).",
       "Bẫy từ 'past' trong cụm 'over the past 5 years' - đây là dấu hiệu Hiện Tại Hoàn Thành chứ KHÔNG phải Quá Khứ Đơn.",
-      "Chủ ngữ là danh từ số ít hoặc danh từ không đếm được dùng 'has', danh từ số nhiều dùng 'have'.",
+      "Chủ ngữ là danh từ số ít hoặc danh từ không đếm được dùng 'has', danh từ số nhiều dùng 'have'."
     ],
     examples: [
       {
         sentence: "Ms. Emily has managed this regional branch for over five years.",
         translation: "Cô Emily đã quản lý chi nhánh khu vực này được hơn năm năm.",
-        analysis: "Có 'for over five years' và chủ ngữ 'Ms. Emily' số ít -> dùng 'has managed'.",
+        analysis: "Có 'for over five years' và chủ ngữ 'Ms. Emily' số ít -> dùng 'has managed'."
       },
       {
         sentence: "Our engineering team has already completed the performance audit.",
         translation: "Đội ngũ kỹ thuật của chúng tôi đã hoàn thành xong việc kiểm toán hiệu suất.",
-        analysis: "'Already' đứng giữa trợ động từ has và V3 completed.",
-      },
+        analysis: "'Already' đứng giữa trợ động từ has và V3 completed."
+      }
     ],
     questions: [
       {
@@ -38,13 +445,13 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "manages",
           B: "has managed",
           C: "will manage",
-          D: "is managing",
+          D: "is managing"
         },
         correctAnswer: "B",
         explanation: "Dấu hiệu nhận biết 'for over five years' (khoảng thời gian từ quá khứ đến hiện tại) kết hợp với chủ ngữ ngôi thứ ba số ít 'Ms. Emily' đòi hỏi thì Hiện Tại Hoàn Thành: has + V3/ed (has managed).",
         trapNote: "Tránh nhầm với Hiện Tại Đơn (A) khi thấy 'each quarter' ở vế sau; động từ chính của câu gắn với trạng từ thời gian 'for over five years'.",
         translation: "Cô Emily đã quản lý chi nhánh khu vực này được hơn 5 năm, đạt mức tăng trưởng doanh thu kỷ lục mỗi quý.",
-        difficulty: "500-750",
+        difficulty: "500-750"
       },
       {
         id: "ppt-q2",
@@ -54,13 +461,13 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "have decreased",
           B: "decrease",
           C: "decreased",
-          D: "will decrease",
+          D: "will decrease"
         },
         correctAnswer: "A",
         explanation: "Cấu trúc với 'Since + mốc thời gian/sự kiện': mệnh đề chính bắt buộc chia thì Hiện Tại Hoàn Thành. Chủ ngữ 'errors' là danh từ số nhiều -> 'have decreased'.",
         trapNote: "Bẫy chọn 'decreased' (C) vì thấy chữ 'Since' tạo cảm giác thì quá khứ.",
         translation: "Kể từ khi đưa vào hệ thống kiểm kho tự động, các lỗi xử lý đơn hàng đã giảm gần 40 phần trăm.",
-        difficulty: "500-750",
+        difficulty: "500-750"
       },
       {
         id: "ppt-q3",
@@ -70,13 +477,13 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "finalize",
           B: "finalizes",
           C: "finalized",
-          D: "finalizing",
+          D: "finalizing"
         },
         correctAnswer: "C",
         explanation: "Sau trợ động từ 'has not', ta cần một quá khứ phân từ V3/ed để tạo thành thể phủ định thì Hiện Tại Hoàn Thành (has not finalized).",
         trapNote: "Từ 'yet' ở cuối câu là dấu hiệu kinh điển của thì Hiện Tại Hoàn Thành.",
         translation: "Ủy ban kiểm toán độc lập vẫn chưa hoàn tất báo cáo đánh giá tài chính hàng năm.",
-        difficulty: "350-500",
+        difficulty: "350-500"
       },
       {
         id: "ppt-q4",
@@ -86,41 +493,42 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "has registered",
           B: "registers",
           C: "is registering",
-          D: "registered",
+          D: "registered"
         },
         correctAnswer: "A",
         explanation: "Cụm từ 'Over the past / last + khoảng thời gian' bắt buộc chia thì Hiện Tại Hoàn Thành. Chủ ngữ 'facility' số ít -> 'has registered'.",
         trapNote: "Nhiều thí sinh thấy chữ 'past' vội chọn Quá Khứ Đơn (D) mà quên cụm 'Over the past decade'.",
         translation: "Trong suốt một thập kỷ qua, cơ sở nghiên cứu của chúng tôi đã đăng ký hơn 30 bằng sáng chế công nghệ năng lượng tái tạo.",
-        difficulty: "500-750",
-      },
+        difficulty: "500-750"
+      }
     ],
     studiedCount: 4,
     correctCount: 3,
     wrongCount: 1,
-    bookmarked: true,
+    bookmarked: true
   },
+
   {
     id: "g-simple-present",
     code: "SPT-02",
-    title: "Thì Hiện Tại Đơn",
+    title: "Thì Hiện Tại Đơn (ETS 2024)",
     englishTitle: "Simple Present Tense",
     part: "Part 5",
     targetScore: "350-500",
     status: "PUBLISHED",
-    summary: "Diễn tả quy định công ty, lịch trình tàu xe cố định, sự thật hiển nhiên hoặc công việc diễn ra thường xuyên.",
+    summary: "Diễn tả quy định công ty, lịch trình tàu xe cố định, sự thật hiển nhiên hoặc công việc diễn ra thường xuyên trong môi trường làm việc.",
     formula: "S + V(s/es) + O | S + am/is/are + Adj/N",
-    signalWords: ["always", "usually", "regularly", "on a quarterly basis", "every month", "often", "routinely"],
+    signalWords: ["always", "usually", "regularly", "on a quarterly basis", "every month", "often", "routinely", "normally"],
     traps: [
       "Bẫy danh từ ghép: Chủ ngữ dài có nhiều danh từ, chỉ danh từ chính đứng cuối hoặc trước giới từ mới quyết định chia số ít/nhiều.",
-      "Lịch trình giờ giấc của phương tiện giao thông hoặc hội nghị dùng Hiện Tại Đơn thay vì Tương Lai.",
+      "Lịch trình giờ giấc của phương tiện giao thông hoặc hội nghị dùng Hiện Tại Đơn thay vì Tương Lai."
     ],
     examples: [
       {
         sentence: "The compliance team reviews internal regulations on a quarterly basis.",
         translation: "Đội ngũ tuân thủ xem xét các quy định nội bộ theo định kỳ hàng quý.",
-        analysis: "Chủ ngữ 'team' số ít, trạng ngữ 'on a quarterly basis' -> reviews.",
-      },
+        analysis: "Chủ ngữ 'team' số ít, trạng ngữ 'on a quarterly basis' -> reviews."
+      }
     ],
     questions: [
       {
@@ -131,13 +539,13 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "review",
           B: "reviews",
           C: "reviewed",
-          D: "is reviewing",
+          D: "is reviewing"
         },
         correctAnswer: "B",
         explanation: "Cụm 'on a quarterly basis' (định kỳ mỗi quý) chỉ tính quy luật lặp lại. Chủ ngữ 'department' là danh từ số ít nên thêm 's': reviews.",
         trapNote: "Bẫy danh từ ghép: 'corporate compliance department' có từ cốt lõi là 'department' số ít.",
         translation: "Bộ phận tuân thủ doanh nghiệp đánh giá lại các quy định an toàn nội bộ theo định kỳ hàng quý.",
-        difficulty: "350-500",
+        difficulty: "350-500"
       },
       {
         id: "spt-q2",
@@ -147,41 +555,58 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "depart",
           B: "departs",
           C: "departed",
-          D: "departing",
+          D: "departing"
         },
         correctAnswer: "A",
         explanation: "Lịch trình tàu xe cố định chia Hiện Tại Đơn. Chủ ngữ 'Direct express trains' là số nhiều -> động từ nguyên mẫu: depart.",
         trapNote: "Chú ý đuôi danh từ số nhiều '-s' của trains.",
         translation: "Các chuyến tàu tốc hành trực tiếp tới Frankfurt thường khởi hành từ Ga số 4 lúc 7:15 sáng mỗi ngày trong tuần.",
-        difficulty: "350-500",
+        difficulty: "350-500"
       },
+      {
+        id: "spt-q3",
+        part: "Part 5",
+        questionText: "Dr. Alvarez regularly _______ international seminars on renewable energy solutions.",
+        options: {
+          A: "conduct",
+          B: "conducts",
+          C: "conducted",
+          D: "conducting"
+        },
+        correctAnswer: "B",
+        explanation: "Trạng từ tần suất 'regularly' (thường xuyên) đi với thì Hiện Tại Đơn. Chủ ngữ 'Dr. Alvarez' số ít -> động từ thêm 's': conducts.",
+        trapNote: "Chủ ngữ số ít đi kèm tên riêng đòi hỏi động từ thêm s/es.",
+        translation: "Tiến sĩ Alvarez thường xuyên tổ chức các hội thảo quốc tế về giải pháp năng lượng tái tạo.",
+        difficulty: "350-500"
+      }
     ],
-    studiedCount: 2,
-    correctCount: 2,
+    studiedCount: 3,
+    correctCount: 3,
     wrongCount: 0,
-    bookmarked: false,
+    bookmarked: false
   },
+
   {
     id: "g-simple-past",
     code: "PST-03",
-    title: "Thì Quá Khứ Đơn",
+    title: "Thì Quá Khứ Đơn (ETS 2024)",
     englishTitle: "Simple Past Tense",
     part: "Part 5 & 6",
     targetScore: "350-500",
     status: "PUBLISHED",
     summary: "Diễn tả sự kiện, giao dịch hoặc cuộc họp đã chấm dứt hoàn toàn trong quá khứ với mốc thời gian xác định rõ.",
     formula: "S + V2/ed + O | S + was/were + Adj/N",
-    signalWords: ["yesterday", "last week/month/year", "ago", "in + năm quá khứ", "previously", "formerly"],
+    signalWords: ["yesterday", "last week/month/year", "ago", "in + năm quá khứ", "previously", "formerly", "initially"],
     traps: [
       "Bẫy từ 'found': 'found' vừa là V2 của 'find' (tìm kiếm), vừa là V nguyên mẫu của 'found' (thành lập -> quá khứ là founded).",
-      "Không dùng Hiện Tại Hoàn Thành khi đã có mốc thời gian quá khứ rõ ràng như 'yesterday' hay 'in 2022'.",
+      "Không dùng Hiện Tại Hoàn Thành khi đã có mốc thời gian quá khứ rõ ràng như 'yesterday' hay 'in 2022'."
     ],
     examples: [
       {
         sentence: "The executive board approved the commercial merger agreement yesterday afternoon.",
         translation: "Ban điều hành đã phê duyệt thỏa thuận sáp nhập thương mại vào chiều hôm qua.",
-        analysis: "Có 'yesterday afternoon' -> động từ chia approved.",
-      },
+        analysis: "Có 'yesterday afternoon' -> động từ chia approved."
+      }
     ],
     questions: [
       {
@@ -192,13 +617,13 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "approved",
           B: "approves",
           C: "will approve",
-          D: "has approved",
+          D: "has approved"
         },
         correctAnswer: "A",
         explanation: "Có mốc thời gian xác định 'yesterday afternoon's session' nên chia Quá Khứ Đơn: approved.",
         trapNote: "Không chọn Hiện Tại Hoàn Thành (D) khi có 'yesterday'.",
         translation: "Ban điều hành đã phê duyệt thỏa thuận sáp nhập thương mại trong phiên họp chiều hôm qua.",
-        difficulty: "350-500",
+        difficulty: "350-500"
       },
       {
         id: "pst-q2",
@@ -208,537 +633,595 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
           A: "founded",
           B: "funds",
           C: "found",
-          D: "founding",
+          D: "founding"
         },
         correctAnswer: "A",
         explanation: "'Three years ago' yêu cầu thì Quá Khứ Đơn. Động từ 'found' (thành lập công ty) có quá khứ là 'founded'.",
         trapNote: "Tránh nhầm với 'found' là dạng quá khứ của 'find' (tìm thấy).",
         translation: "Ba năm trước, Tiến sĩ Jensen đã thành lập công ty khởi nghiệp dược phẩm mà sau này tiên phong phát triển loại vắc-xin này.",
-        difficulty: "500-750",
+        difficulty: "500-750"
       },
+      {
+        id: "pst-q3",
+        part: "Part 6",
+        questionText: "Last month, the logistics director _______ a comprehensive review of all freight transportation costs.",
+        options: {
+          A: "conducts",
+          B: "conducted",
+          C: "has conducted",
+          D: "conducting"
+        },
+        correctAnswer: "B",
+        explanation: "'Last month' là mốc thời gian đã chấm dứt trong quá khứ -> chia Quá Khứ Đơn: conducted.",
+        trapNote: "Không dùng thì hoàn thành khi có thời gian 'Last month'.",
+        translation: "Tháng trước, giám đốc logistics đã tiến hành đánh giá toàn diện mọi chi phí vận chuyển hàng hóa.",
+        difficulty: "350-500"
+      }
     ],
-    studiedCount: 2,
-    correctCount: 2,
+    studiedCount: 3,
+    correctCount: 3,
     wrongCount: 0,
-    bookmarked: false,
+    bookmarked: false
   },
+
   {
     id: "g-simple-future",
     code: "SFT-04",
-    title: "Thì Tương Lai & Mệnh Đề Thời Gian",
+    title: "Thì Tương Lai & Mệnh Đề Thời Gian (ETS 2024)",
     englishTitle: "Future Tenses & Time Clauses",
     part: "Part 5",
     targetScore: "350-500",
     status: "PUBLISHED",
-    summary: "Diễn tả kế hoạch dự kiến hoặc cam kết trong tương lai; quy tắc phối thì mệnh đề chỉ thời gian (when, as soon as, once).",
+    summary: "Diễn tả kế hoạch dự kiến hoặc cam kết trong tương lai; quy tắc phối thì mệnh đề chỉ thời gian (when, as soon as, once, after).",
     formula: "S + will + V_inf | Mệnh đề chính (will + V) + as soon as + Mệnh đề thời gian (Hiện tại đơn)",
-    signalWords: ["tomorrow", "next week", "soon", "shortly", "in the upcoming days", "as soon as", "once"],
+    signalWords: ["tomorrow", "next week", "soon", "shortly", "in the upcoming days", "as soon as", "once", "before", "after"],
     traps: [
-      "Bẫy phối thì kinh điển: Trong mệnh đề trạng ngữ chỉ thời gian bắt đầu bằng 'when/as soon as/after', TUYỆT ĐỐI không dùng 'will'.",
-      "Sau 'will' bắt buộc là động từ nguyên mẫu không chia to.",
+      "Bẫy phối thì kinh điển: Trong mệnh đề trạng ngữ chỉ thời gian bắt đầu bằng 'when/as soon as/after/once', TUYỆT ĐỐI không dùng 'will'.",
+      "Sau 'will' bắt buộc là động từ nguyên mẫu không chia to."
     ],
     examples: [
       {
         sentence: "We will dispatch your order as soon as the wire transfer confirmation is received.",
         translation: "Chúng tôi sẽ gửi đơn hàng ngay khi nhận được xác nhận chuyển khoản.",
-        analysis: "Vế chính dùng 'will dispatch', vế sau 'as soon as' dùng hiện tại đơn 'is received'.",
-      },
+        analysis: "Vế chính dùng 'will dispatch', vế sau 'as soon as' dùng hiện tại đơn 'is received'."
+      }
     ],
     questions: [
       {
         id: "sft-q1",
         part: "Part 5",
-        questionText: "We _______ your expedited shipment as soon as the wire transfer confirmation is verified.",
+        questionText: "The logistics warehouse _______ dispatch the replacement parts as soon as official payment is verified.",
         options: {
-          A: "will dispatch",
-          B: "dispatched",
-          C: "dispatch",
-          D: "have dispatched",
+          A: "will",
+          B: "was",
+          C: "has",
+          D: "did"
         },
         correctAnswer: "A",
-        explanation: "Cấu trúc mệnh đề trạng ngữ chỉ thời gian: Mệnh đề chính (Tương lai đơn: will dispatch) + as soon as + Mệnh đề thời gian (Hiện tại đơn: is verified).",
-        trapNote: "'Will' chỉ đứng ở mệnh đề chính, không đứng trong mệnh đề chứa 'as soon as'.",
-        translation: "Chúng tôi sẽ gửi kiện hàng hỏa tốc ngay khi xác nhận chuyển khoản được kiểm chứng.",
-        difficulty: "500-750",
+        explanation: "Mệnh đề chính đứng trước mệnh đề thời gian 'as soon as + hiện tại đơn' cần thì Tương Lai Đơn: will + dispatch.",
+        trapNote: "Cấu trúc: S + will + V_inf + as soon as + S + V(hiện tại đơn).",
+        translation: "Kho logistics sẽ gửi các linh kiện thay thế ngay khi thanh toán chính thức được xác minh.",
+        difficulty: "350-500"
       },
       {
         id: "sft-q2",
         part: "Part 5",
-        questionText: "The technical maintenance crew _______ the servers late tonight to minimize downtime.",
+        questionText: "Once the new security software _______ installed, employees may resume standard operations.",
         options: {
-          A: "will restart",
-          B: "restarted",
-          C: "have restarted",
-          D: "restarting",
+          A: "is",
+          B: "will be",
+          C: "was",
+          D: "been"
         },
         correctAnswer: "A",
-        explanation: "'Late tonight' (đêm muộn hôm nay) chỉ hành động sắp diễn ra trong tương lai -> will restart.",
-        trapNote: "Phân biệt với 'last night' (tối qua).",
-        translation: "Đội bảo trì kỹ thuật sẽ khởi động lại các máy chủ vào đêm muộn hôm nay để giảm thiểu gián đoạn.",
-        difficulty: "350-500",
-      },
-    ],
-    studiedCount: 0,
-    correctCount: 0,
-    wrongCount: 0,
-    bookmarked: false,
-  },
-  {
-    id: "g-passive-voice",
-    code: "PV-05",
-    title: "Câu Bị Động Trong Hợp Đồng & Quy Chế",
-    englishTitle: "Passive Voice in Business English",
-    part: "Part 5 & 6",
-    targetScore: "500-750",
-    status: "PUBLISHED",
-    summary: "Được dùng khi đối tượng chịu tác động quan trọng hơn chủ thể hành động. Rất phổ biến trong thông báo chính sách, tài liệu bảo mật và văn bản hợp đồng.",
-    formula: "S + be + V3/ed (+ by O) | Modal: S + modal + be + V3/ed",
-    signalWords: ["by + tân ngữ", "must be + V3/ed", "has been + V3/ed", "is scheduled to be + V3/ed"],
-    traps: [
-      "Bẫy trạng từ xen giữa: has been [completely] revised. Trạng từ đứng xen giữa 'be' và 'V3/ed' để bổ nghĩa.",
-      "Chủ ngữ là vật (báo cáo, đơn hàng, gói cước) hầu như luôn đi với câu bị động nếu phía sau không có tân ngữ trực tiếp.",
-    ],
-    examples: [
-      {
-        sentence: "All confidential financial statements must be reviewed before publication.",
-        translation: "Tất cả các báo cáo tài chính mật phải được xem xét kỹ lưỡng trước khi xuất bản.",
-        analysis: "Modal passive: must be reviewed.",
-      },
-    ],
-    questions: [
-      {
-        id: "pv-q1",
-        part: "Part 5",
-        questionText: "All confidential financial statements must be _______ by the certified public accountant before publication.",
-        options: {
-          A: "reviewed",
-          B: "review",
-          C: "reviewing",
-          D: "reviews",
-        },
-        correctAnswer: "A",
-        explanation: "Cấu trúc bị động với động từ khuyết thiếu: Modal Verb (must) + be + V3/ed (reviewed). Báo cáo tài chính chịu tác động hành động xem xét.",
-        trapNote: "Có 'by the accountant' là dấu hiệu điển hình của câu bị động.",
-        translation: "Tất cả các báo cáo tài chính mật phải được xem xét kỹ lưỡng bởi kế toán viên công chứng trước khi xuất bản.",
-        difficulty: "350-500",
-      },
-      {
-        id: "pv-q2",
-        part: "Part 6",
-        questionText: "The employee handbook has been completely _______ to reflect current remote work protocols.",
-        options: {
-          A: "revised",
-          B: "revising",
-          C: "revise",
-          D: "revision",
-        },
-        correctAnswer: "A",
-        explanation: "Cấu trúc bị động thì Hiện Tại Hoàn Thành: has been + (trạng từ completely) + V3/ed (revised). 'Sổ tay nhân viên' được sửa đổi.",
-        trapNote: "Trạng từ 'completely' đứng xen giữa để gây rối mắt thí sinh.",
-        translation: "Cuốn sổ tay nhân viên đã được sửa đổi toàn diện nhằm phản ánh đúng các quy trình làm việc từ xa hiện hành.",
-        difficulty: "500-750",
-      },
+        explanation: "Sau liên từ thời gian 'Once' (một khi), ta KHÔNG dùng 'will be' mà phải chia Hiện Tại Đơn bị động: 'is installed'.",
+        trapNote: "Bẫy chọn 'will be' (B) vì thấy vế sau có 'may resume' chỉ tương lai.",
+        translation: "Một khi phần mềm bảo mật mới được cài đặt, nhân viên có thể tiếp tục công việc bình thường.",
+        difficulty: "500-750"
+      }
     ],
     studiedCount: 2,
     correctCount: 2,
     wrongCount: 0,
-    bookmarked: true,
+    bookmarked: false
   },
+
   {
-    id: "g-conditionals",
-    code: "CS-06",
-    title: "Câu Điều Kiện & Đảo Ngữ Với Should/Had",
-    englishTitle: "Conditionals & Inversion in TOEIC",
-    part: "Part 5",
-    targetScore: "750+",
-    status: "PUBLISHED",
-    summary: "Câu điều kiện loại 1, 2, 3 và kỹ thuật Đảo ngữ câu điều kiện cực kỳ phổ biến trong các câu hỏi điểm 700+ TOEIC Part 5.",
-    formula: "Loại 1: If + S + V(hiện tại), S + will + V | Đảo ngữ loại 1: Should + S + V_inf, S + will/please + V",
-    signalWords: ["If", "Provided that", "As long as", "Should you require", "Had we known", "Unless (= If not)"],
-    traps: [
-      "Bẫy đảo ngữ Should: 'Should you have any questions...' đứng đầu câu không phải câu hỏi mà là câu điều kiện đảo ngữ mang nghĩa 'Nếu bạn có bất kỳ câu hỏi nào...'. Động từ sau 'Should + S' luôn ở dạng NGUYÊN THỂ.",
-      "Unless đã mang nghĩa phủ định, mệnh đề sau Unless không dùng dạng phủ định.",
-    ],
-    examples: [
-      {
-        sentence: "Should you require any further assistance with your travel itinerary, please contact our help desk.",
-        translation: "Nếu quý khách cần thêm bất kỳ sự hỗ trợ nào về lịch trình, xin vui lòng liên hệ bàn hỗ trợ của chúng tôi.",
-        analysis: "Đảo ngữ loại 1: Should + you + require (V_inf).",
-      },
-    ],
-    questions: [
-      {
-        id: "cs-q1",
-        part: "Part 5",
-        questionText: "Should you _______ any further assistance with your travel itinerary, please contact our help desk.",
-        options: {
-          A: "require",
-          B: "requires",
-          C: "required",
-          D: "requiring",
-        },
-        correctAnswer: "A",
-        explanation: "Đảo ngữ câu điều kiện loại 1: Đưa 'Should' lên đầu câu thay cho 'If', động từ theo sau luôn ở dạng NGUYÊN THỂ KHÔNG TO (Should + S + V_inf). Chọn 'require'.",
-        trapNote: "Bẫy kinh điển: Thí sinh tưởng 'Should' là trợ động từ câu hỏi hoặc chia theo ngôi mà chọn sai.",
-        translation: "Nếu quý khách cần thêm bất kỳ sự hỗ trợ nào về lịch trình, xin vui lòng liên hệ bàn hỗ trợ của chúng tôi.",
-        difficulty: "750+",
-      },
-      {
-        id: "cs-q2",
-        part: "Part 5",
-        questionText: "If the client _______ the revised proposal by Friday, we will immediately initiate the development phase.",
-        options: {
-          A: "approves",
-          B: "approved",
-          C: "will approve",
-          D: "approving",
-        },
-        correctAnswer: "A",
-        explanation: "Câu điều kiện loại 1: Mệnh đề If chia ở thì Hiện Tại Đơn (approves), mệnh đề chính chia ở Tương Lai Đơn (will initiate). Chủ ngữ 'the client' số ít -> 'approves'.",
-        trapNote: "Tuyệt đối không dùng 'will' trong mệnh đề If.",
-        translation: "Nếu khách hàng phê duyệt đề xuất đã chỉnh sửa trước thứ Sáu, chúng tôi sẽ ngay lập tức khởi động giai đoạn phát triển.",
-        difficulty: "500-750",
-      },
-    ],
-    studiedCount: 2,
-    correctCount: 1,
-    wrongCount: 1,
-    bookmarked: true,
-  },
-  {
-    id: "g-relative-clauses",
-    code: "RC-07",
-    title: "Mệnh Đề Quan Hệ & Rút Gọn Mệnh Đề",
-    englishTitle: "Relative Clauses & Reduced Participles",
+    id: "g-passive-voice",
+    code: "PAS-05",
+    title: "Câu Bị Động Trong Hợp Đồng & Quy Chế (ETS 2024)",
+    englishTitle: "Passive Voice in Business TOEIC",
     part: "Part 5 & 6",
     targetScore: "500-750",
     status: "PUBLISHED",
-    summary: "Đại từ quan hệ (who, whom, which, whose, that) và kỹ thuật Rút gọn mệnh đề quan hệ dạng V-ing (chủ động) / V-ed (bị động).",
-    formula: "N(người) + who + V | N(sở hữu) + whose + N | Rút gọn: N + V-ing (chủ động) / V-ed (bị động)",
-    signalWords: ["who", "whom", "which", "whose", "those who", "the candidate who", "all items purchased"],
+    summary: "Đặc trưng văn phong hành chính thương mại TOEIC: Chủ ngữ là đồ vật, hợp đồng, đơn hàng hay quy trình chịu sự tác động.",
+    formula: "S + be + V3/ed (+ by O) | S + modal verb + be + V3/ed",
+    signalWords: ["by + tác nhân", "be required to", "be scheduled to", "be expected to", "be notified of", "be held in"],
     traps: [
-      "Bẫy whose: Nếu sau chỗ trống là một DANH TỪ không có mạo từ (a/an/the) thì gần như 100% chọn 'whose'.",
-      "Bẫy rút gọn mệnh đề: Câu đã có động từ chính, động từ bổ nghĩa đứng sau danh từ phải rút gọn thành V-ing hoặc V-ed.",
+      "Bẫy thiếu 'to be': Đừng nhầm lẫn giữa V-ed làm tính từ rút gọn và động từ vị ngữ chính (phải có Be + V3/ed).",
+      "Nội động từ (arrive, happen, occur, remain, fall, rise) TUYỆT ĐỐI KHÔNG chia ở thể bị động."
     ],
     examples: [
       {
-        sentence: "Job applicants who possess at least three years of project management experience will be prioritized.",
-        translation: "Các ứng viên sở hữu ít nhất ba năm kinh nghiệm quản lý dự án sẽ được ưu tiên.",
-        analysis: "Who làm chủ ngữ thay thế cho Job applicants.",
-      },
-      {
-        sentence: "Please direct your inquiries to the department supervisor whose office is on the fourth floor.",
-        translation: "Xin vui lòng gửi thắc mắc tới giám sát bộ phận, người có văn phòng ở tầng 4.",
-        analysis: "Whose office: văn phòng của giám sát đó.",
-      },
+        sentence: "All signed nondisclosure agreements must be submitted to legal counsel by 5 PM.",
+        translation: "Mọi thỏa thuận bảo mật đã ký phải được nộp cho cố vấn pháp lý trước 5 giờ chiều.",
+        analysis: "Chủ ngữ là thỏa thuận (vật) -> bị động 'must be submitted'."
+      }
     ],
     questions: [
       {
-        id: "rc-q1",
+        id: "pas-q1",
         part: "Part 5",
-        questionText: "Job applicants _______ possess at least three years of project management experience will be prioritized.",
+        questionText: "All confidential financial records must _______ in the locked filing cabinets overnight.",
         options: {
-          A: "who",
-          B: "whom",
-          C: "which",
-          D: "whose",
+          A: "store",
+          B: "be stored",
+          C: "storing",
+          D: "stored"
         },
-        correctAnswer: "A",
-        explanation: "Đại từ quan hệ thay thế cho danh từ chỉ người 'Job applicants' và làm CHỦ NGỮ trước động từ 'possess' phải là 'who'.",
-        trapNote: "Không dùng 'whom' vì sau 'whom' phải là mệnh đề S + V (tân ngữ).",
-        translation: "Các ứng viên sở hữu ít nhất ba năm kinh nghiệm quản lý dự án sẽ được ưu tiên xem xét.",
-        difficulty: "350-500",
+        correctAnswer: "B",
+        explanation: "Sau động từ khuyết thiếu 'must', chủ ngữ 'confidential financial records' (hồ sơ tài chính) là vật nên phải chia bị động: must + be + V3/ed (be stored).",
+        trapNote: "Không chọn (A) 'store' vì tài liệu không thể tự lưu trữ mà phải 'được lưu trữ'.",
+        translation: "Tất cả hồ sơ tài chính mật phải được lưu trữ trong tủ hồ sơ có khóa qua đêm.",
+        difficulty: "350-500"
       },
       {
-        id: "rc-q2",
+        id: "pas-q2",
         part: "Part 5",
-        questionText: "Please direct your inquiries to the department supervisor _______ office is on the fourth floor.",
+        questionText: "Unexpected delays occurred when the cargo container ship _______ during the storm.",
         options: {
-          A: "whose",
-          B: "who",
-          C: "which",
-          D: "whom",
+          A: "damaged",
+          B: "was damaged",
+          C: "is damaging",
+          D: "damage"
         },
-        correctAnswer: "A",
-        explanation: "Đại từ quan hệ chỉ sở hữu: N(người) + WHOSE + N(vật sở hữu). 'whose office' = văn phòng của người giám sát đó.",
-        trapNote: "Nhận biết: 'office' đứng ngay sau khoảng trống không có mạo từ a/the -> chọn 'whose'.",
-        translation: "Xin vui lòng gửi thắc mắc của bạn tới người giám sát bộ phận, người có văn phòng làm việc ở tầng bốn.",
-        difficulty: "500-750",
-      },
+        correctAnswer: "B",
+        explanation: "Con tàu 'cargo container ship' bị hư hại bởi bão trong quá khứ -> chia thì Quá Khứ Đơn thể Bị Động: was damaged.",
+        trapNote: "Lưu ý 'occurred' là nội động từ ở vế trước không chia bị động.",
+        translation: "Sự chậm trễ ngoài dự kiến đã xảy ra khi tàu container chở hàng bị hư hại trong cơn bão.",
+        difficulty: "500-750"
+      }
     ],
-    studiedCount: 0,
-    correctCount: 0,
+    studiedCount: 2,
+    correctCount: 2,
     wrongCount: 0,
-    bookmarked: false,
+    bookmarked: false
   },
+
   {
-    id: "g-subject-verb-agreement",
-    code: "SVA-08",
-    title: "Hòa Hợp Chủ Ngữ & Động Từ",
-    englishTitle: "Subject-Verb Agreement",
+    id: "g-conditionals",
+    code: "CND-06",
+    title: "Câu Điều Kiện & Đảo Ngữ Với Should/Had (ETS 2024)",
+    englishTitle: "Conditionals & Inversions",
     part: "Part 5",
-    targetScore: "500-750",
+    targetScore: "750+",
     status: "PUBLISHED",
-    summary: "Quy tắc xác định danh từ chính để chia động từ số ít hoặc số nhiều. Cảnh giác với cụm giới từ xen giữa và các đại từ bất định.",
-    formula: "The N1 + prep + N2 -> Động từ chia theo N1! | Either... or / Neither... nor -> Động từ chia theo S gần nhất!",
-    signalWords: ["The delivery of raw materials IS...", "Each/Every + N số ít -> V số ít", "Neither... nor", "A variety of + Ns -> V số nhiều"],
+    summary: "Cấu trúc điều kiện Loại 1, Loại 2 và đặc biệt là Đảo ngữ với Should/Had/Were – dấu hiệu nhận diện câu hỏi điểm 800+ trong đề ETS.",
+    formula: "Type 1: If + S + V(hiện tại), S + will + V | Đảo ngữ loại 1: Should + S + V_inf, S + will/please + V",
+    signalWords: ["if", "unless (= if not)", "provided that", "in case of", "should you have any questions"],
     traps: [
-      "Bẫy danh từ gần kề: Thí sinh thấy danh từ số nhiều đứng ngay trước chỗ trống (sau giới từ of/in) liền vội chia số nhiều.",
-      "Phân biệt: 'The variety of + Ns' -> V số ít; còn 'A variety of + Ns' -> V số nhiều.",
+      "Bẫy đảo ngữ loại 1: 'Should you require any assistance, please contact us' -> Đứng đầu câu có 'Should' nhưng cuối câu là dấu chấm chứ KHÔNG phải dấu hỏi chấm.",
+      "Sau 'Should' trong đảo ngữ, động từ LUÔN ở dạng nguyên mẫu không 'to' (V_inf)."
     ],
     examples: [
       {
-        sentence: "The delivery of raw materials to the manufacturing plants has been delayed due to customs inspections.",
-        translation: "Việc giao nguyên liệu thô đến các nhà máy sản xuất đã bị trì hoãn do kiểm tra hải quan.",
-        analysis: "Chủ ngữ chính là 'The delivery' (số ít) -> has been delayed.",
+        sentence: "Should you experience technical difficulties, please notify IT support immediately.",
+        translation: "Nếu bạn gặp sự cố kỹ thuật, vui lòng thông báo cho bộ phận IT ngay lập tức.",
+        analysis: "Đảo ngữ loại 1 bỏ If, đưa Should lên đầu câu: Should + you + experience (V_inf)."
+      }
+    ],
+    questions: [
+      {
+        id: "cnd-q1",
+        part: "Part 5",
+        questionText: "_______ you require additional promotional materials, please inform our marketing desk.",
+        options: {
+          A: "Should",
+          B: "Would",
+          C: "Could",
+          D: "Might"
+        },
+        correctAnswer: "A",
+        explanation: "Đảo ngữ câu điều kiện loại 1: Bỏ 'If', đưa 'Should' lên đầu câu đứng trước chủ ngữ 'you' và động từ nguyên mẫu 'require'. Cuối câu có mệnh đề mệnh lệnh 'please inform...'.",
+        trapNote: "Cụm 'Should you require / Should you need' là mẫu câu đảo ngữ thương mại thông dụng nhất trong TOEIC.",
+        translation: "Nếu bạn cần thêm tài liệu quảng cáo, vui lòng thông báo cho bàn tiếp thị của chúng tôi.",
+        difficulty: "750+"
       },
+      {
+        id: "cnd-q2",
+        part: "Part 5",
+        questionText: "Unless the contractor _______ the safety certification, work on the tunnel cannot proceed.",
+        options: {
+          A: "renews",
+          B: "will renew",
+          C: "renewed",
+          D: "renewing"
+        },
+        correctAnswer: "A",
+        explanation: "Sau 'Unless' (nếu không) là mệnh đề điều kiện loại 1 chia thì Hiện Tại Đơn. Chủ ngữ 'the contractor' số ít -> 'renews'.",
+        trapNote: "Tuyệt đối không dùng 'will' trong mệnh đề chứa 'Unless'.",
+        translation: "Nếu nhà thầu không gia hạn chứng nhận an toàn, công việc tại đường hầm không thể tiến hành.",
+        difficulty: "500-750"
+      }
+    ],
+    studiedCount: 2,
+    correctCount: 2,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  {
+    id: "g-relative-clauses",
+    code: "REL-07",
+    title: "Mệnh Đề Quan Hệ & Rút Gọn Mệnh Đề (ETS 2024)",
+    englishTitle: "Relative Clauses & Reductions",
+    part: "Part 5 & 6",
+    targetScore: "500-750",
+    status: "PUBLISHED",
+    summary: "Đại từ quan hệ (who, whom, which, that, whose) và kỹ thuật rút gọn thành V-ing / V-ed cực kỳ phổ biến trong đề thi.",
+    formula: "Who + V (chỉ người) | Which + V/S-V (chỉ vật) | Whose + Noun (sở hữu) | Rút gọn: Noun + V-ing (chủ động) / V3-ed (bị động)",
+    signalWords: ["who", "whom", "whose + danh từ", "which", "that", "those who + V_plural"],
+    traps: [
+      "Bẫy 'whose': Phía sau 'whose' bắt buộc là một DANH TỪ không có mạo từ (a/an/the).",
+      "'That' không bao giờ đứng sau dấu phẩy hoặc sau giới từ.",
+      "Cấu trúc kinh điển: 'Those who + V(số nhiều)' = những người mà..."
+    ],
+    examples: [
+      {
+        sentence: "Those employees who wish to register for the workshop should email HR.",
+        translation: "Những nhân viên muốn đăng ký hội thảo nên gửi email cho phòng nhân sự.",
+        analysis: "'Those who' chỉ những người làm hành động."
+      }
+    ],
+    questions: [
+      {
+        id: "rel-q1",
+        part: "Part 5",
+        questionText: "Candidates _______ resumes demonstrate extensive enterprise software experience will be shortlisted.",
+        options: {
+          A: "who",
+          B: "whose",
+          C: "which",
+          D: "whom"
+        },
+        correctAnswer: "B",
+        explanation: "Phía trước là 'Candidates' (ứng viên), phía sau là danh từ 'resumes' (hồ sơ lý lịch). Mối quan hệ sở hữu: Hồ sơ của các ứng viên -> chọn 'whose'.",
+        trapNote: "Bẫy chọn 'who' vì thấy 'Candidates' là người, nhưng bỏ quên danh từ 'resumes' ngay phía sau.",
+        translation: "Những ứng viên có hồ sơ thể hiện kinh nghiệm phần mềm doanh nghiệp sâu rộng sẽ được đưa vào danh sách rút gọn.",
+        difficulty: "500-750"
+      },
+      {
+        id: "rel-q2",
+        part: "Part 5",
+        questionText: "Those _______ wish to participate in the mentoring program must submit an essay by Friday.",
+        options: {
+          A: "who",
+          B: "which",
+          C: "whom",
+          D: "whose"
+        },
+        correctAnswer: "A",
+        explanation: "Cụm đại từ quan hệ cố định 'Those who + V_plural' (những người mà...).",
+        trapNote: "'Those who' là cụm cố định thử thách học viên ở Part 5.",
+        translation: "Những ai muốn tham gia chương trình cố vấn phải nộp một bài luận trước thứ Sáu.",
+        difficulty: "350-500"
+      }
+    ],
+    studiedCount: 2,
+    correctCount: 2,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  {
+    id: "g-subject-verb-agreement",
+    code: "SVA-08",
+    title: "Hòa Hợp Chủ Ngữ & Động Từ (ETS 2024)",
+    englishTitle: "Subject-Verb Agreement",
+    part: "Part 5",
+    targetScore: "350-500",
+    status: "PUBLISHED",
+    summary: "Xác định đúng chủ ngữ thật trong câu khi bị ngăn cách bởi cụm giới từ, mệnh đề quan hệ hoặc các liên từ đi kèm (along with, as well as).",
+    formula: "S1 + (along with / as well as / together with + S2) + V(chia theo S1) | Each/Every + N_singular + V_singular",
+    signalWords: ["each of", "every", "along with", "together with", "a number of (+ V số nhiều)", "the number of (+ V số ít)"],
+    traps: [
+      "Bẫy cụm giới từ xen giữa: 'The delivery of office supplies is late' -> Chủ ngữ chính là 'delivery' (số ít) chứ không phải 'supplies'.",
+      "'A number of + N số nhiều' đi với động từ số nhiều; 'The number of + N số nhiều' đi với động từ số ít.",
+      "'Each' và 'Every' luôn đi với động từ số ít."
+    ],
+    examples: [
+      {
+        sentence: "The quality of these manufactured components meets international safety benchmarks.",
+        translation: "Chất lượng của các linh kiện sản xuất này đáp ứng tiêu chuẩn an toàn quốc tế.",
+        analysis: "Chủ ngữ thật là 'quality' (số ít) -> meets."
+      }
     ],
     questions: [
       {
         id: "sva-q1",
         part: "Part 5",
-        questionText: "The delivery of raw materials to the manufacturing plants _______ delayed due to customs inspections.",
+        questionText: "The assembly of electronic microchips _______ extreme precision and sterile cleanroom conditions.",
         options: {
-          A: "has been",
-          B: "have been",
-          C: "are",
-          D: "were",
+          A: "requires",
+          B: "require",
+          C: "requiring",
+          D: "are requiring"
         },
         correctAnswer: "A",
-        explanation: "Danh từ đứng trước giới từ 'of' là 'The delivery' (số ít), các thành phần sau chỉ là bổ ngữ. Do đó động từ chia số ít: 'has been'.",
-        trapNote: "Bẫy danh từ gần kề: 'plants' hay 'materials' số nhiều nằm ngay trước chỗ trống để đánh lừa thị giác.",
-        translation: "Việc giao nguyên liệu thô đến các nhà máy sản xuất đã bị trì hoãn do kiểm tra hải quan.",
-        difficulty: "500-750",
+        explanation: "Chủ ngữ chính đứng trước giới từ 'of' là danh từ không đếm được 'The assembly' (quá trình lắp ráp) -> động từ chia ngôi thứ ba số ít: requires.",
+        trapNote: "Nhiều thí sinh nhìn thấy 'microchips' số nhiều vội chọn (B) require.",
+        translation: "Quá trình lắp ráp vi mạch điện tử đòi hỏi độ chính xác cao và điều kiện phòng sạch vô trùng.",
+        difficulty: "350-500"
       },
       {
         id: "sva-q2",
         part: "Part 5",
-        questionText: "Neither the regional manager nor the sales representatives _______ aware of the sudden policy change.",
+        questionText: "The number of domestic tourists visiting coastal resorts _______ increased significantly this summer.",
         options: {
-          A: "were",
-          B: "was",
-          C: "is",
-          D: "has been",
+          A: "has",
+          B: "have",
+          C: "are",
+          D: "were"
         },
         correctAnswer: "A",
-        explanation: "Quy tắc 'Neither... nor...': Động từ chia theo CHỦ NGỮ GẦN NHẤT. Chủ ngữ gần nhất là 'the sales representatives' (số nhiều) -> dùng 'were'.",
-        trapNote: "Nhiều người nhìn 'manager' ở vế trước rồi chọn 'was' là sai quy tắc gần nhất.",
-        translation: "Cả người quản lý khu vực lẫn các đại diện bán hàng đều không hay biết về sự thay đổi chính sách đột ngột.",
-        difficulty: "500-750",
-      },
+        explanation: "Cấu trúc 'The number of + N số nhiều' làm chủ ngữ bắt buộc chia động từ ở dạng số ít: has increased.",
+        trapNote: "Phân biệt: 'The number of' -> số ít (has); 'A number of' -> số nhiều (have).",
+        translation: "Số lượng khách du lịch nội địa đến các khu nghỉ dưỡng ven biển đã tăng lên đáng kể vào mùa hè này.",
+        difficulty: "500-750"
+      }
     ],
-    studiedCount: 0,
-    correctCount: 0,
+    studiedCount: 2,
+    correctCount: 2,
     wrongCount: 0,
-    bookmarked: false,
+    bookmarked: false
   },
+
   {
     id: "g-conjunctions-prepositions",
-    code: "CP-09",
-    title: "Phân Biệt Liên Từ & Giới Từ",
+    code: "CNJ-09",
+    title: "Phân Biệt Liên Từ & Giới Từ (ETS 2024)",
     englishTitle: "Conjunctions vs Prepositions",
-    part: "Part 5",
+    part: "Part 5 & 6",
     targetScore: "500-750",
     status: "PUBLISHED",
-    summary: "Phân biệt liên từ (nối mệnh đề có S + V: Although, Because, While) và giới từ (nối cụm danh từ/V-ing: Despite, Because of, During).",
-    formula: "Liên từ + S + V | Giới từ + Noun Phrase / V-ing",
-    signalWords: ["Although vs Despite", "Because vs Due to / Because of", "While vs During", "By vs Until"],
+    summary: "Dạng bài kinh điển phân biệt giữa từ nối mệnh đề (Conjunction + S + V) và từ đi kèm cụm danh từ (Preposition + Noun/V-ing).",
+    formula: "Liên từ + S + V (although, because, while) vs Giới từ + Noun / V-ing (despite, because of, during)",
+    signalWords: ["although vs despite", "because vs because of", "while vs during", "due to", "in spite of", "provided that"],
     traps: [
-      "Bẫy cấu trúc: Thấy danh từ dài có tính từ bổ nghĩa phía sau tưởng là mệnh đề, chọn Although thay vì Despite.",
-      "Phân biệt 'by' (hoàn thành trước thời hạn deadline) và 'until' (hành động duy trì liên tục đến mốc giờ).",
+      "'Despite / In spite of' + Cụm danh từ / V-ing (KHÔNG có 'of' sau despite).",
+      "'During + khoảng thời gian/sự kiện' (during the meeting); 'For + khoảng thời gian có số đếm' (for three weeks).",
+      "'Because of / Due to' + Danh từ; 'Because / Since' + Mệnh đề."
     ],
     examples: [
       {
-        sentence: "Despite torrential downpours, the corporate charity marathon was conducted on schedule.",
-        translation: "Mặc dù mưa như trút nước, cuộc chạy marathon từ thiện của công ty vẫn diễn ra đúng tiến độ.",
-        analysis: "Sau chỗ trống là cụm danh từ 'torrential downpours' -> dùng giới từ Despite.",
-      },
+        sentence: "Despite severe weather conditions, the cargo vessel arrived at the port safely.",
+        translation: "Mặc dù điều kiện thời tiết khắc nghiệt, tàu chở hàng đã cập cảng an toàn.",
+        analysis: "Sau 'Despite' là cụm danh từ 'severe weather conditions'."
+      }
     ],
     questions: [
       {
-        id: "cp-q1",
+        id: "cnj-q1",
         part: "Part 5",
-        questionText: "_______ torrential downpours, the corporate charity marathon was conducted on schedule.",
+        questionText: "_______ persistent rainfall throughout the morning, attendance at the outdoor product exhibition remained robust.",
         options: {
           A: "Despite",
           B: "Although",
           C: "Even though",
-          D: "In spite",
+          D: "Whereas"
         },
         correctAnswer: "A",
-        explanation: "Sau chỗ trống là cụm danh từ 'torrential downpours'. Để chỉ sự tương phản đi với cụm danh từ, dùng giới từ 'Despite'.",
-        trapNote: "'Although' và 'Even though' phải đi với mệnh đề (S + V). 'In spite' thiếu chữ 'of'.",
-        translation: "Mặc dù trời mưa như trút nước, cuộc chạy marathon từ thiện của công ty vẫn được diễn ra đúng tiến độ.",
-        difficulty: "500-750",
+        explanation: "Phía sau chỗ trống là một cụm danh từ 'persistent rainfall throughout the morning', không có động từ vị ngữ chia thì. Cần một giới từ chỉ sự nhượng bộ -> chọn 'Despite'.",
+        trapNote: "Các phương án B, C, D đều là liên từ bắt buộc phải có mệnh đề (S + V) theo sau.",
+        translation: "Mặc dù trời mưa dai dẳng suốt buổi sáng, lượng người tham dự triển lãm sản phẩm ngoài trời vẫn duy trì ở mức cao.",
+        difficulty: "500-750"
       },
       {
-        id: "cp-q2",
+        id: "cnj-q2",
         part: "Part 5",
-        questionText: "The final revisions to the construction blueprint must be submitted _______ 5:00 PM on Friday.",
+        questionText: "Flight UA-402 was rerouted _______ heavy fog severely reduced runway visibility at Seattle Airport.",
         options: {
-          A: "by",
-          B: "until",
-          C: "during",
-          D: "while",
+          A: "because",
+          B: "because of",
+          C: "due to",
+          D: "owing to"
         },
         correctAnswer: "A",
-        explanation: "Giới từ 'by' diễn tả hành động hoàn tất muộn nhất vào một thời hạn cụ thể (trước 5h chiều). 'Until' dùng cho hành động kéo dài liên tục.",
-        trapNote: "Nộp bài là hành động hoàn tất dứt điểm tại một thời điểm nên dùng 'by'.",
-        translation: "Các bản sửa đổi cuối cùng cho bản vẽ xây dựng phải được nộp trước 5 giờ chiều thứ Sáu.",
-        difficulty: "500-750",
-      },
+        explanation: "Phía sau chỗ trống là mệnh đề hoàn chỉnh có chủ ngữ 'heavy fog' và động từ chia thì 'severely reduced'. Cần liên từ chỉ nguyên nhân -> chọn 'because'.",
+        trapNote: "B, C, D đều là giới từ đi kèm cụm danh từ.",
+        translation: "Chuyến bay UA-402 đã bị đổi hướng vì sương mù dày đặc làm giảm nghiêm trọng tầm nhìn đường băng tại Sân bay Seattle.",
+        difficulty: "500-750"
+      }
     ],
-    studiedCount: 0,
-    correctCount: 0,
+    studiedCount: 2,
+    correctCount: 2,
     wrongCount: 0,
-    bookmarked: true,
+    bookmarked: true
   },
+
   {
     id: "g-gerund-infinitive",
-    code: "GI-10",
-    title: "Danh Động Từ & Động Từ Nguyên Mẫu",
-    englishTitle: "Gerunds (V-ing) & Infinitives (To-V)",
+    code: "GER-10",
+    title: "Danh Động Từ & Động Từ Nguyên Mẫu (ETS 2024)",
+    englishTitle: "Gerunds & Infinitives",
     part: "Part 5",
     targetScore: "500-750",
     status: "PUBLISHED",
-    summary: "Quy tắc sử dụng V-ing hoặc To-V sau các động từ và cụm thành ngữ đặc thù trong văn phong công sở tiếng Anh.",
-    formula: "Verb + V-ing: postpone, consider, avoid, finish | Verb + To-V: decide, plan, agree, hesitate",
-    signalWords: ["look forward to + V-ing", "be committed to + V-ing", "consider + V-ing", "hesitate to + V", "aim to + V"],
+    summary: "Quy tắc dùng V-ing sau giới từ và các động từ đặc biệt (consider, avoid, enjoy), và dùng To-V chỉ mục đích hoặc đi sau các động từ (plan, decide, hesitate).",
+    formula: "Giới từ + V-ing | To-V chỉ mục đích | look forward to + V-ing",
+    signalWords: ["look forward to + V-ing", "in order to + V_inf", "hesitate to", "capable of + V-ing", "be committed to + V-ing"],
     traps: [
-      "Bẫy chữ 'to': Nhiều người thấy 'to' trong 'look forward to' hoặc 'be committed to' liền chia V nguyên mẫu, nhưng 'to' ở đây là giới từ nên bắt buộc theo sau là V-ing!",
+      "Bẫy chữ 'to': Trong cụm 'look forward to', 'be committed to', 'be dedicated to', 'object to', 'prior to', chữ 'to' là GIỚI TỪ nên sau đó phải là V-ing chứ KHÔNG phải V nguyên mẫu.",
+      "Cấu trúc 'in order to / so as to' + V nguyên mẫu để chỉ mục đích."
     ],
     examples: [
       {
-        sentence: "The management committee is considering implementing a new flexible hybrid work schedule.",
-        translation: "Ủy ban quản lý đang cân nhắc áp dụng một lịch làm việc kết hợp linh hoạt mới.",
-        analysis: "Consider + V-ing -> implementing.",
-      },
+        sentence: "Our engineering staff is committed to improving industrial energy efficiency.",
+        translation: "Đội ngũ kỹ sư của chúng tôi cam kết cải thiện hiệu quả năng lượng công nghiệp.",
+        analysis: "'be committed to' + V-ing (improving)."
+      }
     ],
     questions: [
       {
-        id: "gi-q1",
+        id: "ger-q1",
         part: "Part 5",
-        questionText: "The management committee is considering _______ a new flexible hybrid work schedule starting next month.",
+        questionText: "We look forward to _______ your delegation at our international corporate headquarters next week.",
         options: {
-          A: "implementing",
-          B: "to implement",
-          C: "implement",
-          D: "implemented",
+          A: "welcome",
+          B: "welcoming",
+          C: "welcomed",
+          D: "welcomes"
         },
-        correctAnswer: "A",
-        explanation: "Động từ 'consider' theo sau bắt buộc là Danh động từ V-ing (consider doing something: cân nhắc làm gì). Chọn 'implementing'.",
-        trapNote: "Nhiều người nghĩ 'cân nhắc để làm' nên chọn 'to implement', nhưng theo quy tắc chuẩn là consider + V-ing.",
-        translation: "Ủy ban quản lý đang cân nhắc áp dụng lịch trình làm việc kết hợp linh hoạt mới từ tháng sau.",
-        difficulty: "500-750",
+        correctAnswer: "B",
+        explanation: "Cụm 'look forward to' có 'to' là giới từ, do đó động từ theo sau bắt buộc ở dạng V-ing: welcoming.",
+        trapNote: "Bẫy kinh điển: Thấy 'to' vội vàng chọn động từ nguyên thể (A) welcome.",
+        translation: "Chúng tôi rất mong đợi được đón tiếp phái đoàn của bạn tại trụ sở công ty quốc tế của chúng tôi vào tuần tới.",
+        difficulty: "500-750"
       },
       {
-        id: "gi-q2",
+        id: "ger-q2",
         part: "Part 5",
-        questionText: "The logistics provider agreed _______ full compensation for all merchandise damaged during transit.",
+        questionText: "The executive team implemented stricter internal guidelines in order to _______ supply chain waste.",
         options: {
-          A: "to provide",
-          B: "providing",
-          C: "provide",
-          D: "provision",
+          A: "reduce",
+          B: "reducing",
+          C: "reduction",
+          D: "reduced"
         },
         correctAnswer: "A",
-        explanation: "Cấu trúc 'agree to do something' (đồng ý làm gì) đòi hỏi động từ nguyên mẫu có 'to' -> 'to provide'.",
-        trapNote: "'Agree' đi với 'to V', không đi với V-ing.",
-        translation: "Nhà cung cấp dịch vụ hậu cần đã đồng ý bồi thường toàn bộ cho số hàng hóa bị hư hỏng trong quá trình vận chuyển.",
-        difficulty: "500-750",
-      },
+        explanation: "Cụm 'in order to' (để mà) đi kèm động từ nguyên mẫu không 'to' (V_inf) để chỉ mục đích hành động -> chọn 'reduce'.",
+        trapNote: "'in order to + V_inf' vs 'with a view to + V-ing'.",
+        translation: "Ban điều hành đã thực hiện các hướng dẫn nội bộ chặt chẽ hơn nhằm giảm lãng phí trong chuỗi cung ứng.",
+        difficulty: "350-500"
+      }
     ],
-    studiedCount: 0,
-    correctCount: 0,
+    studiedCount: 2,
+    correctCount: 2,
     wrongCount: 0,
-    bookmarked: false,
+    bookmarked: false
   },
+
   {
     id: "g-comparatives",
     code: "CMP-11",
-    title: "So Sánh Tính Từ & Trạng Từ",
+    title: "So Sánh Tính Từ & Trạng Từ (ETS 2024)",
     englishTitle: "Comparatives & Superlatives",
     part: "Part 5",
     targetScore: "500-750",
     status: "PUBLISHED",
-    summary: "Cấu trúc so sánh hơn, so sánh nhất và các trạng từ nhấn mạnh mức độ so sánh cực hay thi trong TOEIC (much, significantly, far).",
-    formula: "Adj-er / More + Adj + THAN | THE + Adj-est / Most + Adj | Trạng từ nhấn mạnh: significantly/much + more...",
-    signalWords: ["than", "the most", "significantly more", "much better", "as... as", "one of the most"],
+    summary: "So sánh hơn (-er / more than), so sánh nhất (the -est / the most) và cấu trúc so sánh bằng (as...as) trong các báo cáo kinh doanh.",
+    formula: "Adj-er / more + Adj + than | the + Adj-est / the most + Adj | as + Adj/Adv + as",
+    signalWords: ["than", "the most", "among all", "by far the best", "as...as", "much/far/significantly + so sánh hơn"],
     traps: [
-      "Bẫy trạng từ bổ nghĩa so sánh hơn: Chỉ có các từ như 'much, far, significantly, considerably' mới được đứng trước so sánh hơn, KHÔNG dùng 'very' trước so sánh hơn.",
+      "Trạng từ nhấn mạnh so sánh hơn: Dùng 'much / far / significantly / considerably / substantially' để bổ nghĩa cho so sánh hơn (TUYỆT ĐỐI không dùng 'very' trước so sánh hơn).",
+      "So sánh nhất bắt buộc có mạo từ 'the' hoặc tính từ sở hữu đi kèm."
     ],
     examples: [
       {
-        sentence: "This new inventory software is significantly more efficient than the previous version.",
-        translation: "Phần mềm kiểm kho mới này hiệu quả hơn đáng kể so với phiên bản trước.",
-        analysis: "Significantly bổ nghĩa cho so sánh hơn 'more efficient'.",
-      },
+        sentence: "This new logistics software operates significantly faster than the previous edition.",
+        translation: "Phần mềm logistics mới này vận hành nhanh hơn đáng kể so với phiên bản trước.",
+        analysis: "'significantly' nhấn mạnh cho so sánh hơn 'faster than'."
+      }
     ],
     questions: [
       {
         id: "cmp-q1",
         part: "Part 5",
-        questionText: "This new inventory software is _______ more efficient than the previous enterprise version.",
+        questionText: "The hybrid manufacturing line produces turbine blades significantly _______ than the older facility.",
         options: {
-          A: "significantly",
-          B: "very",
-          C: "too",
-          D: "extreme",
+          A: "fast",
+          B: "faster",
+          C: "fastest",
+          D: "more fast"
         },
-        correctAnswer: "A",
-        explanation: "Để bổ nghĩa và nhấn mạnh cho cấp so sánh hơn ('more efficient than'), ta dùng các trạng từ như 'significantly', 'much', 'far', 'substantially'. Không dùng 'very' trước so sánh hơn.",
-        trapNote: "Bẫy từ 'very' rất phổ biến ở thí sinh mức 500.",
-        translation: "Phần mềm kiểm kê mới này hiệu quả hơn đáng kể so với phiên bản doanh nghiệp trước đó.",
-        difficulty: "500-750",
+        correctAnswer: "B",
+        explanation: "Phía sau có từ 'than' -> cấu trúc so sánh hơn. 'Fast' là tính từ/trạng từ ngắn -> thêm đuôi '-er' thành 'faster'. 'Significantly' làm trạng từ nhấn mạnh.",
+        trapNote: "Không dùng 'more fast' vì fast là từ ngắn.",
+        translation: "Dây chuyền sản xuất hỗn hợp tạo ra các cánh tuabin nhanh hơn đáng kể so với cơ sở cũ.",
+        difficulty: "500-750"
       },
+      {
+        id: "cmp-q2",
+        part: "Part 5",
+        questionText: "Among all commercial candidates interviewed, Ms. Chen was _______ qualified for the senior position.",
+        options: {
+          A: "most",
+          B: "the most",
+          C: "more",
+          D: "much"
+        },
+        correctAnswer: "B",
+        explanation: "Cụm 'Among all + N số nhiều' (trong số tất cả...) là dấu hiệu kinh điển của so sánh nhất -> cần 'the most' + tính từ dài (the most qualified).",
+        trapNote: "Bắt buộc phải có mạo từ 'the' trong so sánh nhất.",
+        translation: "Trong số tất cả các ứng viên thương mại được phỏng vấn, cô Chen là người có đủ năng lực nhất cho vị trí cấp cao.",
+        difficulty: "500-750"
+      }
     ],
-    studiedCount: 0,
-    correctCount: 0,
+    studiedCount: 2,
+    correctCount: 2,
     wrongCount: 0,
-    bookmarked: false,
+    bookmarked: false
   },
+
   {
     id: "g-modal-subjunctive",
-    code: "MV-12",
-    title: "Động Từ Khuyết Thiếu & Thể Giả Định",
-    englishTitle: "Modal Verbs & Subjunctive Mood",
+    code: "SUB-12",
+    title: "Động Từ Khuyết Thiếu & Thể Giả Định (ETS 2024)",
+    englishTitle: "Modals & Subjunctive Mood",
     part: "Part 5",
     targetScore: "750+",
     status: "PUBLISHED",
-    summary: "Cấu trúc câu giả định với các động từ yêu cầu, đề xuất (require, recommend, suggest, insist) thì mệnh đề 'that' luôn dùng V nguyên mẫu không 'to'.",
-    formula: "S + recommend/request/require + THAT + S + (should) + V_inf",
-    signalWords: ["recommend that", "require that", "it is imperative that", "it is essential that", "must", "should"],
+    summary: "Thể giả định với các động từ yêu cầu/đề xuất (recommend, request, suggest, require, demand, insist) + that + S + (should) + V_inf.",
+    formula: "S + recommend/request/suggest/require + that + S + (should) + V_inf (nguyên thể không chia)",
+    signalWords: ["recommend that", "request that", "suggest that", "require that", "it is essential that", "it is imperative that"],
     traps: [
-      "Bẫy giả định: Cho dù chủ ngữ sau THAT là ngôi thứ ba số ít (he/she/it/the manager), động từ theo sau VẪN Ở DẠNG NGUYÊN THỂ (vì đã ẩn từ 'should').",
+      "Bẫy giả định: Dù chủ ngữ sau 'that' là ngôi thứ 3 số ít (he/she/it/the director), động từ theo sau LUÔN ở dạng nguyên mẫu không chia 's/es' vì có 'should' ngầm hiểu.",
+      "Ở thể bị động: S + request that + S + BE + V3/ed (dùng 'be', không dùng is/are/was/were)."
     ],
     examples: [
       {
-        sentence: "The auditor recommended that the director submit the expenditure records by Friday.",
-        translation: "Kiểm toán viên đã khuyến nghị giám đốc nộp các bản ghi chi tiêu trước thứ Sáu.",
-        analysis: "Subjunctive mood: submit ở dạng nguyên thể dù chủ ngữ 'the director' số ít.",
-      },
+        sentence: "The auditor recommended that the financial officer verify all transaction logs.",
+        translation: "Kiểm toán viên khuyến nghị rằng viên chức tài chính phải xác minh tất cả nhật ký giao dịch.",
+        analysis: "Sau 'recommended that', dù 'officer' số ít nhưng động từ 'verify' vẫn giữ nguyên mẫu."
+      }
     ],
     questions: [
       {
-        id: "mv-q1",
+        id: "sub-q1",
         part: "Part 5",
-        questionText: "The external auditor recommended that the finance director _______ the revised balance sheet immediately.",
+        questionText: "The plant safety inspector requested that every employee _______ protective goggles inside the assembly zone.",
         options: {
-          A: "submit",
-          B: "submits",
-          C: "submitted",
-          D: "submitting",
+          A: "wear",
+          B: "wears",
+          C: "wore",
+          D: "is wearing"
         },
         correctAnswer: "A",
-        explanation: "Cấu trúc giả định thức: Sau động từ 'recommended that + S', động từ theo sau luôn ở dạng NGUYÊN MẪU KHÔNG CHIA (submit), bất kể thì của câu hay chủ ngữ số ít 'the finance director'.",
-        trapNote: "Bẫy siêu khó Part 5: Thí sinh thấy 'the finance director' số ít nên chọn 'submits' (B) hoặc thấy 'recommended' quá khứ nên chọn 'submitted' (C). Cả hai đều sai!",
-        translation: "Kiểm toán viên độc lập đã khuyến nghị giám đốc tài chính nộp bảng cân đối kế toán sửa đổi ngay lập tức.",
-        difficulty: "750+",
+        explanation: "Cấu trúc giả định: S + request that + S + (should) + V_inf. Dù 'every employee' là chủ ngữ số ít, động từ theo sau vẫn giữ nguyên thể không chia: wear.",
+        trapNote: "Bẫy cực kỳ nguy hiểm: Rất nhiều thí sinh chọn 'wears' (B) vì thấy 'every employee' số ít.",
+        translation: "Thanh tra an toàn nhà máy đã yêu cầu mọi nhân viên phải đeo kính bảo hộ bên trong khu vực lắp ráp.",
+        difficulty: "750+"
       },
+      {
+        id: "sub-q2",
+        part: "Part 5",
+        questionText: "It is imperative that the quarterly financial statement _______ submitted prior to the regulatory deadline.",
+        options: {
+          A: "be",
+          B: "is",
+          C: "was",
+          D: "been"
+        },
+        correctAnswer: "A",
+        explanation: "Cấu trúc giả định với tính từ bắt buộc: It is imperative that + S + (should) + BE + V3/ed -> dùng nguyên mẫu 'be'.",
+        trapNote: "Bẫy chọn 'is' (B) theo thói quen chia động từ to be số ít.",
+        translation: "Điều cấp thiết là báo cáo tài chính hàng quý phải được nộp trước thời hạn quy định.",
+        difficulty: "750+"
+      }
     ],
-    studiedCount: 0,
-    correctCount: 0,
+    studiedCount: 2,
+    correctCount: 2,
     wrongCount: 0,
-    bookmarked: true,
-  },
+    bookmarked: false
+  }
 ];

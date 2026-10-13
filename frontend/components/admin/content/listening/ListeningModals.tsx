@@ -275,8 +275,8 @@ export const ReviewQuestionsModal: React.FC<ReviewQuestionsModalProps> = ({
                   </button>
                 </div>
 
-                <p className="text-xs font-semibold text-slate-800">{q.fullTranscript}</p>
-                <p className="text-xs text-slate-500 italic">{q.vietnameseTranslation}</p>
+                <p className="text-sm font-semibold text-slate-900 leading-relaxed">{q.fullTranscript}</p>
+                <p className="text-sm text-slate-600 italic leading-relaxed">{q.vietnameseTranslation}</p>
               </div>
             ))
           )}

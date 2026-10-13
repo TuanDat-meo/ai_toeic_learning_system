@@ -26,7 +26,7 @@ interface VocabularyModalsProps {
   showCreateTestModal: boolean;
   editingTest: TestItem | null;
   onCloseTestForm: () => void;
-  onSaveTestForm: (title: string, year: string, category: "2026" | "600_essential" | "2023") => void;
+  onSaveTestForm: (title: string, year: string, category: "2024" | "2026" | "600_essential" | "2023") => void;
 
   // Delete Test modal
   deleteTestConfirm: TestItem | null;
@@ -91,8 +91,8 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
 
   // Test form state
   const [testTitle, setTestTitle] = useState("");
-  const [testYear, setTestYear] = useState("2026");
-  const [testCategory, setTestCategory] = useState<"2026" | "600_essential" | "2023">("2026");
+  const [testYear, setTestYear] = useState("2024");
+  const [testCategory, setTestCategory] = useState<"2024" | "2026" | "600_essential" | "2023">("2024");
 
   // Word form state
   const [wordText, setWordText] = useState("");
@@ -110,8 +110,8 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       setTestCategory(editingTest.category);
     } else {
       setTestTitle("");
-      setTestYear("2026");
-      setTestCategory("2026");
+      setTestYear("2024");
+      setTestCategory("2024");
     }
   }, [editingTest, showCreateTestModal]);
 
@@ -537,9 +537,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại</label>
                   <select
                     value={testCategory}
-                    onChange={(e) => setTestCategory(e.target.value as "2026" | "600_essential" | "2023")}
+                    onChange={(e) => setTestCategory(e.target.value as "2024" | "2026" | "600_essential" | "2023")}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                   >
+                    <option value="2024">ETS 2024</option>
                     <option value="2026">ETS 2026</option>
                     <option value="600_essential">600 Essential Words</option>
                     <option value="2023">ETS 2023</option>

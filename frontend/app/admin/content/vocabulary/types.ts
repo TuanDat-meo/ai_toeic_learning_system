@@ -15,6 +15,6 @@ export interface TestItem {
   year: string;
   title: string;
   wordCount: number;
-  category: "2026" | "600_essential" | "2023";
+  category: "2024" | "2026" | "600_essential" | "2023";
   words: WordItem[];
 }

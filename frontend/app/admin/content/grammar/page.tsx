@@ -207,7 +207,7 @@ export default function AdminGrammarPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header and Filter Toolbar */}
       <GrammarFilterBar
         activeMainTab={activeMainTab}
