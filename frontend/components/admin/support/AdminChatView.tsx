@@ -32,16 +32,16 @@ export function AdminChatView() {
   }, [selected]);
 
   useEffect(() => {
-    void refreshThreads();
+    const initialLoad = window.setTimeout(() => { void refreshThreads(); }, 0);
     const timer = window.setInterval(() => void refreshThreads(), 6000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearTimeout(initialLoad); window.clearInterval(timer); };
   }, [refreshThreads]);
 
   useEffect(() => {
-    void refreshMessages();
     if (!selected) return;
+    const initialLoad = window.setTimeout(() => { void refreshMessages(); }, 0);
     const timer = window.setInterval(() => void refreshMessages(), 4000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearTimeout(initialLoad); window.clearInterval(timer); };
   }, [refreshMessages, selected]);
 
   async function submit(event: FormEvent) {

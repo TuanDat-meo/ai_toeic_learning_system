@@ -43,7 +43,9 @@ export function StudentChatBubble() {
   }, []);
 
   useEffect(() => {
-    if (tab === 'support' && user && (user.role === 'ADMIN' ? !supportLoaded : !threadId)) void openSupport();
+    if (tab !== 'support' || !user || (user.role === 'ADMIN' ? supportLoaded : Boolean(threadId))) return;
+    const timer = window.setTimeout(() => { void openSupport(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [tab, user, threadId, supportLoaded, openSupport]);
 
   const refresh = useCallback(async () => {
@@ -63,9 +65,9 @@ export function StudentChatBubble() {
 
   useEffect(() => {
     if (!open) return;
-    void refresh();
+    const initialRefresh = window.setTimeout(() => { void refresh(); }, 0);
     const timer = window.setInterval(() => { void refresh(); if (user) void chatHeartbeat().then((r) => setOnlineCount(r.onlineCount)).catch(() => undefined); }, 4000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearTimeout(initialRefresh); window.clearInterval(timer); };
   }, [open, refresh, user]);
 
   useEffect(() => {
