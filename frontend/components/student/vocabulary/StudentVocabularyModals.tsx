@@ -43,22 +43,26 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
   const [gameAnswerChecked, setGameAnswerChecked] = useState(false);
 
   // Reset flashcard state when opened
-  React.useEffect(() => {
+  const [prevFlashcardTest, setPrevFlashcardTest] = useState(flashcardModalTest);
+  if (flashcardModalTest !== prevFlashcardTest) {
+    setPrevFlashcardTest(flashcardModalTest);
     if (flashcardModalTest) {
       setFlashcardIndex(0);
       setIsFlipped(false);
     }
-  }, [flashcardModalTest]);
+  }
 
   // Reset game state when opened
-  React.useEffect(() => {
+  const [prevGameTest, setPrevGameTest] = useState(gameModalTest);
+  if (gameModalTest !== prevGameTest) {
+    setPrevGameTest(gameModalTest);
     if (gameModalTest) {
       setGameQuestionIndex(0);
       setGameScore(0);
       setGameSelectedOption(null);
       setGameAnswerChecked(false);
     }
-  }, [gameModalTest]);
+  }
 
   return (
     <>

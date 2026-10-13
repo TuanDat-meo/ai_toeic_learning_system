@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { LearningOnboardingPrompt } from "@/components/learning/LearningOnboardingPrompt";
 import {
@@ -21,7 +21,6 @@ import {
   Check,
   Clock,
   Zap,
-  Calendar,
   Info,
 } from "lucide-react";
 import {
@@ -58,14 +57,35 @@ const DEFAULT_TARGET_GOAL: TargetGoalData = {
 
 export default function Home() {
   // Study Tracker & Streak Data
-  const [trackerData, setTrackerData] = useState<StudyTrackerData>(getStudyTrackerData());
+  const [trackerData, setTrackerData] = useState<StudyTrackerData>(getStudyTrackerData);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [editDailyMinutes, setEditDailyMinutes] = useState(15);
+  const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
 
   // Latest Score & Target Goal State
-  const [latestScore, setLatestScore] = useState<LatestScoreData>(DEFAULT_LATEST_SCORE);
-  const [targetGoal, setTargetGoal] = useState<TargetGoalData>(DEFAULT_TARGET_GOAL);
+  const [latestScore, setLatestScore] = useState<LatestScoreData>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedScore = localStorage.getItem("toeic_dashboard_latest_score");
+        if (savedScore) return JSON.parse(savedScore);
+      } catch {
+        // fallback
+      }
+    }
+    return DEFAULT_LATEST_SCORE;
+  });
+
+  const [targetGoal, setTargetGoal] = useState<TargetGoalData>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedTarget = localStorage.getItem("toeic_dashboard_target_goal");
+        if (savedTarget) return JSON.parse(savedTarget);
+      } catch {
+        // fallback
+      }
+    }
+    return DEFAULT_TARGET_GOAL;
+  });
 
   // Modal open states for Score & Target
   const [isScoreModalOpen, setIsScoreModalOpen] = useState(false);
@@ -90,25 +110,6 @@ export default function Home() {
     }, 3200);
   };
 
-  // Load saved metrics from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedScore = localStorage.getItem("toeic_dashboard_latest_score");
-      if (savedScore) {
-        setLatestScore(JSON.parse(savedScore));
-      }
-      const savedTarget = localStorage.getItem("toeic_dashboard_target_goal");
-      if (savedTarget) {
-        setTargetGoal(JSON.parse(savedTarget));
-      }
-    } catch {
-      // Ignore parse errors and use defaults
-    }
-
-    const loadedTracker = getStudyTrackerData();
-    setTrackerData(loadedTracker);
-    setEditDailyMinutes(loadedTracker.dailyTargetMinutes);
-  }, []);
 
   // Handlers to open modals with current values
   const handleOpenScoreModal = () => {
