@@ -20,7 +20,6 @@ import {
   ListeningAudioAssetsView,
   ListeningAccentMatrixView,
 } from "@/components/admin/content/listening/ListeningViews";
-import { Headphones, FileAudio, Users, Award, TrendingUp, Layers } from "lucide-react";
 import { ListeningDictationTab } from "@/components/admin/content/listening/ListeningDictationTab";
 import { ListeningPartTab } from "@/components/admin/content/listening/ListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
@@ -79,12 +78,12 @@ export default function ListeningPage() {
   const [quizSelectedOption, setQuizSelectedOption] = useState<{ [qId: number]: string }>({});
   const [quizAnswerChecked, setQuizAnswerChecked] = useState<{ [qId: number]: boolean }>({});
   const [showBilingualQuiz, setShowBilingualQuiz] = useState(false);
+  const [, setIsQuestionGridOpen] = useState(false);
+  const [, setIsNotesModalOpen] = useState(false);
 
   // Audio & SFX
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
-  const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
-  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
   const playAudio = (text: string) => {
     if (!isSfxEnabled || !text.trim()) return;
@@ -102,7 +101,7 @@ export default function ListeningPage() {
     }
   };
 
-  const playSfx = (type?: "correct" | "wrong" | "click") => {
+  const playSfx = () => {
     if (!isSfxEnabled) return;
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;

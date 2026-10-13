@@ -1,3 +1,5 @@
+import { apiRequest, writeAuthRequest } from "@/lib/api/client";
+
 export type SupportReportStatus = "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
 export type SupportReportPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type SupportReportCategory = "QUESTION_ERROR" | "SYSTEM_BUG" | "UI_FEEDBACK" | "ACCOUNT_ISSUE" | "OTHER";
@@ -17,6 +19,24 @@ export type SupportReport = {
   repliedAt?: string;
   createdAt: string;
   updatedAt: string;
+  source?: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK" | "OTHER";
+  questionRef?: string;
+  questionSnapshot?: Record<string, unknown> | null;
+  correction?: Record<string, unknown> | null;
+  reporterId?: string;
+};
+
+export type SupportReportCreate = Pick<SupportReport, "category" | "title" | "description"> & {
+  source: NonNullable<SupportReport["source"]>;
+  questionRef?: string;
+  questionSnapshot?: Record<string, unknown>;
+  relatedContent?: string;
+};
+
+export type SupportReportUpdate = {
+  status: SupportReportStatus;
+  adminReply?: string;
+  correction?: Record<string, unknown>;
 };
 
 export type AnnouncementType = "SYSTEM" | "FEATURE_UPDATE" | "PROMOTION" | "EVENT";
@@ -34,16 +54,15 @@ export type Announcement = {
   isPinned: boolean;
   actionUrl?: string;
   readCount: number;
-  startDate: string;
-  endDate?: string;
+  isRead?: boolean;
   createdAt: string;
+  updatedAt?: string;
   createdBy: string;
 };
 
-const REPORTS_KEY = "toeic_admin_support_reports";
-const ANNOUNCEMENTS_KEY = "toeic_admin_announcements";
+export type AnnouncementInput = Pick<Announcement, "title" | "summary" | "content" | "type" | "target" | "status" | "isPinned"> & { actionUrl?: string };
 
-const initialReports: SupportReport[] = [
+export const initialReports: SupportReport[] = [
   {
     id: "rep-101",
     ticketCode: "TK-9081",
@@ -121,90 +140,58 @@ const initialReports: SupportReport[] = [
   }
 ];
 
-const initialAnnouncements: Announcement[] = [
-  {
-    id: "anc-1",
-    title: "Cập nhật ngân hàng 500+ câu hỏi TOEIC ETS 2026 mới nhất",
-    summary: "Hệ thống bổ sung đầy đủ bộ đề ETS 2026 kèm giải thích chi tiết từ Gemini AI.",
-    content: "Chào các học viên TOEIC Master!\n\nHệ thống vừa hoàn tất cập nhật 500 câu hỏi thi thật chuẩn ETS 2026 cho Part 5, Part 6 và Part 7.\nTất cả các câu hỏi đều có phân tích ngữ pháp, từ vựng trọng tâm và lý do chọn đáp án do mô hình Gemini AI kiểm duyệt.\n\nChúc các bạn ôn tập hiệu quả!",
-    type: "FEATURE_UPDATE",
-    target: "ALL",
-    status: "ACTIVE",
-    isPinned: true,
-    actionUrl: "/mock-tests",
-    readCount: 1420,
-    startDate: "2026-10-01T00:00:00Z",
-    createdAt: "2026-10-01T08:00:00Z",
-    createdBy: "Admin TOEIC",
-  },
-  {
-    id: "anc-2",
-    title: "Ưu đãi 30% gói cước TOEIC VIP Pro dành cho mùa thi tháng 10",
-    summary: "Nâng cấp tài khoản VIP ngay hôm nay để mở khóa không giới hạn gợi ý AI & Mock Test.",
-    content: "Nhân dịp mở rộng kho dữ liệu, TOEIC Master giảm ngay 30% cho tất cả các gói cước VIP 3 tháng và 12 tháng.\nSử dụng mã khuyến mãi: TOEICAI2026 khi thanh toán.",
-    type: "PROMOTION",
-    target: "FREE_USERS",
-    status: "ACTIVE",
-    isPinned: false,
-    actionUrl: "/billing/subscriptions",
-    readCount: 890,
-    startDate: "2026-10-03T00:00:00Z",
-    endDate: "2026-10-15T23:59:59Z",
-    createdAt: "2026-10-03T09:30:00Z",
-    createdBy: "Admin Marketing",
-  },
-  {
-    id: "anc-3",
-    title: "Thông báo bảo trì máy chủ định kỳ đêm ngày 08/10",
-    summary: "Hệ thống sẽ tạm ngưng dịch vụ trong 30 phút từ 02:00 AM đến 02:30 AM để nâng cấp cơ sở dữ liệu vector.",
-    content: "Để nâng cao tốc độ phản hồi khuyến nghị cá nhân hóa BKT và tìm kiếm ngữ nghĩa pgvector, chúng tôi sẽ tiến hành bảo trì hạ tầng hệ thống.\n\nThời gian dự kiến: 02:00 - 02:30 ngày 08/10/2026.\nRất mong quý học viên thông cảm cho sự bất tiện này.",
-    type: "SYSTEM",
-    target: "ALL",
-    status: "ACTIVE",
-    isPinned: false,
-    readCount: 650,
-    startDate: "2026-10-04T00:00:00Z",
-    createdAt: "2026-10-04T10:00:00Z",
-    createdBy: "DevOps Team",
-  },
-];
-
 export async function getReports(): Promise<SupportReport[]> {
-  if (typeof window === "undefined") return initialReports;
-  try {
-    const raw = localStorage.getItem(REPORTS_KEY);
-    if (!raw) {
-      localStorage.setItem(REPORTS_KEY, JSON.stringify(initialReports));
-      return initialReports;
-    }
-    return JSON.parse(raw);
-  } catch {
-    return initialReports;
-  }
+  return apiRequest<SupportReport[]>("/api/admin/support/reports");
 }
 
-export async function saveReports(reports: SupportReport[]): Promise<void> {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
-  }
+export async function createSupportReport(report: SupportReportCreate): Promise<SupportReport> {
+  return writeAuthRequest<SupportReport>("POST", "/api/support-reports", report);
+}
+
+export async function updateSupportReport(id: string, update: SupportReportUpdate): Promise<SupportReport> {
+  return writeAuthRequest<SupportReport>("PATCH", `/api/admin/support/reports/${id}`, update);
+}
+
+export async function getMySupportReports(): Promise<SupportReport[]> {
+  return apiRequest<SupportReport[]>("/api/support-reports/mine");
+}
+
+export async function deleteSupportReport(id: string): Promise<void> {
+  await writeAuthRequest<void>("DELETE", `/api/admin/support/reports/${id}`);
+}
+
+export type QuestionCorrection = {
+  questionText?: string;
+  options?: string[] | Record<string, string>;
+  correctAnswer?: string;
+  explanation?: string;
+  passage?: string;
+};
+
+export async function getQuestionCorrection(questionRef: string): Promise<QuestionCorrection | null> {
+  return apiRequest<QuestionCorrection | null>(`/api/question-corrections/${encodeURIComponent(questionRef)}`);
 }
 
 export async function getAnnouncements(): Promise<Announcement[]> {
-  if (typeof window === "undefined") return initialAnnouncements;
-  try {
-    const raw = localStorage.getItem(ANNOUNCEMENTS_KEY);
-    if (!raw) {
-      localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(initialAnnouncements));
-      return initialAnnouncements;
-    }
-    return JSON.parse(raw);
-  } catch {
-    return initialAnnouncements;
-  }
+  return apiRequest<Announcement[]>("/api/admin/announcements");
 }
 
-export async function saveAnnouncements(announcements: Announcement[]): Promise<void> {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(announcements));
-  }
+export function createAnnouncement(input: AnnouncementInput): Promise<Announcement> {
+  return writeAuthRequest<Announcement>("POST", "/api/admin/announcements", input);
+}
+
+export function updateAnnouncement(id: string, input: AnnouncementInput): Promise<Announcement> {
+  return writeAuthRequest<Announcement>("PUT", `/api/admin/announcements/${id}`, input);
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await writeAuthRequest<void>("DELETE", `/api/admin/announcements/${id}`);
+}
+
+export function getStudentAnnouncements(): Promise<Announcement[]> {
+  return apiRequest<Announcement[]>("/api/announcements");
+}
+
+export async function markAnnouncementRead(id: string): Promise<void> {
+  await writeAuthRequest<void>("PATCH", `/api/announcements/${id}/read`);
 }

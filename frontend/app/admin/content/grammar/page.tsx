@@ -1,14 +1,6 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  BookOpen,
-  HelpCircle,
-  TrendingUp,
-  AlertTriangle,
-  Layers,
-  Sparkles,
-} from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import {
@@ -78,10 +70,6 @@ export default function AdminGrammarPage() {
   const totalTopicsCount = topics.length;
   const totalQuestionsCount = useMemo(() => {
     return topics.reduce((acc, t) => acc + t.questions.length, 0);
-  }, [topics]);
-
-  const totalTrapsCount = useMemo(() => {
-    return topics.reduce((acc, t) => acc + t.traps.length, 0);
   }, [topics]);
 
   // Preview / Student Simulation Quiz Trigger

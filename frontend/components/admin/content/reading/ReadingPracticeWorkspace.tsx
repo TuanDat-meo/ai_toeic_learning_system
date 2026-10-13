@@ -14,7 +14,6 @@ import {
   Star,
   BookOpen,
   Plus,
-  Flag,
   ShoppingBag,
   Search,
   ChevronLeft,
@@ -24,8 +23,9 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
-  Send,
 } from "lucide-react";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ReadingPracticeWorkspaceProps {
   card: ExerciseCardData;
@@ -67,9 +67,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Record<string, boolean>>({});
 
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportCategory, setReportCategory] = useState("Sai đáp án");
-  const [reportText, setReportText] = useState("");
   const [showWordBasketModal, setShowWordBasketModal] = useState(false);
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [dictQuery, setDictQuery] = useState("");
@@ -86,7 +83,26 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return () => clearInterval(interval);
   }, []);
 
-  const q: SampleQuestion = card.sampleQuestions[currentQuestionIndex] || card.sampleQuestions[0];
+  const baseQuestion: SampleQuestion = card.sampleQuestions[currentQuestionIndex] || card.sampleQuestions[0];
+  const questionRef = `READING-${card.id}-${baseQuestion.questionNum || currentQuestionIndex + 1}`;
+  const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [questionRef]);
+  const questionCorrection = questionCorrectionState?.ref === questionRef ? questionCorrectionState.value : null;
+  const correctedOptions = Array.isArray(questionCorrection?.options)
+    ? questionCorrection.options
+    : questionCorrection?.options ? Object.values(questionCorrection.options) : baseQuestion.options;
+  const correctedAnswer = questionCorrection?.correctAnswer ? questionCorrection.correctAnswer.toUpperCase().charCodeAt(0) - 65 : baseQuestion.correctIndex;
+  const q: SampleQuestion = questionCorrection ? {
+    ...baseQuestion,
+    question: questionCorrection.questionText || baseQuestion.question,
+    options: correctedOptions,
+    correctIndex: correctedAnswer >= 0 && correctedAnswer < correctedOptions.length ? correctedAnswer : baseQuestion.correctIndex,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+  } : baseQuestion;
   const totalQ = card.sampleQuestions.length;
   const isQuestionBookmarked = !!bookmarkedQuestions[`${card.id}-${currentQuestionIndex}`];
 
@@ -646,14 +662,11 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       {/* BOTTOM NAV */}
       <footer className="h-14 bg-white border-t border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => setShowReportModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
-          >
-            <Flag className="w-3.5 h-3.5 text-rose-500" />
-            <span>Báo lỗi</span>
-          </button>
+          <QuestionErrorReportButton source="READING"
+            questionRef={questionRef}
+            relatedContent={`${card.title} · Câu ${q.questionNum || currentQuestionIndex + 1}`}
+            questionSnapshot={{ questionText: q.question, options: q.options, correctAnswer: String.fromCharCode(65 + q.correctIndex), explanation: q.explanation, passage: card.passageText || card.title, part: card.category }}
+            compact onSubmitted={(ticket) => showToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
           <button
             type="button"
@@ -882,78 +895,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer"
               >
                 Đã hiểu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* REPORT MODAL */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                  <Flag className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">Báo lỗi câu hỏi</h3>
-                  <p className="text-xs text-slate-500">Báo cáo sự cố cho câu {currentQuestionIndex + 1}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowReportModal(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-slate-700">Loại sự cố:</label>
-              <select
-                value={reportCategory}
-                onChange={(e) => setReportCategory(e.target.value)}
-                className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-blue-500"
-              >
-                <option value="Sai đáp án">Sai đáp án</option>
-                <option value="Lỗi dịch nghĩa">Lỗi dịch nghĩa Tiếng Việt</option>
-                <option value="Nội dung không rõ ràng">Nội dung không rõ ràng</option>
-                <option value="Lỗi chính tả / Ngữ pháp">Lỗi chính tả / Ngữ pháp</option>
-                <option value="Khác">Khác</option>
-              </select>
-
-              <label className="block text-xs font-bold text-slate-700">Mô tả chi tiết:</label>
-              <textarea
-                rows={4}
-                value={reportText}
-                onChange={(e) => setReportText(e.target.value)}
-                placeholder="Nhập chi tiết lỗi bạn gặp phải..."
-                className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 outline-none focus:border-blue-500 resize-none"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowReportModal(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowReportModal(false);
-                  setReportText("");
-                  showToast("Cảm ơn bạn! Báo cáo lỗi đã được gửi đến ban quản trị. 🚩");
-                }}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Gửi báo cáo</span>
               </button>
             </div>
           </div>
