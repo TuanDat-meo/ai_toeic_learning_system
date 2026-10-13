@@ -11,8 +11,18 @@ export interface VocabItem {
   wordFamily?: { word: string; pos: string; meaning: string }[];
 }
 
+export interface ReadingSubPassage {
+  label: string;
+  text: string;
+  textVi?: string;
+}
+
 export interface SampleQuestion {
   questionNum?: string;
+  passageText?: string;
+  passageTitle?: string;
+  passageTextVi?: string;
+  passages?: ReadingSubPassage[];
   question: string;
   bilingual?: string;
   options: string[];
@@ -36,6 +46,8 @@ export interface ExerciseCardData {
   wrongAnswers: number;
   bookmarked?: boolean;
   passageText?: string;
+  passageTextVi?: string;
+  passages?: ReadingSubPassage[];
   theory?: {
     summary: string;
     rules: string[];

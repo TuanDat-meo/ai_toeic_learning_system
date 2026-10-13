@@ -1,212 +1,29 @@
 import { ExerciseCardData } from "./types";
+import {
+  ETS_2024_PART5_TEST_CARDS,
+  ETS_2024_PART5_LEVEL_CARDS,
+  ETS_2024_PART5_TOPIC_CARDS,
+} from "./ets2024Part5Data";
+import { ETS2024_PART6_CARDS } from "./ets2024Part6Data";
+import { ETS2024_PART7_CARDS } from "./ets2024Part7Data";
 
 export const INITIAL_CARDS: ExerciseCardData[] = [
-  // --- PART 5: LEVEL 1 ---
-  {
-    id: "p5-level-1",
-    title: "Lv.1 Dưới 200",
-    category: "part5",
-    subCategory: "levels",
-    tag: "Part 5 · Nhập môn",
-    totalQuestions: 281,
-    studiedQuestions: 63,
-    correctAnswers: 63,
-    wrongAnswers: 3,
-    theory: {
-      summary: "Part 5 mức cơ bản: Từ vựng đơn giản, từ loại rõ ràng (Danh/Tính/Động/Trạng) và thì quá khứ/hiện tại cơ bản.",
-      rules: [
-        "Xác định thành phần câu S - V - O",
-        "Nhìn nhanh từ đứng trước và sau chỗ trống để xác định loại từ cần điền",
-      ],
-      example: "Production of the garments will begin two weeks after the contract is signed.",
-    },
-    sampleQuestions: [
-      {
-        questionNum: "113",
-        question: "Mr. Olivero praised the film in his review, even though he ------- disliked its aesthetic style.",
-        bilingual: "Ông Olivero đã khen ngợi bộ phim trong bài đánh giá của mình, mặc dù đích thân ông không thích phong cách thẩm mỹ của nó.",
-        options: ["personal", "personally", "personals", "person"],
-        optionMeanings: [
-          "(adj): cá nhân",
-          "(adv): đích thân / về mặt cá nhân",
-          "(n-plural): tin nhắn cá nhân",
-          "(n): người"
-        ],
-        correctIndex: 1,
-        explanation: "Trạng từ 'personally' bổ nghĩa cho động từ 'disliked'.",
-        steps: [
-          {
-            title: "Bước 1: Xác định vị trí từ loại trong câu",
-            desc: "Chủ ngữ 'he' + [Trạng từ] + Động từ 'disliked'."
-          },
-          {
-            title: "Bước 2: Phân tích chọn đuôi từ loại",
-            desc: "Bổ nghĩa cho động từ thường 'disliked' cần một trạng từ chỉ cách thức tận cùng bằng -ly ('personally')."
-          },
-          {
-            title: "Bước 3: Chọn đáp án",
-            desc: "Chọn (B) personally (đích thân / về phần cá nhân)."
-          }
-        ],
-        vocabList: [
-          {
-            word: "frequently",
-            pos: "adv",
-            level: "B1",
-            ipa: "/'friːkwəntli/",
-            meaning: "thường xuyên",
-            example: {
-              en: "Her supervisor frequently asks her to make materials for presentations.",
-              vi: "Cấp trên của cô ấy thường xuyên nhờ cô làm tài liệu cho các bài thuyết trình."
-            },
-            collocations: [
-              { en: "be updated frequently", vi: "được cập nhật thường xuyên" },
-              { en: "frequently asked questions", vi: "các câu hỏi thường gặp" }
-            ],
-            synonyms: [{ en: "often", vi: "thường" }],
-            antonyms: [{ en: "rarely", vi: "hiếm khi" }],
-            wordFamily: [{ word: "frequent", pos: "adj", meaning: "thường xuyên" }]
-          },
-          {
-            word: "supervisor",
-            pos: "n",
-            level: "B1",
-            ipa: "US /'suːpərvaɪzər/ UK /'suːpəvaɪzə/",
-            meaning: "cấp trên trực tiếp, người giám sát",
-            example: {
-              en: "Her supervisor frequently asks her to make materials for presentations.",
-              vi: "Cấp trên của cô ấy thường xuyên nhờ cô làm tài liệu cho các bài thuyết trình."
-            },
-            collocations: [
-              { en: "report to a supervisor", vi: "báo cáo cho cấp trên" },
-              { en: "a shift supervisor", vi: "giám sát ca" }
-            ],
-            synonyms: [{ en: "manager", vi: "quản lý" }],
-            antonyms: [{ en: "subordinate", vi: "cấp dưới" }],
-            wordFamily: [{ word: "supervise", pos: "v", meaning: "giám sát" }]
-          },
-          {
-            word: "personally",
-            pos: "adv",
-            level: "B1",
-            ipa: "/ˈpɜːrsənəli/",
-            meaning: "đích thân, về phần cá nhân",
-            example: {
-              en: "Mr. Olivero praised the film in his review, even though he personally disliked its aesthetic style.",
-              vi: "Ông Olivero đã khen ngợi bộ phim, mặc dù đích thân ông không thích phong cách thẩm mỹ của nó."
-            },
-            collocations: [
-              { en: "take something personally", vi: "coi điều gì là xúc phạm cá nhân" },
-              { en: "personally responsible", vi: "chịu trách nhiệm cá nhân" }
-            ],
-            synonyms: [{ en: "in person", vi: "trực tiếp" }],
-            antonyms: [{ en: "impersonally", vi: "thụ động" }],
-            wordFamily: [{ word: "person", pos: "n", meaning: "con người" }]
-          }
-        ]
-      },
-      {
-        questionNum: "105",
-        question: "------- of the garments will begin two weeks after the contract is signed.",
-        bilingual: "Việc sản xuất hàng may mặc sẽ bắt đầu hai tuần sau khi hợp đồng được ký kết.",
-        options: ["Product", "Produce", "Produced", "Production"],
-        optionMeanings: [
-          "(n): sản phẩm",
-          "(v/n): sản xuất/nông sản",
-          "(v-ed): đã sản xuất",
-          "(n): sự sản xuất"
-        ],
-        correctIndex: 3,
-        explanation: "Chọn danh từ 'Production' (việc sản xuất) làm chủ ngữ cho câu.",
-        steps: [
-          {
-            title: "Bước 1: Xác định dạng câu hỏi",
-            desc: 'Bốn đáp án cùng gốc "produc-" nhưng khác hậu tố nên đây là câu từ loại, cần xét vị trí rồi xét nghĩa.'
-          },
-          {
-            title: "Bước 2: Phân tích câu để biết chỗ trống cần gì",
-            desc: 'Xét vị trí: chỗ trống đứng đầu câu, trước cụm giới từ "of the garments" và động từ "will begin", nên cần danh từ làm chủ ngữ.'
-          },
-          {
-            title: "Bước 3: Chọn đáp án",
-            desc: 'Chọn danh từ "Production" (việc sản xuất).'
-          }
-        ],
-        vocabList: [
-          {
-            word: "production",
-            pos: "n",
-            level: "B2",
-            ipa: "/prəˈdʌkʃn/",
-            meaning: "sự sản xuất, việc chế tạo",
-            example: {
-              en: "Production of the garments will begin two weeks after the contract is signed.",
-              vi: "Việc sản xuất hàng may mặc sẽ bắt đầu hai tuần sau khi hợp đồng được ký kết."
-            },
-            collocations: [
-              { en: "mass production", vi: "sản xuất hàng loạt" },
-              { en: "production line", vi: "dây chuyền sản xuất" }
-            ],
-            synonyms: [{ en: "manufacturing", vi: "sự chế tạo" }],
-            antonyms: [{ en: "destruction", vi: "sự phá hủy" }],
-            wordFamily: [{ word: "produce", pos: "v", meaning: "sản xuất" }]
-          },
-          {
-            word: "garment",
-            pos: "n",
-            level: "B2",
-            ipa: "/ˈɡɑːrmənt/",
-            meaning: "hàng may mặc, trang phục",
-            example: {
-              en: "The store sells high-quality leather garments.",
-              vi: "Cửa hàng bán các sản phẩm trang phục bằng da chất lượng cao."
-            },
-            collocations: [
-              { en: "garment industry", vi: "ngành may mặc" }
-            ],
-            synonyms: [{ en: "apparel", vi: "trang phục" }],
-            wordFamily: [{ word: "garments", pos: "n-plural", meaning: "quần áo" }]
-          }
-        ]
-      },
-      {
-        questionNum: "106",
-        question: "Ms. Tanaka requested a detailed ------- of the quarterly expenses.",
-        bilingual: "Bà Tanaka đã yêu cầu một bản tóm tắt chi tiết về các chi phí hàng quý.",
-        options: ["summary", "summarize", "summarized", "summarily"],
-        optionMeanings: [
-          "(n): bản tóm tắt",
-          "(v): tóm tắt",
-          "(v-ed): đã tóm tắt",
-          "(adv): một cách tóm tắt"
-        ],
-        correctIndex: 0,
-        explanation: "Sau mạo từ 'a' và tính từ 'detailed' cần một Danh từ ('summary').",
-        steps: [
-          {
-            title: "Bước 1: Xác định vị trí từ loại",
-            desc: "Sau mạo từ 'a' + tính từ 'detailed' bắt buộc là Danh từ đếm được số ít."
-          },
-          {
-            title: "Bước 2: Phân tích từ loại đáp án",
-            desc: "Summary (n: bản tóm tắt), Summarize (v), Summarized (v-ed/adj), Summarily (adv)."
-          },
-          {
-            title: "Bước 3: Chọn đáp án",
-            desc: "Chọn (A) summary làm danh từ cho cụm 'a detailed summary'."
-          }
-        ],
-        vocabList: [
-          { word: "request", pos: "v", level: "B1", ipa: "/rɪˈkwest/", meaning: "yêu cầu" },
-          { word: "summary", pos: "n", level: "B2", ipa: "/ˈsʌməri/", meaning: "bản tóm tắt" },
-          { word: "quarterly", pos: "adj", level: "B2", ipa: "/ˈkwɔːrtərli/", meaning: "hàng quý" },
-          { word: "expense", pos: "n", level: "B1", ipa: "/ɪkˈspens/", meaning: "chi phí" }
-        ]
-      }
-    ]
-  },
+  // --- ETS 2024 PART 5 FULL TESTS (10 TESTS · 300 QUESTIONS) ---
+  ...ETS_2024_PART5_TEST_CARDS,
 
-  // --- NGỮ PHÁP: TỪ LOẠI ---
+  // --- ETS 2024 PART 5 LEVELS (LV.1 TO LV.4) ---
+  ...ETS_2024_PART5_LEVEL_CARDS,
+
+  // --- ETS 2024 PART 5 TOPICS ---
+  ...ETS_2024_PART5_TOPIC_CARDS,
+
+  // --- ETS 2024 PART 6 COMPLETE OFFICIAL DATA (10 TESTS · 160 QUESTIONS) ---
+  ...ETS2024_PART6_CARDS,
+
+  // --- ETS 2024 PART 7 COMPLETE OFFICIAL DATA (10 TESTS · 540 QUESTIONS) ---
+  ...ETS2024_PART7_CARDS,
+
+  // --- GRAMMAR & PART 7 UNITS ---
   {
     id: "g-tu-loai-danh-tu",
     title: "Danh từ",
@@ -244,6 +61,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-tu-loai-tinh-tu",
     title: "Tính từ",
@@ -281,6 +99,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-tu-loai-trang-tu",
     title: "Trạng từ",
@@ -319,7 +138,8 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
     ]
   },
 
-  // --- NGỮ PHÁP: ĐỘNG TỪ ---
+  // --- NGỮ PHÁP: ĐỘNG TỪ ---,
+
   {
     id: "g-dong-tu-thi",
     title: "Thì & Dạng động từ",
@@ -352,6 +172,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-dong-tu-hoa-hop",
     title: "Hòa hợp Chủ ngữ & Động từ",
@@ -384,6 +205,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-dong-tu-ving-to-v",
     title: "Danh động từ & Động từ nguyên mẫu",
@@ -416,6 +238,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-dong-tu-bi-dong",
     title: "Thể bị động (Passive Voice)",
@@ -449,7 +272,8 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
     ]
   },
 
-  // --- NGỮ PHÁP KHÁC ---
+  // --- NGỮ PHÁP KHÁC ---,
+
   {
     id: "g-other-menh-de-qh",
     title: "Mệnh đề quan hệ",
@@ -482,6 +306,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-other-lien-tu-gioi-tu",
     title: "Liên từ & Giới từ",
@@ -514,6 +339,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-other-dieu-kien-dao-ngu",
     title: "Câu điều kiện & Đảo ngữ",
@@ -546,6 +372,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
       }
     ]
   },
+
   {
     id: "g-other-so-sanh",
     title: "So sánh Hơn & So sánh Nhất",
@@ -580,120 +407,9 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
   },
 
   // --- PART 5: LUYỆN THEO CHỦ ĐIỂM ---
-  {
-    id: "p5-topic-tu-loai",
-    title: "Chủ điểm Từ loại & Vị trí từ",
-    category: "part5",
-    subCategory: "by_topic",
-    tag: "Part 5 · Từ loại",
-    totalQuestions: 210,
-    studiedQuestions: 40,
-    correctAnswers: 38,
-    wrongAnswers: 2,
-    sampleQuestions: [
-      {
-        questionNum: "101",
-        question: "The director praised the team for their _______ contribution to the project.",
-        bilingual: "Giám đốc đã khen ngợi nhóm vì sự đóng góp vượt trội của họ cho dự án.",
-        options: ["outstanding", "outstand", "outstandings", "outstandingly"],
-        optionMeanings: ["(adj): xuất sắc", "(v): nổi bật", "(n-plural): sự xuất sắc", "(adv): một cách xuất sắc"],
-        correctIndex: 0,
-        explanation: "Trước danh từ 'contribution' cần tính từ 'outstanding'.",
-        steps: [
-          { title: "Bước 1: Xác định cấu trúc", desc: "Tính từ sở hữu 'their' + [Tính từ] + Danh từ 'contribution'." },
-          { title: "Bước 2: Chọn đáp án", desc: "Outstanding (adj)." }
-        ],
-        vocabList: [{ word: "contribution", pos: "n", level: "B2", ipa: "/ˌkɑːntrɪˈbjuːʃn/", meaning: "sự đóng góp" }]
-      }
-    ]
-  },
-  {
-    id: "p5-topic-thi-dong-tu",
-    title: "Chủ điểm Thì & Bị động",
-    category: "part5",
-    subCategory: "by_topic",
-    tag: "Part 5 · Động từ",
-    totalQuestions: 180,
-    studiedQuestions: 15,
-    correctAnswers: 14,
-    wrongAnswers: 1,
-    sampleQuestions: [
-      {
-        questionNum: "102",
-        question: "The new policy _______ by the board at yesterday's meeting.",
-        bilingual: "Chính sách mới đã được phê duyệt bởi hội đồng quản trị tại cuộc họp ngày hôm qua.",
-        options: ["was approved", "approved", "approves", "will approve"],
-        optionMeanings: ["(bị động QK): đã được phê duyệt", "(v-ed): đã phê duyệt", "(v-s): phê duyệt", "(TL): sẽ phê duyệt"],
-        correctIndex: 0,
-        explanation: "Dạng bị động quá khứ Was approved.",
-        steps: [
-          { title: "Bước 1: Dấu hiệu yesterday", desc: "Quá khứ đơn bị động: Was/Were + V3." },
-          { title: "Bước 2: Chọn đáp án", desc: "Was approved." }
-        ],
-        vocabList: [{ word: "policy", pos: "n", level: "B1", ipa: "/ˈpɑːləsi/", meaning: "chính sách" }]
-      }
-    ]
-  },
 
-  // --- PART 6: LUYỆN THEO DẠNG VĂN BẢN ---
-  {
-    id: "p6-topic-email",
-    title: "Thư điện tử (Email / Letter)",
-    category: "part6",
-    subCategory: "text_types",
-    tag: "Part 6 · Email",
-    totalQuestions: 140,
-    studiedQuestions: 22,
-    correctAnswers: 20,
-    wrongAnswers: 2,
-    passageText: "Subject: Important Update Regarding Flight Schedule\nDear Passenger,\nWe wish to inform you of a revised departure time for your upcoming trip.",
-    sampleQuestions: [
-      {
-        questionNum: "132",
-        question: "Please check your flight status online _______ heading to the airport.",
-        bilingual: "Vui lòng kiểm tra trạng thái chuyến bay trực tuyến trước khi di chuyển đến sân bay.",
-        options: ["before", "after", "while", "during"],
-        optionMeanings: ["(prep): trước khi", "(prep): sau khi", "(conj): trong khi", "(prep): trong"],
-        correctIndex: 0,
-        explanation: "Before heading to the airport (trước khi đến sân bay).",
-        steps: [
-          { title: "Bước 1: Nhận diện vị trí", desc: "Before + V-ing." },
-          { title: "Bước 2: Chọn đáp án", desc: "Before." }
-        ],
-        vocabList: [{ word: "departure", pos: "n", level: "B1", ipa: "/dɪˈpɑːrtʃər/", meaning: "sự khởi hành" }]
-      }
-    ]
-  },
-  {
-    id: "p6-topic-memo",
-    title: "Thông báo & Ghi nhớ (Notice / Memo)",
-    category: "part6",
-    subCategory: "text_types",
-    tag: "Part 6 · Memo",
-    totalQuestions: 120,
-    studiedQuestions: 10,
-    correctAnswers: 9,
-    wrongAnswers: 1,
-    passageText: "INTERNAL MEMO\nAll staff members are reminded to power off workstations at the end of each working day.",
-    sampleQuestions: [
-      {
-        questionNum: "136",
-        question: "This practice helps reduce overall energy _______ in the office building.",
-        bilingual: "Thói quen này giúp giảm mức tiêu thụ năng lượng tổng thể trong tòa nhà văn phòng.",
-        options: ["consumption", "consume", "consumer", "consumable"],
-        optionMeanings: ["(n): sự tiêu thụ", "(v): tiêu thụ", "(n): người tiêu dùng", "(adj): có thể tiêu thụ"],
-        correctIndex: 0,
-        explanation: "Cụm danh từ 'energy consumption' (sự tiêu thụ năng lượng).",
-        steps: [
-          { title: "Bước 1: Ghép cụm danh từ", desc: "Energy + Noun (consumption)." },
-          { title: "Bước 2: Chọn đáp án", desc: "Consumption." }
-        ],
-        vocabList: [{ word: "consumption", pos: "n", level: "B2", ipa: "/kənˈsʌmpʃn/", meaning: "sự tiêu thụ" }]
-      }
-    ]
-  },
+  // --- PART 6 & PART 7 TOPICS ---,
 
-  // --- PART 7: LUYỆN THEO CẤU TRÚC BÀI ĐỌC ---
   {
     id: "p7-topic-single-email",
     title: "Đoạn đơn - Thư từ & Email",
@@ -734,220 +450,9 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
   },
 
   // --- PART 5 LEVELS ---
-  {
-    id: "p5-level-2",
-    title: "Lv.2 200–500",
-    category: "part5",
-    subCategory: "levels",
-    tag: "Part 5 · Sơ cấp",
-    totalQuestions: 227,
-    studiedQuestions: 117,
-    correctAnswers: 99,
-    wrongAnswers: 18,
-    sampleQuestions: [
-      {
-        questionNum: "107",
-        question: "The latest annual report was ______ distributed to all shareholders.",
-        bilingual: "Báo cáo thường niên mới nhất đã được phân phát rộng rãi tới tất cả các cổ đông.",
-        options: ["wide", "widely", "widen", "width"],
-        optionMeanings: ["(adj): rộng", "(adv): rộng rãi", "(v): mở rộng", "(n): chiều rộng"],
-        correctIndex: 1,
-        explanation: "Trạng từ 'widely' đứng giữa trợ động từ 'was' và phân từ hai 'distributed'.",
-        steps: [
-          { title: "Bước 1: Vị trí bổ nghĩa", desc: "Dạng bị động Was + [Trạng từ] + V3/ed." },
-          { title: "Bước 2: Chọn đáp án", desc: "Widely (adv) bổ nghĩa cho hành động distributed." }
-        ],
-        vocabList: [
-          { word: "shareholder", pos: "n", level: "C1", ipa: "/ˈʃerhəʊldər/", meaning: "cổ đông" },
-          { word: "widely", pos: "adv", level: "B2", ipa: "/ˈwaɪdli/", meaning: "rộng rãi" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p5-level-3",
-    title: "Lv.3 500–750",
-    category: "part5",
-    subCategory: "levels",
-    tag: "Part 5 · Trung cấp",
-    totalQuestions: 185,
-    studiedQuestions: 45,
-    correctAnswers: 40,
-    wrongAnswers: 5,
-    sampleQuestions: [
-      {
-        questionNum: "115",
-        question: "Employees are expected to adhere strictly to safety protocols, _______ circumstances.",
-        bilingual: "Nhân viên được yêu cầu tuân thủ nghiêm ngặt các quy tắc an toàn, bất kể hoàn cảnh nào.",
-        options: ["regardless of", "according to", "in spite", "due to"],
-        optionMeanings: ["(prep): bất kể", "(prep): theo như", "(n): mặc dù (thiếu of)", "(prep): bởi vì"],
-        correctIndex: 0,
-        explanation: "Giới từ 'regardless of' đi với danh từ 'circumstances' mang nghĩa 'bất kể hoàn cảnh'.",
-        steps: [
-          { title: "Bước 1: Xét nghĩa giới từ", desc: "Cụm 'regardless of' + Noun có nghĩa là bất chấp/bất kể." },
-          { title: "Bước 2: Chọn đáp án", desc: "Chọn (A) regardless of." }
-        ],
-        vocabList: [
-          { word: "adhere", pos: "v", level: "C1", ipa: "/ədˈhɪr/", meaning: "tuân thủ" },
-          { word: "circumstance", pos: "n", level: "B2", ipa: "/ˈsɜːrkəmstæns/", meaning: "hoàn cảnh" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p5-level-4",
-    title: "Lv.4 750–990",
-    category: "part5",
-    subCategory: "levels",
-    tag: "Part 5 · Cao cấp",
-    totalQuestions: 140,
-    studiedQuestions: 10,
-    correctAnswers: 8,
-    wrongAnswers: 2,
-    sampleQuestions: [
-      {
-        questionNum: "128",
-        question: "Had the committee _______ the market trend sooner, the investment strategy would have succeeded.",
-        bilingual: "Nếu ủy ban nhận ra xu hướng thị trường sớm hơn, chiến lược đầu tư đã thành công.",
-        options: ["anticipated", "anticipate", "anticipating", "anticipation"],
-        optionMeanings: ["(v3): nhận ra / dự đoán", "(v): dự đoán", "(v-ing): việc dự đoán", "(n): sự dự đoán"],
-        correctIndex: 0,
-        explanation: "Đảo ngữ câu điều kiện loại 3: Had + S + V3/ed.",
-        steps: [
-          { title: "Bước 1: Nhận diện đảo ngữ loại 3", desc: "Had + S + V3/ed." },
-          { title: "Bước 2: Chọn đáp án", desc: "Chọn (A) anticipated." }
-        ],
-        vocabList: [
-          { word: "anticipate", pos: "v", level: "C1", ipa: "/ænˈtɪsɪpeɪt/", meaning: "dự đoán, nhận ra trước" }
-        ]
-      }
-    ]
-  },
 
-  // --- PART 6 LEVELS ---
-  {
-    id: "p6-level-1",
-    title: "Lv.1 Dưới 200",
-    category: "part6",
-    subCategory: "levels",
-    tag: "Part 6 · Nhập môn",
-    totalQuestions: 120,
-    studiedQuestions: 18,
-    correctAnswers: 16,
-    wrongAnswers: 2,
-    passageText: "Dear Valued Customer,\nThank you for choosing Zenith Express for your shipping needs. We are writing to confirm that your package #8921 has been processed and is currently in transit. Please review the shipment summary below to verify your delivery address.",
-    sampleQuestions: [
-      {
-        questionNum: "131",
-        question: "We appreciate your business and look forward to ______ you again in the near future.",
-        bilingual: "Chúng tôi trân trọng sự ủng hộ của quý khách và rất mong được phục vụ quý khách trong tương lai gần.",
-        options: ["serving", "served", "serve", "server"],
-        optionMeanings: ["(v-ing): việc phục vụ", "(v-ed): đã phục vụ", "(v): phục vụ", "(n): người phục vụ"],
-        correctIndex: 0,
-        explanation: "Cấu trúc quen thuộc 'look forward to + V-ing' -> 'serving'.",
-        steps: [
-          { title: "Bước 1: Nhận diện cấu trúc", desc: "Look forward to + V-ing (mong chờ làm gì)." },
-          { title: "Bước 2: Chọn đáp án", desc: "Serving (v-ing) là đáp án chuẩn xác." }
-        ],
-        vocabList: [
-          { word: "appreciate", pos: "v", level: "B2", ipa: "/əˈpriːʃieɪt/", meaning: "trân trọng" },
-          { word: "transit", pos: "n", level: "C1", ipa: "/ˈtrænzɪt/", meaning: "đang vận chuyển" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p6-level-2",
-    title: "Lv.2 200–500",
-    category: "part6",
-    subCategory: "levels",
-    tag: "Part 6 · Sơ cấp",
-    totalQuestions: 155,
-    studiedQuestions: 42,
-    correctAnswers: 38,
-    wrongAnswers: 4,
-    passageText: "MEMORANDUM\nTo: All Staff\nFrom: Operations Manager\n\nPlease ensure all client files are archived properly by 5:00 PM today.",
-    sampleQuestions: [
-      {
-        questionNum: "135",
-        question: "All employees must submit their reports ______ Friday at noon.",
-        bilingual: "Tất cả nhân viên phải nộp báo cáo trước trưa thứ Sáu.",
-        options: ["before", "after", "during", "until"],
-        optionMeanings: ["(prep): trước", "(prep): sau", "(prep): trong khi", "(prep): cho đến khi"],
-        correctIndex: 0,
-        explanation: "Báo cáo nộp 'before' (trước) deadline.",
-        steps: [
-          { title: "Bước 1: Nhận biết nghĩa mốc thời gian", desc: "Nộp trước thời hạn." },
-          { title: "Bước 2: Chọn đáp án", desc: "Chọn (A) before." }
-        ],
-        vocabList: [
-          { word: "submit", pos: "v", level: "B1", ipa: "/səbˈmɪt/", meaning: "nộp" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p6-level-3",
-    title: "Lv.3 500–750",
-    category: "part6",
-    subCategory: "levels",
-    tag: "Part 6 · Trung cấp",
-    totalQuestions: 175,
-    studiedQuestions: 20,
-    correctAnswers: 17,
-    wrongAnswers: 3,
-    passageText: "PRESS RELEASE\nTechCorp Innovations announced today the upcoming launch of its flagship cloud computing framework.",
-    sampleQuestions: [
-      {
-        questionNum: "139",
-        question: "The software update will significantly _______ system performance.",
-        bilingual: "Bản cập nhật phần mềm sẽ cải thiện đáng kể hiệu suất hệ thống.",
-        options: ["enhance", "enhancement", "enhanced", "enhancing"],
-        optionMeanings: ["(v): cải thiện", "(n): sự cải thiện", "(v-ed): đã cải thiện", "(v-ing): việc cải thiện"],
-        correctIndex: 0,
-        explanation: "Sau động từ khuyết thiếu 'will' + Trạng từ 'significantly' cần Động từ nguyên thể ('enhance').",
-        steps: [
-          { title: "Bước 1: Xác định cấu trúc", desc: "Will + [Trạng từ] + V-bare." },
-          { title: "Bước 2: Chọn đáp án", desc: "Enhance (v-bare)." }
-        ],
-        vocabList: [
-          { word: "enhance", pos: "v", level: "B2", ipa: "/ɪnˈhæns/", meaning: "cải thiện, nâng cao" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p6-level-4",
-    title: "Lv.4 750–990",
-    category: "part6",
-    subCategory: "levels",
-    tag: "Part 6 · Cao cấp",
-    totalQuestions: 130,
-    studiedQuestions: 5,
-    correctAnswers: 4,
-    wrongAnswers: 1,
-    passageText: "FINANCIAL REPORT EXCERPT\nDespite macroeconomic headwinds, quarterly revenues surpassed market expectations due to accelerated growth in overseas markets.",
-    sampleQuestions: [
-      {
-        questionNum: "143",
-        question: "________, overseas sales grew by 25% year-over-year.",
-        bilingual: "Cụ thể hơn, doanh số bán hàng ở nước ngoài đã tăng 25% so với cùng kỳ năm ngoái.",
-        options: ["Specifically", "Consequently", "However", "Otherwise"],
-        optionMeanings: ["(adv): Cụ thể hơn", "(adv): Do đó", "(adv): Tuy nhiên", "(adv): Nếu không thì"],
-        correctIndex: 0,
-        explanation: "Trạng từ liên kết 'Specifically' giới thiệu chi tiết minh họa cho câu trước.",
-        steps: [
-          { title: "Bước 1: Phân tích mối quan hệ 2 câu", desc: "Câu trước nói về doanh thu vượt mong đợi, câu sau nêu số liệu chi tiết 25%." },
-          { title: "Bước 2: Chọn từ nối", desc: "Chọn Specifically." }
-        ],
-        vocabList: [
-          { word: "specifically", pos: "adv", level: "B2", ipa: "/spəˈsɪfɪkli/", meaning: "cụ thể hơn" }
-        ]
-      }
-    ]
-  },
+  // --- PART 6 & PART 7 LEVELS ---,
 
-  // --- PART 7 LEVELS ---
   {
     id: "p7-level-1",
     title: "Lv.1 Dưới 200",
@@ -987,116 +492,6 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
           { word: "undergo", pos: "v", level: "C1", ipa: "/ˌʌndərˈɡəʊ/", meaning: "trải qua" },
           { word: "maintenance", pos: "n", level: "B2", ipa: "/ˈmeɪntənəns/", meaning: "bảo trì" },
           { word: "mandatory", pos: "adj", level: "C1", ipa: "/ˈmændətɔːri/", meaning: "bắt buộc" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p7-level-2",
-    title: "Lv.2 200–500",
-    category: "part7",
-    subCategory: "levels",
-    tag: "Part 7 · Sơ cấp",
-    totalQuestions: 185,
-    studiedQuestions: 35,
-    correctAnswers: 30,
-    wrongAnswers: 5,
-    passageText: "EMAIL CORRESPONDENCE\nDear Ms. Henderson,\nWe are pleased to confirm your reservation for Room 402 on November 12. Attached is the catering menu for your review.",
-    sampleQuestions: [
-      {
-        questionNum: "152",
-        question: "What is the purpose of the email?",
-        bilingual: "Mục đích của email là gì?",
-        options: [
-          "To confirm a room reservation",
-          "To cancel a business meeting",
-          "To request an invoice payment",
-          "To submit a job application"
-        ],
-        optionMeanings: [
-          "Đồng ý xác nhận đặt phòng",
-          "Hủy bỏ cuộc họp kinh doanh",
-          "Yêu cầu thanh toán hóa đơn",
-          "Nộp đơn xin việc"
-        ],
-        correctIndex: 0,
-        explanation: "Email nêu rõ 'confirm your reservation for Room 402'.",
-        steps: [
-          { title: "Bước 1: Skim câu đầu email", desc: "Confirm your reservation." },
-          { title: "Bước 2: Chọn đáp án", desc: "Chọn (A)." }
-        ],
-        vocabList: [
-          { word: "reservation", pos: "n", level: "B1", ipa: "/ˌrezərˈveɪʃn/", meaning: "sự đặt chỗ trước" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p7-level-3",
-    title: "Lv.3 500–750",
-    category: "part7",
-    subCategory: "levels",
-    tag: "Part 7 · Trung cấp",
-    totalQuestions: 210,
-    studiedQuestions: 15,
-    correctAnswers: 13,
-    wrongAnswers: 2,
-    passageText: "DOUBLE PASSAGE SET\nPassage 1: Schedule of Events for Annual Tech Expo.\nPassage 2: Email request for speaker slot change.",
-    sampleQuestions: [
-      {
-        questionNum: "165",
-        question: "What time is Mr. Vance scheduled to speak according to the updated schedule?",
-        bilingual: "Theo lịch trình cập nhật, Ông Vance dự kiến phát biểu lúc mấy giờ?",
-        options: ["2:00 PM", "10:00 AM", "4:30 PM", "9:00 AM"],
-        optionMeanings: ["2:00 chiều", "10:00 sáng", "4:30 chiều", "9:00 sáng"],
-        correctIndex: 0,
-        explanation: "Đối chiếu đoạn 1 và đoạn 2 để suy ra thời gian phát biểu 2:00 PM.",
-        steps: [
-          { title: "Bước 1: Tìm thông tin Mr. Vance", desc: "Mr. Vance yêu cầu đổi ca chiều." },
-          { title: "Bước 2: Chọn đáp án", desc: "2:00 PM." }
-        ],
-        vocabList: [
-          { word: "schedule", pos: "n", level: "B1", ipa: "/ˈske dʒuːl/", meaning: "lịch trình" }
-        ]
-      }
-    ]
-  },
-  {
-    id: "p7-level-4",
-    title: "Lv.4 750–990",
-    category: "part7",
-    subCategory: "levels",
-    tag: "Part 7 · Cao cấp",
-    totalQuestions: 160,
-    studiedQuestions: 8,
-    correctAnswers: 6,
-    wrongAnswers: 2,
-    passageText: "TRIPLE PASSAGE SET\nPassage 1: Press Release regarding corporate merger.\nPassage 2: Internal Memo to department heads.\nPassage 3: Customer feedback survey responses.",
-    sampleQuestions: [
-      {
-        questionNum: "180",
-        question: "What implied challenge did the company overcome in Q3?",
-        bilingual: "Thách thức ngầm nào mà công ty đã vượt qua trong Quý 3?",
-        options: [
-          "Supply chain delays",
-          "Higher tax rates",
-          "Employee turnover",
-          "Decreased budget"
-        ],
-        optionMeanings: [
-          "Sự chậm trễ chuỗi cung ứng",
-          "Thuế suất cao hơn",
-          "Tỷ lệ biến động nhân sự",
-          "Ngân sách bị giảm"
-        ],
-        correctIndex: 0,
-        explanation: "Kết hợp dữ liệu từ 3 đoạn văn suy ra sự cố chuỗi cung ứng đã được xử lý thành công.",
-        steps: [
-          { title: "Bước 1: Phân tích cả 3 đoạn văn", desc: "Đoạn 1 nêu thiếu nguyên liệu, đoạn 3 báo cáo đơn hàng đã hoàn tất." },
-          { title: "Bước 2: Chọn đáp án", desc: "Supply chain delays." }
-        ],
-        vocabList: [
-          { word: "overcome", pos: "v", level: "B2", ipa: "/ˌoʊvərˈkʌm/", meaning: "vượt qua" }
         ]
       }
     ]
