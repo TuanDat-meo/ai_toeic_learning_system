@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Bell,
   Eye,
@@ -57,11 +57,7 @@ export function AdminAnnouncementsView() {
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       setAnnouncements(await getAnnouncements());
@@ -70,7 +66,12 @@ export function AdminAnnouncementsView() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
 
   function showFeedback(msg: string, isError = false) {
     setFeedbackMsg(msg);

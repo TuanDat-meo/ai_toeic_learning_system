@@ -9,8 +9,6 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
-  TrendingUp,
 } from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 

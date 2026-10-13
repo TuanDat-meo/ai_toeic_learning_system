@@ -26,7 +26,10 @@ export default function NotificationsPage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function markRead(id: string) {
     setMarkingId(id);

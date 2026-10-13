@@ -5,19 +5,10 @@ import {
   Search,
   CheckCircle2,
   AlertTriangle,
-  BookOpen,
-  Filter,
   Save,
-  Download,
   Eye,
   Sliders,
-  Sparkles,
-  HelpCircle,
-  FileCode,
-  Tag,
-  Clock,
   Layers,
-  ArrowUpRight,
 } from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/grammar/types";
 
@@ -26,12 +17,10 @@ import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/gramm
 // ==========================================
 interface QuestionBankViewProps {
   topics: GrammarTopicItem[];
-  onPreviewQuestion?: (q: GrammarQuestionItem, topicTitle: string) => void;
 }
 
 export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
   topics,
-  onPreviewQuestion,
 }) => {
   const [search, setSearch] = useState("");
   const [selectedPart, setSelectedPart] = useState<string>("ALL");

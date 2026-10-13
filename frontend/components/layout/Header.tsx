@@ -55,7 +55,6 @@ export function Header() {
 
   useEffect(() => {
     if (!user || user.role !== 'STUDENT') {
-      setUnreadAnnouncementCount(0);
       return;
     }
 
