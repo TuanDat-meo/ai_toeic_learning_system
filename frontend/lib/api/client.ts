@@ -47,7 +47,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return payload as T;
 }
 
-export async function writeAuthRequest<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
+export async function writeAuthRequest<T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const csrf = await getCsrfToken();
   return apiRequest<T>(path, {
     method,
