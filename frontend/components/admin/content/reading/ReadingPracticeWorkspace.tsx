@@ -205,9 +205,39 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     if (checkedGroups[currentGroupIndex]) return;
 
     if (isMultiQuestionGroup) {
-      // For multi-question passages (Part 6/7): record choice without revealing answer
-      setUserAnswers((prev) => ({ ...prev, [globalIndex]: optIdx }));
+      // For multi-question passages (Part 6/7): record choice and auto-check when all questions are answered
+      const nextAnswers = { ...userAnswers, [globalIndex]: optIdx };
+      setUserAnswers(nextAnswers);
       if (isSfxEnabled) playSfx("click");
+
+      const allDone = currentGroup.questions.every(
+        (item) => nextAnswers[item.globalIndex] !== undefined
+      );
+
+      if (allDone) {
+        setCheckedGroups((prev) => ({ ...prev, [currentGroupIndex]: true }));
+
+        let correctCount = 0;
+        currentGroup.questions.forEach((item) => {
+          const selected = nextAnswers[item.globalIndex];
+          if (selected === item.question.correctIndex) {
+            correctCount++;
+          }
+        });
+
+        const addedScore = correctCount * 10;
+        setEnergyScore((prev) => prev + addedScore);
+        setSessionCorrectCount((prev) => prev + correctCount);
+        setSessionWrongCount((prev) => prev + (currentGroup.questions.length - correctCount));
+
+        if (correctCount === currentGroup.questions.length) {
+          if (isSfxEnabled) playSfx("correct");
+          showToast(`Xuất sắc! Đúng cả ${correctCount}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
+        } else {
+          if (isSfxEnabled) playSfx("wrong");
+          showToast(`Đúng ${correctCount}/${currentGroup.questions.length} câu. Đã hiển thị giải thích chi tiết ở dưới!`);
+        }
+      }
     } else {
       // For single-question items (Part 5): select and check immediately
       setUserAnswers((prev) => ({ ...prev, [globalIndex]: optIdx }));
@@ -791,9 +821,9 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                               ({optLetter}) {optVal}
                             </span>
                           </div>
-                          {(isCardChecked || isBilingual) && q.optionMeanings && q.optionMeanings[optIdx] && (
-                            <p className="text-xs text-slate-500 font-normal pl-8">
-                              {q.optionMeanings[optIdx]}
+                          {isCardChecked && q.optionMeanings && q.optionMeanings[optIdx] && (
+                            <p className="text-xs text-blue-700 font-medium pl-8 animate-in fade-in">
+                              | {q.optionMeanings[optIdx]}
                             </p>
                           )}
                         </div>
@@ -1026,83 +1056,43 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               </div>
             )}
 
-            {/* PASSAGE ACTION SUBMIT / CHECK BUTTON */}
-            {isMultiQuestionGroup && (
-              <div className="p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 shadow-sm space-y-4">
-                {!isCurrentGroupChecked ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-                      <span>Tiến độ đoạn này:</span>
-                      <span className={isAllAnsweredInGroup ? "text-emerald-600" : "text-amber-600"}>
-                        Đã chọn {answeredInGroupCount}/{currentGroup.questions.length} câu
-                      </span>
-                    </div>
-
-                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-blue-600 h-full transition-all duration-300"
-                        style={{
-                          width: `${(answeredInGroupCount / currentGroup.questions.length) * 100}%`,
-                        }}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleCheckCurrentGroup}
-                      disabled={!isAllAnsweredInGroup}
-                      className={`w-full py-4 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
-                        isAllAnsweredInGroup
-                          ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:shadow-lg active:scale-[0.99]"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      }`}
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>
-                        {isAllAnsweredInGroup
-                          ? "Kiểm tra đáp án cả đoạn"
-                          : `Vui lòng chọn đủ ${currentGroup.questions.length} câu để kiểm tra (${answeredInGroupCount}/${currentGroup.questions.length})`}
-                      </span>
-                    </button>
+            {/* PASSAGE ACTION SUBMIT / CHECK BUTTON (Chỉ hiện khi đã chọn hết đáp án và đoạn đã hoàn thành) */}
+            {isMultiQuestionGroup && isCurrentGroupChecked && (
+              <div className="p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 shadow-sm space-y-4 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <span className="font-bold text-sm text-slate-800">
+                      Đoạn {currentGroupIndex + 1} đã hoàn thành!
+                    </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleResetCurrentGroup}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Làm lại đoạn này</span>
+                  </button>
+                </div>
+
+                {currentGroupIndex < passageGroups.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={handleNextGroup}
+                    className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
+                  >
+                    <span>Chuyển sang đoạn tiếp theo ({currentGroupIndex + 2}/{passageGroups.length})</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                        <span className="font-bold text-sm text-slate-800">
-                          Đoạn {currentGroupIndex + 1} đã hoàn thành!
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleResetCurrentGroup}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Làm lại đoạn này</span>
-                      </button>
-                    </div>
-
-                    {currentGroupIndex < passageGroups.length - 1 ? (
-                      <button
-                        type="button"
-                        onClick={handleNextGroup}
-                        className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
-                      >
-                        <span>Chuyển sang đoạn tiếp theo ({currentGroupIndex + 2}/{passageGroups.length})</span>
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={onClose}
-                        className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
-                      >
-                        <span>Hoàn thành toàn bộ bài luyện tập! 🎉</span>
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
+                  >
+                    <span>Hoàn thành toàn bộ bài luyện tập! 🎉</span>
+                  </button>
                 )}
               </div>
             )}

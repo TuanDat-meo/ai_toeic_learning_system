@@ -295,7 +295,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               >
                 <option value="Part 5">Part 5</option>
                 <option value="Part 6">Part 6</option>
-                <option value="Part 5 & 6">Part 5 & 6</option>
+                <option value="Part 7">Part 7</option>
               </select>
             </div>
 
@@ -617,11 +617,12 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
 
   const currentQ = questions[currentIndex];
 
-  const handleCheckAnswer = () => {
-    if (!selectedAnswer || isAnswerChecked) return;
+  const handleSelectAnswer = (optKey: "A" | "B" | "C" | "D") => {
+    if (isAnswerChecked) return;
+    setSelectedAnswer(optKey);
     setIsAnswerChecked(true);
 
-    const isCorrect = selectedAnswer === currentQ.correctAnswer;
+    const isCorrect = optKey === currentQ.correctAnswer;
     if (isCorrect) {
       setScore((prev) => prev + 1);
     }
@@ -709,7 +710,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
                     key={optKey}
                     type="button"
                     disabled={isAnswerChecked}
-                    onClick={() => setSelectedAnswer(optKey)}
+                    onClick={() => handleSelectAnswer(optKey)}
                     className={`p-3.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2.5 cursor-pointer ${
                       isCorrectAnswer
                         ? "bg-emerald-50 border-emerald-500 text-emerald-900 font-bold"
@@ -744,8 +745,9 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
               })}
             </div>
 
+            {/* HIỂN THỊ DỊCH NGHĨA, MẸO BẪY, VÀ TỪ CẦN HỌC SAU KHI CHỌN ĐÁP ÁN */}
             {isAnswerChecked && (
-              <div className="space-y-3 pt-2">
+              <div className="space-y-3 pt-2 animate-in fade-in duration-200">
                 <div
                   className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
                     selectedAnswer === currentQ.correctAnswer
@@ -769,23 +771,40 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
                     )}
                   </div>
                   <p className="text-slate-700 leading-relaxed font-medium">
-                    <strong>Giải thích:</strong> {currentQ.explanation}
+                    <strong>Giải thích chi tiết:</strong> {currentQ.explanation}
                   </p>
                 </div>
 
                 {currentQ.trapNote && (
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="block text-amber-800 mb-0.5">Lưu ý bẫy đề thi TOEIC:</strong>
+                      <strong className="block text-amber-800 mb-0.5">Mẹo làm bài &amp; Bẫy đề thi TOEIC:</strong>
                       <p className="text-slate-700 leading-relaxed">{currentQ.trapNote}</p>
                     </div>
                   </div>
                 )}
 
                 {currentQ.translation && (
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 italic">
-                    <strong>Dịch nghĩa:</strong> &quot;{currentQ.translation}&quot;
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1 shadow-2xs">
+                    <strong className="text-slate-900 block font-bold">Dịch nghĩa câu hỏi:</strong>
+                    <p className="italic leading-relaxed text-slate-800">&quot;{currentQ.translation}&quot;</p>
+                  </div>
+                )}
+
+                {activeTopic?.signalWords && activeTopic.signalWords.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950 flex items-start gap-2.5 shadow-2xs">
+                    <BookOpen className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <strong className="block text-blue-900">Từ vựng &amp; Dấu hiệu nhận biết (Từ cần học):</strong>
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {activeTopic.signalWords.map((word, wIdx) => (
+                          <span key={wIdx} className="px-2.5 py-0.5 rounded-lg bg-white border border-blue-200 text-blue-800 font-mono font-bold text-[11px] shadow-2xs">
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -843,20 +862,13 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
         {!quizFinished && (
           <div className="flex items-center justify-between pt-3 border-t border-slate-100">
             <span className="text-xs text-slate-500 font-medium">
-              {selectedAnswer ? `Đã chọn đáp án ${selectedAnswer}` : "Vui lòng chọn 1 phương án"}
+              {isAnswerChecked
+                ? `Đã hoàn thành câu ${currentIndex + 1}/${questions.length}`
+                : "Chọn 1 đáp án để kiểm tra ngay"}
             </span>
 
             <div className="flex items-center gap-2.5">
-              {!isAnswerChecked ? (
-                <button
-                  type="button"
-                  disabled={!selectedAnswer}
-                  onClick={handleCheckAnswer}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                >
-                  Kiểm tra đáp án
-                </button>
-              ) : (
+              {isAnswerChecked && (
                 <button
                   type="button"
                   onClick={handleNextQuizQuestion}

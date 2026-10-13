@@ -61,11 +61,7 @@ export default function AdminGrammarPage() {
         t.formula.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.summary.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchPart =
-        filterPart === "ALL" ||
-        (filterPart === "Part 5" && (t.part === "Part 5" || t.part === "Part 5 & 6")) ||
-        (filterPart === "Part 6" && (t.part === "Part 6" || t.part === "Part 5 & 6")) ||
-        (filterPart === "Part 5 & 6" && t.part === "Part 5 & 6");
+      const matchPart = filterPart === "ALL" || t.part === filterPart;
 
       const matchScore = filterScore === "ALL" || t.targetScore === filterScore;
       const matchStatus = filterStatus === "ALL" || t.status === filterStatus;

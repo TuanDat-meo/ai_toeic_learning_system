@@ -640,8 +640,8 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                   {currentQ.id}. {currentQ.questionText}
                 </div>
 
-                {(isChecked || showBilingualPassage) && currentQ.translation && (
-                  <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 text-xs sm:text-sm font-semibold leading-relaxed shadow-xs space-y-1">
+                {isChecked && currentQ.translation && (
+                  <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 text-xs sm:text-sm font-semibold leading-relaxed shadow-xs space-y-1 animate-in fade-in duration-200">
                     <div className="font-bold text-blue-700 flex items-center gap-1.5">
                       <Languages className="w-4 h-4 text-blue-600" />
                       <span>Bản dịch tiếng Việt:</span>

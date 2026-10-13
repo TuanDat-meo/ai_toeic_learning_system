@@ -1,13 +1,20 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { BookOpen, Brain, ClipboardCheck, Headphones, House, ListChecks } from 'lucide-react';
 
 export function Sidebar() {
+  const pathname = usePathname();
+
+  const isDashboard = pathname === '/dashboard' || pathname === '/';
+
   const modules = [
-    { label: 'Từ vựng', icon: BookOpen },
-    { label: 'Ngữ pháp', icon: Brain },
-    { label: 'Listening', icon: Headphones },
-    { label: 'Reading', icon: ListChecks },
-    { label: 'Thi thử', icon: ClipboardCheck },
+    { label: 'Từ vựng', icon: BookOpen, href: '/vocabulary', available: true },
+    { label: 'Ngữ pháp', icon: Brain, href: '/grammar', available: true },
+    { label: 'Listening', icon: Headphones, href: '/listening', available: true },
+    { label: 'Reading', icon: ListChecks, href: '/reading', available: true },
+    { label: 'Thi thử', icon: ClipboardCheck, href: '/mock-tests', available: true },
   ];
 
   return (
@@ -25,25 +32,57 @@ export function Sidebar() {
       <nav aria-label="Điều hướng học tập" className="flex-1 space-y-6 px-4 py-6">
         <div>
           <p className="px-3 text-xs font-semibold uppercase text-on-surface-variant">Cá nhân</p>
-          <Link href="/dashboard" aria-current="page" className="mt-2 flex items-center gap-3 rounded-md bg-[#123c43] px-3 py-2.5 text-sm font-medium text-white">
-            <House size={18} aria-hidden="true" /> Tổng quan
+          <Link
+            href="/dashboard"
+            aria-current={isDashboard ? 'page' : undefined}
+            className={`mt-2 flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+              isDashboard
+                ? 'bg-[#123c43]/10 text-[#123c43] font-semibold'
+                : 'text-on-surface hover:bg-[#123c43]/10 hover:text-[#123c43] active:bg-[#123c43]/15'
+            }`}
+          >
+            <House size={18} aria-hidden="true" />
+            <span>Tổng quan</span>
           </Link>
         </div>
         <div>
           <p className="px-3 text-xs font-semibold uppercase text-on-surface-variant">Lộ trình TOEIC</p>
           <ul className="mt-2 space-y-1">
-            {modules.map(({ label, icon: Icon }) => (
-              <li key={label} className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md px-3 py-2.5 text-sm text-on-surface-variant/80">
-                <span className="flex items-center gap-3"><Icon size={18} aria-hidden="true" />{label}</span>
-                <span className="text-[10px]">Sắp có</span>
-              </li>
-            ))}
+            {modules.map(({ label, icon: Icon, href, available }) => {
+              const active = href ? (pathname === href || pathname.startsWith(`${href}/`)) : false;
+              if (available && href) {
+                return (
+                  <li key={label}>
+                    <Link
+                      href={href}
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex items-center justify-between gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                        active
+                          ? 'bg-[#123c43]/10 text-[#123c43] font-semibold'
+                          : 'text-on-surface hover:bg-[#123c43]/10 hover:text-[#123c43] active:bg-[#123c43]/15'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <Icon size={18} aria-hidden="true" />
+                        {label}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={label} className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md px-3 py-2.5 text-sm text-on-surface-variant/80">
+                  <span className="flex items-center gap-3"><Icon size={18} aria-hidden="true" />{label}</span>
+                  <span className="text-[10px]">Sắp có</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </nav>
 
       <div className="border-t border-outline-variant/40 px-6 py-4 text-xs leading-5 text-on-surface-variant">
-        Bài học và theo dõi tiến độ sẽ được mở khi các tính năng hoàn tất.
+        Hệ thống học tập TOEIC AI đã sẵn sàng. Chúc bạn đạt mục tiêu điểm số!
       </div>
     </aside>
   );

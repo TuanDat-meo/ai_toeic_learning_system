@@ -1,6 +1,6 @@
 export interface GrammarQuestionItem {
   id: string;
-  part: string; // "Part 5" | "Part 6"
+  part: string; // "Part 5" | "Part 6" | "Part 7"
   questionText: string;
   options: {
     A: string;
@@ -20,7 +20,7 @@ export interface GrammarTopicItem {
   code: string;
   title: string;
   englishTitle: string;
-  part: "Part 5" | "Part 6" | "Part 5 & 6";
+  part: "Part 5" | "Part 6" | "Part 7";
   targetScore: "350-500" | "500-750" | "750+";
   status: "PUBLISHED" | "DRAFT";
   summary: string;
@@ -39,6 +39,6 @@ export interface GrammarTopicItem {
   bookmarked?: boolean;
 }
 
-export type PartFilter = "ALL" | "Part 5" | "Part 6" | "Part 5 & 6";
+export type PartFilter = "ALL" | "Part 5" | "Part 6" | "Part 7";
 export type TargetScoreFilter = "ALL" | "350-500" | "500-750" | "750+";
 export type StatusFilter = "ALL" | "PUBLISHED" | "DRAFT";

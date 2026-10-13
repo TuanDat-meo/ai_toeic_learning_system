@@ -7,7 +7,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "PRO-2024",
     title: "Đại Từ & Tính Từ Sở Hữu (ETS 2024)",
     englishTitle: "Pronouns & Possessive Forms in ETS 2024",
-    part: "Part 5 & 6",
+    part: "Part 5",
     targetScore: "350-500",
     status: "PUBLISHED",
     summary: "Nhóm câu hỏi xuất hiện liên tục trong các đề ETS 2024 (chiếm 3-5 câu/đề), kiểm tra chức năng chủ ngữ (S), tân ngữ (O), tính từ sở hữu (Possessive Adj + Noun), đại từ sở hữu và đại từ phản thân.",
@@ -109,7 +109,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "POS-2024",
     title: "Quy Tắc Vị Trí Từ Loại (Danh - Tính - Động - Trạng)",
     englishTitle: "Parts of Speech & Word Formation in ETS 2024",
-    part: "Part 5 & 6",
+    part: "Part 5",
     targetScore: "350-500",
     status: "PUBLISHED",
     summary: "Dạng bài tập chiếm tỷ trọng lớn nhất Part 5 ETS 2024 (khoảng 8-10 câu/đề). Đòi hỏi nhận diện vị trí chỗ trống trong câu thông qua các thành phần bao quanh mà không cần dịch nghĩa toàn câu.",
@@ -211,7 +211,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "PAR-2024",
     title: "Phân Từ V-ing & V-ed Trong ETS 2024",
     englishTitle: "Participles (Present & Past) in ETS 2024",
-    part: "Part 5 & 6",
+    part: "Part 5",
     targetScore: "500-750",
     status: "PUBLISHED",
     summary: "Điểm ngữ pháp phân loại học viên đạt điểm cao (650+) trong ETS 2024. Phân từ được dùng làm tính từ đứng trước danh từ, hoặc rút gọn mệnh đề trạng ngữ / quan hệ.",
@@ -413,7 +413,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "PPT-01",
     title: "Thì Hiện Tại Hoàn Thành (ETS 2024)",
     englishTitle: "Present Perfect Tense",
-    part: "Part 5 & 6",
+    part: "Part 5",
     targetScore: "500-750",
     status: "PUBLISHED",
     summary: "Diễn tả hành động bắt đầu trong quá khứ và vẫn tiếp diễn ở hiện tại, hoặc vừa mới hoàn tất để lại kết quả trong các thông báo doanh nghiệp ETS 2024.",
@@ -591,7 +591,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "PST-03",
     title: "Thì Quá Khứ Đơn (ETS 2024)",
     englishTitle: "Simple Past Tense",
-    part: "Part 5 & 6",
+    part: "Part 5",
     targetScore: "350-500",
     status: "PUBLISHED",
     summary: "Diễn tả sự kiện, giao dịch hoặc cuộc họp đã chấm dứt hoàn toàn trong quá khứ với mốc thời gian xác định rõ.",
@@ -731,7 +731,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "PAS-05",
     title: "Câu Bị Động Trong Hợp Đồng & Quy Chế (ETS 2024)",
     englishTitle: "Passive Voice in Business TOEIC",
-    part: "Part 5 & 6",
+    part: "Part 5",
     targetScore: "500-750",
     status: "PUBLISHED",
     summary: "Đặc trưng văn phong hành chính thương mại TOEIC: Chủ ngữ là đồ vật, hợp đồng, đơn hàng hay quy trình chịu sự tác động.",
@@ -855,7 +855,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "REL-07",
     title: "Mệnh Đề Quan Hệ & Rút Gọn Mệnh Đề (ETS 2024)",
     englishTitle: "Relative Clauses & Reductions",
-    part: "Part 5 & 6",
+    part: "Part 6",
     targetScore: "500-750",
     status: "PUBLISHED",
     summary: "Đại từ quan hệ (who, whom, which, that, whose) và kỹ thuật rút gọn thành V-ing / V-ed cực kỳ phổ biến trong đề thi.",
@@ -981,7 +981,7 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     code: "CNJ-09",
     title: "Phân Biệt Liên Từ & Giới Từ (ETS 2024)",
     englishTitle: "Conjunctions vs Prepositions",
-    part: "Part 5 & 6",
+    part: "Part 6",
     targetScore: "500-750",
     status: "PUBLISHED",
     summary: "Dạng bài kinh điển phân biệt giữa từ nối mệnh đề (Conjunction + S + V) và từ đi kèm cụm danh từ (Preposition + Noun/V-ing).",
@@ -1221,6 +1221,213 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     ],
     studiedCount: 2,
     correctCount: 2,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  // --- CHỦ ĐIỂM PART 7 (MỚI - ETS 2024): ĐẢO NGỮ & NHẤN MẠNH TRONG VĂN BẢN THƯƠNG MẠI ---
+  {
+    id: "g-inversion-part7-2024",
+    code: "INV-P7-24",
+    title: "Cấu Trúc Đảo Ngữ & Nhấn Mạnh Trong Văn Bản Thương Mại (ETS 2024 Part 7)",
+    englishTitle: "Inversions & Emphatic Structures in ETS 2024 Reading",
+    part: "Part 7",
+    targetScore: "750+",
+    status: "PUBLISHED",
+    summary: "Nhóm cấu trúc ngữ pháp nâng cao xuất hiện trong các bài đọc Thông báo (Notices), Hợp đồng (Agreements) và Email chính thức đề ETS 2024 Part 7. Nhận diện đảo ngữ giúp thí sinh hiểu đúng các điều kiện tiên quyết và quy định hủy giao dịch.",
+    formula: "Only after/when + S + V, [Trợ động từ + S + V] | Under no circumstances + should/can + S + V | It is/was + [Thành phần nhấn mạnh] + that + [Mệnh đề]",
+    signalWords: ["Under no circumstances", "Only after", "Seldom", "Not only... but also", "In no event shall", "It was not until"],
+    traps: [
+      "Bẫy hiểu sai điều kiện bắt buộc: Đảo ngữ với 'Only when' mang ý nghĩa chỉ khi thỏa mãn điều kiện A thì quyền lợi B mới có hiệu lực.",
+      "Bẫy cấu trúc nhấn mạnh 'It was not until... that': Dễ nhầm lẫn mốc thời gian hành động diễn ra."
+    ],
+    examples: [
+      {
+        sentence: "Under no circumstances should confidential client records be disclosed to third-party vendors without prior written authorization.",
+        translation: "Trong bất kỳ trường hợp nào, hồ sơ bảo mật của khách hàng cũng không được tiết lộ cho các nhà cung cấp bên thứ ba mà không có sự ủy quyền trước bằng văn bản.",
+        analysis: "'Under no circumstances' đứng đầu câu bắt buộc đảo trợ động từ 'should' lên trước chủ ngữ 'confidential client records'."
+      },
+      {
+        sentence: "Only after completing the mandatory compliance training will newly hired consultants be assigned to active client accounts.",
+        translation: "Chỉ sau khi hoàn thành khóa đào tạo tuân thủ bắt buộc, các tư vấn viên mới được tuyển dụng mới được phân công vào các tài khoản khách hàng thực tế.",
+        analysis: "Đảo ngữ với 'Only after + V-ing', mệnh đề chính đảo trợ động từ 'will' lên trước chủ ngữ."
+      }
+    ],
+    questions: [
+      {
+        id: "inv7-q1",
+        part: "Part 7",
+        questionText: "Under no circumstances _______ employees permitted to operate heavy warehouse machinery without wearing certified safety helmets.",
+        options: {
+          A: "is",
+          B: "are",
+          C: "will",
+          D: "have"
+        },
+        correctAnswer: "B",
+        explanation: "Cấu trúc đảo ngữ phủ định: Under no circumstances + to be / modal verb + S + V3/ed. Chủ ngữ 'employees' số nhiều nên dùng 'are'.",
+        trapNote: "Tránh nhầm lẫn thứ tự từ trong câu thông thường S + V.",
+        translation: "Trong bất kỳ trường hợp nào, nhân viên cũng không được phép vận hành máy móc kho hàng nặng mà không đội mũ bảo hiểm an toàn đã được chứng nhận.",
+        difficulty: "750+"
+      },
+      {
+        id: "inv7-q2",
+        part: "Part 7",
+        questionText: "Only when full payment is processed _______ the shipping department dispatch the custom-built office furniture.",
+        options: {
+          A: "will",
+          B: "did",
+          C: "is",
+          D: "has"
+        },
+        correctAnswer: "A",
+        explanation: "Mệnh đề 'Only when + S + V' ở hiện tại, mệnh đề chính đảo ngữ thì tương lai: will + S + V_bare (dispatch).",
+        trapNote: "Đảo ngữ với 'Only when' cần xác định đúng thì của hành động xảy ra sau.",
+        translation: "Chỉ khi thanh toán đầy đủ được xử lý thì bộ phận vận chuyển mới xuất kho đồ nội thất văn phòng được đóng theo yêu cầu.",
+        difficulty: "750+"
+      }
+    ],
+    studiedCount: 0,
+    correctCount: 0,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  // --- CHỦ ĐIỂM PART 7 (MỚI - ETS 2024): MỆNH ĐỀ DANH NGỮ & CÂU TƯỜNG THUẬT ---
+  {
+    id: "g-noun-clauses-part7-2024",
+    code: "NCL-P7-24",
+    title: "Mệnh Đề Danh Ngữ & Câu Tường Thuật Trong Báo Cáo & Thư Từ (ETS 2024 Part 7)",
+    englishTitle: "Noun Clauses & Reported Speech in Business Texts",
+    part: "Part 7",
+    targetScore: "500-750",
+    status: "PUBLISHED",
+    summary: "Cấu trúc mệnh đề danh ngữ với That/Whether/What đóng vai trò chủ ngữ hoặc tân ngữ xuất hiện với tần suất dày đặc trong các bài báo kinh tế (Articles), khảo sát nội bộ (Surveys) và email của đề ETS 2024 Part 7.",
+    formula: "That / Whether + S + V + [Động từ chính của câu] | S + announced / confirmed / reported + that + S + V",
+    signalWords: ["whether or not", "stated that", "indicated that", "the fact that", "regarding whether", "confirmed that"],
+    traps: [
+      "Bẫy nhầm lẫn giữa 'That' (sự thật khẳng định) và 'Whether/If' (sự không chắc chắn / phân vân giữa 2 khả năng).",
+      "Bẫy mệnh đề danh ngữ làm chủ ngữ: Cả cụm 'That + S + V' là một chủ ngữ số ít, động từ chính phía sau phải chia ở số ít."
+    ],
+    examples: [
+      {
+        sentence: "Whether the proposed branch relocation will be approved depends heavily on the quarterly budget surplus.",
+        translation: "Việc di dời chi nhánh được đề xuất có được phê duyệt hay không phụ thuộc rất lớn vào khoản thặng dư ngân sách hàng quý.",
+        analysis: "'Whether the proposed branch relocation will be approved' là mệnh đề danh ngữ đóng vai trò chủ ngữ số ít, động từ chính là 'depends'."
+      }
+    ],
+    questions: [
+      {
+        id: "ncl7-q1",
+        part: "Part 7",
+        questionText: "Senior management has not yet determined _______ the regional sales summit will take place in Da Nang or Ho Chi Minh City.",
+        options: {
+          A: "that",
+          B: "whether",
+          C: "what",
+          D: "which"
+        },
+        correctAnswer: "B",
+        explanation: "Cấu trúc 'whether A or B' diễn tả sự lựa chọn hoặc phân vân giữa 2 phương án (Da Nang or Ho Chi Minh City).",
+        trapNote: "Tránh chọn 'that' vì câu mang nghĩa chưa xác định (has not yet determined).",
+        translation: "Ban lãnh đạo cấp cao vẫn chưa xác định liệu hội nghị thượng đỉnh bán hàng khu vực sẽ diễn ra ở Đà Nẵng hay Thành phố Hồ Chí Minh.",
+        difficulty: "500-750"
+      }
+    ],
+    studiedCount: 0,
+    correctCount: 0,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  // --- CHỦ ĐIỂM PART 7 (MỚI - ETS 2024): THỂ SAI KHIẾN & GIẢ ĐỊNH TRONG HỢP ĐỒNG ---
+  {
+    id: "g-subjunctive-part7-2024",
+    code: "SUB-P7-24",
+    title: "Cấu Trúc Giả Định & Thể Sai Khiến Trong Hợp Đồng & Quy Chế (ETS 2024 Part 7)",
+    englishTitle: "Subjunctive Mood & Causative Forms in Contracts",
+    part: "Part 7",
+    targetScore: "500-750",
+    status: "PUBLISHED",
+    summary: "Đặc trưng của các văn bản chính sách bảo hành, biên bản làm việc và hợp đồng lao động ETS 2024 Part 7 là sử dụng thể giả định sau các động từ yêu cầu, đề xuất (require, mandate, stipulate that S + V-bare).",
+    formula: "S + stipulate / mandate / require / request + that + S + (should) + V-nguyên mẫu | have / get + something + done (V3/ed)",
+    signalWords: ["mandatory", "required that", "stipulates that", "it is imperative that", "have the system inspected"],
+    traps: [
+      "Bẫy chia thì theo chủ ngữ số ít: Sau 'require that S', động từ luôn ở dạng nguyên mẫu không chia (ví dụ: 'require that every employee submit' thay vì 'submits')."
+    ],
+    examples: [
+      {
+        sentence: "The building maintenance contract stipulates that all air conditioning units be inspected bi-annually by licensed engineers.",
+        translation: "Hợp đồng bảo trì tòa nhà quy định rằng tất cả các máy điều hòa nhiệt độ phải được kiểm tra định kỳ hai năm một lần bởi các kỹ sư có chứng chỉ.",
+        analysis: "Sau 'stipulates that', động từ giả định là 'be inspected' (dạng nguyên mẫu của to be)."
+      }
+    ],
+    questions: [
+      {
+        id: "sub7-q1",
+        part: "Part 7",
+        questionText: "The company travel policy mandates that all international flight bookings _______ made at least two weeks prior to departure.",
+        options: {
+          A: "are",
+          B: "be",
+          C: "were",
+          D: "been"
+        },
+        correctAnswer: "B",
+        explanation: "Cấu trúc giả định thức: S + mandate that + S + (should) + be + V3/ed. Bắt buộc dùng dạng nguyên thể 'be'.",
+        trapNote: "Tránh chọn 'are' theo thói quen chia thì hiện tại đơn số nhiều.",
+        translation: "Chính sách công tác của công ty quy định rằng tất cả các đặt vé chuyến bay quốc tế phải được thực hiện trước ngày khởi hành ít nhất hai tuần.",
+        difficulty: "500-750"
+      }
+    ],
+    studiedCount: 0,
+    correctCount: 0,
+    wrongCount: 0,
+    bookmarked: false
+  },
+
+  // --- CHỦ ĐIỂM PART 7 (MỚI - ETS 2024): TỪ NỐI CHUYỂN ĐOẠN ĐOẠN KÉP / ĐOẠN BA ---
+  {
+    id: "g-transitional-part7-2024",
+    code: "TRN-P7-24",
+    title: "Từ Nối Chuyển Đoạn & Xâu Chuỗi Logic Đoạn Kép / Đoạn Ba (ETS 2024 Part 7)",
+    englishTitle: "Transitional Adverbs in Double & Triple Passages",
+    part: "Part 7",
+    targetScore: "500-750",
+    status: "PUBLISHED",
+    summary: "Kỹ năng phân tích từ nối chuyển ý (However, Consequently, Furthermore, In the meantime) là chìa khóa để xâu chuỗi thông tin giữa email và hóa đơn hoặc phiếu đặt hàng trong bài đọc Part 7 ETS 2024.",
+    formula: "Mệnh đề 1. However / In contrast / As a result, Mệnh đề 2 | Meanwhile / Subsequently + [Hành động tiếp theo]",
+    signalWords: ["Consequently", "In addition", "In the meantime", "On the contrary", "Accordingly", "Therefore", "Nevertheless"],
+    traps: [
+      "Bẫy hiểu ngược ý: Từ nối chuyển ý phản đối (However / Although) thường chứa thông tin đảo ngược hoàn toàn quyết định trong bức thư đầu tiên."
+    ],
+    examples: [
+      {
+        sentence: "The initial order form requested 20 office chairs; however, the attached invoice reflects a revised quantity of 15 units.",
+        translation: "Phiếu đặt hàng ban đầu yêu cầu 20 ghế văn phòng; tuy nhiên, hóa đơn đính kèm phản ánh số lượng đã điều chỉnh là 15 chiếc.",
+        analysis: "'However' là từ nối bản lề kết nối thông tin giữa phiếu đặt hàng (Văn bản 1) và hóa đơn đính kèm (Văn bản 2)."
+      }
+    ],
+    questions: [
+      {
+        id: "trn7-q1",
+        part: "Part 7",
+        questionText: "The manufacturer promised a five-day delivery schedule; _______, severe port congestion has delayed arrival by another week.",
+        options: {
+          A: "therefore",
+          B: "nevertheless",
+          C: "likewise",
+          D: "furthermore"
+        },
+        correctAnswer: "B",
+        explanation: "Vế trước đưa ra cam kết giao hàng 5 ngày, vế sau nói về sự cố cảng làm trễ 1 tuần -> mối quan hệ tương phản, đối lập, chọn 'nevertheless' (tuy nhiên).",
+        trapNote: "Tránh chọn 'therefore' (do đó) vì hai vế mang ý nghĩa trái ngược nhau.",
+        translation: "Nhà sản xuất đã hứa hẹn lịch giao hàng trong năm ngày; tuy nhiên, tình trạng tắc nghẽn cảng nghiêm trọng đã làm chậm trễ chuyến hàng thêm một tuần nữa.",
+        difficulty: "500-750"
+      }
+    ],
+    studiedCount: 0,
+    correctCount: 0,
     wrongCount: 0,
     bookmarked: false
   }

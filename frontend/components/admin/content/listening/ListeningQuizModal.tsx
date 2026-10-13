@@ -492,9 +492,9 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     </div>
                   )}
 
-                  {/* Script & Translation when checked or Bilingual */}
-                  {(showBilingualQuiz || quizAnswerChecked[q.id]) && (
-                    <div className="p-5 sm:p-6 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-4 shadow-xs">
+                  {/* Script & Translation ONLY when checked */}
+                  {(quizAnswerChecked[q.id] || isAllGroupAnswered) && (
+                    <div className="p-5 sm:p-6 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-4 shadow-xs animate-in fade-in duration-200">
                       <div className="flex items-center justify-between border-b border-blue-200/60 pb-2.5">
                         <div className="flex items-center gap-2 font-bold text-sm sm:text-base text-blue-900">
                           <FileText className="w-4 h-4 text-blue-600" />
@@ -612,15 +612,9 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                         const nextSelected = { ...quizSelectedOption, [qItem.id]: optKey };
                                         setQuizSelectedOption(nextSelected);
 
-                                        const allDone = currentGroupQuestions.every((q) => !!nextSelected[q.id]);
-                                        if (allDone) {
-                                          const nextChecked = { ...quizAnswerChecked };
-                                          currentGroupQuestions.forEach((q) => {
-                                            nextChecked[q.id] = true;
-                                          });
-                                          setQuizAnswerChecked(nextChecked);
-                                          updateCardStats(qItem, optKey);
-                                        }
+                                        const nextChecked = { ...quizAnswerChecked, [qItem.id]: true };
+                                        setQuizAnswerChecked(nextChecked);
+                                        updateCardStats(qItem, optKey);
                                       }}
                                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
                                     >
@@ -790,14 +784,14 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                         let promptText = q.question;
                         if (isPart2) {
-                          promptText = isChecked ? q.question : "Mark your answer on your answer sheet (Nghe câu hỏi và chọn A, B hoặc C)";
+                          promptText = isChecked ? q.question : "";
                         } else if (isPart1) {
-                          promptText = isChecked ? (q.question || q.fullTranscript) : "Xem tranh và chọn câu miêu tả đúng nhất";
+                          promptText = isChecked ? (q.question || q.fullTranscript) : "";
                         }
 
                         return (
                           <div className="text-base font-extrabold text-slate-900">
-                            {activeQuizQIndex + 1}. {promptText}
+                            {activeQuizQIndex + 1}.{promptText ? ` ${promptText}` : ""}
                           </div>
                         );
                       })()}

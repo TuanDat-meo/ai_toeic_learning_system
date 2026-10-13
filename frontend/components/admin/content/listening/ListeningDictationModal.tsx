@@ -19,6 +19,9 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
@@ -55,6 +58,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   dictationModalCard,
   setDictationModalCard,
   activeDictationQIndex,
+  setActiveDictationQIndex,
   dictationChecked,
   dictationSubTab,
   setDictationSubTab,
@@ -77,12 +81,28 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   triggerToast,
 }) => {
   const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
+  const [isLocalQuestionGridOpen, setIsLocalQuestionGridOpen] = useState(false);
 
   const q = dictationModalCard.questions[activeDictationQIndex];
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
   }, [activeDictationQIndex, setIsPlayingAudio]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        setActiveDictationQIndex(Math.max(0, activeDictationQIndex - 1));
+      } else if (e.key === "ArrowRight") {
+        setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeDictationQIndex, dictationModalCard.questions.length, setActiveDictationQIndex]);
 
   if (!q) return null;
 
@@ -461,15 +481,114 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
             Ctrl: phát lại · Tab: lật từ · Enter: câu tiếp theo · ←/→: chuyển câu
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsQuestionGridOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs active:scale-95"
-          >
-            <Grid className="w-4 h-4" />
-            <span>{activeDictationQIndex + 1}/{dictationModalCard.questions.length}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={activeDictationQIndex === 0}
+              onClick={() => {
+                playSfx?.("click");
+                setActiveDictationQIndex(Math.max(0, activeDictationQIndex - 1));
+              }}
+              className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
+              title="Câu trước"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsQuestionGridOpen(true);
+                setIsLocalQuestionGridOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs active:scale-95"
+              title="Danh sách toàn bộ câu hỏi"
+            >
+              <Grid className="w-4 h-4" />
+              <span>{activeDictationQIndex + 1}/{dictationModalCard.questions.length}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={activeDictationQIndex >= dictationModalCard.questions.length - 1}
+              onClick={() => {
+                playSfx?.("click");
+                setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
+              }}
+              className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
+              title="Câu tiếp theo"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </footer>
+
+        {/* MODAL DANH SÁCH TOÀN BỘ CÂU HỎI DICTATION */}
+        {isLocalQuestionGridOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <Grid className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-slate-900">Danh sách toàn bộ câu hỏi</h3>
+                    <p className="text-xs text-slate-500">
+                      Tổng số {dictationModalCard.questions.length} câu chép chính tả
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLocalQuestionGridOpen(false)}
+                  className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+                {dictationModalCard.questions.map((item, idx) => {
+                  const isCurrent = idx === activeDictationQIndex;
+                  const isCheckedQ = !!dictationChecked[item.id];
+
+                  let qBtnStyle = "bg-white border-slate-200 text-slate-700 hover:border-blue-400";
+                  if (isCurrent) {
+                    qBtnStyle = "bg-blue-600 text-white font-extrabold border-blue-600 ring-2 ring-blue-300";
+                  } else if (isCheckedQ) {
+                    qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
+                  }
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveDictationQIndex(idx);
+                        setIsLocalQuestionGridOpen(false);
+                      }}
+                      className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
+                    >
+                      <span className="font-extrabold">{idx + 1}</span>
+                      <span className="text-[9px] opacity-80">{item.part || "Part 1"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLocalQuestionGridOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+                >
+                  Đóng danh sách
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
