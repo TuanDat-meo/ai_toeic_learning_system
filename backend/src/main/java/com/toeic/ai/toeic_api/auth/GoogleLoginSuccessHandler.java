@@ -17,6 +17,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.toeic.ai.toeic_api.user.EmailAlreadyRegisteredException;
 import com.toeic.ai.toeic_api.user.UserAccountService;
 
 @Component
@@ -41,6 +42,7 @@ public class GoogleLoginSuccessHandler implements AuthenticationSuccessHandler, 
         String email = googleUser.getAttribute("email");
         Boolean emailVerified = googleUser.getAttribute("email_verified");
         String name = googleUser.getAttribute("name");
+        boolean signupFlow = consumeSignupFlow(request);
 
         if (email == null || !Boolean.TRUE.equals(emailVerified)) {
             redirectWithError(response, "unverified_email");
@@ -48,7 +50,9 @@ public class GoogleLoginSuccessHandler implements AuthenticationSuccessHandler, 
         }
 
         try {
-            UserDetails account = userAccountService.findOrCreateGoogleAccount(name == null ? email : name, email);
+            UserDetails account = signupFlow
+                    ? userAccountService.registerGoogleAccount(name == null ? email : name, email)
+                    : userAccountService.findOrCreateGoogleAccount(name == null ? email : name, email);
             if (request.getSession(false) != null) {
                 request.changeSessionId();
             }
@@ -65,8 +69,11 @@ public class GoogleLoginSuccessHandler implements AuthenticationSuccessHandler, 
 
             response.sendRedirect(UriComponentsBuilder.fromUriString(frontendUrl)
                     .path("/auth/google/callback").build().toUriString());
+        } catch (EmailAlreadyRegisteredException exception) {
+            clearAuthentication(request, response);
+            redirectWithError(response, "email_already_registered");
         } catch (IllegalArgumentException exception) {
-            SecurityContextHolder.clearContext();
+            clearAuthentication(request, response);
             redirectWithError(response, "account_unavailable");
         }
     }
@@ -74,7 +81,25 @@ public class GoogleLoginSuccessHandler implements AuthenticationSuccessHandler, 
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
             org.springframework.security.core.AuthenticationException exception) throws IOException {
+        consumeSignupFlow(request);
         redirectWithError(response, "google_login_failed");
+    }
+
+    private boolean consumeSignupFlow(HttpServletRequest request) {
+        var session = request.getSession(false);
+        if (session == null) {
+            return false;
+        }
+        boolean signupFlow = "signup".equals(session.getAttribute(GoogleOAuthController.FLOW_SESSION_ATTRIBUTE));
+        session.removeAttribute(GoogleOAuthController.FLOW_SESSION_ATTRIBUTE);
+        return signupFlow;
+    }
+
+    private void clearAuthentication(HttpServletRequest request, HttpServletResponse response) {
+        SecurityContext emptyContext = SecurityContextHolder.createEmptyContext();
+        SecurityContextHolder.setContext(emptyContext);
+        contextRepository.saveContext(emptyContext, request, response);
+        SecurityContextHolder.clearContext();
     }
 
     private void redirectWithError(HttpServletResponse response, String error) throws IOException {

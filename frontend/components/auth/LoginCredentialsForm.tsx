@@ -157,7 +157,7 @@ export function LoginCredentialsForm({
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
           <span className="relative bg-white px-2.5 text-[11px] text-slate-400">hoặc</span>
         </div>
-        <button type="button" onClick={startGoogleLogin}
+        <button type="button" onClick={() => startGoogleLogin('login')}
           className="relative mt-2.5 flex h-9 w-full items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
           <GoogleIcon /> <span>Tiếp tục với Google</span>
         </button>

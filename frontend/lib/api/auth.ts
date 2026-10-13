@@ -40,9 +40,9 @@ export function login(email: string, password: string) {
   return postAuthRequest<AuthUser>('/api/auth/login', { email, password });
 }
 
-export function startGoogleLogin() {
+export function startGoogleLogin(flow: 'login' | 'signup') {
   if (typeof window !== 'undefined') {
-    window.location.assign(`${API_BASE_URL}/oauth2/authorization/google`);
+    window.location.assign(`${API_BASE_URL}/api/auth/google/${flow}`);
   }
 }
 

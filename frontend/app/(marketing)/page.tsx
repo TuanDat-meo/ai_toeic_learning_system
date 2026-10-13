@@ -9,6 +9,7 @@ import { RoadmapPlanner } from '@/components/marketing/RoadmapPlanner';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { getAvailableLearningPlans, type SubscriptionPlan } from '@/lib/api/billing';
 import { LEARNING_CAPABILITIES } from '@/lib/learning-capabilities';
+import { GoogleAuthErrorModal } from '@/components/auth/GoogleAuthErrorModal';
 
 const learningSteps = [
   ['01', 'Đánh giá đầu vào', 'Xác định trình độ và mục tiêu điểm của bạn.'],
@@ -26,12 +27,21 @@ function LoginQueryTrigger({ onOpen }: { onOpen: () => void }) {
   return null;
 }
 
+function GoogleAuthErrorQueryTrigger({ onErrorChange }: { onErrorChange: (errorCode: string | null) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    onErrorChange(searchParams.get('authError'));
+  }, [searchParams, onErrorChange]);
+  return null;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [learningPlans, setLearningPlans] = useState<SubscriptionPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [plansError, setPlansError] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
   const loadLearningPlans = useCallback(async () => {
     setPlansLoading(true);
@@ -64,15 +74,21 @@ export default function LandingPage() {
     };
   }, []);
 
-  function closeLoginModal() {
+  const closeLoginModal = useCallback(() => {
     setIsLoginModalOpen(false);
     router.replace('/', { scroll: false });
-  }
+  }, [router]);
+
+  const closeGoogleAuthError = useCallback(() => {
+    setGoogleAuthError(null);
+    router.replace('/', { scroll: false });
+  }, [router]);
 
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
       <Suspense fallback={null}>
         <LoginQueryTrigger onOpen={openLoginModal} />
+        <GoogleAuthErrorQueryTrigger onErrorChange={setGoogleAuthError} />
       </Suspense>
 
       {/* Navbar */}
@@ -242,6 +258,7 @@ export default function LandingPage() {
 
       {/* Login Modal */}
       <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
+      <GoogleAuthErrorModal errorCode={googleAuthError} onClose={closeGoogleAuthError} />
     </div>
   );
 }
