@@ -454,7 +454,7 @@ export const INITIAL_CARDS: ExerciseCardData[] = [
   // --- PART 6 & PART 7 LEVELS ---,
 
   {
-    id: "p7-level-1",
+    id: "mock-p7-level-1",
     title: "Lv.1 Dưới 200",
     category: "part7",
     subCategory: "levels",

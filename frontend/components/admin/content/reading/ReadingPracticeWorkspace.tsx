@@ -1105,7 +1105,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           <QuestionErrorReportButton source="READING"
             questionRef={questionRef}
             relatedContent={`${card.title} · Đoạn ${currentGroupIndex + 1} (Câu ${currentGroupFirstQuestion?.questionNum || currentGroupIndex + 1})`}
-            questionSnapshot={{ questionText: currentGroupFirstQuestion?.question || "", options: currentGroupFirstQuestion?.options || [], correctAnswer: String.fromCharCode(65 + (currentGroupFirstQuestion?.correctIndex ?? 0)), explanation: currentGroupFirstQuestion?.explanation, passage: card.passageText || card.title, part: card.category }}
+            questionSnapshot={{ questionText: currentGroupFirstQuestion?.question || "", options: currentGroupFirstQuestion?.options || [], correctAnswer: String.fromCharCode(65 + (currentGroupFirstQuestion?.correctIndex ?? 0)), explanation: currentGroupFirstQuestion?.explanation, passage: currentGroup.passageText || card.passageText, passageTextVi: currentGroup.passageTextVi || card.passageTextVi, passageTitle: currentGroup.passageTitle || card.title, passages: currentGroup.passages || card.passages, part: card.category }}
             compact onSubmitted={(ticket) => showToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
           <button

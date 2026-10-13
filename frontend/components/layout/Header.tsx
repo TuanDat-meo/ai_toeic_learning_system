@@ -37,7 +37,7 @@ const navigationItems = [
   { label: 'Ngữ pháp', href: null, icon: Brain, color: 'text-teal-400' },
   { label: 'Từ vựng', href: null, icon: BookA, color: 'text-emerald-400' },
   { label: 'Thi thử', href: null, icon: ClipboardCheck, color: 'text-orange-400' },
-  { label: 'Cộng đồng', href: '/dashboard#community', icon: MessagesSquare, color: 'text-indigo-400' },
+  { label: 'Cộng đồng', href: '/community', icon: MessagesSquare, color: 'text-indigo-400' },
 ] as const;
 
 export function Header() {

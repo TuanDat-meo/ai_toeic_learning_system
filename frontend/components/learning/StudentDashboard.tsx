@@ -202,19 +202,16 @@ export function StudentDashboard() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 id="community-title" className="text-lg font-bold text-on-surface">Cộng đồng học viên</h2>
-                <span className="rounded-full bg-surface-container px-2.5 py-1 text-[10px] font-semibold text-on-surface-variant">
-                  Đang phát triển
-                </span>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">Đã mở</span>
               </div>
               <p className="mt-1.5 max-w-2xl text-sm leading-6 text-on-surface-variant">
-                Kết nối và chia sẻ kinh nghiệm học TOEIC cùng các học viên khác. Khu vực cộng đồng sẽ xuất hiện tại đây khi sẵn sàng.
+                Đặt câu hỏi TOEIC, chia sẻ kinh nghiệm và cùng các học viên khác thảo luận.
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
-            <span className="size-2 rounded-full bg-outline-variant" aria-hidden="true" />
-            Chưa có bài viết
-          </div>
+          <Link href="/community" className="flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700">
+            <MessagesSquare className="size-4" aria-hidden="true" /> Mở cộng đồng
+          </Link>
         </div>
       </section>
     </div>

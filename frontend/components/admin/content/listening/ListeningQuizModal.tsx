@@ -122,6 +122,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
     explanation: questionCorrection.explanation || baseQuestion.explanation,
   } : baseQuestion;
+  const resolvedAudioUrl = currentQ.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3";
 
   const updateCardStats = (q: DictationQuestion, chosen: string) => {
     const isCorrect = chosen === q.correctAnswer;
@@ -492,7 +493,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                   {/* Audio Player Box (Interactive Waveform, Rewind, Forward & Click-to-Seek) */}
                   <AudioWaveformPlayer
-                    audioUrl={currentQ?.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3"}
+                    audioUrl={resolvedAudioUrl}
                     isPlaying={isPlayingAudio}
                     onPlayPauseChange={(playing) => setIsPlayingAudio(playing)}
                     showSpeedControl={true}
@@ -1036,7 +1037,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           <QuestionErrorReportButton source="LISTENING"
             questionRef={questionRef}
             relatedContent={`${quizModalCard.part} · ${quizModalCard.title} · Câu ${activeQuizQIndex + 1}`}
-            questionSnapshot={{ questionText: currentQ.question || currentQ.fullTranscript, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, audioUrl: currentQ.audioUrl, part: currentQ.part }}
+            questionSnapshot={{ questionText: currentQ.question || currentQ.fullTranscript, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, imageUrl: currentQ.imageUrl, audioUrl: resolvedAudioUrl, part: currentQ.part }}
             compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
           <button
