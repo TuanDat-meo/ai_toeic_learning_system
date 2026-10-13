@@ -71,6 +71,7 @@ public class SecurityConfig {
                             "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
                             "/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers("/api/billing/**").hasRole("STUDENT")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .anyRequest().permitAll());

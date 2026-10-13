@@ -1,14 +1,13 @@
+"use client";
+
 import Link from 'next/link';
-import { BookOpen, Brain, ClipboardCheck, Headphones, House, ListChecks } from 'lucide-react';
+import { BookOpen, Brain, ClipboardCheck, CreditCard, Headphones, House, ListChecks } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { LEARNING_CAPABILITIES } from '@/lib/learning-capabilities';
 
 export function Sidebar() {
-  const modules = [
-    { label: 'Từ vựng', icon: BookOpen },
-    { label: 'Ngữ pháp', icon: Brain },
-    { label: 'Listening', icon: Headphones },
-    { label: 'Reading', icon: ListChecks },
-    { label: 'Thi thử', icon: ClipboardCheck },
-  ];
+  const pathname = usePathname();
+  const moduleIcons = { VOCABULARY: BookOpen, GRAMMAR: Brain, LISTENING: Headphones, READING: ListChecks, MOCK_TEST: ClipboardCheck };
 
   return (
     <aside className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col border-r border-outline-variant/40 bg-surface-container-lowest lg:flex">
@@ -25,19 +24,29 @@ export function Sidebar() {
       <nav aria-label="Điều hướng học tập" className="flex-1 space-y-6 px-4 py-6">
         <div>
           <p className="px-3 text-xs font-semibold uppercase text-on-surface-variant">Cá nhân</p>
-          <Link href="/dashboard" aria-current="page" className="mt-2 flex items-center gap-3 rounded-md bg-[#123c43] px-3 py-2.5 text-sm font-medium text-white">
-            <House size={18} aria-hidden="true" /> Tổng quan
-          </Link>
+          <ul className="mt-2 space-y-1">
+            <li>
+              <Link href="/dashboard" aria-current={pathname === "/dashboard" ? "page" : undefined} className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium ${pathname === "/dashboard" ? "bg-[#123c43] text-white" : "text-on-surface-variant hover:bg-surface-container"}`}>
+                <House size={18} aria-hidden="true" /> Tổng quan
+              </Link>
+            </li>
+            <li>
+              <Link href="/billing" aria-current={pathname === "/billing" ? "page" : undefined} className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium ${pathname === "/billing" ? "bg-[#123c43] text-white" : "text-on-surface-variant hover:bg-surface-container"}`}>
+                <CreditCard size={18} aria-hidden="true" /> Gói học &amp; thanh toán
+              </Link>
+            </li>
+          </ul>
         </div>
         <div>
           <p className="px-3 text-xs font-semibold uppercase text-on-surface-variant">Lộ trình TOEIC</p>
           <ul className="mt-2 space-y-1">
-            {modules.map(({ label, icon: Icon }) => (
-              <li key={label} className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md px-3 py-2.5 text-sm text-on-surface-variant/80">
+            {LEARNING_CAPABILITIES.map(({ key, label }) => {
+              const Icon = moduleIcons[key as keyof typeof moduleIcons];
+              return <li key={key} className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md px-3 py-2.5 text-sm text-on-surface-variant/80">
                 <span className="flex items-center gap-3"><Icon size={18} aria-hidden="true" />{label}</span>
-                <span className="text-[10px]">Sắp có</span>
-              </li>
-            ))}
+                <span className="text-[10px]">Đang phát triển</span>
+              </li>;
+            })}
           </ul>
         </div>
       </nav>
