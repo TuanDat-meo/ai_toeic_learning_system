@@ -7,7 +7,7 @@ import { createSupportReport, type SupportReportCategory } from "@/lib/api/suppo
 import { createCommunityPost } from '@/lib/api/community';
 
 type Props = {
-  source: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK";
+  source: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK" | "OTHER";
   questionRef: string;
   relatedContent: string;
   questionSnapshot: Record<string, unknown>;

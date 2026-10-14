@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X, Plus, Pencil, Trash2, Volume2, Gamepad2 } from "lucide-react";
 import { WordItem, TestItem } from "@/app/admin/content/vocabulary/types";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 
 interface VocabularyModalsProps {
   // Word list modal
@@ -396,9 +397,26 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 <Gamepad2 className="w-3.5 h-3.5" />
                 Mini-game Ôn Từ Nhanh
               </span>
-              <span className="text-xs bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded-full border border-amber-200">
-                Điểm: {gameScore}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded-full border border-amber-200">
+                  Điểm: {gameScore}
+                </span>
+                {gameModalTest.words[gameQuestionIndex] && (
+                  <QuestionErrorReportButton
+                    source="OTHER"
+                    questionRef={`vocab-${gameModalTest.id}-${gameModalTest.words[gameQuestionIndex].id || gameQuestionIndex + 1}`}
+                    relatedContent={`Từ vựng: ${gameModalTest.title} - ${gameModalTest.words[gameQuestionIndex].word}`}
+                    questionSnapshot={{
+                      topicTitle: gameModalTest.title,
+                      word: gameModalTest.words[gameQuestionIndex].word,
+                      meaning: gameModalTest.words[gameQuestionIndex].meaning,
+                      ipa: gameModalTest.words[gameQuestionIndex].ipa,
+                      level: gameModalTest.words[gameQuestionIndex].level,
+                    }}
+                    compact
+                  />
+                )}
+              </div>
             </div>
 
             {(() => {
