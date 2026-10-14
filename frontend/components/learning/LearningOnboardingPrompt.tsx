@@ -7,19 +7,19 @@ import { getLearningOnboardingStatus } from '@/lib/api/auth';
 
 export function LearningOnboardingPrompt() {
   const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
 
     getLearningOnboardingStatus()
-      .then(({ state }) => {
-        if (active) setOnboardingStep(state.completed ? null : state.currentStep + 1);
-      })
-      .catch((statusError: unknown) => {
-        if (active) {
-          setError(statusError instanceof Error ? statusError.message : 'Không thể tải trạng thái mục tiêu học tập.');
+      .then((res) => {
+        if (active && res?.state) {
+          setOnboardingStep(res.state.completed ? null : (res.state.currentStep || 0) + 1);
         }
+      })
+      .catch(() => {
+        // Silently hide prompt if onboarding status service is unavailable
+        if (active) setOnboardingStep(null);
       });
 
     return () => {
@@ -27,13 +27,6 @@ export function LearningOnboardingPrompt() {
     };
   }, []);
 
-  if (error) {
-    return (
-      <p role="alert" className="rounded-xl border border-error/30 bg-error-container px-5 py-4 text-sm text-on-error-container">
-        {error}
-      </p>
-    );
-  }
   if (onboardingStep === null) return null;
 
   return (
