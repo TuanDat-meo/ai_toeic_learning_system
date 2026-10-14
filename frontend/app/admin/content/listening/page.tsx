@@ -20,7 +20,6 @@ import {
   ListeningAudioAssetsView,
   ListeningAccentMatrixView,
 } from "@/components/admin/content/listening/ListeningViews";
-import { Headphones, FileAudio, Users, Award, TrendingUp, Layers } from "lucide-react";
 import { ListeningDictationTab } from "@/components/admin/content/listening/ListeningDictationTab";
 import { ListeningPartTab } from "@/components/admin/content/listening/ListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
@@ -40,7 +39,7 @@ export default function ListeningPage() {
   // --- STATES CHÍNH ---
   const [activeAdminTab, setActiveAdminTab] = useState<ListeningAdminTab>("listening_units");
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
-  const [selectedYear, setSelectedYear] = useState<"2026" | "2024" | "2023" | "2022">("2026");
+  const [selectedYear, setSelectedYear] = useState<"2026" | "2024" | "2023" | "2022">("2024");
 
   // Dữ liệu cards
   const [dictationCards, setDictationCards] = useState<DictationCardData[]>(INITIAL_DICTATION_CARDS);
@@ -79,12 +78,12 @@ export default function ListeningPage() {
   const [quizSelectedOption, setQuizSelectedOption] = useState<{ [qId: number]: string }>({});
   const [quizAnswerChecked, setQuizAnswerChecked] = useState<{ [qId: number]: boolean }>({});
   const [showBilingualQuiz, setShowBilingualQuiz] = useState(false);
+  const [, setIsQuestionGridOpen] = useState(false);
+  const [, setIsNotesModalOpen] = useState(false);
 
   // Audio & SFX
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
-  const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
-  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
   const playAudio = (text: string) => {
     if (!isSfxEnabled || !text.trim()) return;
@@ -102,7 +101,7 @@ export default function ListeningPage() {
     }
   };
 
-  const playSfx = (type?: "correct" | "wrong" | "click") => {
+  const playSfx = () => {
     if (!isSfxEnabled) return;
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -419,7 +418,7 @@ export default function ListeningPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Toast notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce">

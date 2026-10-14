@@ -12,15 +12,20 @@ import {
   Lock,
   BookOpen,
   Volume2,
-  Flag,
   ShoppingBag,
   Grid,
   Sparkles,
   Search,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
+import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ListeningDictationModalProps {
   dictationModalCard: DictationCardData;
@@ -54,6 +59,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   dictationModalCard,
   setDictationModalCard,
   activeDictationQIndex,
+  setActiveDictationQIndex,
   dictationChecked,
   dictationSubTab,
   setDictationSubTab,
@@ -76,28 +82,49 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   triggerToast,
 }) => {
   const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
+  const [isLocalQuestionGridOpen, setIsLocalQuestionGridOpen] = useState(false);
 
-  const q = dictationModalCard.questions[activeDictationQIndex];
-
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const baseQuestion = dictationModalCard.questions[activeDictationQIndex];
+  const questionRef = baseQuestion ? `DICTATION-${dictationModalCard.id}-${baseQuestion.id}` : "";
+  const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!questionRef) return () => { active = false; };
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [questionRef]);
+  const questionCorrection = questionCorrectionState?.ref === questionRef ? questionCorrectionState.value : null;
+  const correctionOptions = Array.isArray(questionCorrection?.options)
+    ? Object.fromEntries(questionCorrection.options.map((option, index) => [String.fromCharCode(65 + index), option]))
+    : questionCorrection?.options || baseQuestion?.options;
+  const q = baseQuestion && questionCorrection ? {
+    ...baseQuestion,
+    question: questionCorrection.questionText || baseQuestion.question,
+    fullTranscript: questionCorrection.questionText || baseQuestion.fullTranscript,
+    options: correctionOptions,
+    correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+  } : baseQuestion;
+  const resolvedAudioUrl = q?.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3";
 
   React.useEffect(() => {
-    if (!audioRef.current) return;
-    if (isPlayingAudio) {
-      audioRef.current.playbackRate = parseFloat(audioSpeed) || 1.0;
-      audioRef.current.play().catch(() => setIsPlayingAudio(false));
-    } else {
-      audioRef.current.pause();
-    }
-  }, [isPlayingAudio, audioSpeed, setIsPlayingAudio]);
-
-  React.useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
     setIsPlayingAudio(false);
   }, [activeDictationQIndex, setIsPlayingAudio]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        setActiveDictationQIndex(Math.max(0, activeDictationQIndex - 1));
+      } else if (e.key === "ArrowRight") {
+        setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeDictationQIndex, dictationModalCard.questions.length, setActiveDictationQIndex]);
 
   if (!q) return null;
 
@@ -198,112 +225,20 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* KHỐI BÊN TRÁI (COL 7): AUDIO WAVEFORM & KHUNG ĐỤC LỖ */}
             <div className="lg:col-span-7 space-y-5">
-              {/* THẺ 1: SÓNG ÂM & BỘ ĐIỀU KHIỂN AUDIO */}
-              <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-                <div className="w-full h-16 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between px-6 relative overflow-hidden">
-                  <div className="flex items-center justify-between w-full h-10 gap-1.5">
-                    {Array.from({ length: 42 }).map((_, idx) => {
-                      const heights = [20, 35, 60, 40, 85, 50, 30, 95, 45, 25, 75, 90, 35, 65, 40];
-                      const h = heights[idx % heights.length];
-                      const isPlayed = idx < 12;
-                      return (
-                        <span
-                          key={idx}
-                          style={{ height: `${h}%` }}
-                          className={`w-1.5 rounded-full transition-all ${
-                            isPlayed ? "bg-blue-500" : "bg-slate-200"
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="absolute left-[28%] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-md" />
-                </div>
-
-                <audio
-                  ref={audioRef}
-                  src={q?.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
-                  onEnded={() => setIsPlayingAudio(false)}
-                  className="hidden"
-                />
-
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playSfx("click");
-                      setReplayCount((r) => r + 1);
-                    }}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-                  >
-                    <span>Phát lại</span>
-                    <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-700 text-[10px] flex items-center justify-center font-mono">
-                      {replayCount}
-                    </span>
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        triggerToast("Đã lùi 2 giây");
-                      }}
-                      className="w-8 h-8 rounded-full border border-slate-200/90 hover:bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
-                    >
-                      &lt;
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        setIsPlayingAudio(!isPlayingAudio);
-                      }}
-                      className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md shadow-blue-500/25 transition cursor-pointer active:scale-95"
-                    >
-                      {isPlayingAudio ? (
-                        <Pause className="w-5 h-5 fill-white" />
-                      ) : (
-                        <Play className="w-5 h-5 ml-0.5 fill-white" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        triggerToast("Đã tới 2 giây");
-                      }}
-                      className="w-8 h-8 rounded-full border border-slate-200/90 hover:bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer"
-                    >
-                      &gt;
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        const nextSpeed = audioSpeed === "1.0" ? "0.8" : audioSpeed === "0.8" ? "1.2" : "1.0";
-                        setAudioSpeed(nextSpeed);
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      {audioSpeed}x
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSfx("click");
-                        triggerToast("Đã kích hoạt chế độ Tự lập");
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      Tự lập
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* THẺ 1: SÓNG ÂM & BỘ ĐIỀU KHIỂN AUDIO (CLICK-TO-SEEK, REWIND, FAST FORWARD) */}
+              <AudioWaveformPlayer
+                audioUrl={resolvedAudioUrl}
+                isPlaying={isPlayingAudio}
+                onPlayPauseChange={(playing) => setIsPlayingAudio(playing)}
+                showSpeedControl={true}
+                showReplayButton={true}
+                replayCount={replayCount}
+                onReplayClick={() => {
+                  playSfx("click");
+                  setReplayCount((r) => r + 1);
+                }}
+                title={`Bài chép chính tả • Câu ${activeDictationQIndex + 1}`}
+              />
 
               {/* THẺ 2: KHUNG ĐỤC LỖ TỪ VỰNG & NÚT LẬT TỪ */}
               <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">
@@ -545,14 +480,11 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
         {/* 3. FOOTER THANH ĐIỀU HƯỚNG BÊN DƯỚI */}
         <footer className="h-14 bg-white border-t border-slate-200/90 px-6 sm:px-8 flex items-center justify-between shrink-0 shadow-lg select-none">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => triggerToast("Đã nhận phản hồi báo lỗi từ bạn!")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-            >
-              <Flag className="w-3.5 h-3.5 text-slate-500" />
-              <span>Báo lỗi</span>
-            </button>
+            <QuestionErrorReportButton source="LISTENING"
+              questionRef={questionRef}
+              relatedContent={`${q.part} · Test ${dictationModalCard.testNumber} · Câu ${activeDictationQIndex + 1}`}
+              questionSnapshot={{ questionText: q.question || q.fullTranscript, options: q.options, correctAnswer: q.correctAnswer, explanation: q.explanation, transcript: q.fullTranscript, imageUrl: q.imageUrl, audioUrl: resolvedAudioUrl, part: q.part }}
+              compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
             <button
               type="button"
@@ -568,15 +500,114 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
             Ctrl: phát lại · Tab: lật từ · Enter: câu tiếp theo · ←/→: chuyển câu
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsQuestionGridOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs active:scale-95"
-          >
-            <Grid className="w-4 h-4" />
-            <span>{activeDictationQIndex + 1}/{dictationModalCard.questions.length}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={activeDictationQIndex === 0}
+              onClick={() => {
+                playSfx?.("click");
+                setActiveDictationQIndex(Math.max(0, activeDictationQIndex - 1));
+              }}
+              className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
+              title="Câu trước"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsQuestionGridOpen(true);
+                setIsLocalQuestionGridOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs active:scale-95"
+              title="Danh sách toàn bộ câu hỏi"
+            >
+              <Grid className="w-4 h-4" />
+              <span>{activeDictationQIndex + 1}/{dictationModalCard.questions.length}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={activeDictationQIndex >= dictationModalCard.questions.length - 1}
+              onClick={() => {
+                playSfx?.("click");
+                setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
+              }}
+              className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
+              title="Câu tiếp theo"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </footer>
+
+        {/* MODAL DANH SÁCH TOÀN BỘ CÂU HỎI DICTATION */}
+        {isLocalQuestionGridOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <Grid className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-slate-900">Danh sách toàn bộ câu hỏi</h3>
+                    <p className="text-xs text-slate-500">
+                      Tổng số {dictationModalCard.questions.length} câu chép chính tả
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLocalQuestionGridOpen(false)}
+                  className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+                {dictationModalCard.questions.map((item, idx) => {
+                  const isCurrent = idx === activeDictationQIndex;
+                  const isCheckedQ = !!dictationChecked[item.id];
+
+                  let qBtnStyle = "bg-white border-slate-200 text-slate-700 hover:border-blue-400";
+                  if (isCurrent) {
+                    qBtnStyle = "bg-blue-600 text-white font-extrabold border-blue-600 ring-2 ring-blue-300";
+                  } else if (isCheckedQ) {
+                    qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
+                  }
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveDictationQIndex(idx);
+                        setIsLocalQuestionGridOpen(false);
+                      }}
+                      className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
+                    >
+                      <span className="font-extrabold">{idx + 1}</span>
+                      <span className="text-[9px] opacity-80">{item.part || "Part 1"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLocalQuestionGridOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+                >
+                  Đóng danh sách
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

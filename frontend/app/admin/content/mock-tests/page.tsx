@@ -1,17 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  BookOpen,
-  Users,
-  Award,
-  Clock,
-  Sparkles,
-  Layers,
-  CheckCircle2,
-} from "lucide-react";
-
-import { TestItem, PracticeQuestion } from "./types";
+import { TestItem } from "./types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "./mockData";
 
 import {
@@ -42,15 +32,12 @@ export default function AdminMockTestsPage() {
 
   const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
   const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
-
-  // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Toast notification
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null), 2800;
-    });
+    window.setTimeout(() => setToastMessage(null), 2800);
   };
 
   // Audio helper SFX
@@ -108,7 +95,6 @@ export default function AdminMockTestsPage() {
 
   // State Luyện tập (Practice Mode)
   const [practiceModalTest, setPracticeModalTest] = useState<TestItem | null>(null);
-  const [practicePartFilter, setPracticePartFilter] = useState<string>("ALL");
   const [practiceCurrentQIndex, setPracticeCurrentQIndex] = useState(0);
   const [practiceAnswers, setPracticeAnswers] = useState<{ [qId: number]: string }>({});
   const [practiceChecked, setPracticeChecked] = useState<{ [qId: number]: boolean }>({});
@@ -340,6 +326,7 @@ export default function AdminMockTestsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {toastMessage && <div role="status" className="fixed right-6 top-6 z-[100] rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg">{toastMessage}</div>}
       {/* Header and Filter Toolbar */}
       <MockTestHeader
         activeMainTab={activeMainTab}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Bell,
   Eye,
@@ -21,7 +21,9 @@ import {
 import { AdminPageFrame, type AdminMetric } from "@/components/admin/AdminPageFrame";
 import {
   getAnnouncements,
-  saveAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
   type Announcement,
   type AnnouncementStatus,
   type AnnouncementTarget,
@@ -53,22 +55,27 @@ export function AdminAnnouncementsView() {
   const [deletingItem, setDeletingItem] = useState<Announcement | null>(null);
 
   const [feedbackMsg, setFeedbackMsg] = useState("");
+  const [feedbackIsError, setFeedbackIsError] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       setAnnouncements(await getAnnouncements());
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : "Không thể tải danh sách thông báo.", true);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  function showFeedback(msg: string) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
+
+  function showFeedback(msg: string, isError = false) {
     setFeedbackMsg(msg);
+    setFeedbackIsError(isError);
     setTimeout(() => setFeedbackMsg(""), 4000);
   }
 
@@ -133,62 +140,51 @@ export function AdminAnnouncementsView() {
       alert("Vui lòng nhập đầy đủ Tiêu đề và Nội dung thông báo!");
       return;
     }
-
-    let nextList: Announcement[];
-    if (editingItem.id) {
-      nextList = announcements.map((a) =>
-        a.id === editingItem.id
-          ? ({ ...a, ...editingItem, updatedAt: new Date().toISOString() } as Announcement)
-          : a
-      );
-      showFeedback(`Đã cập nhật thông báo "${editingItem.title}"`);
-    } else {
-      const newItem: Announcement = {
-        id: `anc-${Date.now()}`,
-        title: editingItem.title || "",
-        summary: editingItem.summary || "",
-        content: editingItem.content || "",
-        type: editingItem.type || "FEATURE_UPDATE",
-        target: editingItem.target || "ALL",
-        status: editingItem.status || "ACTIVE",
-        isPinned: Boolean(editingItem.isPinned),
-        actionUrl: editingItem.actionUrl || "",
-        readCount: 0,
-        startDate: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        createdBy: "Admin TOEIC",
+    try {
+      const payload = {
+        title: editingItem.title.trim(), summary: editingItem.summary?.trim() || "",
+        content: editingItem.content.trim(), type: editingItem.type || "FEATURE_UPDATE",
+        target: editingItem.target || "ALL", status: editingItem.status || "ACTIVE",
+        isPinned: Boolean(editingItem.isPinned), actionUrl: editingItem.actionUrl?.trim() || "",
       };
-      nextList = [newItem, ...announcements];
-      showFeedback(`Đã tạo thông báo mới "${newItem.title}"`);
+      const saved = editingItem.id
+        ? await updateAnnouncement(editingItem.id, payload)
+        : await createAnnouncement(payload);
+      setAnnouncements((current) => editingItem.id
+        ? current.map((item) => item.id === saved.id ? saved : item)
+        : [saved, ...current]);
+      showFeedback(editingItem.id ? `Đã cập nhật thông báo "${saved.title}"` : `Đã tạo thông báo mới "${saved.title}"`);
+      setEditingItem(null);
+    } catch (error) {
+      showFeedback(error instanceof Error ? error.message : "Không thể lưu thông báo.", true);
     }
-
-    setAnnouncements(nextList);
-    await saveAnnouncements(nextList);
-    setEditingItem(null);
   }
 
   async function togglePin(announcement: Announcement) {
-    const updated = announcements.map((a) => (a.id === announcement.id ? { ...a, isPinned: !a.isPinned } : a));
-    setAnnouncements(updated);
-    await saveAnnouncements(updated);
-    showFeedback(announcement.isPinned ? "Đã gỡ ghim thông báo" : "Đã ghim thông báo lên đầu trang");
+    try {
+      const updated = await updateAnnouncement(announcement.id, { ...announcement, isPinned: !announcement.isPinned });
+      setAnnouncements((current) => current.map((item) => item.id === updated.id ? updated : item));
+      showFeedback(announcement.isPinned ? "Đã gỡ ghim thông báo" : "Đã ghim thông báo lên đầu trang");
+    } catch (error) { showFeedback(error instanceof Error ? error.message : "Không thể cập nhật thông báo.", true); }
   }
 
   async function toggleStatus(announcement: Announcement) {
     const nextStatus: AnnouncementStatus = announcement.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
-    const updated = announcements.map((a) => (a.id === announcement.id ? { ...a, status: nextStatus } : a));
-    setAnnouncements(updated);
-    await saveAnnouncements(updated);
-    showFeedback(nextStatus === "ACTIVE" ? "Đã kích hoạt hiển thị thông báo" : "Đã chuyển thông báo sang bản nháp");
+    try {
+      const updated = await updateAnnouncement(announcement.id, { ...announcement, status: nextStatus });
+      setAnnouncements((current) => current.map((item) => item.id === updated.id ? updated : item));
+      showFeedback(nextStatus === "ACTIVE" ? "Đã kích hoạt hiển thị thông báo" : "Đã chuyển thông báo sang bản nháp");
+    } catch (error) { showFeedback(error instanceof Error ? error.message : "Không thể cập nhật thông báo.", true); }
   }
 
   async function handleDeleteConfirm() {
     if (!deletingItem) return;
-    const updated = announcements.filter((a) => a.id !== deletingItem.id);
-    setAnnouncements(updated);
-    await saveAnnouncements(updated);
-    setDeletingItem(null);
-    showFeedback(`Đã xóa thông báo "${deletingItem.title}"`);
+    try {
+      await deleteAnnouncement(deletingItem.id);
+      setAnnouncements((current) => current.filter((item) => item.id !== deletingItem.id));
+      setDeletingItem(null);
+      showFeedback(`Đã xóa thông báo "${deletingItem.title}"`);
+    } catch (error) { showFeedback(error instanceof Error ? error.message : "Không thể xóa thông báo.", true); }
   }
 
   return (
@@ -258,7 +254,7 @@ export function AdminAnnouncementsView() {
         </div>
 
         {feedbackMsg && (
-          <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+          <div role={feedbackIsError ? "alert" : "status"} className={`rounded-xl border px-4 py-3 text-xs font-semibold ${feedbackIsError ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
             {feedbackMsg}
           </div>
         )}

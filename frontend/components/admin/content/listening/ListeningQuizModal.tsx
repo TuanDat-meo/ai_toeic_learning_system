@@ -15,7 +15,6 @@ import {
   Star,
   BookOpen,
   HelpCircle,
-  Flag,
   ShoppingBag,
   Search,
   ChevronLeft,
@@ -27,6 +26,9 @@ import {
   Plus,
 } from "lucide-react";
 import { LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
+import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ListeningQuizModalProps {
   quizModalCard: LevelCategoryCardData;
@@ -97,26 +99,30 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const [expandedVocabWords, setExpandedVocabWords] = useState<Record<string, boolean>>({});
   const [isAllVocabExpanded, setIsAllVocabExpanded] = useState(false);
 
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-
   React.useEffect(() => {
-    if (!audioRef.current) return;
-    if (isPlayingAudio) {
-      audioRef.current.play().catch(() => setIsPlayingAudio(false));
-    } else {
-      audioRef.current.pause();
-    }
-  }, [isPlayingAudio, setIsPlayingAudio]);
-
-  React.useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
     setIsPlayingAudio(false);
   }, [activeQuizQIndex, setIsPlayingAudio]);
 
-  const currentQ = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
+  const baseQuestion = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
+  const questionRef = `LISTENING-${quizModalCard.id}-${baseQuestion.id}`;
+  const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
+  React.useEffect(() => {
+    let active = true;
+    getQuestionCorrection(questionRef).then((correction) => { if (active) setQuestionCorrectionState({ ref: questionRef, value: correction }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [questionRef]);
+  const questionCorrection = questionCorrectionState?.ref === questionRef ? questionCorrectionState.value : null;
+  const correctionOptions = Array.isArray(questionCorrection?.options)
+    ? Object.fromEntries(questionCorrection.options.map((option, index) => [String.fromCharCode(65 + index), option]))
+    : questionCorrection?.options || baseQuestion.options;
+  const currentQ: DictationQuestion = questionCorrection ? {
+    ...baseQuestion,
+    question: questionCorrection.questionText || baseQuestion.question,
+    options: correctionOptions,
+    correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
+    explanation: questionCorrection.explanation || baseQuestion.explanation,
+  } : baseQuestion;
+  const resolvedAudioUrl = currentQ.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3";
 
   const updateCardStats = (q: DictationQuestion, chosen: string) => {
     const isCorrect = chosen === q.correctAnswer;
@@ -143,7 +149,10 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   };
 
   const isGroupMode = quizModalCard.part === "Part 3" || quizModalCard.part === "Part 4";
-  const isAllGroupAnswered = isGroupMode && quizModalCard.questions.every((q) => !!quizSelectedOption[q.id]);
+  const currentGroupQuestions = isGroupMode
+    ? quizModalCard.questions.filter((q) => q.audioUrl === (quizModalCard.questions[activeQuizQIndex]?.audioUrl || quizModalCard.questions[0]?.audioUrl))
+    : [quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0]];
+  const isAllGroupAnswered = isGroupMode && currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizSelectedOption[q.id]);
 
   const combinedVocabItems = (() => {
     const map = new Map<
@@ -161,7 +170,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
         wordFamily?: { word: string; pos: string; meaning: string }[];
       }
     >();
-    quizModalCard.questions.forEach((q) => {
+    currentGroupQuestions.forEach((q) => {
       const list = q.vocabList || [
         {
           word: "pottery",
@@ -437,7 +446,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     }}
                     className={`h-11 rounded-xl border flex flex-col items-center justify-center text-xs transition cursor-pointer ${qBtnStyle}`}
                   >
-                    <span className="font-extrabold">{idx + 1}</span>
+                    <span className="font-extrabold">{q.id >= 100 ? (q.id % 100) : (idx + 1)}</span>
                     <span className="text-[9px] opacity-80">{q.part}</span>
                   </button>
                 );
@@ -482,62 +491,59 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     })()}
                   </h2>
 
-                  {/* Audio Player Box */}
-                  <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-                    <audio
-                      ref={audioRef}
-                      src={currentQ?.audioUrl || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
-                      onEnded={() => setIsPlayingAudio(false)}
-                      className="hidden"
-                    />
-                    <div className="flex items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                        className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
-                        title={isPlayingAudio ? "Tạm dừng" : "Phát audio"}
-                      >
-                        {isPlayingAudio ? (
-                          <Pause className="w-6 h-6 fill-white" />
-                        ) : (
-                          <Play className="w-6 h-6 ml-0.5 fill-white" />
-                        )}
-                      </button>
-
-                      <div className="flex-1 flex items-center gap-1 h-9 px-3 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                        {[40, 65, 30, 85, 95, 40, 60, 30, 75, 90, 50, 35, 70, 80, 45, 90, 60, 40, 80, 50, 30, 70, 85, 40].map((h, i) => (
-                          <div
-                            key={i}
-                            className={`flex-1 rounded-full transition-all duration-300 ${
-                              isPlayingAudio ? "bg-blue-600 animate-pulse" : "bg-slate-300"
-                            }`}
-                            style={{ height: `${isPlayingAudio ? Math.max(25, (h * ((i % 4) + 1)) % 100) : h}%` }}
-                          />
-                        ))}
-                      </div>
-
-                      <span className="font-mono text-xs font-bold text-slate-600 shrink-0 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/80">
-                        00:15 / 00:45
-                      </span>
-                    </div>
-                  </div>
+                  {/* Audio Player Box (Interactive Waveform, Rewind, Forward & Click-to-Seek) */}
+                  <AudioWaveformPlayer
+                    audioUrl={resolvedAudioUrl}
+                    isPlaying={isPlayingAudio}
+                    onPlayPauseChange={(playing) => setIsPlayingAudio(playing)}
+                    showSpeedControl={true}
+                    showReplayButton={true}
+                    title={`Audio ${quizModalCard.part || "Part 1"} • Câu ${activeQuizQIndex + 1}`}
+                  />
 
                   {/* Photograph for Part 1 */}
                   {q.imageUrl && (
-                    <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-xs max-h-72">
-                      <img src={q.imageUrl} alt="Part 1 Photograph" className="w-full h-full object-cover" />
+                    <div className="rounded-2xl border border-slate-200/90 bg-slate-100/80 p-2.5 shadow-xs flex items-center justify-center overflow-hidden">
+                      <img
+                        src={q.imageUrl}
+                        alt="Part 1 Photograph"
+                        className="max-h-[380px] sm:max-h-[440px] w-auto max-w-full rounded-xl object-contain shadow-2xs"
+                      />
                     </div>
                   )}
 
-                  {/* Script & Translation when checked or Bilingual */}
-                  {(showBilingualQuiz || quizAnswerChecked[q.id]) && (
-                    <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-2">
-                      <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
-                        <FileText className="w-4 h-4 text-blue-600" />
-                        <span>Audio Script & Dịch tiếng Việt</span>
+                  {/* Script & Translation ONLY when checked */}
+                  {(quizAnswerChecked[q.id] || isAllGroupAnswered) && (
+                    <div className="p-5 sm:p-6 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-4 shadow-xs animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between border-b border-blue-200/60 pb-2.5">
+                        <div className="flex items-center gap-2 font-bold text-sm sm:text-base text-blue-900">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <span>Audio Script (Lời thoại tiếng Anh)</span>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                          English
+                        </span>
                       </div>
-                      <p className="text-xs font-semibold text-slate-800">{q.fullTranscript}</p>
-                      <p className="text-xs text-slate-600 italic">{q.vietnameseTranslation}</p>
+                      <p className="text-base sm:text-lg font-medium text-slate-900 whitespace-pre-line leading-relaxed sm:leading-loose select-text">
+                        {q.fullTranscript}
+                      </p>
+
+                      {q.vietnameseTranslation && (
+                        <div className="pt-3 border-t border-blue-200/60 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 font-bold text-sm sm:text-base text-blue-900">
+                              <Languages className="w-4 h-4 text-blue-600" />
+                              <span>Bản dịch tiếng Việt</span>
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                              Tiếng Việt
+                            </span>
+                          </div>
+                          <p className="text-base sm:text-lg text-slate-800 italic whitespace-pre-line leading-relaxed sm:leading-loose select-text">
+                            {q.vietnameseTranslation}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -569,10 +575,10 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     </div>
 
                     <div className="space-y-6">
-                      {quizModalCard.questions.map((qItem, idx) => {
+                      {currentGroupQuestions.map((qItem, idx) => {
                         const chosenOpt = quizSelectedOption[qItem.id];
                         const isChecked = isAllGroupAnswered || !!quizAnswerChecked[qItem.id];
-                        const qNumDisplay = idx + 1;
+                        const qNumDisplay = qItem.id >= 100 ? (qItem.id % 100) : (idx + 1);
 
                         return (
                           <div key={qItem.id} className="p-5 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs space-y-4">
@@ -626,15 +632,9 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                         const nextSelected = { ...quizSelectedOption, [qItem.id]: optKey };
                                         setQuizSelectedOption(nextSelected);
 
-                                        const allDone = quizModalCard.questions.every((q) => !!nextSelected[q.id]);
-                                        if (allDone) {
-                                          const nextChecked = { ...quizAnswerChecked };
-                                          quizModalCard.questions.forEach((q) => {
-                                            nextChecked[q.id] = true;
-                                          });
-                                          setQuizAnswerChecked(nextChecked);
-                                          updateCardStats(qItem, optKey);
-                                        }
+                                        const nextChecked = { ...quizAnswerChecked, [qItem.id]: true };
+                                        setQuizAnswerChecked(nextChecked);
+                                        updateCardStats(qItem, optKey);
                                       }}
                                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
                                     >
@@ -796,9 +796,25 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="text-base font-extrabold text-slate-900">
-                        {activeQuizQIndex + 1}. {q.question}
-                      </div>
+                      {(() => {
+                        const currentPart = q.part || quizModalCard.part;
+                        const isPart2 = currentPart === "Part 2";
+                        const isPart1 = currentPart === "Part 1";
+                        const isChecked = !!quizAnswerChecked[q.id];
+
+                        let promptText = q.question;
+                        if (isPart2) {
+                          promptText = isChecked ? q.question : "";
+                        } else if (isPart1) {
+                          promptText = isChecked ? (q.question || q.fullTranscript) : "";
+                        }
+
+                        return (
+                          <div className="text-base font-extrabold text-slate-900">
+                            {activeQuizQIndex + 1}.{promptText ? ` ${promptText}` : ""}
+                          </div>
+                        );
+                      })()}
 
                       {q.options && (() => {
                         const currentPart = q.part || quizModalCard.part;
@@ -1018,14 +1034,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
       {/* BOTTOM NAVIGATION BAR */}
       <footer className="h-14 bg-white border-t border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-lg select-none">
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => triggerToast("Đã nhận phản hồi báo lỗi từ bạn!")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
-          >
-            <Flag className="w-3.5 h-3.5 text-rose-500" />
-            <span>Báo lỗi</span>
-          </button>
+          <QuestionErrorReportButton source="LISTENING"
+            questionRef={questionRef}
+            relatedContent={`${quizModalCard.part} · ${quizModalCard.title} · Câu ${activeQuizQIndex + 1}`}
+            questionSnapshot={{ questionText: currentQ.question || currentQ.fullTranscript, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, imageUrl: currentQ.imageUrl, audioUrl: resolvedAudioUrl, part: currentQ.part }}
+            compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
           <button
             type="button"
@@ -1050,9 +1063,22 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           <button
             type="button"
             disabled={activeQuizQIndex === 0}
-            onClick={() => setActiveQuizQIndex((prev) => Math.max(0, prev - 1))}
+            onClick={() => {
+              if (!isGroupMode) {
+                setActiveQuizQIndex((prev) => Math.max(0, prev - 1));
+              } else {
+                const prevCandidates = quizModalCard.questions.filter((q, idx) => idx < activeQuizQIndex && q.audioUrl !== currentQ?.audioUrl);
+                if (prevCandidates.length > 0) {
+                  const targetAudio = prevCandidates[prevCandidates.length - 1].audioUrl;
+                  const targetIdx = quizModalCard.questions.findIndex((q) => q.audioUrl === targetAudio);
+                  if (targetIdx !== -1) setActiveQuizQIndex(targetIdx);
+                } else {
+                  setActiveQuizQIndex(0);
+                }
+              }
+            }}
             className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-            title="Câu trước"
+            title={isGroupMode ? "Đoạn hội thoại trước" : "Câu trước"}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -1063,15 +1089,30 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-all shadow-xs cursor-pointer"
           >
             <Grid className="w-4 h-4" />
-            <span>{activeQuizQIndex + 1}/{quizModalCard.questions.length}</span>
+            <span>
+              {isGroupMode && currentGroupQuestions.length > 0
+                ? `Câu ${currentGroupQuestions[0].id >= 100 ? currentGroupQuestions[0].id % 100 : 1}-${currentGroupQuestions[currentGroupQuestions.length - 1].id >= 100 ? currentGroupQuestions[currentGroupQuestions.length - 1].id % 100 : currentGroupQuestions.length} / ${quizModalCard.questions.length}`
+                : `${activeQuizQIndex + 1}/${quizModalCard.questions.length}`}
+            </span>
           </button>
 
           <button
             type="button"
-            disabled={activeQuizQIndex === quizModalCard.questions.length - 1}
-            onClick={() => setActiveQuizQIndex((prev) => Math.min(quizModalCard.questions.length - 1, prev + 1))}
+            disabled={activeQuizQIndex >= quizModalCard.questions.length - 1}
+            onClick={() => {
+              if (!isGroupMode) {
+                setActiveQuizQIndex((prev) => Math.min(quizModalCard.questions.length - 1, prev + 1));
+              } else {
+                const nextIdx = quizModalCard.questions.findIndex((q, idx) => idx > activeQuizQIndex && q.audioUrl !== currentQ?.audioUrl);
+                if (nextIdx !== -1) {
+                  setActiveQuizQIndex(nextIdx);
+                } else {
+                  setActiveQuizQIndex(quizModalCard.questions.length - 1);
+                }
+              }
+            }}
             className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-            title="Câu tiếp"
+            title={isGroupMode ? "Đoạn hội thoại tiếp theo" : "Câu tiếp theo"}
           >
             <ChevronRight className="w-5 h-5" />
           </button>

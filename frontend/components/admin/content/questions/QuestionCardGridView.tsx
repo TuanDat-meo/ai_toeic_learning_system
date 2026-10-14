@@ -32,7 +32,7 @@ export const QuestionCardGridView: React.FC<QuestionCardGridViewProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4">
       {questions.map((q) => (
         <div
           key={q.id}
@@ -64,11 +64,11 @@ export const QuestionCardGridView: React.FC<QuestionCardGridViewProps> = ({
 
             {/* Image Preview if Part 1 */}
             {q.imageUrl && (
-              <div className="relative rounded-2xl overflow-hidden bg-slate-100 aspect-video border border-slate-200/80">
+              <div className="relative rounded-2xl overflow-hidden bg-slate-100 aspect-video border border-slate-200/80 flex items-center justify-center p-1">
                 <img
                   src={q.imageUrl}
                   alt={q.code || "Question Image"}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
               </div>
             )}

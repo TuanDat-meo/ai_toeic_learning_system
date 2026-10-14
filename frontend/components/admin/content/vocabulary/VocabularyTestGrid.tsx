@@ -16,8 +16,8 @@ import { TestItem } from "@/app/admin/content/vocabulary/types";
 
 interface VocabularyTestGridProps {
   tests: TestItem[];
-  activeSubCategory: "all" | "2026" | "600_essential" | "2023";
-  setActiveSubCategory: (cat: "all" | "2026" | "600_essential" | "2023") => void;
+  activeSubCategory: "all" | "2024" | "2026" | "600_essential" | "2023";
+  setActiveSubCategory: (cat: "all" | "2024" | "2026" | "600_essential" | "2023") => void;
   onOpenEditTest: (test: TestItem, e?: React.MouseEvent) => void;
   onOpenDeleteTest: (test: TestItem, e?: React.MouseEvent) => void;
   onOpenWordList: (test: TestItem) => void;
@@ -51,9 +51,9 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
   return (
     <div className="space-y-5 animate-in fade-in duration-150">
       {/* Admin Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
         {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
+        <div className="relative w-full lg:w-72 xl:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -65,12 +65,12 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
         </div>
 
         {/* Categories & View Switcher */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+        <div className="flex items-center gap-2 flex-nowrap shrink-0 overflow-x-auto no-scrollbar w-full lg:w-auto">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl shrink-0 overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setActiveSubCategory("all")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeSubCategory === "all"
                   ? "bg-white text-blue-600 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -80,8 +80,19 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
             </button>
             <button
               type="button"
+              onClick={() => setActiveSubCategory("2024")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                activeSubCategory === "2024"
+                  ? "bg-white text-blue-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              ETS 2024 ({tests.filter((t) => t.category === "2024").length})
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveSubCategory("2026")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeSubCategory === "2026"
                   ? "bg-white text-blue-600 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -92,7 +103,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
             <button
               type="button"
               onClick={() => setActiveSubCategory("600_essential")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeSubCategory === "600_essential"
                   ? "bg-white text-blue-600 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -103,7 +114,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
             <button
               type="button"
               onClick={() => setActiveSubCategory("2023")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                 activeSubCategory === "2023"
                   ? "bg-white text-blue-600 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -113,7 +124,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center border border-slate-200 rounded-xl p-0.5 bg-slate-50">
+          <div className="shrink-0 flex items-center border border-slate-200 rounded-xl p-0.5 bg-slate-50">
             <button
               type="button"
               onClick={() => setViewMode("grid")}
@@ -144,7 +155,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
 
       {/* Grid Mode */}
       {viewMode === "grid" ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
           {filteredTests.map((t) => (
             <div
               key={t.id}

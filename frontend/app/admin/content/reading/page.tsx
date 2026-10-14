@@ -3,11 +3,6 @@
 import React, { useState, useMemo } from "react";
 import {
   Sparkles,
-  BookOpen,
-  FileText,
-  Clock,
-  TrendingUp,
-  Layers,
 } from "lucide-react";
 
 import { ExerciseCardData } from "./types";
@@ -51,7 +46,7 @@ export default function ReadingLearningPage() {
   };
 
   // Web Audio Sound Effects Synthesizer
-  const playSfx = (type?: "correct" | "wrong" | "click") => {
+  const playSfx = () => {
     try {
       const AudioContextClass =
         window.AudioContext ||
@@ -246,7 +241,7 @@ export default function ReadingLearningPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Toast notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce">

@@ -74,8 +74,8 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
         </div>
       </div>
 
-      {/* Danh sách các phần Test: Test 1, Test 2, Test 3 */}
-      {[1, 2, 3].map((testNum) => {
+      {/* Danh sách các phần Test: Test 1 đến Test 10 */}
+      {Object.keys(testsGrouped).map(Number).sort((a, b) => a - b).map((testNum) => {
         const cardsInTest = testsGrouped[testNum] || [];
         if (cardsInTest.length === 0) return null;
 
@@ -88,7 +88,7 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4">
               {cardsInTest.map((card) => (
                 <div
                   key={card.id}

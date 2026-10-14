@@ -9,7 +9,6 @@ import { QuestionCardGridView } from "@/components/admin/content/questions/Quest
 import { QuestionPreviewModal } from "@/components/admin/content/questions/QuestionPreviewModal";
 import { QuestionEditModal } from "@/components/admin/content/questions/QuestionEditModal";
 import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
-import { HelpCircle, CheckCircle2, Clock, Layers } from "lucide-react";
 
 
 export default function QuestionsPage() {
@@ -163,9 +162,6 @@ export default function QuestionsPage() {
     }, 1000);
   };
 
-  const publishedCount = questions.filter((q) => q.status === "PUBLISHED").length;
-  const draftCount = questions.filter((q) => q.status === "DRAFT").length;
-
   const handleExportCsv = () => {
     const headers = ["Mã câu", "Phần thi", "Kỹ năng", "Độ khó", "Nội dung câu hỏi", "Đáp án đúng", "Trạng thái"];
     const rows = questions.map((q) => [
@@ -190,7 +186,7 @@ export default function QuestionsPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header & Filter Bar */}
       <QuestionFilterBar
         selectedPartTab={selectedPart}

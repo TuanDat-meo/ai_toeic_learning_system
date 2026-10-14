@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sparkles, FolderKanban, BookOpen, CheckCircle2, TrendingUp } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { WordItem, TestItem } from "./types";
 import { SAMPLE_WORDS, INITIAL_TESTS } from "./mockData";
 import { VocabularyHeader } from "@/components/admin/content/vocabulary/VocabularyHeader";
@@ -15,7 +15,7 @@ import { VocabularyModals } from "@/components/admin/content/vocabulary/Vocabula
 
 export default function VocabularyLearningPage() {
   const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "algorithm" | "analytics">("topics");
-  const [activeSubCategory, setActiveSubCategory] = useState<"all" | "2026" | "600_essential" | "2023">("all");
+  const [activeSubCategory, setActiveSubCategory] = useState<"all" | "2024" | "2026" | "600_essential" | "2023">("all");
   const [tests, setTests] = useState<TestItem[]>(INITIAL_TESTS);
 
   // Toast state
@@ -53,7 +53,20 @@ export default function VocabularyLearningPage() {
     }
   };
 
-  const totalWordsCount = tests.reduce((sum, t) => sum + (t.words?.length || t.wordCount), 0);
+  const allWordsCombined = React.useMemo(() => {
+    const map = new Map<string, WordItem>();
+    tests.forEach((t) => {
+      t.words?.forEach((w) => {
+        const key = w.word.toLowerCase().trim();
+        if (!map.has(key)) {
+          map.set(key, w);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [tests]);
+
+  const totalWordsCount = allWordsCombined.length;
 
   // Export CSV
   const handleExportCsv = () => {
@@ -81,7 +94,7 @@ export default function VocabularyLearningPage() {
   };
 
   // Test CRUD
-  const handleSaveTestForm = (title: string, year: string, category: "2026" | "600_essential" | "2023") => {
+  const handleSaveTestForm = (title: string, year: string, category: "2024" | "2026" | "600_essential" | "2023") => {
     if (editingTest) {
       setTests((prev) =>
         prev.map((t) => (t.id === editingTest.id ? { ...t, title, year, category } : t))
@@ -155,7 +168,7 @@ export default function VocabularyLearningPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]/90 p-4 sm:p-6 lg:p-8 space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Header Admin */}
       <VocabularyHeader
         activeMainTab={activeMainTab}
@@ -188,7 +201,7 @@ export default function VocabularyLearningPage() {
       {/* Tab 2: Ngân hàng toàn bộ từ vựng */}
       {activeMainTab === "all_words" && (
         <VocabularyAllWordsView
-          words={SAMPLE_WORDS}
+          words={allWordsCombined}
           playAudio={playAudio}
           onOpenAddWord={() => {
             setEditingWord(null);

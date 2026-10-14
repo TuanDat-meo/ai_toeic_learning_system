@@ -73,6 +73,12 @@ public class SecurityConfig {
                             "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/billing/**").hasRole("STUDENT")
                         .requestMatchers("/api/learning-profile/**").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.GET, "/api/chat/discussion").permitAll()
+                        .requestMatchers("/api/chat/**").authenticated()
+                        .requestMatchers("/api/support-reports/**").authenticated()
+                        .requestMatchers("/api/community/**").authenticated()
+                        .requestMatchers("/api/announcements/**").hasRole("STUDENT")
+                        .requestMatchers("/api/question-corrections/**").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .anyRequest().permitAll());

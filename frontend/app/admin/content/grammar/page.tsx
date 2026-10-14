@@ -1,14 +1,6 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  BookOpen,
-  HelpCircle,
-  TrendingUp,
-  AlertTriangle,
-  Layers,
-  Sparkles,
-} from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import {
@@ -61,11 +53,7 @@ export default function AdminGrammarPage() {
         t.formula.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.summary.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchPart =
-        filterPart === "ALL" ||
-        (filterPart === "Part 5" && (t.part === "Part 5" || t.part === "Part 5 & 6")) ||
-        (filterPart === "Part 6" && (t.part === "Part 6" || t.part === "Part 5 & 6")) ||
-        (filterPart === "Part 5 & 6" && t.part === "Part 5 & 6");
+      const matchPart = filterPart === "ALL" || t.part === filterPart;
 
       const matchScore = filterScore === "ALL" || t.targetScore === filterScore;
       const matchStatus = filterStatus === "ALL" || t.status === filterStatus;
@@ -78,10 +66,6 @@ export default function AdminGrammarPage() {
   const totalTopicsCount = topics.length;
   const totalQuestionsCount = useMemo(() => {
     return topics.reduce((acc, t) => acc + t.questions.length, 0);
-  }, [topics]);
-
-  const totalTrapsCount = useMemo(() => {
-    return topics.reduce((acc, t) => acc + t.traps.length, 0);
   }, [topics]);
 
   // Preview / Student Simulation Quiz Trigger
@@ -207,7 +191,7 @@ export default function AdminGrammarPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header and Filter Toolbar */}
       <GrammarFilterBar
         activeMainTab={activeMainTab}

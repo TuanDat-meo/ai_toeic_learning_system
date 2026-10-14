@@ -12,7 +12,6 @@ import {
   LayoutGrid,
   List,
   CheckCircle2,
-  FileSpreadsheet,
 } from "lucide-react";
 
 export type GrammarAdminTab = "topics" | "questions" | "traps_matrix" | "curriculum";
@@ -180,7 +179,7 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
                 <option value="ALL">Tất cả phần thi</option>
                 <option value="Part 5">Part 5 (Câu đơn)</option>
                 <option value="Part 6">Part 6 (Điền đoạn)</option>
-                <option value="Part 5 & 6">Cả Part 5 &amp; 6</option>
+                <option value="Part 7">Part 7 (Đọc hiểu & Cấu trúc câu)</option>
               </select>
 
               <select
