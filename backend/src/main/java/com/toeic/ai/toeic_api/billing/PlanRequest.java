@@ -15,6 +15,7 @@ public record PlanRequest(@NotBlank @Size(max=80) @Pattern(regexp="[A-Za-z0-9_-]
         @Min(0) int durationDays, @Size(max=100) String badgeTag, boolean isPopular,
         @NotNull @Size(max=30) List<@NotBlank @Size(max=300) String> features,
         @Min(0) int maxAiQueriesPerDay,
+        @NotBlank @Pattern(regexp="DISABLED|LIMITED|UNLIMITED") String aiAccessMode,
         @NotBlank @Pattern(regexp="ACTIVE|DRAFT|ARCHIVED") String status,
         @NotBlank @Pattern(regexp="FREE|PRO|PREMIUM|PROMOTION") String planCategory,
         @NotNull @Size(max=30) List<@NotBlank @Size(max=40) String> capabilityKeys,

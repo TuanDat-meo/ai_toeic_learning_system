@@ -3,6 +3,7 @@ import { apiRequest, writeAuthRequest } from "./client";
 export type SubscriptionBillingCycle = "MONTHLY" | "QUARTERLY" | "YEARLY" | "LIFETIME";
 export type SubscriptionPlanStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
 export type LearningPlanCategory = "FREE" | "PRO" | "PREMIUM" | "PROMOTION";
+export type AiAccessMode = "DISABLED" | "LIMITED" | "UNLIMITED";
 
 export type SubscriptionPlan = {
   id: string;
@@ -17,6 +18,7 @@ export type SubscriptionPlan = {
   features: string[];
   capabilityKeys: string[];
   planCategory: LearningPlanCategory;
+  aiAccessMode: AiAccessMode;
   offerStartsAt: string | null;
   offerEndsAt: string | null;
   maxAiQueriesPerDay: number;

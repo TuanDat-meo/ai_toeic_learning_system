@@ -209,7 +209,7 @@ function LearningPlanCard({ plan, isCurrent }: { plan: SubscriptionPlan; isCurre
         {plan.capabilityKeys.length === 0 ? <li>Quyền lợi sẽ được cập nhật theo thông tin gói.</li> : null}
       </ul>
       <p className="mt-5 border-t border-outline-variant/40 pt-4 text-xs text-on-surface-variant">
-        {plan.maxAiQueriesPerDay === 0 ? "Không bao gồm lượt AI mỗi ngày" : `${plan.maxAiQueriesPerDay} lượt AI mỗi ngày`}
+        {plan.aiAccessMode === "UNLIMITED" ? "Không giới hạn lượt AI" : plan.aiAccessMode === "LIMITED" ? `${plan.maxAiQueriesPerDay} lượt AI mỗi ngày` : "Không bao gồm lượt AI"}
       </p>
     </article>
   );

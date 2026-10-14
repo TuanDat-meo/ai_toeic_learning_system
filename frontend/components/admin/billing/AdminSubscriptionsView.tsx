@@ -21,6 +21,7 @@ import {
   cancelUserSubscription,
   extendUserSubscription,
   type PlanInput,
+  type AiAccessMode,
   type LearningPlanCategory,
   type SubscriptionBillingCycle,
   type SubscriptionPlan,
@@ -42,6 +43,19 @@ const calculateDiscountPercent = (originalPrice: number, promotionalPrice: numbe
   originalPrice > 0 ? Math.round(((originalPrice - promotionalPrice) / originalPrice) * 1_000_000_000) / 10_000_000 : 0;
 const calculatePromotionalPrice = (originalPrice: number, discountPercent: number) =>
   Math.round(originalPrice * (1 - discountPercent / 100));
+
+const generatePlanCode = (name: string, plans: SubscriptionPlan[]) => {
+  const base = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/Đ/g, "D")
+    .replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80).replace(/_+$/g, "") || "GOI_HOC";
+  const existingCodes = new Set(plans.map((plan) => plan.code.toUpperCase()));
+  let candidate = base;
+  let suffix = 2;
+  while (existingCodes.has(candidate)) {
+    const suffixText = `_${suffix++}`;
+    candidate = `${base.slice(0, 80 - suffixText.length).replace(/_+$/g, "")}${suffixText}`;
+  }
+  return candidate;
+};
 
 type PlanField = "code" | "name" | "originalPrice" | "discountPercent" | "durationDays" | "offerStartsAt" | "offerEndsAt" | "maxAiQueriesPerDay";
 const planCategoryLabels: Record<LearningPlanCategory, string> = {
@@ -119,6 +133,7 @@ export function AdminSubscriptionsView() {
       features: [],
       capabilityKeys: [],
       planCategory: "PRO",
+      aiAccessMode: "DISABLED",
       offerStartsAt: null,
       offerEndsAt: null,
       maxAiQueriesPerDay: 0,
@@ -151,7 +166,7 @@ export function AdminSubscriptionsView() {
     if (!Number.isFinite(discountPercent) || discountPercent < 0 || discountPercent > 100) errors.discountPercent = "Phần trăm giảm giá phải từ 0% đến 100%.";
     if (!Number.isInteger(promotionalPrice) || promotionalPrice < 0) errors.discountPercent = "Không tính được giá sau giảm hợp lệ.";
     if (plan.billingCycle !== "LIFETIME" && (!Number.isInteger(durationDays) || durationDays < 1)) errors.durationDays = "Thời hạn sử dụng phải từ 1 ngày trở lên.";
-    if (!Number.isInteger(aiLimit) || aiLimit < 0) errors.maxAiQueriesPerDay = "Hạn mức AI phải là số nguyên từ 0 trở lên.";
+    if (plan.aiAccessMode === "LIMITED" && (!Number.isInteger(aiLimit) || aiLimit < 1)) errors.maxAiQueriesPerDay = "Hạn mức AI phải từ 1 lượt mỗi ngày trở lên.";
     if (plan.planCategory === "PROMOTION") {
       if (!plan.offerStartsAt) errors.offerStartsAt = "Vui lòng chọn thời điểm bắt đầu phát hành.";
       if (!plan.offerEndsAt) errors.offerEndsAt = "Vui lòng chọn thời điểm kết thúc phát hành.";
@@ -216,7 +231,8 @@ export function AdminSubscriptionsView() {
   }
 
   function toPlanInput(plan: Partial<SubscriptionPlan>): PlanInput {
-    return { code: plan.code?.trim() || "", name: plan.name?.trim() || "", originalPrice: Number(plan.originalPrice ?? 0), promotionalPrice: Number(plan.promotionalPrice ?? 0), billingCycle: plan.billingCycle || "QUARTERLY", durationDays: Number(plan.durationDays ?? 90), badgeTag: plan.badgeTag || "", isPopular: Boolean(plan.isPopular), features: plan.features ?? [], capabilityKeys: plan.capabilityKeys ?? [], maxAiQueriesPerDay: Number(plan.maxAiQueriesPerDay ?? 0), status: plan.status || "DRAFT", planCategory: plan.planCategory || "PRO", offerStartsAt: plan.planCategory === "PROMOTION" ? plan.offerStartsAt ?? null : null, offerEndsAt: plan.planCategory === "PROMOTION" ? plan.offerEndsAt ?? null : null };
+    const aiAccessMode = plan.aiAccessMode || "DISABLED";
+    return { code: plan.code?.trim() || "", name: plan.name?.trim() || "", originalPrice: Number(plan.originalPrice ?? 0), promotionalPrice: Number(plan.promotionalPrice ?? 0), billingCycle: plan.billingCycle || "QUARTERLY", durationDays: Number(plan.durationDays ?? 90), badgeTag: plan.badgeTag || "", isPopular: Boolean(plan.isPopular), features: plan.features ?? [], capabilityKeys: plan.capabilityKeys ?? [], maxAiQueriesPerDay: aiAccessMode === "LIMITED" ? Number(plan.maxAiQueriesPerDay ?? 0) : 0, aiAccessMode, status: plan.status || "DRAFT", planCategory: plan.planCategory || "PRO", offerStartsAt: plan.planCategory === "PROMOTION" ? plan.offerStartsAt ?? null : null, offerEndsAt: plan.planCategory === "PROMOTION" ? plan.offerEndsAt ?? null : null };
   }
 
   async function runAction(action: () => Promise<void>) {
@@ -291,7 +307,7 @@ export function AdminSubscriptionsView() {
                         <td className="px-5 py-4"><div className="flex min-w-0 items-start gap-3"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${plan.isPopular ? "bg-blue-600" : "bg-slate-300"}`} /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{plan.name}{plan.isPopular ? <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">Phổ biến</span> : null}</span><span className="mt-1 block font-mono text-xs text-slate-500">{plan.code}</span><span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan.planCategory === "PROMOTION" ? "bg-violet-50 text-violet-700" : plan.planCategory === "PREMIUM" ? "bg-amber-50 text-amber-700" : plan.planCategory === "PRO" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{planCategoryLabels[plan.planCategory]}</span>{plan.badgeTag ? <span className="mt-1 block text-xs text-slate-500">{plan.badgeTag}</span> : null}</span></div></td>
                         <td className="px-4 py-4"><span className="block text-sm font-semibold text-slate-900">{formatVnd(plan.promotionalPrice)}</span>{plan.originalPrice > plan.promotionalPrice ? <span className="mt-1 block text-xs text-slate-400 line-through">{formatVnd(plan.originalPrice)}</span> : null}</td>
                         <td className="px-4 py-4"><span className="block text-sm text-slate-800">Thời hạn sử dụng</span><span className="mt-1 block text-xs text-slate-500">{plan.billingCycle === "LIFETIME" ? "Không hết hạn" : `${plan.durationDays} ngày từ lúc mua thành công`}</span>{plan.planCategory === "PROMOTION" && plan.offerStartsAt && plan.offerEndsAt ? <span className="mt-2 block max-w-[170px] text-[11px] leading-4 text-violet-700">Phát hành: {new Date(plan.offerStartsAt).toLocaleString("vi-VN")} – {new Date(plan.offerEndsAt).toLocaleString("vi-VN")}</span> : null}</td>
-                        <td className="px-4 py-4"><ul className="max-w-xs space-y-1 text-xs text-slate-600">{(plan.capabilityKeys ?? []).slice(0, 3).map((key) => { const item = LEARNING_CAPABILITIES.find((capability) => capability.key === key); return <li key={`${plan.id}-${key}`} className="flex gap-1.5"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" /><span className="line-clamp-2">{item?.label ?? key}</span></li>; })}</ul>{plan.capabilityKeys.length > 3 ? <span className="mt-1 block text-[11px] text-slate-400">+{plan.capabilityKeys.length - 3} mục học khác</span> : null}{plan.capabilityKeys.length === 0 ? <span className="text-xs text-slate-400">Chưa chọn mục học</span> : null}<span className="mt-2 block text-xs font-medium text-slate-500">AI: {plan.maxAiQueriesPerDay} lượt/ngày</span></td>
+                        <td className="px-4 py-4"><ul className="max-w-xs space-y-1 text-xs text-slate-600">{(plan.capabilityKeys ?? []).slice(0, 3).map((key) => { const item = LEARNING_CAPABILITIES.find((capability) => capability.key === key); return <li key={`${plan.id}-${key}`} className="flex gap-1.5"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" /><span className="line-clamp-2">{item?.label ?? key}</span></li>; })}</ul>{plan.capabilityKeys.length > 3 ? <span className="mt-1 block text-[11px] text-slate-400">+{plan.capabilityKeys.length - 3} mục học khác</span> : null}{plan.capabilityKeys.length === 0 ? <span className="text-xs text-slate-400">Chưa chọn mục học</span> : null}<span className="mt-2 block text-xs font-medium text-slate-500">AI: {plan.aiAccessMode === "UNLIMITED" ? "Không giới hạn" : plan.aiAccessMode === "LIMITED" ? `${plan.maxAiQueriesPerDay} lượt/ngày` : "Không được dùng"}</span></td>
                         <td className="px-4 py-4 text-center text-sm font-semibold text-slate-800">{plan.purchaseCount.toLocaleString("vi-VN")}</td>
                         <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-medium ${plan.status === "ACTIVE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : plan.status === "ARCHIVED" ? "border-slate-200 bg-slate-100 text-slate-600" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{plan.status === "ACTIVE" ? "Đang phát hành" : plan.status === "ARCHIVED" ? "Đã lưu trữ" : "Bản nháp"}</span></td>
                         <td className="px-5 py-4"><div className="flex items-center justify-end gap-1"><button type="button" onClick={() => openEditPlanModal(plan)} title="Chỉnh sửa gói" aria-label={`Chỉnh sửa gói ${plan.name}`} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-50 hover:text-blue-700"><Edit size={16} aria-hidden="true" /></button><button type="button" disabled={plan.purchaseCount > 0} onClick={() => setDeletingPlan(plan)} title={plan.purchaseCount > 0 ? "Gói đã có lượt mua, không thể xóa" : "Xóa gói"} aria-label={`Xóa gói ${plan.name}`} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={16} aria-hidden="true" /></button><button type="button" disabled={plan.status === "ARCHIVED"} onClick={() => void runAction(() => togglePlanStatus(plan))} className="ml-1 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">{plan.status === "ACTIVE" ? "Tạm dừng" : "Kích hoạt"}</button></div></td>
@@ -397,13 +413,12 @@ export function AdminSubscriptionsView() {
                   <input
                     type="text"
                     value={editingPlan.code || ""}
-                    onChange={(e) => { setEditingPlan({ ...editingPlan, code: e.target.value }); clearFieldError("code"); }}
-                    aria-invalid={Boolean(fieldErrors.code)}
-                    aria-describedby={fieldErrors.code ? "plan-code-error" : undefined}
-                    placeholder="VIP_3MONTHS"
-                    className={`h-9 w-full rounded-xl border px-3 font-mono text-xs outline-none focus:border-blue-500 ${fieldErrors.code ? "border-red-400" : "border-slate-200"}`}
+                    readOnly
+                    placeholder="Tự tạo từ tên gói học"
+                    className="h-9 w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-xs text-slate-500 outline-none"
                   />
-                  {fieldErrors.code ? <p id="plan-code-error" role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.code}</p> : null}
+                  <p className="mt-1.5 text-[11px] text-slate-500">Mã được tự tạo từ tên gói và không thể chỉnh sửa.</p>
+                  {fieldErrors.code ? <p role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.code}</p> : null}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Nhãn Badge (tùy chọn)</label>
@@ -422,7 +437,7 @@ export function AdminSubscriptionsView() {
                 <input
                   type="text"
                   value={editingPlan.name || ""}
-                  onChange={(e) => { setEditingPlan({ ...editingPlan, name: e.target.value }); clearFieldError("name"); }}
+                  onChange={(e) => { const name = e.target.value; setEditingPlan({ ...editingPlan, name, ...(editingPlan.id ? {} : { code: generatePlanCode(name, plans) }) }); clearFieldError("name"); }}
                   aria-invalid={Boolean(fieldErrors.name)}
                   aria-describedby={fieldErrors.name ? "plan-name-error" : undefined}
                   placeholder="Gói TOEIC VIP 3 Tháng"
@@ -521,17 +536,36 @@ export function AdminSubscriptionsView() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-800 mb-1">Hạn ngạch AI Gemini / ngày</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editingPlan.maxAiQueriesPerDay ?? 0}
-                    onChange={(e) => { setEditingPlan({ ...editingPlan, maxAiQueriesPerDay: Number(e.target.value) }); clearFieldError("maxAiQueriesPerDay"); }}
-                    aria-invalid={Boolean(fieldErrors.maxAiQueriesPerDay)}
-                    aria-describedby={fieldErrors.maxAiQueriesPerDay ? "plan-ai-limit-error" : undefined}
-                    className={`h-9 w-full rounded-xl border px-3 text-xs outline-none focus:border-blue-500 font-mono ${fieldErrors.maxAiQueriesPerDay ? "border-red-400" : "border-slate-200"}`}
-                  />
-                  {fieldErrors.maxAiQueriesPerDay ? <p id="plan-ai-limit-error" role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.maxAiQueriesPerDay}</p> : null}
+                  <label className="block font-bold text-slate-800 mb-1">Quyền sử dụng AI Gemini</label>
+                  <select
+                    value={editingPlan.aiAccessMode || "DISABLED"}
+                    onChange={(e) => {
+                      const aiAccessMode = e.target.value as AiAccessMode;
+                      setEditingPlan({ ...editingPlan, aiAccessMode, maxAiQueriesPerDay: aiAccessMode === "LIMITED" ? Math.max(1, Number(editingPlan.maxAiQueriesPerDay ?? 0)) : editingPlan.maxAiQueriesPerDay ?? 0 });
+                      clearFieldError("maxAiQueriesPerDay");
+                    }}
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none focus:border-blue-500"
+                  >
+                    <option value="DISABLED">Không được sử dụng AI</option>
+                    <option value="LIMITED">Có giới hạn lượt dùng mỗi ngày</option>
+                    <option value="UNLIMITED">Không giới hạn lượt dùng</option>
+                  </select>
+                  {editingPlan.aiAccessMode === "LIMITED" ? (
+                    <div className="mt-3">
+                      <label htmlFor="plan-ai-limit" className="mb-1 block font-bold text-slate-800">Số lượt AI tối đa mỗi ngày</label>
+                      <input
+                        id="plan-ai-limit"
+                        type="number"
+                        min={1}
+                        value={editingPlan.maxAiQueriesPerDay ?? 1}
+                        onChange={(e) => { setEditingPlan({ ...editingPlan, maxAiQueriesPerDay: Number(e.target.value) }); clearFieldError("maxAiQueriesPerDay"); }}
+                        aria-invalid={Boolean(fieldErrors.maxAiQueriesPerDay)}
+                        aria-describedby={fieldErrors.maxAiQueriesPerDay ? "plan-ai-limit-error" : undefined}
+                        className={`h-9 w-full rounded-xl border px-3 text-xs font-mono outline-none focus:border-blue-500 ${fieldErrors.maxAiQueriesPerDay ? "border-red-400" : "border-slate-200"}`}
+                      />
+                      {fieldErrors.maxAiQueriesPerDay ? <p id="plan-ai-limit-error" role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.maxAiQueriesPerDay}</p> : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
