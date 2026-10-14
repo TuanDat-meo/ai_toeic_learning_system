@@ -40,7 +40,12 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       }
       throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
     }
-    if (response.status === 403) throw new Error('Bạn không có quyền thực hiện thao tác này.');
+    if (response.status === 403) {
+      if (path === '/api/auth/me') {
+        throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
+      }
+      throw new Error('Bạn không có quyền thực hiện thao tác này.');
+    }
     throw new Error(payload?.detail || payload?.message || 'Yêu cầu chưa thể xử lý. Vui lòng thử lại.');
   }
 

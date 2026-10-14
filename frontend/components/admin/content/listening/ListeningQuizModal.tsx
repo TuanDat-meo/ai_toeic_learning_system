@@ -24,11 +24,14 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
+  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
 import { LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
+import { saveItemProgress } from "@/lib/practiceProgress";
 
 interface ListeningQuizModalProps {
   quizModalCard: LevelCategoryCardData;
@@ -152,6 +155,9 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const currentGroupQuestions = isGroupMode
     ? quizModalCard.questions.filter((q) => q.audioUrl === (quizModalCard.questions[activeQuizQIndex]?.audioUrl || quizModalCard.questions[0]?.audioUrl))
     : [quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0]];
+  const isGroupChecked = isGroupMode
+    ? currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizAnswerChecked[q.id])
+    : !!quizAnswerChecked[quizModalCard.questions[activeQuizQIndex]?.id];
   const isAllGroupAnswered = isGroupMode && currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizSelectedOption[q.id]);
 
   const combinedVocabItems = (() => {
@@ -434,6 +440,8 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                 } else if (isCheckedQ) {
                   if (isRight) qBtnStyle = "bg-emerald-500 text-white font-bold border-emerald-500";
                   else qBtnStyle = "bg-rose-500 text-white font-bold border-rose-500";
+                } else if (userAns) {
+                  qBtnStyle = "bg-blue-100 border-blue-300 text-blue-800 font-semibold";
                 }
 
                 return (
@@ -513,7 +521,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                   )}
 
                   {/* Script & Translation ONLY when checked */}
-                  {(quizAnswerChecked[q.id] || isAllGroupAnswered) && (
+                  {isGroupChecked && (
                     <div className="p-5 sm:p-6 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-4 shadow-xs animate-in fade-in duration-200">
                       <div className="flex items-center justify-between border-b border-blue-200/60 pb-2.5">
                         <div className="flex items-center gap-2 font-bold text-sm sm:text-base text-blue-900">
@@ -577,7 +585,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     <div className="space-y-6">
                       {currentGroupQuestions.map((qItem, idx) => {
                         const chosenOpt = quizSelectedOption[qItem.id];
-                        const isChecked = isAllGroupAnswered || !!quizAnswerChecked[qItem.id];
+                        const isChecked = isGroupChecked;
                         const qNumDisplay = qItem.id >= 100 ? (qItem.id % 100) : (idx + 1);
 
                         return (
@@ -608,18 +616,40 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                                   let cardStyle = "bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800";
                                   let textColor = "text-slate-900";
+                                  let iconNode: React.ReactNode = (
+                                    <div className="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0">
+                                      {isChosen && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                                    </div>
+                                  );
 
                                   if (isChosen && !isChecked) {
-                                    cardStyle = "bg-blue-50/70 border-blue-500 text-blue-950 font-semibold ring-1 ring-blue-400/30";
+                                    cardStyle = "bg-blue-50/80 border-blue-500 text-blue-950 font-semibold ring-2 ring-blue-400/20";
+                                    textColor = "text-blue-900 font-bold";
                                   }
 
                                   if (isChecked) {
                                     if (isRight) {
                                       cardStyle = "bg-emerald-50/90 border-emerald-500 text-emerald-950 font-bold ring-2 ring-emerald-500/20";
                                       textColor = "text-emerald-700 font-bold";
+                                      iconNode = (
+                                        <div className="w-4 h-4 rounded-full border border-emerald-600 text-emerald-600 flex items-center justify-center shrink-0 text-[10px] font-black bg-emerald-50">
+                                          ✓
+                                        </div>
+                                      );
                                     } else if (isChosen) {
                                       cardStyle = "bg-rose-50/90 border-rose-400 text-rose-950 font-bold ring-2 ring-rose-400/20";
                                       textColor = "text-rose-700 font-bold";
+                                      iconNode = (
+                                        <div className="w-4 h-4 rounded-full border border-rose-600 text-rose-600 flex items-center justify-center shrink-0 text-[10px] font-black bg-rose-50">
+                                          ✕
+                                        </div>
+                                      );
+                                    } else {
+                                      cardStyle = "bg-white border-slate-200 text-slate-800";
+                                      textColor = "text-slate-800 font-medium";
+                                      iconNode = (
+                                        <div className="w-4 h-4 rounded-full border border-slate-300 shrink-0" />
+                                      );
                                     }
                                   }
 
@@ -632,19 +662,32 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                         const nextSelected = { ...quizSelectedOption, [qItem.id]: optKey };
                                         setQuizSelectedOption(nextSelected);
 
-                                        const nextChecked = { ...quizAnswerChecked, [qItem.id]: true };
-                                        setQuizAnswerChecked(nextChecked);
-                                        updateCardStats(qItem, optKey);
+                                        // Auto-check only when all questions in group are answered
+                                        const allGroupDone = currentGroupQuestions.length > 0 && currentGroupQuestions.every((item) => !!nextSelected[item.id]);
+
+                                        if (allGroupDone) {
+                                          const nextChecked = { ...quizAnswerChecked };
+                                          currentGroupQuestions.forEach((item) => {
+                                            nextChecked[item.id] = true;
+                                            updateCardStats(item, nextSelected[item.id]);
+                                          });
+                                          setQuizAnswerChecked(nextChecked);
+                                          playSfx("correct");
+                                        }
+
+                                        const totalQ = quizModalCard.questions?.length || quizModalCard.totalQuestions || 10;
+                                        saveItemProgress(`listening-quiz-${quizModalCard.id}`, Object.keys(nextSelected).length, totalQ);
                                       }}
                                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
                                     >
                                       <div className="flex items-center gap-3">
+                                        {iconNode}
                                         <span className={`text-sm ${textColor}`}>
                                           ({optKey}) {optVal}
                                         </span>
                                       </div>
                                       {isChecked && (
-                                        <div className="flex items-center gap-2 pl-4 pt-0.5">
+                                        <div className="flex items-center gap-2 pl-7 pt-0.5">
                                           <span className="text-blue-500 font-bold text-xs">|</span>
                                           <span className="text-xs font-semibold text-blue-700">
                                             {optTrans || "Dịch nghĩa đáp án."}
@@ -677,8 +720,40 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                       })}
                     </div>
 
+                    {/* GROUP ACTION BUTTONS */}
+                    {!isGroupChecked && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const answeredCount = currentGroupQuestions.filter((item) => !!quizSelectedOption[item.id]).length;
+                            if (answeredCount === 0) {
+                              triggerToast("Vui lòng chọn đáp án trước khi kiểm tra!");
+                              return;
+                            }
+                            const nextChecked = { ...quizAnswerChecked };
+                            currentGroupQuestions.forEach((item) => {
+                              nextChecked[item.id] = true;
+                              if (quizSelectedOption[item.id]) {
+                                updateCardStats(item, quizSelectedOption[item.id]);
+                              }
+                            });
+                            setQuizAnswerChecked(nextChecked);
+                            playSfx("correct");
+                            triggerToast("Đã kiểm tra đáp án toàn bộ nhóm câu!");
+                          }}
+                          className="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>
+                            Kiểm tra đáp án nhóm ({currentGroupQuestions.filter((item) => !!quizSelectedOption[item.id]).length}/{currentGroupQuestions.length} câu đã chọn)
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
                     {/* VOCABULARY SECTION FOR GROUP MODE */}
-                    {isAllGroupAnswered && combinedVocabItems.length > 0 && (
+                    {isGroupChecked && combinedVocabItems.length > 0 && (
                       <div className="bg-amber-50/70 border border-amber-200/90 rounded-3xl p-5 space-y-4 mt-6">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
@@ -838,14 +913,35 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                               let cardStyle = "bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800";
                               let textColor = "text-slate-900";
+                              let iconNode: React.ReactNode = (
+                                <div className="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0">
+                                  {isChosen && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                                </div>
+                              );
 
                               if (isChecked) {
                                 if (isRight) {
-                                  cardStyle = "bg-emerald-50/90 border-emerald-500 text-emerald-950 font-bold ring-2 ring-emerald-500/20";
-                                  textColor = "text-emerald-700 font-bold";
+                                  cardStyle = "bg-emerald-50/70 border-emerald-500 text-emerald-950 font-semibold ring-1 ring-emerald-400/40";
+                                  textColor = "text-emerald-800 font-semibold";
+                                  iconNode = (
+                                    <div className="w-4 h-4 rounded-full border border-emerald-600 text-emerald-600 flex items-center justify-center shrink-0 text-[10px] font-black bg-emerald-50">
+                                      ✓
+                                    </div>
+                                  );
                                 } else if (isChosen) {
-                                  cardStyle = "bg-rose-50/90 border-rose-400 text-rose-950 font-bold ring-2 ring-rose-400/20";
-                                  textColor = "text-rose-700 font-bold";
+                                  cardStyle = "bg-rose-50/70 border-rose-400 text-rose-950 font-semibold ring-1 ring-rose-400/40";
+                                  textColor = "text-rose-800 font-semibold";
+                                  iconNode = (
+                                    <div className="w-4 h-4 rounded-full border border-rose-600 text-rose-600 flex items-center justify-center shrink-0 text-[10px] font-black bg-rose-50">
+                                      ✕
+                                    </div>
+                                  );
+                                } else {
+                                  cardStyle = "bg-white border-slate-200 text-slate-800";
+                                  textColor = "text-slate-800 font-medium";
+                                  iconNode = hideTextBeforeCheck ? null : (
+                                    <div className="w-4 h-4 rounded-full border border-slate-300 shrink-0" />
+                                  );
                                 }
                               }
 
@@ -857,13 +953,17 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                   onClick={() => {
                                     playSfx("click");
                                     if (isChecked) return;
-                                    setQuizSelectedOption({ ...quizSelectedOption, [q.id]: optKey });
+                                    const nextSelected = { ...quizSelectedOption, [q.id]: optKey };
+                                    setQuizSelectedOption(nextSelected);
                                     setQuizAnswerChecked({ ...quizAnswerChecked, [q.id]: true });
                                     updateCardStats(q, optKey);
+                                    const totalQ = quizModalCard.questions?.length || quizModalCard.totalQuestions || 10;
+                                    saveItemProgress(`listening-quiz-${quizModalCard.id}`, Object.keys(nextSelected).length, totalQ);
                                   }}
-                                  className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
+                                  className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
                                 >
                                   <div className="flex items-center gap-3">
+                                    {iconNode}
                                     <span className={`text-sm ${textColor}`}>{labelText}</span>
                                   </div>
 

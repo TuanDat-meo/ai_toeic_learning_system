@@ -26,6 +26,7 @@ import { DictationCardData } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
+import { saveItemProgress } from "@/lib/practiceProgress";
 
 interface ListeningDictationModalProps {
   dictationModalCard: DictationCardData;
@@ -532,7 +533,9 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
               disabled={activeDictationQIndex >= dictationModalCard.questions.length - 1}
               onClick={() => {
                 playSfx?.("click");
-                setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
+                const nextIdx = Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1);
+                setActiveDictationQIndex(nextIdx);
+                saveItemProgress(`listening-dictation-${dictationModalCard.id}`, nextIdx + 1, dictationModalCard.totalQuestions);
               }}
               className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
               title="Câu tiếp theo"
