@@ -5,6 +5,7 @@ Hệ thống hỗ trợ học TOEIC với giao diện học tập và quản tr�
 ## Mục lục
 
 - [Mục tiêu và trạng thái](#mục-tiêu-và-trạng-thái)
+- [Đặc tả chức năng import nội dung](docs/content-import.md)
 - [Công nghệ](#công-nghệ)
 - [Cấu trúc repository](#cấu-trúc-repository)
 - [Yêu cầu môi trường](#yêu-cầu-môi-trường)
@@ -26,10 +27,12 @@ Mục tiêu là hỗ trợ học viên tổ chức việc học TOEIC, quản l�
 - Đăng nhập/đăng ký Google qua OAuth/OIDC khi cấu hình đủ Google Client ID và Secret.
 - PostgreSQL với Flyway migrations cho người dùng và các nhóm dữ liệu nội dung, luyện tập, analytics, recommendation và AI.
 - Các trang dashboard và admin cho nội dung, báo cáo, billing và recommendation.
+- Luồng admin import, xem trước, validate, chuẩn hóa, phát hiện trùng và publish từ CSV/XLSX/JSON; đặc tả tại [docs/content-import.md](docs/content-import.md).
+- Cấu hình hệ thống admin được lưu trong PostgreSQL, có kiểm soát quyền, optimistic locking và audit; đặc tả tại [docs/system-settings.md](docs/system-settings.md).
 
 ### Prototype hoặc chưa hoàn thiện
 
-- Các màn hình admin về nội dung học, analytics, recommendation, billing và hỗ trợ hiện chủ yếu dùng mock data, state phía trình duyệt hoặc `localStorage`; backend chưa có API tương ứng cho các nghiệp vụ đó.
+- Các màn hình admin nội dung (ngoài luồng import mới), analytics, recommendation, billing và hỗ trợ vẫn chủ yếu dùng mock data, state phía trình duyệt hoặc `localStorage`. Dữ liệu đã publish qua import được lưu trong kho nội dung JSON nhưng chưa được các màn hình học tập hiện tại sử dụng; cần tích hợp ở bước tiếp theo.
 - Có schema pgvector và biến mẫu `GEMINI_API_KEY`, nhưng không tìm thấy dịch vụ Gemini/RAG được nối trong backend hiện tại. Không xem các số liệu demo trên giao diện là dữ liệu thực.
 - Chưa có frontend test script, cấu hình coverage, hoặc workflow triển khai tự động.
 
