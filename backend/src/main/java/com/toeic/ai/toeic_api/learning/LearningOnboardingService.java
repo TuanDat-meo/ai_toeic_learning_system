@@ -9,12 +9,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.toeic.ai.toeic_api.settings.SystemSettingsService;
+
 @Service
 public class LearningOnboardingService {
     private final JdbcTemplate jdbcTemplate;
+    private final SystemSettingsService systemSettingsService;
 
-    public LearningOnboardingService(JdbcTemplate jdbcTemplate) {
+    public LearningOnboardingService(JdbcTemplate jdbcTemplate, SystemSettingsService systemSettingsService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.systemSettingsService = systemSettingsService;
     }
 
     public boolean isOnboardingCompleted(UUID userId) {
@@ -43,7 +47,7 @@ public class LearningOnboardingService {
                 List.of()), userId);
 
         if (states.isEmpty()) {
-            return LearningOnboardingState.empty();
+            return LearningOnboardingState.empty(systemSettingsService.getDefaultDailyStudyMinutes());
         }
         LearningOnboardingState state = states.getFirst();
         return new LearningOnboardingState(
@@ -53,7 +57,9 @@ public class LearningOnboardingService {
                 state.learningReason(),
                 state.currentLevel(),
                 state.recentScore(),
-                state.dailyStudyMinutes(),
+                state.dailyStudyMinutes() == null
+                        ? systemSettingsService.getDefaultDailyStudyMinutes()
+                        : state.dailyStudyMinutes(),
                 state.currentStep(),
                 state.completed(),
                 jdbcTemplate.query(
@@ -196,8 +202,9 @@ public class LearningOnboardingService {
             List<Integer> studyDays,
             List<String> interests) {
 
-        static LearningOnboardingState empty() {
-            return new LearningOnboardingState(null, null, null, null, null, null, null, 0, false, List.of(), List.of());
+        static LearningOnboardingState empty(int defaultDailyStudyMinutes) {
+            return new LearningOnboardingState(null, null, null, null, null, null, defaultDailyStudyMinutes,
+                    0, false, List.of(), List.of());
         }
     }
 }
