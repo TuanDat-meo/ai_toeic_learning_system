@@ -5,14 +5,13 @@ import {
   Search,
   FileText,
   Languages,
-  Headphones,
-  CheckCircle2,
-  Clock,
   Play,
   RotateCcw,
-  Sparkles,
+  Layers,
 } from "lucide-react";
 import { TestItem } from "@/app/admin/content/mock-tests/types";
+import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
+import { useItemProgress } from "@/lib/practiceProgress";
 
 interface StudentMockTestCardGridProps {
   tests: TestItem[];
@@ -22,6 +21,125 @@ interface StudentMockTestCardGridProps {
   onOpenPractice: (test: TestItem) => void;
   onOpenTranscript: (test: TestItem) => void;
   onOpenVocab: (test: TestItem) => void;
+}
+
+function StudentMockTestCardItem({
+  test,
+  onOpenExam,
+  onOpenPractice,
+  onOpenTranscript,
+  onOpenVocab,
+}: {
+  test: TestItem;
+  onOpenExam: (test: TestItem) => void;
+  onOpenPractice: (test: TestItem) => void;
+  onOpenTranscript: (test: TestItem) => void;
+  onOpenVocab: (test: TestItem) => void;
+}) {
+  const progress = useItemProgress(`mock-test-${test.id}`, 200);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
+      <div className="space-y-3">
+        {/* Header Badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+            {test.volId === "vol1" ? "Crack Vol 1" : "Crack Vol 2"}
+          </span>
+          <span
+            className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
+              test.difficulty === "Khó"
+                ? "bg-rose-50 text-rose-700 border border-rose-100"
+                : test.difficulty === "Trung bình"
+                ? "bg-amber-50 text-amber-700 border border-amber-100"
+                : "bg-emerald-50 text-emerald-700 border border-emerald-100"
+            }`}
+          >
+            Độ khó: {test.difficulty}
+          </span>
+        </div>
+
+        {/* Title */}
+        <div>
+          <h3 className="text-base font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">
+            {test.title}
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">200 câu hỏi • 120 phút • 7 Parts</p>
+        </div>
+
+        {/* Thanh tiến độ bài làm & Số câu hoàn thành */}
+        <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
+          <PracticeProgressBar
+            completed={progress.completedQuestions}
+            total={progress.totalQuestions || 200}
+            unit="câu"
+          />
+          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-500">
+            <span className="flex items-center gap-1 font-medium">
+              <Layers className="w-3.5 h-3.5 text-emerald-600" />
+              Đã làm: <strong className="text-slate-800 font-mono">{progress.completedQuestions}</strong> câu
+            </span>
+            <span className="font-mono text-slate-400">
+              Còn lại: <strong className="text-slate-600 font-mono">{Math.max(0, (progress.totalQuestions || 200) - progress.completedQuestions)}</strong>
+            </span>
+          </div>
+          {progress.lastScore ? (
+            <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-200/60 font-mono">
+              <span className="text-slate-500 font-sans">Điểm ước tính gần nhất:</span>
+              <span className="font-extrabold text-blue-600">{progress.lastScore}/990</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Nút hành động học viên */}
+      <div className="pt-3.5 border-t border-slate-100 space-y-2 mt-4">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenExam(test)}
+            className="py-2.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+            title="Bắt đầu thi thử tính giờ (Exam Mode)"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            Thi thử
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenPractice(test)}
+            className="py-2.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+            title="Luyện tập từng phần (Practice Mode)"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Luyện tập
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenTranscript(test)}
+            className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+            title="Xem Transcript bài nghe & Dịch nghĩa"
+          >
+            <FileText className="w-3 h-3 text-blue-600" />
+            Transcript
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenVocab(test)}
+            className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+            title="Xem từ vựng trọng tâm trong đề"
+          >
+            <Languages className="w-3 h-3 text-emerald-600" />
+            Từ vựng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export const StudentMockTestCardGrid: React.FC<StudentMockTestCardGridProps> = ({
@@ -122,97 +240,14 @@ export const StudentMockTestCardGrid: React.FC<StudentMockTestCardGridProps> = (
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredTests.map((test) => (
-            <div
+            <StudentMockTestCardItem
               key={test.id}
-              className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                {/* Header Badge */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-                    {test.volId === "vol1" ? "Crack Vol 1" : "Crack Vol 2"}
-                  </span>
-                  <span
-                    className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-                      test.difficulty === "Khó"
-                        ? "bg-rose-50 text-rose-700 border border-rose-100"
-                        : test.difficulty === "Trung bình"
-                        ? "bg-amber-50 text-amber-700 border border-amber-100"
-                        : "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                    }`}
-                  >
-                    Độ khó: {test.difficulty}
-                  </span>
-                </div>
-
-                {/* Title */}
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">
-                    {test.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">200 câu hỏi • 120 phút • 7 Parts</p>
-                </div>
-
-                {/* Info Card */}
-                <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between text-slate-600">
-                    <span>Cấu trúc:</span>
-                    <strong className="text-slate-900 font-bold">100 LC + 100 RC</strong>
-                  </div>
-                  <div className="flex items-center justify-between text-slate-600 pt-1 border-t border-slate-200/50">
-                    <span>Thang điểm:</span>
-                    <span className="text-blue-600 font-extrabold font-mono">10 - 990 Điểm</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Nút hành động học viên */}
-              <div className="pt-3.5 border-t border-slate-100 space-y-2 mt-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenExam(test)}
-                    className="py-2.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-                    title="Bắt đầu thi thử tính giờ (Exam Mode)"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    Thi thử
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onOpenPractice(test)}
-                    className="py-2.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-                    title="Luyện tập từng phần (Practice Mode)"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Luyện tập
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenTranscript(test)}
-                    className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
-                    title="Xem Transcript bài nghe & Dịch nghĩa"
-                  >
-                    <FileText className="w-3 h-3 text-blue-600" />
-                    Transcript
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onOpenVocab(test)}
-                    className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
-                    title="Xem từ vựng trọng tâm trong đề"
-                  >
-                    <Languages className="w-3 h-3 text-emerald-600" />
-                    Từ vựng
-                  </button>
-                </div>
-              </div>
-            </div>
+              test={test}
+              onOpenExam={onOpenExam}
+              onOpenPractice={onOpenPractice}
+              onOpenTranscript={onOpenTranscript}
+              onOpenVocab={onOpenVocab}
+            />
           ))}
         </div>
       )}

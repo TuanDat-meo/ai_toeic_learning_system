@@ -4,6 +4,7 @@ import React from "react";
 import { TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
+import { saveItemProgress } from "@/lib/practiceProgress";
 import {
   ArrowLeft,
   Languages,
@@ -680,32 +681,40 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                     if ((currentQ.part === "Part 2" || qPart === "Part 2") && optKey === "D") return null;
 
                     let cardStyle = "bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800";
-                    let iconNode = (
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0">
-                        {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                    let iconNode: React.ReactNode = (
+                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0">
+                        {isChosen && <div className="w-2 h-2 rounded-full bg-blue-600" />}
                       </div>
                     );
                     let textColor = "text-slate-900";
 
                     if (isChecked) {
                       if (isRight) {
-                        cardStyle = "bg-emerald-50/90 border-emerald-500 text-emerald-950 font-bold ring-2 ring-emerald-500/20";
-                        textColor = "text-emerald-700 font-bold";
+                        cardStyle = "bg-emerald-50/70 border-emerald-500 text-emerald-950 font-semibold ring-1 ring-emerald-400/40";
+                        textColor = "text-emerald-800 font-semibold";
                         iconNode = (
-                          <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-xs font-black">
+                          <div className="w-4 h-4 rounded-full border border-emerald-600 text-emerald-600 flex items-center justify-center shrink-0 text-[10px] font-black bg-emerald-50">
                             ✓
                           </div>
                         );
                       } else if (isChosen) {
-                        cardStyle = "bg-rose-50/90 border-rose-400 text-rose-950 font-bold ring-2 ring-rose-400/20";
-                        textColor = "text-rose-700 font-bold";
+                        cardStyle = "bg-rose-50/70 border-rose-400 text-rose-950 font-semibold ring-1 ring-rose-400/40";
+                        textColor = "text-rose-800 font-semibold";
                         iconNode = (
-                          <div className="w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 text-xs font-black">
+                          <div className="w-4 h-4 rounded-full border border-rose-600 text-rose-600 flex items-center justify-center shrink-0 text-[10px] font-black bg-rose-50">
                             ✕
                           </div>
                         );
+                      } else {
+                        cardStyle = "bg-white border-slate-200 text-slate-800";
+                        textColor = "text-slate-800 font-medium";
+                        iconNode = isPart1or2 ? null : (
+                          <div className="w-4 h-4 rounded-full border border-slate-300 shrink-0" />
+                        );
                       }
                     }
+
+                    const labelText = (isPart1or2 && !isChecked) ? `(${optKey})` : `(${optKey}) ${optVal}`;
 
                     return (
                       <div
@@ -716,15 +725,17 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                             if (optKey === currentQ.correctAnswer) playSfx("correct");
                             else playSfx("wrong");
                           }
-                          setPracticeAnswers({ ...practiceAnswers, [currentQ.id]: optKey });
+                          const nextAnswers = { ...practiceAnswers, [currentQ.id]: optKey };
+                          setPracticeAnswers(nextAnswers);
                           setPracticeChecked({ ...practiceChecked, [currentQ.id]: true });
+                          saveItemProgress(`mock-test-${test.id}`, Object.keys(nextAnswers).length, filteredPracticeQuestions.length || 200);
                         }}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
+                        className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer ${cardStyle}`}
                       >
                         <div className="flex items-center gap-3">
                           {iconNode}
                           <span className={`text-sm ${textColor}`}>
-                            {isPart1or2 ? `(${optKey})` : `(${optKey}) ${optVal}`}
+                            {labelText}
                           </span>
                         </div>
                       </div>

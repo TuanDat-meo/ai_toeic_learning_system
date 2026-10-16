@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import { X, Volume2, Gamepad2, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
-import { WordItem, TestItem } from "@/app/admin/content/vocabulary/types";
+import { TestItem } from "@/app/admin/content/vocabulary/types";
+import { saveItemProgress } from "@/lib/practiceProgress";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 
 interface StudentVocabularyModalsProps {
   // Word list modal
@@ -267,9 +269,11 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                   type="button"
                   onClick={() => {
                     setIsFlipped(false);
-                    setFlashcardIndex((prev) =>
-                      Math.min(flashcardModalTest.words.length - 1, prev + 1)
-                    );
+                    setFlashcardIndex((prev) => {
+                      const next = Math.min(flashcardModalTest.words.length - 1, prev + 1);
+                      saveItemProgress(`vocab-${flashcardModalTest.id}`, next + 1, flashcardModalTest.words.length);
+                      return next;
+                    });
                   }}
                   disabled={flashcardIndex >= flashcardModalTest.words.length - 1}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1"
@@ -338,9 +342,26 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <Gamepad2 className="w-3.5 h-3.5" />
                 Mini-game Ôn Từ Nhanh
               </span>
-              <span className="text-xs bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded-full border border-amber-200">
-                Điểm: {gameScore}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded-full border border-amber-200">
+                  Điểm: {gameScore}
+                </span>
+                {gameModalTest.words[gameQuestionIndex] && (
+                  <QuestionErrorReportButton
+                    source="OTHER"
+                    questionRef={`vocab-${gameModalTest.id}-${gameModalTest.words[gameQuestionIndex].id || gameQuestionIndex + 1}`}
+                    relatedContent={`Từ vựng: ${gameModalTest.title} - ${gameModalTest.words[gameQuestionIndex].word}`}
+                    questionSnapshot={{
+                      topicTitle: gameModalTest.title,
+                      word: gameModalTest.words[gameQuestionIndex].word,
+                      meaning: gameModalTest.words[gameQuestionIndex].meaning,
+                      ipa: gameModalTest.words[gameQuestionIndex].ipa,
+                      level: gameModalTest.words[gameQuestionIndex].level,
+                    }}
+                    compact
+                  />
+                )}
+              </div>
             </div>
 
             {(() => {
@@ -368,6 +389,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 if (options[idx] === currentWord.meaning) {
                   setGameScore((prev) => prev + 10);
                 }
+                saveItemProgress(`vocab-${gameModalTest.id}`, gameQuestionIndex + 1, gameModalTest.words.length);
               };
 
               return (
