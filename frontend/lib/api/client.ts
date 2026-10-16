@@ -3,6 +3,13 @@ export type ApiMessage = {
   detail?: string;
 };
 
+export class ApiRequestError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
 async function getCsrfToken() {
@@ -36,9 +43,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (!response.ok) {
     if (response.status === 401) {
       if (path === '/api/auth/login') {
-        throw new Error(payload?.detail || payload?.message || 'Email hoặc mật khẩu không chính xác.');
+        throw new ApiRequestError(payload?.detail || payload?.message || 'Email hoặc mật khẩu không chính xác.', 401);
       }
-      throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
+      throw new ApiRequestError('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.', 401);
     }
     if (response.status === 403) {
       if (path === '/api/auth/me') {
@@ -61,6 +68,15 @@ export async function writeAuthRequest<T>(method: 'POST' | 'PUT' | 'PATCH' | 'DE
       [csrf.headerName]: csrf.token,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+export async function uploadAuthRequest<T>(path: string, body: FormData): Promise<T> {
+  const csrf = await getCsrfToken();
+  return apiRequest<T>(path, {
+    method: 'POST',
+    headers: { [csrf.headerName]: csrf.token },
+    body,
   });
 }
 

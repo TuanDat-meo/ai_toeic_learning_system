@@ -12,14 +12,21 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> invalidBody(MethodArgumentNotValidException exception) {
-        String detail = exception.getBindingResult().getFieldErrors().stream()
+        var bindingResult = exception.getBindingResult();
+        String fieldErrors = bindingResult.getFieldErrors().stream()
                 .map(this::formatFieldError).distinct().collect(Collectors.joining(" "));
+        String objectErrors = bindingResult.getGlobalErrors().stream()
+                .map(error -> error.getDefaultMessage() == null ? "Dữ liệu chưa hợp lệ." : error.getDefaultMessage())
+                .distinct().collect(Collectors.joining(" "));
+        String detail = java.util.stream.Stream.of(fieldErrors, objectErrors)
+                .filter(message -> !message.isBlank()).collect(Collectors.joining(" "));
         return ResponseEntity.badRequest().body(new ApiError("Dữ liệu chưa hợp lệ.", detail));
     }
 
@@ -34,6 +41,12 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> conflict(DataIntegrityViolationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("Không thể hoàn tất thao tác.", "Email đã tồn tại hoặc tài khoản còn liên kết dữ liệu."));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> uploadTooLarge(MaxUploadSizeExceededException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiError("File quá lớn.", "Kích thước file tối đa là 10 MB."));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
