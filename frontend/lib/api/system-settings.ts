@@ -10,6 +10,7 @@ export type SystemSettings = {
     supportRequests: boolean;
     contentReports: boolean;
   };
+  aiModerationEnabled: boolean;
   version: number;
   updatedAt: string;
 };

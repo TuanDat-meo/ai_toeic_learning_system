@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, BookOpen, RotateCcw, Save, Settings2 } from "lucide-react";
+import { Bell, BookOpen, Bot, RotateCcw, Save, Settings2 } from "lucide-react";
 import { ApiRequestError } from "@/lib/api/client";
 import {
   getSystemSettings,
@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS: EditableSettings = {
     supportRequests: true,
     contentReports: false,
   },
+  aiModerationEnabled: true,
 };
 
 const STUDY_DURATIONS = [15, 30, 45, 60, 90];
@@ -33,6 +34,7 @@ function editableSettings(settings: SystemSettings): EditableSettings {
     dailyStudyMinutes: settings.dailyStudyMinutes,
     reminderTime: settings.reminderTime,
     notifications: settings.notifications,
+    aiModerationEnabled: settings.aiModerationEnabled,
   };
 }
 
@@ -57,7 +59,8 @@ function isSystemSettings(value: unknown): value is SystemSettings {
     Number.isFinite(Date.parse(settings.updatedAt)) &&
     typeof notificationValues.newRegistrations === "boolean" &&
     typeof notificationValues.supportRequests === "boolean" &&
-    typeof notificationValues.contentReports === "boolean"
+    typeof notificationValues.contentReports === "boolean" &&
+    typeof settings.aiModerationEnabled === "boolean"
   );
 }
 
@@ -439,6 +442,25 @@ export function SystemSettings() {
           <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
             Các lựa chọn sự kiện được lưu trong hệ thống; chúng chưa kích hoạt email hoặc thông báo
             đẩy vì kênh gửi chưa được nối.
+          </p>
+        </SettingsSection>
+
+        <SettingsSection
+          title="Kiểm duyệt AI"
+          description="Cấu hình bật hoặc tắt kiểm duyệt nội dung AI."
+          icon={<Bot aria-hidden="true" className="h-5 w-5" />}
+        >
+          <ToggleSetting
+            title="Bật kiểm duyệt AI"
+            description="Lưu lựa chọn vận hành kiểm duyệt nội dung do AI tạo."
+            checked={draft.aiModerationEnabled}
+            onChange={(checked) =>
+              updateDraft((current) => ({ ...current, aiModerationEnabled: checked }))
+            }
+          />
+          <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+            Cấu hình được lưu dùng chung. Việc tự động đưa nội dung từ dịch vụ sinh AI vào queue
+            chưa được tích hợp; nội dung đã có trong queue được xử lý tại trang Kiểm duyệt AI.
           </p>
         </SettingsSection>
 

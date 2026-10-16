@@ -8,6 +8,7 @@ public record SystemSettings(
         int dailyStudyMinutes,
         String reminderTime,
         SystemSettingNotifications notifications,
+        boolean aiModerationEnabled,
         long version,
         Instant updatedAt) {
 }

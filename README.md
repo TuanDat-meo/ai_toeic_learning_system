@@ -28,6 +28,7 @@ Mục tiêu là hỗ trợ học viên tổ chức việc học TOEIC, quản l�
 - PostgreSQL với Flyway migrations cho người dùng và các nhóm dữ liệu nội dung, luyện tập, analytics, recommendation và AI.
 - Các trang dashboard và admin cho nội dung, báo cáo, billing và recommendation.
 - Luồng admin import, xem trước, validate, chuẩn hóa, phát hiện trùng và publish từ CSV/XLSX/JSON; đặc tả tại [docs/content-import.md](docs/content-import.md).
+- Queue admin xem xét, duyệt hoặc từ chối nội dung AI đã được ghi vào bảng nội dung AI; đặc tả và giới hạn producer tại [docs/ai-moderation.md](docs/ai-moderation.md).
 - Cấu hình hệ thống admin được lưu trong PostgreSQL, có kiểm soát quyền, optimistic locking và audit; đặc tả tại [docs/system-settings.md](docs/system-settings.md).
 
 ### Prototype hoặc chưa hoàn thiện

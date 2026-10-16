@@ -19,7 +19,7 @@ public class SystemSettingsService {
     private static final String SELECT_SETTINGS = """
             SELECT system_name, support_email, daily_study_minutes, reminder_time,
                    notify_new_registrations, notify_support_requests, notify_content_reports,
-                   version, updated_at
+                   ai_moderation_enabled, version, updated_at
             FROM system_settings
             WHERE id = 1
             """;
@@ -54,7 +54,7 @@ public class SystemSettingsService {
                 UPDATE system_settings
                 SET system_name = ?, support_email = ?, daily_study_minutes = ?, reminder_time = ?,
                     notify_new_registrations = ?, notify_support_requests = ?, notify_content_reports = ?,
-                    version = version + 1, updated_by = ?, updated_at = now()
+                    ai_moderation_enabled = ?, version = version + 1, updated_by = ?, updated_at = now()
                 WHERE id = 1 AND version = ?
                 """,
                 request.systemName().trim(),
@@ -64,6 +64,7 @@ public class SystemSettingsService {
                 request.notifications().newRegistrations(),
                 request.notifications().supportRequests(),
                 request.notifications().contentReports(),
+                request.aiModerationEnabled(),
                 adminId,
                 request.expectedVersion());
 
@@ -90,6 +91,7 @@ public class SystemSettingsService {
                         rs.getBoolean("notify_new_registrations"),
                         rs.getBoolean("notify_support_requests"),
                         rs.getBoolean("notify_content_reports")),
+                rs.getBoolean("ai_moderation_enabled"),
                 rs.getLong("version"),
                 rs.getTimestamp("updated_at").toInstant());
     }

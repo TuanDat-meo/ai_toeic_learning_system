@@ -18,6 +18,7 @@ class SystemSettingsUpdateRequestValidationTest {
                 45,
                 "07:30",
                 new SystemSettingNotificationsRequest(true, false, true),
+                true,
                 0L);
 
         assertThat(validator.validate(request)).isEmpty();
@@ -31,12 +32,13 @@ class SystemSettingsUpdateRequestValidationTest {
                 20,
                 "25:61",
                 new SystemSettingNotificationsRequest(null, true, false),
+                null,
                 -1L);
 
         assertThat(validator.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("systemName", "supportEmail", "reminderTime",
                         "notifications.newRegistrations", "expectedVersion",
-                        "dailyStudyMinutesSupported");
+                        "aiModerationEnabled", "dailyStudyMinutesSupported");
     }
 }

@@ -63,6 +63,7 @@ class SystemSettingsServiceIntegrationTest {
                 45,
                 "08:15",
                 new SystemSettingNotificationsRequest(false, true, true),
+                false,
                 current.version());
 
         SystemSettings updated = settingsService.update(request, null, "127.0.0.1");
@@ -73,6 +74,7 @@ class SystemSettingsServiceIntegrationTest {
         assertThat(updated.reminderTime()).isEqualTo("08:15");
         assertThat(updated.notifications())
                 .isEqualTo(new SystemSettingNotifications(false, true, true));
+        assertThat(updated.aiModerationEnabled()).isFalse();
         assertThat(updated.version()).isEqualTo(current.version() + 1);
         assertThat(onboardingService.getOnboardingState(UUID.randomUUID()).dailyStudyMinutes()).isEqualTo(45);
         assertThat(jdbc.queryForObject(
@@ -89,6 +91,7 @@ class SystemSettingsServiceIntegrationTest {
                 30,
                 "19:00",
                 new SystemSettingNotificationsRequest(true, true, false),
+                current.aiModerationEnabled(),
                 current.version() + 1);
 
         assertThatThrownBy(() -> settingsService.update(staleRequest, null, "127.0.0.1"))
@@ -143,13 +146,15 @@ class SystemSettingsServiceIntegrationTest {
                     "supportRequests": true,
                     "contentReports": false
                   },
+                  "aiModerationEnabled": false,
                   "expectedVersion": %d
                 }
                 """.formatted(current.version());
 
         mockMvc.perform(get("/api/admin/settings").with(user(adminEmail).roles("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.version").value(current.version()));
+                .andExpect(jsonPath("$.version").value(current.version()))
+                .andExpect(jsonPath("$.aiModerationEnabled").value(true));
         mockMvc.perform(put("/api/admin/settings")
                         .with(user(adminEmail).roles("ADMIN"))
                         .with(csrf())
@@ -158,6 +163,7 @@ class SystemSettingsServiceIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.systemName").value("Admin configured system"))
                 .andExpect(jsonPath("$.dailyStudyMinutes").value(60))
+                .andExpect(jsonPath("$.aiModerationEnabled").value(false))
                 .andExpect(jsonPath("$.version").value(current.version() + 1));
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM audit_logs WHERE user_id = ? AND entity_type = 'SYSTEM_SETTINGS'",

@@ -16,6 +16,7 @@ public record SystemSettingsUpdateRequest(
         @NotNull @Min(15) @Max(90) Integer dailyStudyMinutes,
         @NotBlank @Pattern(regexp = "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$") String reminderTime,
         @NotNull @Valid SystemSettingNotificationsRequest notifications,
+        @NotNull Boolean aiModerationEnabled,
         @NotNull @Min(0) Long expectedVersion) {
 
     @AssertTrue(message = "Thời lượng học phải là một trong các mức 15, 30, 45, 60 hoặc 90 phút.")
