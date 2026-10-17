@@ -44,18 +44,28 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
           return;
         }
         if (user.role === 'STUDENT') {
-          const onboarding = await getLearningOnboardingStatus();
-          if (!active) return;
-          if (onboarding.state.completed && pathname === '/onboarding') {
-            router.replace('/dashboard');
-            return;
+          try {
+            const onboarding = await getLearningOnboardingStatus();
+            if (!active) return;
+            if (onboarding?.state?.completed && pathname === '/onboarding') {
+              router.replace('/dashboard');
+              return;
+            }
+          } catch {
+            // Ignore onboarding status fetch error so learning routes remain accessible
           }
         }
         setAuthorizationError(null);
         setAuthorizedPath(pathname);
       } catch (error) {
         if (!active) return;
-        if (error instanceof Error && error.message === 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.') {
+        if (
+          error instanceof Error &&
+          (error.message === 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.' ||
+            error.message.includes('quyền') ||
+            error.message.includes('hết hạn') ||
+            error.message.includes('xử lý'))
+        ) {
           router.replace('/?login=true');
           return;
         }

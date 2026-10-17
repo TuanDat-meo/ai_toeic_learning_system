@@ -1,0 +1,61 @@
+package com.toeic.ai.toeic_api.grammar;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.toeic.ai.toeic_api.user.UserAccountService;
+
+@RestController
+public class GrammarController {
+
+    private final GrammarService grammarService;
+    private final UserAccountService userAccountService;
+
+    public GrammarController(GrammarService grammarService, UserAccountService userAccountService) {
+        this.grammarService = grammarService;
+        this.userAccountService = userAccountService;
+    }
+
+    @GetMapping("/api/grammar/topics")
+    public List<GrammarTopic> listTopics(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return grammarService.listTopics(userId);
+    }
+
+    @GetMapping("/api/grammar/topics/{topicId}")
+    public GrammarTopic getTopic(@PathVariable String topicId, Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return grammarService.getTopic(topicId, userId);
+    }
+
+    @PostMapping("/api/grammar/topics/{topicId}/progress")
+    @ResponseStatus(HttpStatus.OK)
+    public void saveProgress(@PathVariable String topicId, @RequestBody Map<String, Object> body, Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        int completed = body.get("completedQuestions") instanceof Number n ? n.intValue() : 0;
+        int total = body.get("totalQuestions") instanceof Number n ? n.intValue() : 0;
+        String status = body.getOrDefault("status", "Đang học").toString();
+        grammarService.saveProgress(userId, topicId, completed, total, status);
+    }
+
+    private UUID extractUserId(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            return null;
+        }
+        try {
+            return userAccountService.findManagedUser(authentication.getName()).id();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}
