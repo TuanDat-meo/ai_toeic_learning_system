@@ -71,6 +71,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
                             "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
+                            "/api/listening/**",
+                            "/api/vocabulary/**",
+                            "/api/grammar/**",
+                            "/api/reading/**",
+                            "/api/mock-tests/**",
                             "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/billing/**").hasRole("STUDENT")
                         .requestMatchers("/api/learning-profile/**").hasRole("STUDENT")
