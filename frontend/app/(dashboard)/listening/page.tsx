@@ -19,10 +19,22 @@ import { StudentListeningPartTab } from "@/components/student/listening/StudentL
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentListeningPage() {
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
   const [selectedYear, setSelectedYear] = useState<"2026" | "2024" | "2023" | "2022">("2024");
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
+
+  async function startActivity(featureKey: string, open: () => void) {
+    try {
+      await consumeLearningFeature(featureKey);
+      open();
+    } catch (error) {
+      setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu hoạt động học.");
+    }
+  }
 
   // Dữ liệu Cards
   const [dictationCards] = useState<DictationCardData[]>(INITIAL_DICTATION_CARDS);
@@ -134,6 +146,7 @@ export default function StudentListeningPage() {
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
+      {quotaMessage ? <div role="alert" className="fixed right-5 top-5 z-[70] max-w-sm rounded-xl bg-red-700 px-4 py-3 text-xs font-semibold text-white shadow-xl">{quotaMessage}</div> : null}
       {/* Header chuẩn tối giản, thanh lịch như Admin */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
         <div>
@@ -149,11 +162,12 @@ export default function StudentListeningPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
             <Headphones className="w-4 h-4 text-blue-600" />
             Đầy đủ Part 1, 2, 3, 4 &amp; Dictation Studio
           </span>
+          <LearningQuotaBadge featureKey="LISTENING" />
         </div>
       </header>
 
@@ -190,8 +204,10 @@ export default function StudentListeningPage() {
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
           handleOpenDictationPractice={(card) => {
-            setDictationModalCard(card);
-            setActiveDictationQIndex(0);
+            void startActivity("LISTENING_DICTATION", () => {
+              setDictationModalCard(card);
+              setActiveDictationQIndex(0);
+            });
           }}
         />
       )}
@@ -206,8 +222,10 @@ export default function StudentListeningPage() {
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
           handleOpenQuizPractice={(card) => {
-            setQuizModalCard(card);
-            setActiveQuizQIndex(0);
+            void startActivity("LISTENING_PART_PRACTICE", () => {
+              setQuizModalCard(card);
+              setActiveQuizQIndex(0);
+            });
           }}
         />
       )}
@@ -222,8 +240,10 @@ export default function StudentListeningPage() {
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
           handleOpenQuizPractice={(card) => {
-            setQuizModalCard(card);
-            setActiveQuizQIndex(0);
+            void startActivity("LISTENING_PART_PRACTICE", () => {
+              setQuizModalCard(card);
+              setActiveQuizQIndex(0);
+            });
           }}
         />
       )}
@@ -238,8 +258,10 @@ export default function StudentListeningPage() {
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
           handleOpenQuizPractice={(card) => {
-            setQuizModalCard(card);
-            setActiveQuizQIndex(0);
+            void startActivity("LISTENING_PART_PRACTICE", () => {
+              setQuizModalCard(card);
+              setActiveQuizQIndex(0);
+            });
           }}
         />
       )}
@@ -254,8 +276,10 @@ export default function StudentListeningPage() {
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
           handleOpenQuizPractice={(card) => {
-            setQuizModalCard(card);
-            setActiveQuizQIndex(0);
+            void startActivity("LISTENING_PART_PRACTICE", () => {
+              setQuizModalCard(card);
+              setActiveQuizQIndex(0);
+            });
           }}
         />
       )}

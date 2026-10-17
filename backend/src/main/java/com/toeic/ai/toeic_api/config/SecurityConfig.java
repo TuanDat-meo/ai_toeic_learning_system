@@ -62,6 +62,7 @@ public class SecurityConfig {
                 .userDetailsService(userAccountService)
                 .securityContext(context -> context.securityContextRepository(contextRepository))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/webhooks/sepay"))
                 .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                         request -> request.getServletPath().startsWith("/api/")))

@@ -5,6 +5,44 @@ export type SubscriptionPlanStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
 export type LearningPlanCategory = "FREE" | "PRO" | "PREMIUM" | "PROMOTION";
 export type AiAccessMode = "DISABLED" | "LIMITED" | "UNLIMITED";
 
+export type FeatureConfigField = {
+  key: string;
+  label: string;
+  type: "STRING" | "INTEGER" | "NUMBER" | "BOOLEAN" | "SELECT";
+  required: boolean;
+  options: string[];
+};
+
+export type LearningFeature = {
+  key: string;
+  parentFeatureKey: string | null;
+  name: string;
+  category: string;
+  description: string;
+  lifecycleStatus: "AVAILABLE" | "IN_DEVELOPMENT" | "PLANNED" | "DISABLED";
+  controlType: "TOGGLE" | "METERED";
+  allowedUnits: string[];
+  allowedPeriods: Array<NonNullable<PlanEntitlement["period"]>>;
+  configFields: FeatureConfigField[];
+};
+
+export type PlanEntitlement = {
+  enabled: boolean;
+  limit: number | null;
+  unit: string | null;
+  period: "DAY" | "WEEK" | "MONTH" | "PLAN_TERM" | null;
+  config: Record<string, string | number | boolean>;
+};
+
+export type FeatureQuotaUsage = {
+  featureKey: string;
+  name: string;
+  used: number;
+  limit: number | null;
+  period: "DAY" | "WEEK" | "MONTH" | "PLAN_TERM";
+  periodEndsAt: string;
+};
+
 export type SubscriptionPlan = {
   id: string;
   code: string;
@@ -22,6 +60,7 @@ export type SubscriptionPlan = {
   offerStartsAt: string | null;
   offerEndsAt: string | null;
   maxAiQueriesPerDay: number;
+  entitlements: Record<string, PlanEntitlement>;
   status: SubscriptionPlanStatus;
   purchaseCount: number;
   createdAt: string;
@@ -85,6 +124,7 @@ export type StudentSubscription = {
 
 export type StudentPaymentTransaction = {
   id: string;
+  planId: string;
   transactionCode: string;
   orderCode: string;
   planName: string;
@@ -100,18 +140,76 @@ export type StudentBillingOverview = {
   transactions: StudentPaymentTransaction[];
 };
 
+export type StudentCheckoutResponse = {
+  transactionId: string;
+  orderCode: string;
+  planName: string;
+  amount: number;
+  status: TransactionStatus;
+  bankCode: string;
+  accountNumber: string;
+  accountName: string;
+  paymentContent: string;
+  qrImageUrl: string;
+  qrExpiresAt: string;
+};
+
 export type PlanInput = Omit<SubscriptionPlan, "id" | "purchaseCount" | "createdAt" | "updatedAt">;
 
 export function getSubscriptionPlans() {
   return apiRequest<SubscriptionPlan[]>("/api/admin/billing/plans");
 }
 
+export function getLearningFeatures() {
+  return apiRequest<LearningFeature[]>("/api/admin/billing/features");
+}
+
+export async function consumeLearningFeature(featureKey: string, operationId = crypto.randomUUID()) {
+  const result = await writeAuthRequest<{ used: number }>("POST", "/api/billing/entitlements/use", { featureKey, operationId });
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("learning-quota-updated"));
+  return result;
+}
+
+export function getStudentFeatureUsage() {
+  return apiRequest<FeatureQuotaUsage[]>("/api/billing/entitlements/usage");
+}
+
 export function getAvailableLearningPlans() {
   return apiRequest<SubscriptionPlan[]>("/api/learning-plans");
 }
 
+export function getAvailableLearningFeatures() {
+  return apiRequest<LearningFeature[]>("/api/learning-features");
+}
+
+export function describePlanEntitlements(plan: SubscriptionPlan, catalog: LearningFeature[]) {
+  const periodLabels: Record<NonNullable<PlanEntitlement["period"]>, string> = {
+    DAY: "ngày",
+    WEEK: "tuần",
+    MONTH: "tháng",
+    PLAN_TERM: "thời hạn gói",
+  };
+  return Object.entries(plan.entitlements ?? {}).flatMap(([key, entitlement]) => {
+    const feature = catalog.find((item) => item.key === key && item.lifecycleStatus === "AVAILABLE");
+    if (!entitlement.enabled || !feature) return [];
+    if (feature.controlType === "TOGGLE") return [feature.name];
+    const quota = entitlement.limit == null
+      ? "không giới hạn"
+      : `${entitlement.limit} ${entitlement.unit ?? feature.allowedUnits[0] ?? "lượt"} / ${entitlement.period ? periodLabels[entitlement.period] : "chu kỳ"}`;
+    return [`${feature.name}: ${quota}`];
+  });
+}
+
 export function getStudentBillingOverview() {
   return apiRequest<StudentBillingOverview>("/api/billing/me");
+}
+
+export function createStudentPaymentOrder(planId: string) {
+  return writeAuthRequest<StudentCheckoutResponse>("POST", "/api/billing/orders", { planId });
+}
+
+export function refreshStudentPaymentQr(transactionId: string) {
+  return writeAuthRequest<StudentCheckoutResponse>("POST", `/api/billing/orders/${transactionId}/qr`);
 }
 
 export function createSubscriptionPlan(plan: PlanInput) {
@@ -120,6 +218,14 @@ export function createSubscriptionPlan(plan: PlanInput) {
 
 export function updateSubscriptionPlan(id: string, plan: PlanInput) {
   return writeAuthRequest<SubscriptionPlan>("PATCH", `/api/admin/billing/plans/${id}`, plan);
+}
+
+export function createSubscriptionPlanReplacingActive(plan: PlanInput) {
+  return writeAuthRequest<SubscriptionPlan>("POST", "/api/admin/billing/plans/replace-active", plan);
+}
+
+export function updateSubscriptionPlanReplacingActive(id: string, plan: PlanInput) {
+  return writeAuthRequest<SubscriptionPlan>("PATCH", `/api/admin/billing/plans/${id}/replace-active`, plan);
 }
 
 export function deleteSubscriptionPlan(id: string) {

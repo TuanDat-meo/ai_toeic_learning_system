@@ -27,11 +27,18 @@ public class SubscriptionAdminController {
     public SubscriptionAdminController(SubscriptionService service, AuditLogService audit, UserAccountService users) { this.service=service; this.audit=audit; this.users=users; }
 
     @GetMapping("/plans") List<SubscriptionPlan> plans() { return service.listPlans(); }
+    @GetMapping("/features") List<LearningFeature> features() { return service.listFeatureCatalog(); }
     @PostMapping("/plans") @ResponseStatus(HttpStatus.CREATED) SubscriptionPlan create(@Valid @RequestBody PlanRequest body, Authentication auth, jakarta.servlet.http.HttpServletRequest req) {
         SubscriptionPlan result=service.create(body); record(auth,req,"CREATE","SUBSCRIPTION_PLAN",result.id(),"Tạo gói " + result.code()); return result;
     }
+    @PostMapping("/plans/replace-active") @ResponseStatus(HttpStatus.CREATED) SubscriptionPlan createReplacingActive(@Valid @RequestBody PlanRequest body, Authentication auth, jakarta.servlet.http.HttpServletRequest req) {
+        SubscriptionPlan result=service.createReplacingActive(body); record(auth,req,"CREATE","SUBSCRIPTION_PLAN",result.id(),"Tạo gói " + result.code() + " và tạm dừng gói cùng nhóm"); return result;
+    }
     @PatchMapping("/plans/{id}") SubscriptionPlan update(@PathVariable UUID id,@Valid @RequestBody PlanRequest body,Authentication auth,jakarta.servlet.http.HttpServletRequest req) {
         SubscriptionPlan result=service.update(id,body); record(auth,req,"UPDATE","SUBSCRIPTION_PLAN",id,"Cập nhật gói " + result.code()); return result;
+    }
+    @PatchMapping("/plans/{id}/replace-active") SubscriptionPlan updateReplacingActive(@PathVariable UUID id,@Valid @RequestBody PlanRequest body,Authentication auth,jakarta.servlet.http.HttpServletRequest req) {
+        SubscriptionPlan result=service.updateReplacingActive(id,body); record(auth,req,"UPDATE","SUBSCRIPTION_PLAN",id,"Cập nhật gói " + result.code() + " và tạm dừng gói cùng nhóm"); return result;
     }
     @DeleteMapping("/plans/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) void delete(@PathVariable UUID id,Authentication auth,jakarta.servlet.http.HttpServletRequest req) {
         service.delete(id); record(auth,req,"DELETE","LEARNING_PLAN",id,"Xóa gói học.");

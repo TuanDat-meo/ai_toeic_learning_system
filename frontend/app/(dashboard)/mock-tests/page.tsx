@@ -9,6 +9,8 @@ import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTes
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
 import { MockTestTranscriptModal } from "@/components/admin/content/mock-tests/MockTestTranscriptModal";
 import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTestVocabModal";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentMockTestsPage() {
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2">("vol1");
@@ -131,14 +133,31 @@ export default function StudentMockTestsPage() {
     return () => clearInterval(timer);
   }, [examStarted, examSubmitted, examTimeRemaining]);
 
-  const handleStartExamNow = (_customParts?: string[], customMinutes?: number) => {
+  const handleStartExamNow = async (_customParts?: string[], customMinutes?: number) => {
     const mins = customMinutes ?? parseInt(examDurationType, 10);
-    setExamTimeRemaining(mins * 60);
-    setExamStarted(true);
-    setExamSubmitted(false);
-    setExamAnswers({});
-    setExamCurrentQIndex(0);
-    setExamResultScore(null);
+    try {
+      await consumeLearningFeature("MOCK_TEST_EXAM");
+      setExamTimeRemaining(mins * 60);
+      setExamStarted(true);
+      setExamSubmitted(false);
+      setExamAnswers({});
+      setExamCurrentQIndex(0);
+      setExamResultScore(null);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể bắt đầu thi thử.");
+    }
+  };
+
+  const handleOpenPractice = async (test: TestItem) => {
+    try {
+      await consumeLearningFeature("MOCK_TEST_PRACTICE");
+      setPracticeModalTest(test);
+      setPracticeCurrentQIndex(0);
+      setPracticeAnswers({});
+      setPracticeChecked({});
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể bắt đầu luyện tập.");
+    }
   };
 
   const handleSubmitExam = (effectiveQuestions?: PracticeQuestion[]) => {
@@ -194,11 +213,12 @@ export default function StudentMockTestsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
             <ClipboardCheck className="w-4 h-4 text-blue-600" />
             {testsVol1.length + testsVol2.length} Đề thi TOEIC Full 7 Parts
           </span>
+          <LearningQuotaBadge featureKey="MOCK_TEST" />
         </div>
       </header>
 
@@ -212,12 +232,7 @@ export default function StudentMockTestsPage() {
           setExamStarted(false);
           setExamSubmitted(false);
         }}
-        onOpenPractice={(test) => {
-          setPracticeModalTest(test);
-          setPracticeCurrentQIndex(0);
-          setPracticeAnswers({});
-          setPracticeChecked({});
-        }}
+        onOpenPractice={(test) => { void handleOpenPractice(test); }}
         onOpenTranscript={(test) => setTranscriptModalTest(test)}
         onOpenVocab={(test) => setVocabModalTest(test)}
       />

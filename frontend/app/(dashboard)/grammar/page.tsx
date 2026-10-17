@@ -9,6 +9,8 @@ import {
   GrammarTopicDetailModal,
   GrammarQuizModal,
 } from "@/components/admin/content/grammar/GrammarModals";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
@@ -17,11 +19,17 @@ export default function StudentGrammarPage() {
   const [theoryTopic, setTheoryTopic] = useState<GrammarTopicItem | null>(null);
   const [quizActive, setQuizActive] = useState<boolean>(false);
   const [activeTopicForQuiz, setActiveTopicForQuiz] = useState<GrammarTopicItem | null>(null);
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
-  const startTopicQuiz = (topic: GrammarTopicItem) => {
+  const startTopicQuiz = async (topic: GrammarTopicItem) => {
     if (topic.questions.length === 0) return;
-    setActiveTopicForQuiz(topic);
-    setQuizActive(true);
+    try {
+      await consumeLearningFeature("GRAMMAR_QUIZ");
+      setActiveTopicForQuiz(topic);
+      setQuizActive(true);
+    } catch (error) {
+      setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu bài quiz ngữ pháp.");
+    }
   };
 
   const handleRecordResult = (topicId: string, isCorrect: boolean) => {
@@ -45,6 +53,7 @@ export default function StudentGrammarPage() {
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
+      {quotaMessage ? <div role="alert" className="fixed right-5 top-5 z-[70] max-w-sm rounded-xl bg-red-700 px-4 py-3 text-xs font-semibold text-white shadow-xl">{quotaMessage}</div> : null}
       {/* Header chuẩn tối giản, thanh lịch như Admin */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
         <div>
@@ -60,11 +69,12 @@ export default function StudentGrammarPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
             <Brain className="w-4 h-4 text-blue-600" />
             {topics.length} chuyên đề ({totalQuestionsCount} câu bài tập)
           </span>
+          <LearningQuotaBadge featureKey="GRAMMAR" />
         </div>
       </header>
 
@@ -72,7 +82,7 @@ export default function StudentGrammarPage() {
       <StudentGrammarGrid
         topics={topics}
         onOpenTheory={(topic) => setTheoryTopic(topic)}
-        onStartQuiz={(topic) => startTopicQuiz(topic)}
+        onStartQuiz={(topic) => { void startTopicQuiz(topic); }}
       />
 
       {/* Modal Xem chi tiết lý thuyết (Công thức, Dấu hiệu, Bẫy, Ví dụ) */}
@@ -81,7 +91,7 @@ export default function StudentGrammarPage() {
         onClose={() => setTheoryTopic(null)}
         onStartQuiz={(topic) => {
           setTheoryTopic(null);
-          startTopicQuiz(topic);
+          void startTopicQuiz(topic);
         }}
       />
 

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record StudentPaymentTransaction(
         UUID id,
+        UUID planId,
         String transactionCode,
         String orderCode,
         String planName,

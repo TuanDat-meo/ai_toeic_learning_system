@@ -1,0 +1,123 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    if: >-
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate deployment secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_USER VPS_SSH_PRIVATE_KEY VPS_KNOWN_HOSTS VPS_APP_DIR; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required production secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy and verify on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          printf -v remote_app_dir '%q' "$VPS_APP_DIR"
+          printf -v remote_deploy_sha '%q' "$DEPLOY_SHA"
+          remote_command="APP_DIR=$remote_app_dir DEPLOY_SHA=$remote_deploy_sha bash -s"
+
+          ssh \
+            -i "$HOME/.ssh/deploy_key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "$remote_command" <<'REMOTE'
+          set -euo pipefail
+          cd "$APP_DIR"
+          trap 'docker compose logs --tail=80 frontend backend postgres || true' ERR
+
+          if [[ ! -f .env ]]; then
+            echo "Missing production .env in $APP_DIR" >&2
+            exit 1
+          fi
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Deployment checkout has local changes; refusing to overwrite them." >&2
+            exit 1
+          fi
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$DEPLOY_SHA" ]]; then
+            echo "Deployment commit mismatch: expected $DEPLOY_SHA, found $actual_sha." >&2
+            exit 1
+          fi
+
+          docker compose config --quiet
+          docker compose up -d --build
+
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent http://127.0.0.1:3000/ -o /dev/null; then
+              break
+            fi
+            if [[ "$attempt" -eq 24 ]]; then
+              echo "Frontend did not become ready in time." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          for service in postgres backend frontend; do
+            if ! docker compose ps --status running --services | grep -qx "$service"; then
+              echo "Service $service is not running." >&2
+              exit 1
+            fi
+          done
+
+          echo "Deployment of $actual_sha completed successfully."
+          REMOTE
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"

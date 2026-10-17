@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.security.SecureRandom;
 import java.util.Base64;
 
+import com.toeic.ai.toeic_api.billing.SubscriptionService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -24,10 +25,13 @@ public class UserAccountService implements UserDetailsService {
 
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
+    private final SubscriptionService subscriptionService;
 
-    public UserAccountService(JdbcTemplate jdbcTemplate, PasswordEncoder passwordEncoder) {
+    public UserAccountService(JdbcTemplate jdbcTemplate, PasswordEncoder passwordEncoder,
+            SubscriptionService subscriptionService) {
         this.jdbcTemplate = jdbcTemplate;
         this.passwordEncoder = passwordEncoder;
+        this.subscriptionService = subscriptionService;
     }
 
     @Override
@@ -174,6 +178,9 @@ public class UserAccountService implements UserDetailsService {
         jdbcTemplate.update(
                 "INSERT INTO users (id, email, password_hash, full_name, role, status) VALUES (?, ?, ?, ?, ?, 'ACTIVE')",
                 id, normalizedEmail, passwordEncoder.encode(password), fullName.trim(), role);
+        if ("STUDENT".equals(role)) {
+            subscriptionService.assignDefaultFreeSubscription(id);
+        }
         return findManagedUser(normalizedEmail);
     }
 

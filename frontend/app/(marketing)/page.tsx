@@ -7,8 +7,13 @@ import { MarketingNav } from '@/components/marketing/MarketingNav';
 import { MarketingBrand } from '@/components/marketing/MarketingBrand';
 import { RoadmapPlanner } from '@/components/marketing/RoadmapPlanner';
 import { LoginModal } from '@/components/auth/LoginModal';
-import { getAvailableLearningPlans, type SubscriptionPlan } from '@/lib/api/billing';
-import { LEARNING_CAPABILITIES } from '@/lib/learning-capabilities';
+import {
+  describePlanEntitlements,
+  getAvailableLearningFeatures,
+  getAvailableLearningPlans,
+  type LearningFeature,
+  type SubscriptionPlan,
+} from '@/lib/api/billing';
 import { GoogleAuthErrorModal } from '@/components/auth/GoogleAuthErrorModal';
 
 const learningSteps = [
@@ -16,6 +21,60 @@ const learningSteps = [
   ['02', 'Nhận lộ trình riêng', 'Ưu tiên đúng kỹ năng cần cải thiện nhất.'],
   ['03', 'Theo dõi tiến bộ', 'Điều chỉnh kế hoạch sau mỗi lần luyện tập.'],
 ];
+
+const planCategoryOrder: Record<SubscriptionPlan['planCategory'], number> = {
+  FREE: 0,
+  PRO: 1,
+  PREMIUM: 2,
+  PROMOTION: 3,
+};
+
+const planCategoryStyles: Record<SubscriptionPlan['planCategory'], {
+  card: string;
+  badge: string;
+  description: string;
+  price: string;
+  duration: string;
+  benefit: string;
+  button: string;
+}> = {
+  FREE: {
+    card: 'border-emerald-200 bg-gradient-to-b from-emerald-50 to-white shadow-emerald-100/70',
+    badge: 'bg-emerald-100 text-emerald-800',
+    description: 'text-emerald-900/70',
+    price: 'text-emerald-800',
+    duration: 'text-emerald-900/65',
+    benefit: 'text-emerald-700',
+    button: 'bg-emerald-600 text-white hover:bg-emerald-700',
+  },
+  PRO: {
+    card: 'border-blue-300 bg-gradient-to-b from-blue-50 to-white shadow-blue-100/70',
+    badge: 'bg-blue-100 text-blue-800',
+    description: 'text-blue-900/70',
+    price: 'text-blue-800',
+    duration: 'text-blue-900/65',
+    benefit: 'text-blue-700',
+    button: 'bg-blue-600 text-white hover:bg-blue-700',
+  },
+  PREMIUM: {
+    card: 'border-violet-700 bg-gradient-to-br from-slate-950 via-violet-950 to-indigo-950 text-white shadow-violet-300/40',
+    badge: 'bg-violet-300/20 text-violet-100',
+    description: 'text-violet-100/75',
+    price: 'text-white',
+    duration: 'text-violet-100/70',
+    benefit: 'text-violet-100',
+    button: 'bg-white text-violet-900 hover:bg-violet-100',
+  },
+  PROMOTION: {
+    card: 'border-amber-300 bg-gradient-to-b from-amber-50 via-orange-50 to-white shadow-amber-100/70',
+    badge: 'bg-amber-200 text-amber-900',
+    description: 'text-amber-950/70',
+    price: 'text-orange-800',
+    duration: 'text-amber-950/65',
+    benefit: 'text-amber-800',
+    button: 'bg-amber-600 text-white hover:bg-amber-700',
+  },
+};
 
 function LoginQueryTrigger({ onOpen }: { onOpen: () => void }) {
   const searchParams = useSearchParams();
@@ -39,31 +98,36 @@ export default function LandingPage() {
   const router = useRouter();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [learningPlans, setLearningPlans] = useState<SubscriptionPlan[]>([]);
+  const [featureCatalog, setFeatureCatalog] = useState<LearningFeature[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [plansError, setPlansError] = useState(false);
+  const [featuresError, setFeaturesError] = useState(false);
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
-  const loadLearningPlans = useCallback(async () => {
+  const loadLearningData = useCallback(async () => {
     setPlansLoading(true);
     setPlansError(false);
-    try {
-      setLearningPlans(await getAvailableLearningPlans());
-    } catch {
-      setPlansError(true);
-    } finally {
-      setPlansLoading(false);
-    }
+    setFeaturesError(false);
+    const [plansResult, featuresResult] = await Promise.allSettled([
+      getAvailableLearningPlans(),
+      getAvailableLearningFeatures(),
+    ]);
+    if (plansResult.status === 'fulfilled') setLearningPlans(plansResult.value);
+    else setPlansError(true);
+    if (featuresResult.status === 'fulfilled') setFeatureCatalog(featuresResult.value);
+    else setFeaturesError(true);
+    setPlansLoading(false);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-
-    getAvailableLearningPlans()
-      .then((plans) => {
-        if (!cancelled) setLearningPlans(plans);
-      })
-      .catch(() => {
-        if (!cancelled) setPlansError(true);
+    Promise.allSettled([getAvailableLearningPlans(), getAvailableLearningFeatures()])
+      .then(([plansResult, featuresResult]) => {
+        if (cancelled) return;
+        if (plansResult.status === 'fulfilled') setLearningPlans(plansResult.value);
+        else setPlansError(true);
+        if (featuresResult.status === 'fulfilled') setFeatureCatalog(featuresResult.value);
+        else setFeaturesError(true);
       })
       .finally(() => {
         if (!cancelled) setPlansLoading(false);
@@ -83,6 +147,10 @@ export default function LandingPage() {
     setGoogleAuthError(null);
     router.replace('/', { scroll: false });
   }, [router]);
+
+  const displayedPlans = [...learningPlans]
+    .sort((first, second) => planCategoryOrder[first.planCategory] - planCategoryOrder[second.planCategory])
+    .slice(0, 4);
 
   return (
     <div className="marketing-page min-h-screen flex flex-col bg-surface font-sans">
@@ -230,14 +298,35 @@ export default function LandingPage() {
         {/* Plans */}
         <section id="pricing" className="border-y border-outline-variant/20 bg-surface-container-lowest px-4 py-16 sm:px-6 sm:py-20 lg:py-24">
           <div className="mx-auto max-w-7xl"><div className="mx-auto max-w-2xl text-center"><span className="font-label-sm text-label-sm font-semibold uppercase tracking-[0.12em] text-primary">Chọn cách bắt đầu</span><h2 className="mt-3 font-headline-lg text-headline-lg font-bold">Gói học theo nhu cầu</h2><p className="mt-4 font-body-md text-body-md text-on-surface-variant">Các gói được cập nhật từ hệ thống quản lý gói học.</p></div>
-            {plansLoading ? <p role="status" className="mt-10 text-center text-sm text-on-surface-variant">Đang tải gói học…</p> : plansError ? <div className="mt-10 text-center"><p role="alert" className="text-sm text-on-surface-variant">Chưa tải được danh sách gói học.</p><button type="button" onClick={() => void loadLearningPlans()} className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary">Thử lại</button></div> : learningPlans.length === 0 ? <p className="mt-10 text-center text-sm text-on-surface-variant">Hiện chưa có gói học được phát hành.</p> : <div className="mx-auto mt-10 grid max-w-6xl gap-6 md:grid-cols-2 xl:grid-cols-3">{learningPlans.map((plan) => <article key={plan.id} className={`flex flex-col rounded-2xl border p-7 ${plan.isPopular ? 'border-2 border-primary bg-primary text-white shadow-xl shadow-primary/20' : 'border-outline-variant/30 bg-surface text-on-surface'}`}>
-              <div className="flex flex-wrap gap-2"><span className={`w-fit rounded-full px-3 py-1 font-label-sm text-label-sm font-bold ${plan.planCategory === 'PROMOTION' ? 'bg-violet-100 text-violet-800' : plan.isPopular ? 'bg-white/15 text-white' : 'bg-surface-container text-on-surface-variant'}`}>{plan.planCategory === 'PROMOTION' ? 'Ưu đãi' : plan.planCategory === 'FREE' ? 'Free' : plan.planCategory === 'PREMIUM' ? 'Premium' : 'Pro'}</span>{plan.isPopular ? <span className="w-fit rounded-full bg-tertiary-fixed px-3 py-1 font-label-sm text-label-sm font-bold text-on-tertiary-fixed">{plan.badgeTag || 'Phổ biến'}</span> : null}</div>
-              <h3 className="mt-4 font-headline-md text-headline-md font-bold">{plan.name}</h3><p className={`mt-2 min-h-10 font-body-md text-body-md ${plan.isPopular ? 'text-white/75' : 'text-on-surface-variant'}`}>{plan.badgeTag || 'Quyền học theo gói đã chọn.'}</p>
-              <p className="mt-5 text-3xl font-bold">{plan.promotionalPrice === 0 ? 'Miễn phí' : new Intl.NumberFormat('vi-VN').format(plan.promotionalPrice) + ' ₫'}</p>{plan.originalPrice > plan.promotionalPrice ? <p className={`mt-1 text-sm line-through ${plan.isPopular ? 'text-white/60' : 'text-on-surface-variant'}`}>{new Intl.NumberFormat('vi-VN').format(plan.originalPrice)} ₫</p> : null}
-              <p className={`mt-2 text-sm ${plan.isPopular ? 'text-white/75' : 'text-on-surface-variant'}`}>{plan.billingCycle === 'LIFETIME' ? 'Không hết hạn' : `${plan.durationDays} ngày kể từ khi mua thành công`}</p>
-              <ul className={`mt-6 flex-1 space-y-3 font-body-md text-body-md ${plan.isPopular ? 'text-white/85' : 'text-on-surface-variant'}`}>{plan.capabilityKeys.map((key) => <li key={key}>✓ {LEARNING_CAPABILITIES.find((item) => item.key === key)?.label ?? key}</li>)}</ul>
-              <Link href="/register" className={`mt-8 inline-flex h-11 w-full items-center justify-center rounded-lg px-5 font-label-md text-label-md font-semibold transition ${plan.isPopular ? 'bg-white text-primary hover:bg-primary-fixed' : 'border border-primary text-primary hover:bg-primary/5'}`}>Đăng ký tài khoản</Link>
-            </article>)}</div>}
+            {plansLoading ? <p role="status" className="mt-10 text-center text-sm text-on-surface-variant">Đang tải gói học…</p> : plansError ? <div className="mt-10 text-center"><p role="alert" className="text-sm text-on-surface-variant">Chưa tải được danh sách gói học.</p><button type="button" onClick={() => void loadLearningData()} className="mt-3 rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary">Thử lại</button></div> : displayedPlans.length === 0 ? <p className="mt-10 text-center text-sm text-on-surface-variant">Hiện chưa có gói học được phát hành.</p> : <div className="mx-auto mt-10 grid max-w-7xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{displayedPlans.map((plan) => {
+              const styles = planCategoryStyles[plan.planCategory];
+              const categoryName = plan.planCategory === 'PROMOTION'
+                ? 'Ưu đãi'
+                : plan.planCategory === 'FREE'
+                  ? 'Free'
+                  : plan.planCategory === 'PREMIUM'
+                    ? 'Premium'
+                    : 'Pro';
+              const benefits = describePlanEntitlements(plan, featureCatalog);
+
+              return <article key={plan.id} className={`flex min-w-0 flex-col rounded-2xl border p-5 shadow-lg ${styles.card} ${plan.isPopular ? 'ring-2 ring-primary/25' : ''}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`w-fit rounded-full px-3 py-1 font-label-sm text-label-sm font-bold ${styles.badge}`}>{categoryName}</span>
+                  {plan.isPopular ? <span className={`w-fit rounded-full px-3 py-1 font-label-sm text-label-sm font-bold ${plan.planCategory === 'PREMIUM' ? 'bg-white/15 text-white' : 'bg-primary/10 text-primary'}`}>{plan.badgeTag || 'Phổ biến'}</span> : null}
+                </div>
+                <h3 className="mt-4 break-words font-headline-md text-headline-md font-bold">{plan.name}</h3>
+                <p className={`mt-2 min-h-10 font-body-md text-body-md ${styles.description}`}>{plan.badgeTag || 'Quyền học theo gói đã chọn.'}</p>
+                <p className={`mt-5 text-3xl font-bold ${styles.price}`}>{plan.promotionalPrice === 0 ? 'Miễn phí' : new Intl.NumberFormat('vi-VN').format(plan.promotionalPrice) + ' ₫'}</p>
+                {plan.originalPrice > plan.promotionalPrice ? <p className={`mt-1 text-sm line-through ${styles.duration}`}>{new Intl.NumberFormat('vi-VN').format(plan.originalPrice)} ₫</p> : null}
+                <p className={`mt-2 text-sm ${styles.duration}`}>{plan.billingCycle === 'LIFETIME' ? 'Không hết hạn' : `${plan.durationDays} ngày kể từ khi mua thành công`}</p>
+                {featuresError ? <p className={`mt-6 flex-1 font-body-md text-body-md ${styles.description}`}>Chưa tải được danh mục quyền lợi.</p> : <ul className={`mt-6 flex-1 space-y-3 font-body-md text-body-md ${styles.description}`}>
+                  {benefits.map((benefit) => <li key={benefit} className="flex gap-2"><span aria-hidden="true" className={`font-bold ${styles.benefit}`}>✓</span><span>{benefit}</span></li>)}
+                  {benefits.length === 0 ? <li>Quyền lợi chưa được phát hành.</li> : null}
+                </ul>}
+                <Link href="/register" className={`mt-8 inline-flex h-11 w-full items-center justify-center rounded-lg px-3 text-center font-label-md text-label-md font-semibold transition ${styles.button}`}>Đăng ký tài khoản</Link>
+              </article>;
+            })}</div>}
+            {featuresError ? <p role="status" className="mt-4 text-center text-sm text-on-surface-variant">Chưa tải được danh mục quyền lợi nên thông tin chi tiết có thể chưa đầy đủ.</p> : null}
           </div>
         </section>
 
