@@ -30,15 +30,22 @@ import {
 import { getCurrentUser, logout, type AuthUser } from '@/lib/api/auth';
 import { getStudentAnnouncements } from '@/lib/api/support';
 
-const navigationItems = [
+interface NavigationItem {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  color: string;
+}
+
+const navigationItems: NavigationItem[] = [
   { label: 'Tổng quan', href: '/dashboard', icon: House, color: 'text-sky-400' },
-  { label: 'Nghe', href: null, icon: Headphones, color: 'text-violet-400' },
-  { label: 'Đọc', href: null, icon: BookOpen, color: 'text-cyan-400' },
-  { label: 'Ngữ pháp', href: null, icon: Brain, color: 'text-teal-400' },
-  { label: 'Từ vựng', href: null, icon: BookA, color: 'text-emerald-400' },
-  { label: 'Thi thử', href: null, icon: ClipboardCheck, color: 'text-orange-400' },
+  { label: 'Nghe', href: '/listening', icon: Headphones, color: 'text-violet-400' },
+  { label: 'Đọc', href: '/reading', icon: BookOpen, color: 'text-cyan-400' },
+  { label: 'Ngữ pháp', href: '/grammar', icon: Brain, color: 'text-teal-400' },
+  { label: 'Từ vựng', href: '/vocabulary', icon: BookA, color: 'text-emerald-400' },
+  { label: 'Thi thử', href: '/mock-tests', icon: ClipboardCheck, color: 'text-orange-400' },
   { label: 'Cộng đồng', href: '/community', icon: MessagesSquare, color: 'text-indigo-400' },
-] as const;
+];
 
 export function Header() {
   const router = useRouter();
@@ -46,7 +53,6 @@ export function Header() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
   const [logoutError, setLogoutError] = useState('');
-  const [currentHash, setCurrentHash] = useState('');
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
@@ -80,12 +86,7 @@ export function Header() {
     };
   }, [user, pathname]);
 
-  useEffect(() => {
-    const syncHash = () => setCurrentHash(window.location.hash.slice(1));
-    syncHash();
-    window.addEventListener('hashchange', syncHash);
-    return () => window.removeEventListener('hashchange', syncHash);
-  }, [pathname]);
+
 
   useEffect(() => {
     function closeProfileMenu(event: PointerEvent) {
@@ -126,28 +127,18 @@ export function Header() {
 
         <nav aria-label="Điều hướng học tập" className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navigationItems.map(({ label, href, icon: Icon, color }) => {
-            const [route, anchor] = href?.split('#') ?? [];
-            const active = route
-              ? pathname === route && (anchor ? currentHash === anchor : currentHash !== 'community')
-              : false;
+            const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
             const className = `inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold transition sm:px-3.5 sm:text-sm ${
               active
                 ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/10'
-                : href
-                  ? 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
-                  : 'cursor-not-allowed text-on-surface-variant/80'
+                : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
             }`;
 
-            return href ? (
+            return (
               <Link key={label} href={href} aria-current={active ? 'page' : undefined} className={className}>
                 <Icon className={`size-[17px] shrink-0 ${color}`} aria-hidden="true" />
                 <span>{label}</span>
               </Link>
-            ) : (
-              <span key={label} aria-disabled="true" title="Tính năng đang được phát triển" className={className}>
-                <Icon className={`size-[17px] shrink-0 ${color}`} aria-hidden="true" />
-                <span>{label}</span>
-              </span>
             );
           })}
           <details className="group relative shrink-0">

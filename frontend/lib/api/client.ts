@@ -47,11 +47,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       }
       throw new ApiRequestError('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.', 401);
     }
-    if (response.status === 403) throw new ApiRequestError('Bạn không có quyền thực hiện thao tác này.', 403);
-    throw new ApiRequestError(
-      payload?.detail || payload?.message || 'Yêu cầu chưa thể xử lý. Vui lòng thử lại.',
-      response.status,
-    );
+    if (response.status === 403) {
+      if (path === '/api/auth/me') {
+        throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
+      }
+      throw new Error('Bạn không có quyền thực hiện thao tác này.');
+    }
+    throw new Error(payload?.detail || payload?.message || 'Yêu cầu chưa thể xử lý. Vui lòng thử lại.');
   }
 
   return payload as T;

@@ -16,6 +16,8 @@ import {
   Clock,
 } from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/grammar/types";
+import { saveItemProgress } from "@/lib/practiceProgress";
+import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 
 // ==========================================
 // 1. MODAL XEM CHI TIẾT CHỦ ĐIỂM NGỮ PHÁP
@@ -631,8 +633,11 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
       setScore((prev) => prev + 1);
     }
 
-    if (activeTopic && onRecordResult) {
-      onRecordResult(activeTopic.id, isCorrect);
+    if (activeTopic) {
+      saveItemProgress(`grammar-${activeTopic.id}`, currentIndex + 1, questions.length);
+      if (onRecordResult) {
+        onRecordResult(activeTopic.id, isCorrect);
+      }
     }
   };
 
@@ -865,11 +870,26 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
 
         {!quizFinished && (
           <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-            <span className="text-xs text-slate-500 font-medium">
-              {isAnswerChecked
-                ? `Đã hoàn thành câu ${currentIndex + 1}/${questions.length}`
-                : "Chọn 1 đáp án để kiểm tra ngay"}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500 font-medium">
+                {isAnswerChecked
+                  ? `Đã hoàn thành câu ${currentIndex + 1}/${questions.length}`
+                  : "Chọn 1 đáp án để kiểm tra ngay"}
+              </span>
+              <QuestionErrorReportButton
+                source="QUESTION_BANK"
+                questionRef={String(currentQ.id || `grammar-${activeTopic?.id || 'quiz'}-${currentIndex + 1}`)}
+                relatedContent={`Ngữ pháp: ${activeTopic?.title || title || 'Quiz'} - Câu ${currentIndex + 1}`}
+                questionSnapshot={{
+                  questionText: currentQ.questionText,
+                  options: currentQ.options,
+                  correctAnswer: currentQ.correctAnswer,
+                  explanation: currentQ.explanation,
+                  topicTitle: activeTopic?.title || title,
+                }}
+                compact
+              />
+            </div>
 
             <div className="flex items-center gap-2.5">
               {isAnswerChecked && (

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { ExerciseCardData, ReadingSubPassage, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
+import { saveItemProgress } from "@/lib/practiceProgress";
 import {
   ArrowLeft,
   Languages,
@@ -124,14 +125,56 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   }, [currentGroup]);
 
   // Track user selections: globalIndex -> selected option index
-  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.answers || {};
+      }
+    } catch {}
+    return {};
+  });
   
   // Track checked state: groupIndex -> boolean
-  const [checkedGroups, setCheckedGroups] = useState<Record<number, boolean>>({});
+  const [checkedGroups, setCheckedGroups] = useState<Record<number, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.checkedGroups || {};
+      }
+    } catch {}
+    return {};
+  });
   const isCurrentGroupChecked = !!checkedGroups[currentGroupIndex];
 
-  const [sessionCorrectCount, setSessionCorrectCount] = useState(0);
-  const [sessionWrongCount, setSessionWrongCount] = useState(0);
+  const [sessionCorrectCount, setSessionCorrectCount] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.correctCount || 0;
+      }
+    } catch {}
+    return 0;
+  });
+
+  const [sessionWrongCount, setSessionWrongCount] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.wrongCount || 0;
+      }
+    } catch {}
+    return 0;
+  });
+
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [energyScore, setEnergyScore] = useState(0);
 
@@ -213,44 +256,100 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         (item) => nextAnswers[item.globalIndex] !== undefined
       );
 
-      if (allDone) {
-        setCheckedGroups((prev) => ({ ...prev, [currentGroupIndex]: true }));
+      let nextCorrect = sessionCorrectCount;
+      let nextWrong = sessionWrongCount;
+      const nextChecked = { ...checkedGroups };
 
-        let correctCount = 0;
+      if (allDone) {
+        nextChecked[currentGroupIndex] = true;
+        setCheckedGroups(nextChecked);
+
+        let groupCorrect = 0;
         currentGroup.questions.forEach((item) => {
           const selected = nextAnswers[item.globalIndex];
           if (selected === item.question.correctIndex) {
-            correctCount++;
+            groupCorrect++;
           }
         });
 
-        const addedScore = correctCount * 10;
-        setEnergyScore((prev) => prev + addedScore);
-        setSessionCorrectCount((prev) => prev + correctCount);
-        setSessionWrongCount((prev) => prev + (currentGroup.questions.length - correctCount));
+        nextCorrect += groupCorrect;
+        nextWrong += (currentGroup.questions.length - groupCorrect);
 
-        if (correctCount === currentGroup.questions.length) {
+        const addedScore = groupCorrect * 10;
+        setEnergyScore((prev) => prev + addedScore);
+        setSessionCorrectCount(nextCorrect);
+        setSessionWrongCount(nextWrong);
+
+        if (groupCorrect === currentGroup.questions.length) {
           if (isSfxEnabled) playSfx("correct");
-          showToast(`Xuất sắc! Đúng cả ${correctCount}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
+          showToast(`Xuất sắc! Đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
         } else {
           if (isSfxEnabled) playSfx("wrong");
-          showToast(`Đúng ${correctCount}/${currentGroup.questions.length} câu. Đã hiển thị giải thích chi tiết ở dưới!`);
+          showToast(`Đúng ${groupCorrect}/${currentGroup.questions.length} câu. Đã hiển thị giải thích chi tiết ở dưới!`);
         }
       }
+
+      saveItemProgress(
+        `reading-${card.id}`,
+        Object.keys(nextAnswers).length,
+        card.totalQuestions || card.sampleQuestions.length,
+        undefined,
+        nextCorrect,
+        nextWrong
+      );
+
+      try {
+        localStorage.setItem(
+          `toeic_reading_answers_${card.id}`,
+          JSON.stringify({
+            answers: nextAnswers,
+            checkedGroups: nextChecked,
+            correctCount: nextCorrect,
+            wrongCount: nextWrong,
+          })
+        );
+      } catch {}
     } else {
       // For single-question items (Part 5): select and check immediately
-      setUserAnswers((prev) => ({ ...prev, [globalIndex]: optIdx }));
-      setCheckedGroups((prev) => ({ ...prev, [currentGroupIndex]: true }));
-
       const correct = optIdx === correctIdx;
+      const nextCorrect = correct ? sessionCorrectCount + 1 : sessionCorrectCount;
+      const nextWrong = !correct ? sessionWrongCount + 1 : sessionWrongCount;
+
+      const nextAnswers = { ...userAnswers, [globalIndex]: optIdx };
+      const nextChecked = { ...checkedGroups, [currentGroupIndex]: true };
+
+      setUserAnswers(nextAnswers);
+      setCheckedGroups(nextChecked);
+      setSessionCorrectCount(nextCorrect);
+      setSessionWrongCount(nextWrong);
+
+      saveItemProgress(
+        `reading-${card.id}`,
+        Object.keys(nextAnswers).length,
+        card.totalQuestions || card.sampleQuestions.length,
+        undefined,
+        nextCorrect,
+        nextWrong
+      );
+
+      try {
+        localStorage.setItem(
+          `toeic_reading_answers_${card.id}`,
+          JSON.stringify({
+            answers: nextAnswers,
+            checkedGroups: nextChecked,
+            correctCount: nextCorrect,
+            wrongCount: nextWrong,
+          })
+        );
+      } catch {}
+
       if (correct) {
         if (isSfxEnabled) playSfx("correct");
-        setSessionCorrectCount((prev) => prev + 1);
         setEnergyScore((prev) => prev + 10);
         showToast("Chính xác! +10 Năng lượng ⚡");
       } else {
         if (isSfxEnabled) playSfx("wrong");
-        setSessionWrongCount((prev) => prev + 1);
         showToast("Chưa đúng rồi! Hãy xem giải thích chi tiết ở dưới.");
       }
     }
@@ -263,40 +362,85 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       return;
     }
 
-    setCheckedGroups((prev) => ({ ...prev, [currentGroupIndex]: true }));
+    const nextChecked = { ...checkedGroups, [currentGroupIndex]: true };
+    setCheckedGroups(nextChecked);
 
-    let correctCount = 0;
+    let groupCorrect = 0;
     currentGroup.questions.forEach((item) => {
       const selected = userAnswers[item.globalIndex];
       if (selected === item.question.correctIndex) {
-        correctCount++;
+        groupCorrect++;
       }
     });
 
-    const addedScore = correctCount * 10;
+    const nextCorrect = sessionCorrectCount + groupCorrect;
+    const nextWrong = sessionWrongCount + (currentGroup.questions.length - groupCorrect);
+    const addedScore = groupCorrect * 10;
     setEnergyScore((prev) => prev + addedScore);
-    setSessionCorrectCount((prev) => prev + correctCount);
-    setSessionWrongCount((prev) => prev + (currentGroup.questions.length - correctCount));
+    setSessionCorrectCount(nextCorrect);
+    setSessionWrongCount(nextWrong);
 
-    if (correctCount === currentGroup.questions.length) {
+    saveItemProgress(
+      `reading-${card.id}`,
+      Object.keys(userAnswers).length,
+      card.totalQuestions || card.sampleQuestions.length,
+      undefined,
+      nextCorrect,
+      nextWrong
+    );
+
+    try {
+      localStorage.setItem(
+        `toeic_reading_answers_${card.id}`,
+        JSON.stringify({
+          answers: userAnswers,
+          checkedGroups: nextChecked,
+          correctCount: nextCorrect,
+          wrongCount: nextWrong,
+        })
+      );
+    } catch {}
+
+    if (groupCorrect === currentGroup.questions.length) {
       if (isSfxEnabled) playSfx("correct");
-      showToast(`Xuất sắc! Bạn làm đúng cả ${correctCount}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
+      showToast(`Xuất sắc! Bạn làm đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
     } else {
       if (isSfxEnabled) playSfx("wrong");
-      showToast(`Đúng ${correctCount}/${currentGroup.questions.length} câu. Hãy xem giải thích chi tiết ở dưới nhé!`);
+      showToast(`Đúng ${groupCorrect}/${currentGroup.questions.length} câu. Hãy xem giải thích chi tiết ở dưới nhé!`);
     }
   };
 
   const handleResetCurrentGroup = () => {
     if (!currentGroup) return;
-    setCheckedGroups((prev) => ({ ...prev, [currentGroupIndex]: false }));
-    setUserAnswers((prev) => {
-      const next = { ...prev };
-      currentGroup.questions.forEach((item) => {
-        delete next[item.globalIndex];
-      });
-      return next;
+    const nextChecked = { ...checkedGroups, [currentGroupIndex]: false };
+    const nextAnswers = { ...userAnswers };
+    currentGroup.questions.forEach((item) => {
+      delete nextAnswers[item.globalIndex];
     });
+
+    setCheckedGroups(nextChecked);
+    setUserAnswers(nextAnswers);
+
+    saveItemProgress(
+      `reading-${card.id}`,
+      Object.keys(nextAnswers).length,
+      card.totalQuestions || card.sampleQuestions.length,
+      undefined,
+      sessionCorrectCount,
+      sessionWrongCount
+    );
+
+    try {
+      localStorage.setItem(
+        `toeic_reading_answers_${card.id}`,
+        JSON.stringify({
+          answers: nextAnswers,
+          checkedGroups: nextChecked,
+          correctCount: sessionCorrectCount,
+          wrongCount: sessionWrongCount,
+        })
+      );
+    } catch {}
     showToast("Đã đặt lại để bạn làm lại bài tập đoạn này! ↺");
   };
 

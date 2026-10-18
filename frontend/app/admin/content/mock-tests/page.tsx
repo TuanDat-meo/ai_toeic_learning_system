@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { TestItem } from "./types";
+import { TestItem, PracticeQuestion } from "./types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "./mockData";
 
 import {
@@ -187,11 +187,11 @@ export default function AdminMockTestsPage() {
         list.map((t) =>
           t.id === editingTest.id
             ? {
-                ...t,
-                title: testFormTitle.trim(),
-                volId: testFormVolId,
-                difficulty: testFormDifficulty,
-              }
+              ...t,
+              title: testFormTitle.trim(),
+              volId: testFormVolId,
+              difficulty: testFormDifficulty,
+            }
             : t
         );
       if (editingTest.volId === "vol1") setTestsVol1(updateFn);
@@ -248,24 +248,42 @@ export default function AdminMockTestsPage() {
     }
   };
 
-  const handleStartExamNow = () => {
+  const handleStartExamNow = (_customParts?: string[], customMinutes?: number) => {
     setExamStarted(true);
-    const secs =
-      examDurationType === "120" ? 120 * 60 : examDurationType === "60" ? 60 * 60 : 30 * 60;
+    const secs = customMinutes
+      ? customMinutes * 60
+      : examDurationType === "120"
+        ? 120 * 60
+        : examDurationType === "60"
+          ? 60 * 60
+          : 30 * 60;
     setExamTimeRemaining(secs);
+    setExamSubmitted(false);
+    setExamAnswers({});
+    setExamCurrentQIndex(0);
+    setExamResultScore(null);
     triggerToast("Bắt đầu tính giờ thi thử!");
   };
 
-  const handleSubmitExam = () => {
+  const handleSubmitExam = (effectiveQuestions?: PracticeQuestion[]) => {
     setExamSubmitted(true);
+    const questionsToGrade = effectiveQuestions && effectiveQuestions.length > 0 ? effectiveQuestions : SAMPLE_EXAM_QUESTIONS;
     let correct = 0;
-    SAMPLE_EXAM_QUESTIONS.forEach((q) => {
-      if (examAnswers[q.id] === q.correctAnswer) correct++;
+    let correctLC = 0;
+    let correctRC = 0;
+    questionsToGrade.forEach((q) => {
+      if (examAnswers[q.id] === q.correctAnswer) {
+        correct++;
+        const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(q.part);
+        if (isListening) correctLC++;
+        else correctRC++;
+      }
     });
 
-    const scaledListening = Math.min(495, Math.round((correct / SAMPLE_EXAM_QUESTIONS.length) * 490) + 10);
-    const scaledReading = Math.min(495, Math.round((correct / SAMPLE_EXAM_QUESTIONS.length) * 480) + 15);
-    const totalScore = scaledListening + scaledReading;
+    const isFullScale = questionsToGrade.length >= 200;
+    const scaledListening = isFullScale ? Math.min(495, correctLC * 5) : correctLC * 5;
+    const scaledReading = isFullScale ? Math.min(495, correctRC * 5) : correctRC * 5;
+    const totalScore = isFullScale ? Math.min(990, scaledListening + scaledReading) : correct * 5;
 
     const result = {
       total: totalScore,
@@ -277,17 +295,18 @@ export default function AdminMockTestsPage() {
     playSfx("correct");
 
     if (examModalTest) {
+      const maxTotal = isFullScale ? 990 : questionsToGrade.length * 5;
       const updateFn = (list: TestItem[]) =>
         list.map((t) =>
           t.id === examModalTest.id
             ? {
-                ...t,
-                score: totalScore,
-                listeningScore: scaledListening,
-                readingScore: scaledReading,
-                status: `Đã hoàn thành (${totalScore}/990)`,
-                completedAt: "Vừa xong",
-              }
+              ...t,
+              score: totalScore,
+              listeningScore: scaledListening,
+              readingScore: scaledReading,
+              status: `Đã hoàn thành (${totalScore}/${maxTotal})`,
+              completedAt: "Vừa xong",
+            }
             : t
         );
       if (examModalTest.volId === "vol1") setTestsVol1(updateFn);
@@ -465,14 +484,14 @@ export default function AdminMockTestsPage() {
               prev.map((t) =>
                 t.id === testId
                   ? {
-                      ...t,
-                      score: null,
-                      listeningScore: null,
-                      readingScore: null,
-                      status: "Chưa luyện tập",
-                      completedAt: null,
-                      historyAttempts: [],
-                    }
+                    ...t,
+                    score: null,
+                    listeningScore: null,
+                    readingScore: null,
+                    status: "Chưa luyện tập",
+                    completedAt: null,
+                    historyAttempts: [],
+                  }
                   : t
               );
             if (historyModalTest.volId === "vol1") setTestsVol1(clearFn);
