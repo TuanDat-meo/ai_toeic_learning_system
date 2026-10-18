@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { QuestionItem, QuestionPart, QuestionDifficulty } from "./types";
 import { INITIAL_QUESTIONS } from "./mockData";
 import { QuestionFilterBar } from "@/components/admin/content/questions/QuestionFilterBar";
@@ -13,6 +13,50 @@ import { QuestionDeleteModal } from "@/components/admin/content/questions/Questi
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<QuestionItem[]>(INITIAL_QUESTIONS);
+
+  // Toast Notification
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2800);
+  };
+
+  // Web Audio SFX
+  const playSfx = (type?: "correct" | "wrong" | "click" | string) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(type === "click" ? 440 : 520, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.08);
+    } catch {}
+  };
+
+  // Audio Speech Synthesis
+  const playAudio = (text: string) => {
+    if (!text?.trim()) return;
+    if (text.startsWith("http://") || text.startsWith("https://")) {
+      const audio = new Audio(text);
+      audio.play().catch(() => {});
+      return;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filters & Views
   const [selectedPart, setSelectedPart] = useState<QuestionPart | "ALL">("ALL");
@@ -183,10 +227,93 @@ export default function QuestionsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast("Đã xuất danh sách câu hỏi ra tệp CSV thành công! 📊");
+  };
+
+  const handleImportCsvClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) return;
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length <= 1) {
+          showToast("File CSV không có dữ liệu!");
+          return;
+        }
+        let addedCount = 0;
+        const importedQuestions: QuestionItem[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
+          if (cols.length >= 5) {
+            const code = cols[0] || `IMPORT-${Math.floor(100 + Math.random() * 900)}`;
+            const part = (cols[1] || "Part 5") as QuestionPart;
+            const skill = cols[2] || "Grammar";
+            const difficulty = (cols[3] || "Medium") as QuestionDifficulty;
+            const questionText = cols[4] || "";
+            const correctAnswer = cols[5] || "A";
+            const status = (cols[6] === "PUBLISHED" ? "PUBLISHED" : "DRAFT") as "PUBLISHED" | "DRAFT";
+
+            if (questionText) {
+              importedQuestions.push({
+                id: `q-csv-${Date.now()}-${i}`,
+                code,
+                part,
+                skill,
+                difficulty,
+                questionText,
+                options: [
+                  { id: "A", text: "Option A", isCorrect: correctAnswer === "A" },
+                  { id: "B", text: "Option B", isCorrect: correctAnswer === "B" },
+                  { id: "C", text: "Option C", isCorrect: correctAnswer === "C" },
+                  { id: "D", text: "Option D", isCorrect: correctAnswer === "D" },
+                ],
+                correctAnswer,
+                explanation: "Câu hỏi được nhập tự động từ tệp CSV.",
+                status,
+              });
+              addedCount++;
+            }
+          }
+        }
+        if (addedCount > 0) {
+          setQuestions((prev) => [...importedQuestions, ...prev]);
+          showToast(`Đã nhập thành công ${addedCount} câu hỏi từ CSV! 🎉`);
+        } else {
+          showToast("Không tìm thấy dòng dữ liệu hợp lệ trong file CSV!");
+        }
+      } catch {
+        showToast("Lỗi khi đọc file CSV, vui lòng kiểm tra định dạng!");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   return (
     <div className="space-y-6">
+      {/* Toast thông báo */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 bg-slate-900/95 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-xl border border-slate-700 animate-in fade-in slide-in-from-top-3">
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Hidden file input for CSV Import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleCsvFileChange}
+        accept=".csv"
+        className="hidden"
+      />
+
       {/* Header & Filter Bar */}
       <QuestionFilterBar
         selectedPartTab={selectedPart}
@@ -205,6 +332,9 @@ export default function QuestionsPage() {
         onBulkDelete={() => setBulkDeleteConfirm(true)}
         onOpenCreateModal={openAddModal}
         onExportCsv={handleExportCsv}
+        onImportCsvClick={handleImportCsvClick}
+        playSfx={playSfx}
+        showToast={showToast}
       />
 
       {/* Main Content View */}
@@ -217,6 +347,7 @@ export default function QuestionsPage() {
           onPreview={openPreviewModal}
           onEdit={openEditModal}
           onDelete={(q) => setDeleteConfirmQuestion(q)}
+          playSfx={playSfx}
         />
       ) : (
         <QuestionCardGridView
@@ -226,6 +357,7 @@ export default function QuestionsPage() {
           onPreview={openPreviewModal}
           onEdit={openEditModal}
           onDelete={(q) => setDeleteConfirmQuestion(q)}
+          playSfx={playSfx}
         />
       )}
 
@@ -233,6 +365,9 @@ export default function QuestionsPage() {
       <QuestionPreviewModal
         question={previewQuestion}
         onClose={() => setPreviewQuestion(null)}
+        playSfx={playSfx}
+        playAudio={playAudio}
+        showToast={showToast}
       />
 
       {/* Add / Edit Question Modal */}

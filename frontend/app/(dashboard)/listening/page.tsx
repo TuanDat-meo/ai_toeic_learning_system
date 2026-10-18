@@ -78,6 +78,17 @@ export default function StudentListeningPage() {
   const [savedVocabBag, setSavedVocabBag] = useState<string[]>([]);
   const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>([]);
 
+  // ✅ FIX 1: Ghi chú & Lưới câu hỏi — có state thật, không còn hàm rỗng
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
+
+  // ✅ FIX 2: Toast thông báo — có state thật, hiển thị được
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2800);
+  };
+
   // Audio synthesis
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
@@ -147,6 +158,13 @@ export default function StudentListeningPage() {
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
       {quotaMessage ? <div role="alert" className="fixed right-5 top-5 z-[70] max-w-sm rounded-xl bg-red-700 px-4 py-3 text-xs font-semibold text-white shadow-xl">{quotaMessage}</div> : null}
+      {/* ✅ Toast thông báo — hiển thị đúng */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 bg-slate-900/95 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-xl border border-slate-700 animate-in fade-in slide-in-from-top-3">
+          {toastMessage}
+        </div>
+      )}
+
       {/* Header chuẩn tối giản, thanh lịch như Admin */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
         <div>
@@ -207,6 +225,8 @@ export default function StudentListeningPage() {
             void startActivity("LISTENING_DICTATION", () => {
               setDictationModalCard(card);
               setActiveDictationQIndex(0);
+              setDictationUserInputs({});
+              setDictationChecked({});
             });
           }}
         />
@@ -307,11 +327,11 @@ export default function StudentListeningPage() {
           setAudioSpeed={setAudioSpeed}
           flaggedReviewIds={flaggedReviewIds}
           handleToggleFlagReview={handleToggleFlagReview}
-          setIsNotesModalOpen={() => {}}
-          setIsQuestionGridOpen={() => {}}
+          setIsNotesModalOpen={setIsNotesModalOpen}
+          setIsQuestionGridOpen={setIsQuestionGridOpen}
           playSfx={playSfx}
           playAudio={playAudio}
-          triggerToast={() => {}}
+          triggerToast={triggerToast}
         />
       )}
 
@@ -336,7 +356,7 @@ export default function StudentListeningPage() {
           handleToggleFlagReview={handleToggleFlagReview}
           playSfx={playSfx}
           playAudio={playAudio}
-          triggerToast={() => {}}
+          triggerToast={triggerToast}
           setPart1Levels={setPart1Levels}
           setPart1Categories={setPart1Categories}
           setPart2Levels={setPart2Levels}

@@ -243,7 +243,7 @@ export default function ListeningPage() {
   const handleSaveLevel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!levelFormTitle.trim()) {
-      alert("Vui lòng nhập tên chủ điểm!");
+      triggerToast("Vui lòng nhập tên chủ điểm!");
       return;
     }
     const rulesArray = levelFormRules.split("\n").map((r) => r.trim()).filter(Boolean);

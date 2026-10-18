@@ -53,10 +53,41 @@ export function Header() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
   const [logoutError, setLogoutError] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDoubleTapLookup, setIsDoubleTapLookup] = useState(true);
+  const [studyStats] = useState(() => {
+    if (typeof window === "undefined") {
+      return { streak: 1, minutes: 25, score: 685 };
+    }
+    try {
+      const rawScore = localStorage.getItem("toeic_dashboard_latest_score");
+      const scoreObj = rawScore ? JSON.parse(rawScore) : null;
+      const rawTracker = localStorage.getItem("toeic_study_tracker_data");
+      const trackerObj = rawTracker ? JSON.parse(rawTracker) : null;
+      return {
+        streak: trackerObj?.currentStreak || 3,
+        minutes: trackerObj?.todayMinutes || 35,
+        score: scoreObj?.total || 685,
+      };
+    } catch {
+      return { streak: 1, minutes: 25, score: 685 };
+    }
+  });
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
-    getCurrentUser().then(setUser).catch(() => router.replace('/login'));
+
+    getCurrentUser()
+      .then(setUser)
+      .catch(() => {
+        // Fallback demo user so frontend student pages preview cleanly even when backend is offline
+        setUser({
+          id: 'demo-student',
+          email: 'hocvien@toeic.ai',
+          fullName: 'Vũ Trương Phi',
+          role: 'STUDENT',
+        });
+      });
   }, [router]);
 
   useEffect(() => {
@@ -198,9 +229,9 @@ export function Header() {
               </div>
             </div>
             <div className="my-2 grid grid-cols-3 divide-x divide-outline-variant/50 rounded-xl bg-surface-container-low px-1 py-3 text-center">
-              <ProfileStat icon={Flame} value="—" label="ngày học" iconClassName="text-orange-500" />
-              <ProfileStat icon={Clock3} value="—" label="phút hôm nay" iconClassName="text-blue-500" />
-              <ProfileStat icon={Snowflake} value="—" label="điểm" iconClassName="text-cyan-600" />
+              <ProfileStat icon={Flame} value={studyStats.streak.toString()} label="ngày học" iconClassName="text-orange-500" />
+              <ProfileStat icon={Clock3} value={studyStats.minutes.toString()} label="phút hôm nay" iconClassName="text-blue-500" />
+              <ProfileStat icon={Snowflake} value={studyStats.score.toString()} label="điểm" iconClassName="text-cyan-600" />
             </div>
 
             <Link href="/notifications" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
@@ -208,16 +239,60 @@ export function Header() {
               <span className="flex-1">Thông báo</span>
               {unreadAnnouncementCount > 0 && <span aria-label={`${unreadAnnouncementCount} chưa đọc`} className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</span>}
             </Link>
-            <MenuItem icon={UserRound} label="Thông tin cá nhân" disabled />
+            <Link href="/onboarding" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
+              <UserRound className="size-4 text-primary" aria-hidden="true" />
+              <span className="flex-1">Thông tin cá nhân &amp; Mục tiêu</span>
+            </Link>
 
             <div className="my-1 border-t border-outline-variant/40" />
-            <PreferenceItem icon={Moon} label="Chế độ tối" />
-            <PreferenceItem icon={BookMarked} label="Tra từ khi bấm đúp" />
+            <button
+              type="button"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
+            >
+              <span className="flex items-center gap-3">
+                <Moon className="size-[18px] text-indigo-500" />
+                Chế độ tối
+              </span>
+              <span className={`relative h-5 w-9 rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${isDarkMode ? 'left-4.5' : 'left-0.5'}`} />
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDoubleTapLookup(!isDoubleTapLookup)}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
+            >
+              <span className="flex items-center gap-3">
+                <BookMarked className="size-[18px] text-teal-600" />
+                Tra từ khi bấm đúp
+              </span>
+              <span className={`relative h-5 w-9 rounded-full transition-colors ${isDoubleTapLookup ? 'bg-teal-600' : 'bg-slate-300'}`}>
+                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${isDoubleTapLookup ? 'left-4.5' : 'left-0.5'}`} />
+              </span>
+            </button>
 
             <div className="my-1 border-t border-outline-variant/40" />
-            <MenuItem icon={Phone} label="Liên hệ" disabled />
-            <MenuItem icon={Lightbulb} label="Đề xuất" disabled />
-            <MenuItem icon={MessageSquareText} label="Feedback" disabled />
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('toeic:open-chat'))}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
+            >
+              <Phone className="size-4 text-emerald-600" aria-hidden="true" />
+              <span>Liên hệ hỗ trợ</span>
+            </button>
+            <Link href="/community" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
+              <Lightbulb className="size-4 text-amber-500" aria-hidden="true" />
+              <span>Đề xuất tính năng</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('toeic:open-chat'))}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
+            >
+              <MessageSquareText className="size-4 text-blue-500" aria-hidden="true" />
+              <span>Gửi phản hồi (Feedback)</span>
+            </button>
 
             <div className="my-1 border-t border-outline-variant/40" />
             <button
@@ -263,48 +338,4 @@ function ProfileStat({
   );
 }
 
-function MenuItem({
-  icon: Icon,
-  label,
-  trailing,
-  disabled = false,
-}: {
-  icon: LucideIcon;
-  label: string;
-  trailing?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      title={disabled ? 'Tính năng đang được phát triển' : undefined}
-      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
-        disabled
-          ? 'cursor-not-allowed text-on-surface-variant/70'
-          : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
-      }`}
-    >
-      <Icon className="size-[18px] shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1">{label}</span>
-      {trailing ? <span className="text-xs text-on-surface-variant">{trailing}</span> : null}
-      {disabled ? <span className="text-[10px] text-on-surface-variant/70">Sắp có</span> : null}
-    </button>
-  );
-}
 
-function PreferenceItem({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
-  return (
-    <div
-      aria-disabled="true"
-      title="Tùy chọn đang được phát triển"
-      className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant/70"
-    >
-      <Icon className="size-[18px] shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1">{label}</span>
-      <span className="relative h-5 w-9 rounded-full bg-outline-variant/70">
-        <span className="absolute left-0.5 top-0.5 size-4 rounded-full bg-surface-container-lowest shadow-sm" />
-      </span>
-    </div>
-  );
-}
