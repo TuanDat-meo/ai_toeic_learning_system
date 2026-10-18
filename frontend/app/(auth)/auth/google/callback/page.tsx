@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getCurrentUser } from '@/lib/api/auth';
+import { getCurrentUser, getHomePathForRole } from '@/lib/api/auth';
 
 export default function GoogleCallbackPage() {
   return (
@@ -25,7 +25,7 @@ function GoogleCallbackContent() {
     }
 
     getCurrentUser()
-      .then((user) => router.replace(user.role === 'ADMIN' ? '/admin/overview' : '/dashboard'))
+      .then((user) => router.replace(getHomePathForRole(user.role)))
       .catch(() => router.replace('/?authError=callback_failed'));
   }, [errorCode, router]);
 

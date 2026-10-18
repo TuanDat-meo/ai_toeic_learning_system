@@ -52,7 +52,7 @@ public class CommunityController {
     public void delete(@PathVariable UUID id, Authentication auth) {
         assertStudentCanUseCommunity(auth);
         var user = users.findManagedUser(auth.getName());
-        community.delete(id, user.id(), "ADMIN".equals(user.role()));
+        community.delete(id, user.id(), "ADMIN".equals(user.role()) || "TEACHER".equals(user.role()));
     }
 
     @GetMapping("/api/community/posts/{id}/comments")

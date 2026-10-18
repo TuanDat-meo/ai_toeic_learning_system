@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getCurrentUser, type AuthUser } from "@/lib/api/auth";
 import { 
   LayoutDashboard, 
   BookA,
@@ -68,6 +70,30 @@ const navGroups = [
 
 export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const [role, setRole] = useState<AuthUser["role"] | null>(null);
+  const [roleLoadFailed, setRoleLoadFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getCurrentUser()
+      .then((user) => {
+        if (active) setRole(user.role);
+      })
+      .catch(() => {
+        if (active) setRoleLoadFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visibleGroups = role === "TEACHER"
+    ? navGroups
+        .filter((group) => group.title === "Nội dung" || group.title === "Chăm sóc" || group.title === "Hệ thống")
+        .map((group) => group.title === "Hệ thống"
+          ? { ...group, title: "Cài đặt", items: group.items.filter((item) => item.href === "/admin/settings") }
+          : group)
+    : role === "ADMIN" ? navGroups : [];
 
   return (
     <>
@@ -89,7 +115,11 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
         <nav className="space-y-6">
-          {navGroups.map((group) => (
+          {roleLoadFailed ? (
+            <p role="alert" className="px-2 text-xs text-rose-700">Không thể tải quyền điều hướng.</p>
+          ) : role === null ? (
+            <p role="status" className="px-2 text-xs text-slate-500">Đang tải điều hướng...</p>
+          ) : visibleGroups.map((group) => (
             <div key={group.title} className="space-y-2">
               <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 {group.title}
