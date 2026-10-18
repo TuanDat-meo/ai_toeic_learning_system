@@ -82,8 +82,10 @@ const formatDate = (value: string | null) => {
 const transactionStatus: Record<StudentPaymentTransaction["status"], { label: string; style: string }> = {
   SUCCESS: { label: "Thành công", style: "bg-emerald-50 text-emerald-700" },
   PENDING: { label: "Đang chờ thanh toán", style: "bg-amber-50 text-amber-700" },
-  FAILED: { label: "Thất bại", style: "bg-rose-50 text-rose-700" },
+  FAILED: { label: "Thanh toán thất bại", style: "bg-rose-50 text-rose-700" },
   REFUNDED: { label: "Đã hoàn tiền", style: "bg-violet-50 text-violet-700" },
+  EXPIRED: { label: "Đăng ký thất bại — hóa đơn quá hạn", style: "bg-slate-100 text-slate-700" },
+  REVIEW_REQUIRED: { label: "Đang kiểm tra giao dịch", style: "bg-orange-50 text-orange-800" },
 };
 
 const paymentMethod: Record<string, string> = {
@@ -116,7 +118,6 @@ export function StudentBillingView() {
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [refreshingQr, setRefreshingQr] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const autoRefreshAttempted = useRef(false);
   const qrRefreshInProgress = useRef(false);
   const notifiedPaymentTransactionIds = useRef(new Set<string>());
 
@@ -182,10 +183,9 @@ export function StudentBillingView() {
     setCheckoutError("");
     try {
       const result = await createStudentPaymentOrder(selectedPlan.id);
-      autoRefreshAttempted.current = false;
       setCheckout(result);
       setResumingTransactionId(null);
-      setRemainingSeconds(getRemainingSeconds(result.qrExpiresAt));
+      setRemainingSeconds(getRemainingSeconds(result.expiresAt));
       setIsCheckoutModalOpen(true);
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "Không thể tạo đơn thanh toán. Vui lòng thử lại.");
@@ -201,10 +201,9 @@ export function StudentBillingView() {
     setCheckoutError("");
     try {
       const result = await refreshStudentPaymentQr(transactionId);
-      autoRefreshAttempted.current = false;
       setCheckout(result);
       setResumingTransactionId(null);
-      setRemainingSeconds(getRemainingSeconds(result.qrExpiresAt));
+      setRemainingSeconds(getRemainingSeconds(result.expiresAt));
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "Không thể tạo lại mã QR. Vui lòng thử lại.");
     } finally {
@@ -220,7 +219,6 @@ export function StudentBillingView() {
     setCheckoutError("");
     setIsCheckoutModalOpen(true);
     setActiveTab("PAYMENT");
-    autoRefreshAttempted.current = false;
     void refreshQr(transaction.id);
   };
 
@@ -236,23 +234,24 @@ export function StudentBillingView() {
   useEffect(() => {
     if (!checkout || checkout.status !== "PENDING") return;
     const timer = window.setInterval(() => {
-      const seconds = getRemainingSeconds(checkout.qrExpiresAt);
+      const seconds = getRemainingSeconds(checkout.expiresAt);
       setRemainingSeconds(seconds);
-      if (seconds === 0 && !autoRefreshAttempted.current) {
-        autoRefreshAttempted.current = true;
-        void refreshQr(checkout.transactionId);
-      }
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [checkout, refreshQr]);
+  }, [checkout]);
 
   const checkoutTransactionId = checkout?.transactionId;
   const pendingBankTransactionIds = new Set(
     (overview?.transactions ?? [])
-      .filter((transaction) => transaction.status === "PENDING" && transaction.paymentMethod === "BANK_TRANSFER")
-      .map((transaction) => transaction.id),
+    .filter((transaction) => (
+      (transaction.status === "PENDING" || transaction.status === "REVIEW_REQUIRED")
+      && transaction.paymentMethod === "BANK_TRANSFER"
+    ))
+    .map((transaction) => transaction.id),
   );
-  if (checkout?.status === "PENDING") pendingBankTransactionIds.add(checkout.transactionId);
+  if (checkout?.status === "PENDING" || checkout?.status === "REVIEW_REQUIRED") {
+    pendingBankTransactionIds.add(checkout.transactionId);
+  }
   const pendingBankTransactionKey = [...pendingBankTransactionIds].join(",");
 
   useEffect(() => {
@@ -363,7 +362,12 @@ export function StudentBillingView() {
 
       {activeTab === "PLANS" ? (
         <div className="space-y-8">
-          <CurrentPlanSection currentSubscription={currentSubscription} loading={loading && !overview} billingError={billingError} />
+          <CurrentPlanSection
+            currentSubscription={currentSubscription}
+            upcomingSubscriptions={overview?.upcomingSubscriptions ?? []}
+            loading={loading && !overview}
+            billingError={billingError}
+          />
 
           <section aria-labelledby="available-plans-title" className="space-y-4">
             <div>
@@ -478,7 +482,7 @@ export function StudentBillingView() {
                       {checkout.status === "SUCCESS"
                         ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
                         : <Clock3 className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />}
-                      <p className="text-sm font-semibold text-on-surface">{checkout.status === "SUCCESS" ? "Đã thanh toán thành công" : "Đang chờ thanh toán"}</p>
+                      <p className="text-sm font-semibold text-on-surface">{transactionStatus[checkout.status].label}</p>
                     </div>
                     <p className="mt-2 break-words text-xs text-on-surface-variant">Mã đơn {checkout.orderCode}</p>
                     <button
@@ -486,7 +490,7 @@ export function StudentBillingView() {
                       onClick={() => setIsCheckoutModalOpen(true)}
                       className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white ${selectedPlan ? planColors[selectedPlan.planCategory].button : "bg-primary hover:bg-primary/90"}`}
                     >
-                      {checkout.status === "SUCCESS" ? "Xem trạng thái" : "Mở mã QR"}
+                      {checkout.status === "SUCCESS" ? "Xem trạng thái" : "Xem hóa đơn"}
                     </button>
                   </div>
                 ) : selectedPlan ? (
@@ -574,10 +578,7 @@ export function StudentBillingView() {
                 remainingSeconds={remainingSeconds}
                 refreshing={refreshingQr}
                 error={checkoutError}
-                onRefresh={() => {
-                  autoRefreshAttempted.current = true;
-                  void refreshQr(checkout.transactionId);
-                }}
+                onRefresh={() => void refreshQr(checkout.transactionId)}
               />
             ) : !resumingTransactionId ? (
               <div className="space-y-5">
@@ -587,7 +588,7 @@ export function StudentBillingView() {
                     <div>
                       <p className="font-semibold text-on-surface">Thanh toán bằng VietQR</p>
                       <p className="mt-1 text-sm leading-6 text-on-surface-variant">
-                        Sau khi tạo đơn, mã QR sẽ mở trong cửa sổ riêng. Mã được làm mới sau mỗi 2 phút.
+                        Sau khi tạo đơn, bạn có 30 phút để thanh toán. Mã tham chiếu được giữ cố định cho hóa đơn này.
                       </p>
                     </div>
                   </div>
@@ -662,8 +663,9 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function CurrentPlanSection({ currentSubscription, loading, billingError }: {
+function CurrentPlanSection({ currentSubscription, upcomingSubscriptions, loading, billingError }: {
   currentSubscription: StudentBillingOverview["currentSubscription"];
+  upcomingSubscriptions: StudentBillingOverview["upcomingSubscriptions"];
   loading: boolean;
   billingError: string;
 }) {
@@ -697,6 +699,27 @@ function CurrentPlanSection({ currentSubscription, loading, billingError }: {
           {billingError ? "Chưa thể xác định gói học hiện tại." : "Tài khoản chưa có gói học đang hoạt động."}
         </p>
       )}
+      {upcomingSubscriptions.length > 0 ? (
+        <div className="mt-6 border-t border-outline-variant/40 pt-5">
+          <h3 className="font-semibold text-on-surface">Gói đã mua đang chờ kích hoạt</h3>
+          <p className="mt-1 text-sm text-on-surface-variant">Các gói sẽ tự nối tiếp và có hiệu lực theo thứ tự thanh toán.</p>
+          <ol className="mt-4 space-y-3">
+            {upcomingSubscriptions.map((subscription, index) => (
+              <li key={subscription.id} className="flex flex-col gap-1 rounded-xl bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-on-surface">{index + 1}. {subscription.planName}</p>
+                  <p className="mt-1 text-sm text-on-surface-variant">
+                    Bắt đầu {formatDate(subscription.startDate)} · Kết thúc {formatDate(subscription.endDate)}
+                  </p>
+                </div>
+                <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                  Đang xếp lịch
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -792,61 +815,93 @@ function CheckoutQr({ checkout, remainingSeconds, refreshing, error, onRefresh }
 }) {
   const minutes = Math.floor(remainingSeconds / 60).toString().padStart(2, "0");
   const seconds = (remainingSeconds % 60).toString().padStart(2, "0");
-  const paid = checkout.status === "SUCCESS";
   const expired = remainingSeconds <= 0;
+
+  if (checkout.status === "SUCCESS") {
+    return (
+      <div role="status" className="flex min-h-64 flex-col items-center justify-center text-center">
+        <CheckCircle2 className="h-12 w-12 text-emerald-600" aria-hidden="true" />
+        <h3 className="mt-3 text-lg font-bold text-on-surface">Thanh toán thành công</h3>
+        <p className="mt-1 text-sm text-on-surface-variant">Gói học đã được kích hoạt cho tài khoản của bạn.</p>
+      </div>
+    );
+  }
+
+  if (checkout.status === "EXPIRED" || (checkout.status === "PENDING" && expired)) {
+    return (
+      <div role="status" className="flex min-h-64 flex-col items-center justify-center text-center">
+        <Clock3 className="h-12 w-12 text-slate-500" aria-hidden="true" />
+        <h3 className="mt-3 text-lg font-bold text-on-surface">Đăng ký thất bại — hóa đơn đã hết hạn</h3>
+        <p className="mt-1 max-w-sm text-sm leading-6 text-on-surface-variant">
+          Mã thanh toán đã đóng vì hệ thống chưa ghi nhận thanh toán trong 30 phút. Nếu bạn đã chuyển khoản, vui lòng liên hệ quản trị viên để đối soát trước khi tạo đơn mới.
+        </p>
+      </div>
+    );
+  }
+
+  if (checkout.status === "REVIEW_REQUIRED") {
+    return (
+      <div role="status" className="flex min-h-64 flex-col items-center justify-center text-center">
+        <Clock3 className="h-12 w-12 text-orange-600" aria-hidden="true" />
+        <h3 className="mt-3 text-lg font-bold text-on-surface">Giao dịch đang được kiểm tra</h3>
+        <p className="mt-1 max-w-sm text-sm leading-6 text-on-surface-variant">
+          Hệ thống đã nhận giao dịch nhưng chưa thể xác minh thời điểm thanh toán. Quản trị viên sẽ kiểm tra trước khi kích hoạt gói học.
+        </p>
+      </div>
+    );
+  }
+
+  if (checkout.status === "FAILED" || checkout.status === "REFUNDED") {
+    return (
+      <div role="status" className="flex min-h-64 flex-col items-center justify-center text-center">
+        <h3 className="text-lg font-bold text-on-surface">{transactionStatus[checkout.status].label}</h3>
+        <p className="mt-1 text-sm text-on-surface-variant">Vui lòng liên hệ quản trị viên nếu bạn cần hỗ trợ.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-outline-variant/50 p-4 sm:p-5">
-      {paid ? (
-        <div role="status" className="flex min-h-64 flex-col items-center justify-center text-center">
-          <CheckCircle2 className="h-12 w-12 text-emerald-600" aria-hidden="true" />
-          <h3 className="mt-3 text-lg font-bold text-on-surface">Thanh toán thành công</h3>
-          <p className="mt-1 text-sm text-on-surface-variant">Gói học đã được kích hoạt cho tài khoản của bạn.</p>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-start justify-between gap-3">
-            <div><p className="font-semibold text-on-surface">Quét mã để chuyển khoản</p><p className="mt-1 text-xs text-on-surface-variant">Đơn hàng {checkout.orderCode}</p></div>
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${expired ? "bg-amber-100 text-amber-800" : "bg-surface-container text-on-surface-variant"}`}>
-              <Clock3 size={13} aria-hidden="true" /> {expired ? "Đang tạo mã mới" : `${minutes}:${seconds}`}
-            </span>
+      <div className="flex items-start justify-between gap-3">
+        <div><p className="font-semibold text-on-surface">Quét mã để chuyển khoản</p><p className="mt-1 text-xs text-on-surface-variant">Đơn hàng {checkout.orderCode}</p></div>
+        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${expired ? "bg-amber-100 text-amber-800" : "bg-surface-container text-on-surface-variant"}`}>
+          <Clock3 size={13} aria-hidden="true" /> {expired ? "Đang đóng hóa đơn" : `${minutes}:${seconds}`}
+        </span>
+      </div>
+      <div className="mx-auto mt-4 w-full max-w-64 rounded-xl border border-outline-variant/50 bg-white p-2">
+        {!expired ? (
+          <VietQrImage
+            key={checkout.qrImageUrl}
+            src={checkout.qrImageUrl}
+            alt={`Mã QR thanh toán ${formatVnd(checkout.amount)}`}
+          />
+        ) : (
+          <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 bg-surface-container-low text-center">
+            <Clock3 className="h-7 w-7 text-slate-500" aria-hidden="true" />
+            <p className="px-5 text-sm text-on-surface-variant">Mã thanh toán đã hết hạn.</p>
           </div>
-          <div className="mx-auto mt-4 w-full max-w-64 rounded-xl border border-outline-variant/50 bg-white p-2">
-            {remainingSeconds > 0 ? (
-              <VietQrImage
-                key={checkout.qrImageUrl}
-                src={checkout.qrImageUrl}
-                alt={`Mã QR thanh toán ${formatVnd(checkout.amount)}`}
-              />
-            ) : (
-              <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 bg-surface-container-low text-center">
-                <RefreshCw className={`h-7 w-7 text-primary ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-                <p className="px-5 text-sm text-on-surface-variant">{refreshing ? "Đang tạo mã QR mới…" : "Mã QR đã hết hạn."}</p>
-              </div>
-            )}
-          </div>
-          <dl className="mt-4 space-y-2 text-sm">
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Ngân hàng</dt><dd className="min-w-0 break-words text-right font-semibold text-on-surface">{checkout.bankCode}</dd></div>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Số tài khoản</dt><dd className="min-w-0 break-all text-right font-mono font-semibold text-on-surface">{checkout.accountNumber}</dd></div>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Chủ tài khoản</dt><dd className="min-w-0 break-words text-right font-semibold text-on-surface">{checkout.accountName}</dd></div>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Số tiền</dt><dd className="min-w-0 break-words text-right font-bold text-primary">{formatVnd(checkout.amount)}</dd></div>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Nội dung chuyển khoản</dt><dd className="min-w-0 break-all text-right font-mono font-bold text-on-surface">{checkout.paymentContent}</dd></div>
-          </dl>
-          <p className="mt-4 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-900">
-            Mã QR được làm mới sau mỗi 2 phút. Nếu bạn đã quét mã cũ, giao dịch vẫn được nhận diện theo đơn hàng và số tiền.
-          </p>
-          {error ? <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-outline-variant/60 text-sm font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-60"
-          >
-            <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-            {refreshing ? "Đang tạo mã mới…" : expired ? "Tạo lại mã QR" : "Làm mới mã QR"}
-          </button>
-        </>
-      )}
+        )}
+      </div>
+      <dl className="mt-4 space-y-2 text-sm">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Ngân hàng</dt><dd className="min-w-0 break-words text-right font-semibold text-on-surface">{checkout.bankCode}</dd></div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Số tài khoản</dt><dd className="min-w-0 break-all text-right font-mono font-semibold text-on-surface">{checkout.accountNumber}</dd></div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Chủ tài khoản</dt><dd className="min-w-0 break-words text-right font-semibold text-on-surface">{checkout.accountName}</dd></div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Số tiền</dt><dd className="min-w-0 break-words text-right font-bold text-primary">{formatVnd(checkout.amount)}</dd></div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start gap-3"><dt className="min-w-0 text-on-surface-variant">Nội dung chuyển khoản</dt><dd className="min-w-0 break-all text-right font-mono font-bold text-on-surface">{checkout.paymentContent}</dd></div>
+      </dl>
+      <p className="mt-4 rounded-lg bg-sky-50 p-3 text-xs leading-5 text-sky-900">
+        Hóa đơn hết hạn sau 30 phút kể từ khi tạo. Hãy chuyển đúng số tiền và nội dung thanh toán hiển thị.
+      </p>
+      {error ? <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={refreshing || expired}
+        className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-outline-variant/60 text-sm font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-60"
+      >
+        <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
+        {refreshing ? "Đang tải mã QR…" : expired ? "Hóa đơn đã hết hạn" : "Tải lại mã QR"}
+      </button>
     </div>
   );
 }

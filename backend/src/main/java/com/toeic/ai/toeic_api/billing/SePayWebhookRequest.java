@@ -8,4 +8,5 @@ public record SePayWebhookRequest(
         String transferType,
         Long transferAmount,
         String content,
-        String code) { }
+        String code,
+        String transactionDate) { }

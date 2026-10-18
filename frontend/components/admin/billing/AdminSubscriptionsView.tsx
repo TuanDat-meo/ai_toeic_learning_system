@@ -610,17 +610,19 @@ export function AdminSubscriptionsView() {
                           className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
                             sub.status === "ACTIVE"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : sub.status === "CANCELLED" ? "bg-red-50 text-red-700 border-red-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                              : sub.status === "SCHEDULED"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : sub.status === "CANCELLED" ? "bg-red-50 text-red-700 border-red-200" : "bg-slate-100 text-slate-600 border-slate-200"
                           }`}
                         >
-                          {sub.status === "ACTIVE" ? "Đang có hiệu lực" : sub.status === "CANCELLED" ? "Đã thu hồi" : "Đã hết hạn"}
+                          {sub.status === "ACTIVE" ? "Đang có hiệu lực" : sub.status === "SCHEDULED" ? "Đang xếp lịch" : sub.status === "CANCELLED" ? "Đã thu hồi" : "Đã hết hạn"}
                         </span>
                       </td>
 
                       <td className="px-4 py-3.5 text-right">
                         <div className="inline-flex items-center gap-2">
                           {(sub.status === "ACTIVE" || sub.status === "EXPIRED") && sub.endDate && <button type="button" onClick={() => void runAction(() => handleExtendSubscription(sub))} className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100">Cộng 30 ngày</button>}
-                          {sub.status === "ACTIVE" && <button type="button" onClick={() => void runAction(() => handleCancelSubscription(sub))} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Thu hồi quyền</button>}
+                          {(sub.status === "ACTIVE" || sub.status === "SCHEDULED") && <button type="button" onClick={() => void runAction(() => handleCancelSubscription(sub))} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">{sub.status === "SCHEDULED" ? "Hủy lịch" : "Thu hồi quyền"}</button>}
                         </div>
                       </td>
                     </tr>

@@ -51,7 +51,7 @@ public class EntitlementService {
         var activeSubscriptions = jdbc.query("""
                 SELECT id, entitlements_snapshot
                 FROM user_subscriptions
-                WHERE user_id=? AND status='ACTIVE' AND start_at<=now()
+                WHERE user_id=? AND status IN ('ACTIVE', 'SCHEDULED') AND start_at<=now()
                   AND (end_at IS NULL OR end_at>now())
                 ORDER BY start_at DESC
                 LIMIT 1
@@ -134,7 +134,7 @@ public class EntitlementService {
         String query = """
                 SELECT s.id, s.entitlements_snapshot, s.start_at, s.end_at
                 FROM user_subscriptions s
-                WHERE s.user_id=? AND s.status='ACTIVE' AND s.start_at<=now()
+                WHERE s.user_id=? AND s.status IN ('ACTIVE', 'SCHEDULED') AND s.start_at<=now()
                   AND (s.end_at IS NULL OR s.end_at>now())
                 ORDER BY s.start_at DESC
                 LIMIT 1

@@ -77,12 +77,12 @@ export type UserSubscription = {
   startDate: string;
   endDate: string | null;
   autoRenew: boolean;
-  status: "ACTIVE" | "EXPIRED" | "CANCELLED";
+  status: "ACTIVE" | "SCHEDULED" | "EXPIRED" | "CANCELLED";
   paymentMethod: string | null;
 };
 
 export type PaymentMethod = "MOMO" | "VNPAY" | "BANK_TRANSFER" | "CREDIT_CARD";
-export type TransactionStatus = "SUCCESS" | "PENDING" | "FAILED" | "REFUNDED";
+export type TransactionStatus = "SUCCESS" | "PENDING" | "FAILED" | "REFUNDED" | "EXPIRED" | "REVIEW_REQUIRED";
 
 export type Transaction = {
   id: string;
@@ -118,7 +118,7 @@ export type StudentSubscription = {
   startDate: string;
   endDate: string | null;
   autoRenew: boolean;
-  status: "ACTIVE";
+  status: "ACTIVE" | "SCHEDULED";
   paymentMethod: string | null;
 };
 
@@ -137,6 +137,7 @@ export type StudentPaymentTransaction = {
 
 export type StudentBillingOverview = {
   currentSubscription: StudentSubscription | null;
+  upcomingSubscriptions: StudentSubscription[];
   transactions: StudentPaymentTransaction[];
 };
 
@@ -151,7 +152,7 @@ export type StudentCheckoutResponse = {
   accountName: string;
   paymentContent: string;
   qrImageUrl: string;
-  qrExpiresAt: string;
+  expiresAt: string;
 };
 
 export type PlanInput = Omit<SubscriptionPlan, "id" | "purchaseCount" | "createdAt" | "updatedAt">;

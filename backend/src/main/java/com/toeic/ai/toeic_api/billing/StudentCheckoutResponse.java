@@ -13,4 +13,4 @@ public record StudentCheckoutResponse(
         String accountName,
         String paymentContent,
         String qrImageUrl,
-        Instant qrExpiresAt) { }
+        Instant expiresAt) { }

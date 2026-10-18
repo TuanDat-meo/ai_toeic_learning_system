@@ -2,6 +2,7 @@ package com.toeic.ai.toeic_api.billing;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -78,8 +80,8 @@ public class SubscriptionService {
         return jdbc.query("""
                 SELECT id, plan_id, plan_name, start_at, end_at, auto_renew, payment_method
                 FROM user_subscriptions
-                WHERE user_id = ? AND status = 'ACTIVE'
-                  AND (end_at IS NULL OR end_at > now())
+                WHERE user_id = ? AND status IN ('ACTIVE', 'SCHEDULED')
+                  AND start_at <= now() AND (end_at IS NULL OR end_at > now())
                 ORDER BY start_at DESC
                 LIMIT 1
                 """, (rs, row) -> new StudentSubscription(
@@ -90,8 +92,22 @@ public class SubscriptionService {
                 .stream().findFirst().orElse(null);
     }
 
+    public List<StudentSubscription> listUpcomingSubscriptions(UUID userId) {
+        return jdbc.query("""
+                SELECT id, plan_id, plan_name, start_at, end_at, auto_renew, payment_method
+                FROM user_subscriptions
+                WHERE user_id = ? AND status = 'SCHEDULED' AND start_at > now()
+                ORDER BY start_at, id
+                """, (rs, row) -> new StudentSubscription(
+                rs.getObject("id", UUID.class), rs.getObject("plan_id", UUID.class), rs.getString("plan_name"),
+                rs.getTimestamp("start_at").toInstant(),
+                rs.getTimestamp("end_at") == null ? null : rs.getTimestamp("end_at").toInstant(),
+                rs.getBoolean("auto_renew"), "SCHEDULED", rs.getString("payment_method")), userId);
+    }
+
     @Transactional
     public void assignDefaultFreeSubscription(UUID userId) {
+        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", UUID.class, userId);
         int inserted = jdbc.update("""
                 INSERT INTO user_subscriptions(
                     id, user_id, plan_id, plan_code, plan_name, plan_features, max_ai_queries_per_day,
@@ -105,9 +121,13 @@ public class SubscriptionService {
                        false, 'ACTIVE', NULL, p.capability_keys, p.ai_access_mode, p.entitlements
                 FROM subscription_plans p
                 WHERE p.plan_category = 'FREE' AND p.status = 'ACTIVE'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_subscriptions s
+                      WHERE s.user_id = ? AND s.status IN ('ACTIVE', 'SCHEDULED')
+                  )
                 ORDER BY p.created_at DESC
                 LIMIT 1
-                """, UUID.randomUUID(), userId);
+                """, UUID.randomUUID(), userId, userId);
         if (inserted == 0) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Hệ thống chưa có gói Free đang phát hành. Vui lòng liên hệ quản trị viên.");
@@ -117,7 +137,7 @@ public class SubscriptionService {
     @Transactional
     public void activatePaidSubscription(UUID transactionId) {
         PaidPlanPurchase purchase = jdbc.queryForObject("""
-                SELECT t.user_id, t.plan_id, p.plan_category
+                SELECT t.user_id, t.plan_id, t.activated_subscription_id
                 FROM payment_transactions t
                 JOIN subscription_plans p ON p.id = t.plan_id
                 WHERE t.id = ? AND t.status = 'SUCCESS'
@@ -125,17 +145,57 @@ public class SubscriptionService {
                 """, (rs, row) -> new PaidPlanPurchase(
                 rs.getObject("user_id", UUID.class),
                 rs.getObject("plan_id", UUID.class),
-                rs.getString("plan_category")), transactionId);
+                rs.getObject("activated_subscription_id", UUID.class)), transactionId);
+        if (purchase.activatedSubscriptionId() != null) return;
 
-        jdbc.update("""
-                UPDATE user_subscriptions
-                SET status = 'CANCELLED', auto_renew = false, updated_at = now()
-                WHERE user_id = ? AND status = 'ACTIVE'
-                  AND (end_at IS NULL OR end_at > now())
-                  AND plan_id IN (
-                      SELECT id FROM subscription_plans WHERE plan_category = ?
-                  )
-                """, purchase.userId(), purchase.planCategory());
+        lockUser(purchase.userId());
+
+        boolean hasActiveLifetimePlan = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM user_subscriptions s
+                    JOIN subscription_plans p ON p.id = s.plan_id
+                    WHERE s.user_id = ? AND s.status IN ('ACTIVE', 'SCHEDULED')
+                      AND p.plan_category <> 'FREE' AND p.billing_cycle = 'LIFETIME'
+                )
+                """, Boolean.class, purchase.userId()));
+        if (hasActiveLifetimePlan) {
+            jdbc.update("""
+                    UPDATE payment_transactions
+                    SET status = 'REVIEW_REQUIRED',
+                        note = CONCAT_WS(E'\\n', NULLIF(note, ''),
+                            'Đã nhận thanh toán nhưng không thể xếp gói sau gói trọn đời đang hiệu lực; cần admin xử lý.'),
+                        updated_at = now()
+                    WHERE id = ? AND status = 'SUCCESS'
+                    """, transactionId);
+            return;
+        }
+
+        ActivationStart activationStart = jdbc.queryForObject("""
+                SELECT COALESCE(MAX(s.end_at), now()) AS start_at,
+                       COALESCE(MAX(s.end_at), now()) > now() AS scheduled
+                FROM user_subscriptions s
+                JOIN subscription_plans p ON p.id = s.plan_id
+                WHERE s.user_id = ? AND s.status IN ('ACTIVE', 'SCHEDULED')
+                  AND p.plan_category <> 'FREE'
+                  AND s.end_at > now()
+                """, (rs, row) -> new ActivationStart(
+                rs.getTimestamp("start_at"), rs.getBoolean("scheduled")), purchase.userId());
+        if (activationStart == null || activationStart.startAt() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Không thể xác định thời điểm bắt đầu gói học.");
+        }
+        Timestamp startAt = activationStart.startAt();
+        boolean scheduled = activationStart.scheduled();
+        if (!scheduled) {
+            jdbc.update("""
+                    UPDATE user_subscriptions
+                    SET status = 'CANCELLED', auto_renew = false, updated_at = now()
+                    WHERE user_id = ? AND status = 'ACTIVE'
+                      AND plan_id IN (
+                          SELECT id FROM subscription_plans WHERE plan_category = 'FREE'
+                      )
+                    """, purchase.userId());
+        }
 
         UUID subscriptionId = UUID.randomUUID();
         int inserted = jdbc.update("""
@@ -145,13 +205,13 @@ public class SubscriptionService {
                     ai_access_mode, entitlements_snapshot
                 )
                 SELECT ?, ?, p.id, p.code, p.name, p.features, p.max_ai_queries_per_day,
-                       now(),
-                       CASE WHEN p.billing_cycle = 'LIFETIME' THEN NULL
-                            ELSE now() + make_interval(days => p.duration_days) END,
-                       false, 'ACTIVE', 'BANK_TRANSFER', p.capability_keys, p.ai_access_mode, p.entitlements
+                       ?, CASE WHEN p.billing_cycle = 'LIFETIME' THEN NULL
+                               ELSE ? + make_interval(days => p.duration_days) END,
+                       false, ?, 'BANK_TRANSFER', p.capability_keys, p.ai_access_mode, p.entitlements
                 FROM subscription_plans p
                 WHERE p.id = ?
-                """, subscriptionId, purchase.userId(), purchase.planId());
+                """, subscriptionId, purchase.userId(), startAt, startAt,
+                scheduled ? "SCHEDULED" : "ACTIVE", purchase.planId());
         if (inserted == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Không thể kích hoạt gói học sau khi xác nhận thanh toán.");
@@ -165,6 +225,13 @@ public class SubscriptionService {
 
     @Transactional
     public void revokePaidSubscription(UUID transactionId) {
+        UUID userId = jdbc.query("""
+                SELECT user_id FROM payment_transactions
+                WHERE id = ? AND status = 'REFUNDED'
+                """, (rs, row) -> rs.getObject("user_id", UUID.class), transactionId)
+                .stream().findFirst().orElse(null);
+        if (userId == null) return;
+        lockUser(userId);
         jdbc.update("""
                 UPDATE user_subscriptions
                 SET status = 'CANCELLED', auto_renew = false, updated_at = now()
@@ -172,20 +239,125 @@ public class SubscriptionService {
                     SELECT activated_subscription_id
                     FROM payment_transactions
                     WHERE id = ? AND status = 'REFUNDED'
-                ) AND status = 'ACTIVE'
+                ) AND status IN ('ACTIVE', 'SCHEDULED')
                 """, transactionId);
+        reflowScheduledSubscriptions(userId);
     }
 
     @Transactional
     public void cancelSubscription(UUID id) {
-        int updated = jdbc.update("UPDATE user_subscriptions SET status='CANCELLED', auto_renew=false, updated_at=now() WHERE id=? AND status='ACTIVE'", id);
+        UUID userId = jdbc.query("""
+                SELECT user_id FROM user_subscriptions
+                WHERE id = ? AND status IN ('ACTIVE', 'SCHEDULED')
+                """, (rs, row) -> rs.getObject("user_id", UUID.class), id)
+                .stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Lượt mua không tồn tại hoặc quyền học không còn hiệu lực."));
+        lockUser(userId);
+        int updated = jdbc.update("UPDATE user_subscriptions SET status='CANCELLED', auto_renew=false, updated_at=now() WHERE id=? AND status IN ('ACTIVE', 'SCHEDULED')", id);
         if (updated == 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Lượt mua không tồn tại hoặc quyền học không còn hiệu lực.");
+        reflowScheduledSubscriptions(userId);
     }
 
     @Transactional
     public void extendSubscription(UUID id) {
+        UUID userId = jdbc.query("""
+                SELECT user_id FROM user_subscriptions
+                WHERE id = ? AND status IN ('ACTIVE', 'EXPIRED') AND end_at IS NOT NULL
+                """, (rs, row) -> rs.getObject("user_id", UUID.class), id)
+                .stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Không thể cộng thêm thời hạn cho lượt mua trọn đời hoặc lượt mua không hợp lệ."));
+        lockUser(userId);
         int updated = jdbc.update("UPDATE user_subscriptions SET end_at=GREATEST(end_at, now()) + interval '30 days', status='ACTIVE', updated_at=now() WHERE id=? AND status IN ('ACTIVE','EXPIRED') AND end_at IS NOT NULL", id);
         if (updated == 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Không thể cộng thêm thời hạn cho lượt mua trọn đời hoặc lượt mua không hợp lệ.");
+        reflowScheduledSubscriptions(userId);
+    }
+
+    @Scheduled(fixedDelayString = "${app.subscription.activation-scan-interval-ms:15000}")
+    @Transactional
+    public void activateDueSubscriptions() {
+        jdbc.update("""
+                UPDATE user_subscriptions
+                SET status = 'EXPIRED', updated_at = now()
+                WHERE status = 'ACTIVE' AND end_at IS NOT NULL AND end_at <= now()
+                """);
+        jdbc.update("""
+                UPDATE user_subscriptions free
+                SET status = 'CANCELLED', auto_renew = false, updated_at = now()
+                FROM subscription_plans p
+                WHERE free.plan_id = p.id AND p.plan_category = 'FREE'
+                  AND free.status = 'ACTIVE'
+                  AND EXISTS (
+                      SELECT 1 FROM user_subscriptions queued
+                      WHERE queued.user_id = free.user_id
+                        AND queued.status = 'SCHEDULED' AND queued.start_at <= now()
+                  )
+                """);
+        jdbc.update("""
+                UPDATE user_subscriptions queued
+                SET status = 'ACTIVE', updated_at = now()
+                WHERE queued.status = 'SCHEDULED' AND queued.start_at <= now()
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_subscriptions current
+                      JOIN subscription_plans p ON p.id = current.plan_id
+                      WHERE current.user_id = queued.user_id
+                        AND current.id <> queued.id AND current.status = 'ACTIVE'
+                        AND p.plan_category <> 'FREE'
+                        AND (current.end_at IS NULL OR current.end_at > now())
+                  )
+                """);
+    }
+
+    private void lockUser(UUID userId) {
+        jdbc.queryForObject("SELECT id FROM users WHERE id=? FOR UPDATE", UUID.class, userId);
+    }
+
+    private void reflowScheduledSubscriptions(UUID userId) {
+        boolean hasActiveLifetimePlan = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM user_subscriptions s
+                    JOIN subscription_plans p ON p.id = s.plan_id
+                    WHERE s.user_id = ? AND s.status = 'ACTIVE'
+                      AND p.plan_category <> 'FREE' AND p.billing_cycle = 'LIFETIME'
+                )
+                """, Boolean.class, userId));
+        if (hasActiveLifetimePlan) return;
+
+        jdbc.update("""
+                WITH queue AS (
+                    SELECT s.id,
+                           s.end_at IS NULL AS lifetime,
+                           CASE WHEN s.end_at IS NULL THEN 0
+                                ELSE GREATEST(1, EXTRACT(EPOCH FROM (s.end_at - s.start_at)) / 86400)::integer
+                           END AS duration_days,
+                           COALESCE(
+                               SUM(CASE WHEN s.end_at IS NULL THEN 0
+                                        ELSE GREATEST(1, EXTRACT(EPOCH FROM (s.end_at - s.start_at)) / 86400)::integer
+                                   END) OVER (ORDER BY s.start_at, s.id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),
+                               0
+                           ) AS days_before,
+                           SUM(CASE WHEN s.end_at IS NULL THEN 0
+                                    ELSE GREATEST(1, EXTRACT(EPOCH FROM (s.end_at - s.start_at)) / 86400)::integer
+                               END) OVER (ORDER BY s.start_at, s.id) AS days_through,
+                           (SELECT COALESCE(MAX(active.end_at), now())
+                            FROM user_subscriptions active
+                            JOIN subscription_plans active_plan ON active_plan.id = active.plan_id
+                            WHERE active.user_id = ? AND active.status = 'ACTIVE'
+                              AND active_plan.plan_category <> 'FREE'
+                              AND active.end_at > now()) AS base_at
+                    FROM user_subscriptions s
+                    WHERE s.user_id = ? AND s.status = 'SCHEDULED'
+                )
+                UPDATE user_subscriptions s
+                SET start_at = q.base_at + make_interval(days => q.days_before),
+                    end_at = CASE WHEN q.lifetime THEN NULL
+                                  ELSE q.base_at + make_interval(days => q.days_through) END,
+                    updated_at = now()
+                FROM queue q
+                WHERE s.id = q.id
+                """, userId, userId);
     }
 
     @Transactional
@@ -311,7 +483,7 @@ public class SubscriptionService {
                   AND NOT EXISTS (
                       SELECT 1
                       FROM user_subscriptions s
-                      WHERE s.user_id = u.id AND s.status = 'ACTIVE'
+                      WHERE s.user_id = u.id AND s.status IN ('ACTIVE', 'SCHEDULED')
                         AND (s.end_at IS NULL OR s.end_at > now())
                   )
                 """, planId);
@@ -509,5 +681,10 @@ public class SubscriptionService {
 
     private record LegacyAiSettings(String mode, int limit) { }
 
-    private record PaidPlanPurchase(UUID userId, UUID planId, String planCategory) { }
+    private record ActivationStart(Timestamp startAt, boolean scheduled) { }
+
+    private record PaidPlanPurchase(
+            UUID userId,
+            UUID planId,
+            UUID activatedSubscriptionId) { }
 }

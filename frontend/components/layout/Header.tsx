@@ -11,8 +11,6 @@ import {
   Bell,
   ClipboardCheck,
   Clock3,
-  CreditCard,
-  Ellipsis,
   Flame,
   Headphones,
   House,
@@ -196,31 +194,6 @@ export function Header() {
               </Link>
             );
           })}
-          <details className="group relative shrink-0">
-            <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-3 text-sm font-semibold text-on-surface transition hover:border-primary/30 hover:bg-surface-container-low [&::-webkit-details-marker]:hidden">
-              <Ellipsis className="size-[18px] text-primary" aria-hidden="true" />
-              <span className="hidden sm:inline">Thêm</span>
-            </summary>
-            <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 overflow-hidden rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-1.5 text-on-surface shadow-xl shadow-slate-900/10">
-              <div className="border-b border-outline-variant/40 px-3 py-3">
-                <p className="text-sm font-semibold text-on-surface">Tiện ích học tập</p>
-                <p className="mt-0.5 text-xs text-on-surface-variant">Quản lý lộ trình TOEIC</p>
-              </div>
-              <Link href="/billing" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
-                <CreditCard className="size-4 text-primary" aria-hidden="true" />
-                Gói học &amp; thanh toán
-              </Link>
-              <Link href="/onboarding" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
-                <Target className="size-4 text-tertiary" aria-hidden="true" />
-                Mục tiêu học tập
-              </Link>
-              <div className="my-1 border-t border-outline-variant/40" />
-              <p className="flex items-start gap-3 px-3 py-2 text-xs leading-5 text-on-surface-variant">
-                <Flame className="mt-0.5 size-4 shrink-0 text-orange-500" aria-hidden="true" />
-                Các tính năng luyện tập đang được phát triển
-              </p>
-            </div>
-          </details>
         </nav>
 
         <Link
@@ -361,5 +334,4 @@ function ProfileStat({
     </div>
   );
 }
-
 

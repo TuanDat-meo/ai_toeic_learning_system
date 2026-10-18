@@ -28,6 +28,7 @@ public class StudentBillingController {
         var user = users.findManagedUser(authentication.getName());
         return new StudentBillingOverview(
                 subscriptions.findCurrentSubscription(user.id()),
+                subscriptions.listUpcomingSubscriptions(user.id()),
                 transactions.listTransactionsForUser(user.id()));
     }
 }

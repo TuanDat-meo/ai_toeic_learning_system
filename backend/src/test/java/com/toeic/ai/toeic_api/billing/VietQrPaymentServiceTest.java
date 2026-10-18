@@ -10,36 +10,35 @@ import static org.mockito.Mockito.when;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.web.server.ResponseStatusException;
 
 class VietQrPaymentServiceTest {
     @Test
-    void createsAnExactAmountQrWithAUniqueReferenceAndTwoMinuteExpiry() {
+    void createsAnExactAmountQrWithAStableReferenceAndThirtyMinuteExpiry() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        PaymentTransaction transaction = pendingTransaction(75_000);
+        String reference = "TOEIC1234567890123456789";
+        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(transaction.createdAt()), List.of(reference));
         VietQrPaymentService service = new VietQrPaymentService(
                 jdbc, "970415", "123456789", "NGUYEN VAN A", "test-sepay-token");
-        Instant before = Instant.now();
 
-        StudentCheckoutResponse response = service.createQr(pendingTransaction(75_000));
+        StudentCheckoutResponse response = service.createQr(transaction);
 
         assertThat(response.qrImageUrl())
                 .contains("970415-123456789-compact2.png?amount=75000")
                 .contains("addInfo=" + response.paymentContent())
                 .contains("accountName=NGUYEN%20VAN%20A");
-        assertThat(response.paymentContent()).startsWith("TOEIC").hasSize(24);
-        assertThat(response.qrExpiresAt()).isBetween(before.plusSeconds(119), before.plusSeconds(121));
-        ArgumentCaptor<Object[]> sqlArguments = ArgumentCaptor.forClass(Object[].class);
-        verify(jdbc).update(anyString(), sqlArguments.capture());
-        assertThat(sqlArguments.getValue()[2])
-                .isInstanceOf(Timestamp.class)
-                .extracting(value -> ((Timestamp) value).toInstant())
-                .isEqualTo(response.qrExpiresAt());
+        assertThat(response.paymentContent()).isEqualTo(reference);
+        assertThat(response.expiresAt()).isEqualTo(transaction.createdAt().plus(30, ChronoUnit.MINUTES));
+        verify(jdbc).update(anyString(), any(Timestamp.class), any(UUID.class));
     }
 
     @Test

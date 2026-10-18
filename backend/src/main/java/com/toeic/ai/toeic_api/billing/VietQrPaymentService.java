@@ -2,8 +2,10 @@ package com.toeic.ai.toeic_api.billing;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.sql.Timestamp;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class VietQrPaymentService {
-    private static final long QR_LIFETIME_SECONDS = 120;
+    private static final Duration PAYMENT_LIFETIME = Duration.ofMinutes(30);
 
     private final JdbcTemplate jdbc;
     private final String bankCode;
@@ -38,19 +40,52 @@ public class VietQrPaymentService {
     public StudentCheckoutResponse createQr(PaymentTransaction transaction) {
         requireConfigured();
 
-        String reference = "TOEIC" + UUID.randomUUID().toString().replace("-", "").substring(0, 19);
-        Instant expiresAt = Instant.now().plusSeconds(QR_LIFETIME_SECONDS);
-        int inserted = jdbc.update("""
-                INSERT INTO payment_qr_sessions(transaction_id, qr_reference, expires_at)
-                SELECT ?, ?, ?
-                WHERE EXISTS (
-                    SELECT 1 FROM payment_transactions
+        List<Instant> creationTimes = jdbc.query("""
+                SELECT created_at
+                FROM payment_transactions
+                WHERE id = ? AND status = 'PENDING'
+                  AND created_at > now() - INTERVAL '30 minutes'
+                FOR UPDATE
+                """, (rs, row) -> rs.getTimestamp("created_at").toInstant(), transaction.id());
+        if (creationTimes.isEmpty()) {
+            jdbc.update("""
+                    UPDATE payment_transactions
+                    SET status = 'EXPIRED',
+                        note = CONCAT_WS(E'\\n', NULLIF(note, ''), 'Hóa đơn hết hạn sau 30 phút, chưa ghi nhận thanh toán.'),
+                        updated_at = now()
                     WHERE id = ? AND status = 'PENDING'
-                )
-                """, transaction.id(), reference, Timestamp.from(expiresAt), transaction.id());
-        if (inserted == 0) {
+                      AND created_at <= now() - INTERVAL '30 minutes'
+                    """, transaction.id());
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Đơn thanh toán vừa được xử lý. Hãy làm mới trạng thái giao dịch.");
+                    "Hóa đơn đã hết hạn hoặc vừa được xử lý. Vui lòng tạo đơn đăng ký mới.");
+        }
+
+        Instant expiresAt = creationTimes.getFirst().plus(PAYMENT_LIFETIME);
+        List<String> references = jdbc.query("""
+                SELECT qr_reference
+                FROM payment_qr_sessions
+                WHERE transaction_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """, (rs, row) -> rs.getString("qr_reference"), transaction.id());
+        String reference;
+        if (references.isEmpty()) {
+            reference = "TOEIC" + UUID.randomUUID().toString().replace("-", "").substring(0, 19);
+            int inserted = jdbc.update("""
+                    INSERT INTO payment_qr_sessions(transaction_id, qr_reference, expires_at)
+                    VALUES (?, ?, ?)
+                    """, transaction.id(), reference, Timestamp.from(expiresAt));
+            if (inserted == 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Không thể tạo mã thanh toán. Vui lòng thử lại.");
+            }
+        } else {
+            reference = references.getFirst();
+            jdbc.update("""
+                    UPDATE payment_qr_sessions
+                    SET expires_at = ?
+                    WHERE transaction_id = ?
+                    """, Timestamp.from(expiresAt), transaction.id());
         }
 
         String qrImageUrl = "https://img.vietqr.io/image/"
