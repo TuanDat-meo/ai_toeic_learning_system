@@ -30,6 +30,7 @@ interface QuestionFilterBarProps {
   onBulkDelete: () => void;
   onOpenCreateModal: () => void;
   onExportCsv?: () => void;
+  onImportCsvClick?: () => void;
   playSfx?: (sound: string) => void;
   showToast?: (msg: string) => void;
 }
@@ -51,6 +52,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
   onBulkDelete,
   onOpenCreateModal,
   onExportCsv = () => {},
+  onImportCsvClick,
   playSfx = () => {},
   showToast = () => {},
 }) => {
@@ -79,7 +81,11 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
             type="button"
             onClick={() => {
               playSfx("click");
-              showToast("Vui lòng chọn tệp CSV để nhập dữ liệu câu hỏi!");
+              if (onImportCsvClick) {
+                onImportCsvClick();
+              } else {
+                showToast("Vui lòng chọn tệp CSV để nhập dữ liệu câu hỏi!");
+              }
             }}
             className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
           >

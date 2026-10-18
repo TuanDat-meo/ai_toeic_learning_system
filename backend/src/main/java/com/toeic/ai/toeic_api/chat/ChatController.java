@@ -20,8 +20,22 @@ import com.toeic.ai.toeic_api.user.UserAccountService;
 public class ChatController {
     private final ChatService chat;
     private final UserAccountService users;
+    private final GeminiChatService gemini;
 
-    public ChatController(ChatService chat, UserAccountService users) { this.chat = chat; this.users = users; }
+    public ChatController(ChatService chat, UserAccountService users, GeminiChatService gemini) {
+        this.chat = chat;
+        this.users = users;
+        this.gemini = gemini;
+    }
+
+    @PostMapping("/api/chat/ai")
+    public AiChatResponse askAi(@Valid @RequestBody AiChatRequest request, Authentication auth) {
+        var user = users.findManagedUser(auth.getName());
+        if (!"STUDENT".equals(user.role())) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ học viên mới có thể sử dụng gia sư AI.");
+        }
+        return gemini.reply(request.messages());
+    }
 
     @GetMapping("/api/chat/discussion")
     public Map<String,Object> discussion() { return Map.of("onlineCount", chat.onlineCount(), "messages", chat.discussionMessages()); }

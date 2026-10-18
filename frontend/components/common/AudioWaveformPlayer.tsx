@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, RefreshCw } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Play, Pause, RotateCcw, RotateCw, RefreshCw } from "lucide-react";
 
 export interface AudioWaveformPlayerProps {
   audioUrl?: string;
@@ -38,7 +38,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   onTimeUpdateCallback,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const waveformRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
 
   // Trạng thái phát
   const [internalIsPlaying, setInternalIsPlaying] = useState(false);
@@ -49,6 +49,11 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const skipStep = 3; // Tua mặc định 3 giây theo yêu cầu
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Trạng thái kéo / tua (Drag & Scrub)
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragPercent, setDragPercent] = useState<number | null>(null);
+  const [dragTime, setDragTime] = useState<number>(0);
 
   // Hover preview state trên waveform
   const [isHovering, setIsHovering] = useState(false);
@@ -155,37 +160,114 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     }
   };
 
-  // Khi bấm chuột vào khung phát sóng âm -> phát lại ngay từ khúc đó
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!waveformRef.current || !audioRef.current) return;
-    const rect = waveformRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+  // Tính tỷ lệ vị trí (0 -> 1) dựa theo khung track của các thanh sóng
+  const getRatioFromClientX = (clientX: number) => {
+    if (!trackRef.current) return 0;
+    const rect = trackRef.current.getBoundingClientRect();
+    const clickX = clientX - rect.left;
+    return Math.max(0, Math.min(1, clickX / rect.width));
+  };
 
-    const totalDur = audioRef.current.duration || duration;
-    if (!totalDur || Number.isNaN(totalDur)) return;
+  const updateDrag = (clientX: number, immediateApply: boolean = false) => {
+    const ratio = getRatioFromClientX(clientX);
+    const percent = ratio * 100;
+    setDragPercent(percent);
 
+    const totalDur = audioRef.current?.duration || duration || 0;
     const targetTime = ratio * totalDur;
-    audioRef.current.currentTime = targetTime;
-    setCurrentTime(targetTime);
+    setDragTime(targetTime);
 
-    // Phát lại ngay lập tức từ khúc được bấm
-    if (autoPlayOnSeek) {
-      audioRef.current.play().then(() => {
-        setInternalIsPlaying(true);
-        onPlayPauseChangeRef.current?.(true);
-      }).catch((err) => {
-        console.warn("Play on seek failed:", err);
-      });
+    if (immediateApply && audioRef.current && totalDur > 0) {
+      audioRef.current.currentTime = targetTime;
+      setCurrentTime(targetTime);
     }
   };
 
+  const applySeek = (clientX: number) => {
+    const ratio = getRatioFromClientX(clientX);
+    const totalDur = audioRef.current?.duration || duration || 0;
+    const targetTime = ratio * totalDur;
+
+    setDragPercent(null);
+    if (audioRef.current && totalDur > 0) {
+      audioRef.current.currentTime = targetTime;
+      setCurrentTime(targetTime);
+      if (autoPlayOnSeek) {
+        audioRef.current.play().then(() => {
+          setInternalIsPlaying(true);
+          onPlayPauseChangeRef.current?.(true);
+        }).catch((err) => {
+          console.warn("Play on seek failed:", err);
+        });
+      }
+    }
+  };
+
+  // Mouse event handlers for dragging
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    setIsDragging(true);
+    updateDrag(e.clientX, true);
+  };
+
+  // Touch event handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length > 0) {
+      setIsDragging(true);
+      updateDrag(e.touches[0].clientX, true);
+    }
+  };
+
+  const updateDragRef = useRef(updateDrag);
+  const applySeekRef = useRef(applySeek);
+  useEffect(() => {
+    updateDragRef.current = updateDrag;
+    applySeekRef.current = applySeek;
+  });
+
+  // Global mousemove and mouseup listeners when dragging
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      updateDragRef.current(e.clientX, false);
+    };
+
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      setIsDragging(false);
+      applySeekRef.current(e.clientX);
+    };
+
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        updateDragRef.current(e.touches[0].clientX, false);
+      }
+    };
+
+    const handleWindowTouchEnd = (e: TouchEvent) => {
+      setIsDragging(false);
+      if (e.changedTouches.length > 0) {
+        applySeekRef.current(e.changedTouches[0].clientX);
+      }
+    };
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+    window.addEventListener("touchmove", handleWindowTouchMove);
+    window.addEventListener("touchend", handleWindowTouchEnd);
+
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+      window.removeEventListener("touchmove", handleWindowTouchMove);
+      window.removeEventListener("touchend", handleWindowTouchEnd);
+    };
+  }, [isDragging]);
+
   // Hover di chuột trên khung để xem trước thời gian
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!waveformRef.current) return;
-    const rect = waveformRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, mouseX / rect.width));
+    const ratio = getRatioFromClientX(e.clientX);
     const totalDur = audioRef.current?.duration || duration || 0;
     setHoverPercent(ratio * 100);
     setHoverTime(ratio * totalDur);
@@ -209,6 +291,10 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
 
   const progressRatio = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
   const progressPercent = progressRatio * 100;
+  // Vị trí thanh dọc dài: khi đang kéo thì theo tay kéo, bình thường theo thời gian phát
+  const activePercent = isDragging && dragPercent !== null ? dragPercent : progressPercent;
+  // Thời gian hiển thị trên đầu thanh dọc dài
+  const activeDisplayTime = isDragging ? dragTime : currentTime;
 
   return (
     <div className={`bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3 ${className}`}>
@@ -278,17 +364,17 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
       )}
 
       {/* HÀNG ĐIỀU KHIỂN CHÍNH */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-2.5 w-full">
         {/* NHÓM NÚT ĐIỀU HƯỚNG: TUA LÙI (-3s) - PLAY/PAUSE - TUA TỚI (+3s) */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {/* Nút tua lùi 3s */}
           <button
             type="button"
             onClick={() => handleRewind(3)}
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
             title="Tua lại 3 giây"
           >
-            <RotateCcw className="w-4 h-4 transition-transform group-hover:-rotate-45" />
+            <RotateCcw className="w-3.5 h-3.5 transition-transform group-hover:-rotate-45" />
             <span className="text-[9px] font-black -mt-0.5 tracking-tight">-3s</span>
           </button>
 
@@ -296,13 +382,13 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           <button
             type="button"
             onClick={togglePlay}
-            className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
             title={isPlaying ? "Tạm dừng" : "Phát audio"}
           >
             {isPlaying ? (
-              <Pause className="w-6 h-6 fill-white" />
+              <Pause className="w-5 h-5 fill-white" />
             ) : (
-              <Play className="w-6 h-6 ml-0.5 fill-white" />
+              <Play className="w-5 h-5 ml-0.5 fill-white" />
             )}
           </button>
 
@@ -310,79 +396,102 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           <button
             type="button"
             onClick={() => handleForward(3)}
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
             title="Tua tới 3 giây"
           >
-            <RotateCw className="w-4 h-4 transition-transform group-hover:rotate-45" />
+            <RotateCw className="w-3.5 h-3.5 transition-transform group-hover:rotate-45" />
             <span className="text-[9px] font-black -mt-0.5 tracking-tight">+3s</span>
           </button>
         </div>
 
-        {/* KHUNG PHÁT ÂM THANH / THANH SÓNG CLICK-TO-SEEK */}
+        {/* KHUNG PHÁT ÂM THANH / THANH SÓNG KÉO & CLICK ĐỂ TUA (OVERFLOW VISIBLE ĐỂ HIỆN BADGE THỜI GIAN) */}
         <div
-          ref={waveformRef}
-          onClick={handleSeek}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
           onMouseEnter={() => setIsHovering(true)}
-          onMouseLeave={() => setIsHovering(false)}
+          onMouseLeave={() => {
+            if (!isDragging) setIsHovering(false);
+          }}
           onMouseMove={handleMouseMove}
-          className="flex-1 relative h-12 px-3 sm:px-4 bg-slate-50 hover:bg-blue-50/30 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer flex items-center overflow-hidden select-none group"
-          title="Nhấn vào bất kỳ vị trí nào để phát âm thanh từ khúc đấy"
+          className="flex-1 min-w-0 relative h-11 sm:h-12 px-2.5 sm:px-3 bg-slate-50 hover:bg-blue-50/30 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer flex items-center select-none group"
+          title="Kéo hoặc nhấn vào bất kỳ vị trí nào để nghe từ đoạn đó"
         >
-          {/* Tooltip hiển thị mốc thời gian khi rê chuột */}
-          {isHovering && duration > 0 && (
-            <div
-              className="absolute -top-7 transform -translate-x-1/2 bg-slate-900 text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded shadow pointer-events-none z-30 whitespace-nowrap"
-              style={{ left: `${hoverPercent}%` }}
-            >
-              {formatTime(hoverTime)}
+          {/* TRACK SÓNG ÂM (CÙNG HỆ QUY CHIẾU TỌA ĐỘ CHO CẢ CÁC THANH VÀ THANH DỌC) */}
+          <div ref={trackRef} className="relative w-full h-8 flex items-center min-w-0">
+            {/* Vạch kẻ chỉ thị vị trí chuột hover (khi chưa kéo) */}
+            {isHovering && !isDragging && duration > 0 && Math.abs(hoverPercent - activePercent) > 2.5 && (
+              <div
+                className="absolute top-0 bottom-0 w-[1.5px] bg-blue-400/60 z-10 pointer-events-none"
+                style={{ left: `${hoverPercent}%` }}
+              >
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-slate-800/90 text-white font-mono text-[9px] font-medium rounded shadow-sm pointer-events-none whitespace-nowrap">
+                  {formatTime(hoverTime)}
+                </div>
+              </div>
+            )}
+
+            {/* Dãy các thanh sóng âm thanh (Đồng bộ 100% với thanh dọc dài) */}
+            <div className="w-full h-full flex items-center justify-between gap-[1.5px] sm:gap-[2px] pointer-events-none min-w-0">
+              {WAVEFORM_HEIGHTS.map((h, i) => {
+                const totalBars = WAVEFORM_HEIGHTS.length;
+                // Vị trí phần trăm (0% -> 100%) của thanh thứ i
+                const barPercent = totalBars > 1 ? (i / (totalBars - 1)) * 100 : 50;
+                // Thanh được tô màu xanh KHI VÀ CHỈ KHI vị trí của nó nằm trước hoặc ngay tại thanh dọc dài!
+                const isPlayed = barPercent <= activePercent + 0.5;
+                const isNearHead = isPlaying && !isDragging && Math.abs(barPercent - activePercent) < (100 / totalBars * 1.5);
+
+                // Chiều cao pixel từ 6px đến 28px
+                const baseHeightPx = Math.max(6, Math.min(28, Math.round(h * 0.28)));
+                const activeHeightPx = isPlaying && !isDragging && (isPlayed || isNearHead)
+                  ? Math.max(8, Math.min(28, Math.round(((h * ((i % 3) + 1)) % 100) * 0.28)))
+                  : baseHeightPx;
+
+                return (
+                  <div
+                    key={i}
+                    className={`flex-1 min-w-[1.5px] max-w-[4px] sm:max-w-[5px] rounded-full transition-all duration-150 ${
+                      isPlayed
+                        ? isNearHead
+                          ? "bg-blue-600 scale-y-110 shadow-xs ring-1 ring-blue-400"
+                          : "bg-blue-600"
+                        : "bg-slate-300 group-hover:bg-slate-400/80"
+                    }`}
+                    style={{
+                      height: `${activeHeightPx}px`,
+                    }}
+                  />
+                );
+              })}
             </div>
-          )}
 
-          {/* Vạch kẻ chỉ thị vị trí chuột hover */}
-          {isHovering && (
+            {/* THANH DỌC DÀI MÀU XANH (PLAYHEAD / SCRUBBER) LUÔN KHỚP CHÍNH XÁC VỚI CÁC THANH XANH */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-blue-400/80 z-20 pointer-events-none"
-              style={{ left: `${hoverPercent}%` }}
-            />
-          )}
+              className={`absolute top-0 bottom-0 w-[2px] bg-blue-600 z-20 pointer-events-none transition-[left] ${
+                isDragging ? "duration-0" : "duration-75"
+              } ease-out shadow-xs`}
+              style={{ left: `${activePercent}%` }}
+            >
+              {/* BADGE HIỂN THỊ THỜI GIAN NGAY TRÊN ĐẦU THANH DỌC DÀI */}
+              <div
+                className={`absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-blue-600 text-white font-mono text-[10px] font-bold rounded-md shadow-md flex items-center justify-center whitespace-nowrap transition-transform duration-100 ${
+                  isDragging || isHovering || isPlaying || currentTime > 0 ? "scale-100 opacity-100" : "scale-95 opacity-90"
+                }`}
+              >
+                <span>{formatTime(activeDisplayTime)}</span>
+                {/* Mũi tên nhỏ chỉ thẳng xuống đỉnh thanh dọc */}
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-x-[3.5px] border-x-transparent border-t-[4px] border-t-blue-600" />
+              </div>
 
-          {/* Dãy các thanh sóng âm thanh (Cố định chiều cao pixel và độ rộng rõ ràng) */}
-          <div className="w-full h-8 flex items-center justify-between gap-[2px] sm:gap-[3px] px-0.5 pointer-events-none">
-            {WAVEFORM_HEIGHTS.map((h, i) => {
-              const totalBars = WAVEFORM_HEIGHTS.length;
-              const barThreshold = (i + 1) / totalBars;
-              const isPlayed = progressRatio >= barThreshold;
-              const isNearHead = isPlaying && Math.abs(barThreshold - progressRatio) < (1.5 / totalBars);
-
-              // Chiều cao pixel từ 6px đến 28px
-              const baseHeightPx = Math.max(6, Math.min(28, Math.round(h * 0.28)));
-              const activeHeightPx = isPlaying && (isPlayed || isNearHead)
-                ? Math.max(8, Math.min(28, Math.round(((h * ((i % 3) + 1)) % 100) * 0.28)))
-                : baseHeightPx;
-
-              return (
-                <div
-                  key={i}
-                  className={`w-1 sm:w-1.5 rounded-full transition-all duration-150 shrink-0 ${
-                    isPlayed
-                      ? isNearHead
-                        ? "bg-blue-600 scale-y-110 shadow-xs ring-1 ring-blue-400"
-                        : "bg-blue-600"
-                      : "bg-slate-300 group-hover:bg-slate-400/80"
-                  }`}
-                  style={{
-                    height: `${activeHeightPx}px`,
-                  }}
-                />
-              );
-            })}
+              {/* Núm tròn ở giữa thanh dọc giúp dễ quan sát vị trí đầu phát */}
+              <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-blue-600 ring-2 ring-white shadow-sm" />
+            </div>
           </div>
         </div>
 
         {/* THÔNG TIN THỜI GIAN THỰC & CÁC NÚT TIỆN ÍCH */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Badge đồng hồ mm:ss / mm:ss */}
-          <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200/90 whitespace-nowrap">
+          <span className="font-mono text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-100 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200/90 whitespace-nowrap">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
 
@@ -391,7 +500,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
             <button
               type="button"
               onClick={cyclePlaybackSpeed}
-              className="px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer"
+              className="px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer shrink-0"
               title="Đổi tốc độ phát âm thanh"
             >
               {playbackSpeed}x
@@ -413,7 +522,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
                 }
                 onReplayClick?.();
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer shrink-0"
               title="Phát lại từ đầu (0:00)"
             >
               <RefreshCw className="w-3.5 h-3.5" />
