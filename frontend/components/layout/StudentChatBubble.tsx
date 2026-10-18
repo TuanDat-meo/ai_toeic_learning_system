@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ArrowLeft, MessageCircle, Reply, Send, Sparkles, X } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/api/auth';
 import { askAiChat, chatHeartbeat, getDiscussion, getOrCreateSupportThread, getSupportMessages, getSupportThreads, sendDiscussionMessage, sendSupportMessage, type AiChatTurn, type ChatMessage, type SupportThread } from '@/lib/api/chat';
@@ -11,6 +12,7 @@ type AiMessage = AiChatTurn & { id: string };
 const formatTime = (value: string) => new Date(value).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 export function StudentChatBubble() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('discussion');
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -24,6 +26,7 @@ export function StudentChatBubble() {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [isMockExamActive, setIsMockExamActive] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   const openSupport = useCallback(async () => {
@@ -45,8 +48,16 @@ export function StudentChatBubble() {
   useEffect(() => {
     getCurrentUser().then(setUser).catch(() => setUser(null));
     const openChat = () => setOpen(true);
+    const handleMockExamState = (event: Event) => {
+      const examEvent = event as CustomEvent<{ isTaking: boolean }>;
+      setIsMockExamActive(examEvent.detail?.isTaking === true);
+    };
     window.addEventListener('toeic:open-chat', openChat);
-    return () => window.removeEventListener('toeic:open-chat', openChat);
+    window.addEventListener('toeic:mock-exam-state', handleMockExamState);
+    return () => {
+      window.removeEventListener('toeic:open-chat', openChat);
+      window.removeEventListener('toeic:mock-exam-state', handleMockExamState);
+    };
   }, []);
 
   useEffect(() => {
@@ -117,7 +128,12 @@ export function StudentChatBubble() {
   const selectTab = (next: Tab) => { setTab(next); setError(''); setReplyTo(null); };
   const isAiAvailable = user?.role === 'STUDENT';
 
-  return <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+  if (isMockExamActive) return null;
+
+  const isPracticeWorkspace = ['/mock-tests', '/listening', '/reading'].some((route) => pathname.startsWith(route));
+  const positionClass = isPracticeWorkspace ? 'bottom-16' : 'bottom-5 sm:bottom-6';
+
+  return <div className={`fixed ${positionClass} right-5 z-[60] flex flex-col items-end gap-3 sm:right-6`}>
     {open ? <section id="student-chat-panel" aria-labelledby="student-chat-title" className="flex h-[min(34rem,calc(100dvh-7rem))] w-[min(23rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
       <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div><h2 id="student-chat-title" className="text-sm font-bold text-slate-900">{tab === 'discussion' ? 'Thảo luận' : tab === 'support' ? 'Hỗ trợ' : 'Gia sư AI TOEIC'} <span className="font-normal text-emerald-600">{tab === 'discussion' ? `• ${onlineCount} online` : ''}</span></h2><p className="text-xs text-slate-500">{tab === 'discussion' ? 'Trò chuyện và chia sẻ kinh nghiệm TOEIC' : tab === 'support' ? 'Nhắn tin riêng với quản trị viên' : 'Hỏi bài khó và nhận giải thích từng bước'}</p></div>

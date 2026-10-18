@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, BookOpenText, LoaderCircle, MessageCircle, MessagesSquare, Plus, Send, Trash2 } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/api/auth';
 import {
@@ -60,6 +61,9 @@ function QuestionSnapshot({ snapshot, showQuestionText = true }: { snapshot: Rec
 }
 
 export function CommunityPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedPostId = searchParams.get('post');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -80,8 +84,6 @@ export function CommunityPage() {
       if (!active) return;
       setUser(currentUser);
       setPosts(data);
-      const postFromUrl = new URLSearchParams(window.location.search).get('post');
-      if (postFromUrl && data.some((post) => post.id === postFromUrl)) setSelectedId(postFromUrl);
     }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Không thể tải cộng đồng.'))
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -101,7 +103,7 @@ export function CommunityPage() {
     try {
       const post = await createCommunityPost({ title: title.trim(), content: content.trim(), postType: 'DISCUSSION' });
       setPosts((current) => [post, ...current]); setTitle(''); setContent(''); setCreating(false); setComments([]); setSelectedId(post.id);
-      window.history.replaceState(null, '', `/community?post=${post.id}`);
+      router.push(`/community?post=${post.id}`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể đăng bài.'); }
     finally { setSubmitting(false); }
   }
@@ -137,12 +139,14 @@ export function CommunityPage() {
     try {
       await deleteCommunityPost(postId);
       setPosts((current) => current.filter((post) => post.id !== postId));
-      if (selectedId === postId) { setComments([]); setSelectedId(''); window.history.replaceState(null, '', '/community'); }
+      if (selectedId === postId || requestedPostId === postId) { setComments([]); setSelectedId(''); router.replace('/community?feed=all'); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể xóa bài viết.'); }
   }
 
-  const selected = posts.find((post) => post.id === selectedId);
-  const visiblePosts = posts.filter((post) => feedFilter === 'ALL' || post.postType === feedFilter);
+  const selectedPostId = requestedPostId ?? (searchParams.get('feed') === 'all' ? '' : selectedId);
+  const selected = posts.find((post) => post.id === selectedPostId);
+  const visibleFeedFilter = searchParams.get('feed') === 'all' ? 'ALL' : feedFilter;
+  const visiblePosts = posts.filter((post) => visibleFeedFilter === 'ALL' || post.postType === visibleFeedFilter);
 
   return <div className="mx-auto w-full max-w-5xl">
     <div className="mx-auto max-w-[660px]">
@@ -163,18 +167,13 @@ export function CommunityPage() {
     </form>}
 
     {selected ? <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-      <button type="button" onClick={() => { setComments([]); setSelectedId(''); window.history.replaceState(null, '', '/community'); }} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 hover:text-indigo-900"><ArrowLeft className="size-4" /> Tất cả bài viết</button>
+      <button type="button" onClick={() => { setComments([]); setSelectedId(''); router.push('/community?feed=all'); }} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 hover:text-indigo-900"><ArrowLeft className="size-4" /> Tất cả bài viết</button>
       <div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-extrabold text-slate-900">{selected.title}</h2>{getQuestionName(selected.questionSnapshot) && <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-base font-semibold leading-6 text-indigo-800">{getQuestionName(selected.questionSnapshot)}</p>}<p className="mt-2 text-xs text-slate-500">{selected.authorName} · {formatDate(selected.createdAt)}</p></div>{(user?.id === selected.authorId || user?.role === 'ADMIN') && <button type="button" onClick={() => void removePost(selected.id)} title="Xóa bài viết" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"><Trash2 className="size-4" /></button>}</div>
       <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-slate-700">{selected.content}</p>
       {selected.questionSnapshot && <QuestionSnapshot snapshot={selected.questionSnapshot} showQuestionText={false} />}
     </section> : <>
-      <div className="mb-3 flex gap-5 border-b border-slate-200 text-sm font-semibold text-slate-500">
-        <span className="border-b-2 border-blue-600 px-2 py-3 text-blue-700">Bảng tin</span>
-        <span className="px-2 py-3">Cộng đồng</span>
-        <span className="px-2 py-3">Thảo luận</span>
-      </div>
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-        {([['ALL', 'Tất cả'], ['QUESTION', 'Hỏi bài'], ['DISCUSSION', 'Thảo luận']] as const).map(([filter, label]) => <button key={filter} type="button" onClick={() => setFeedFilter(filter)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${feedFilter === filter ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{label}</button>)}
+        {([['ALL', 'Tất cả'], ['QUESTION', 'Hỏi bài'], ['DISCUSSION', 'Thảo luận']] as const).map(([filter, label]) => <button key={filter} type="button" onClick={() => { setFeedFilter(filter); router.replace('/community'); }} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${visibleFeedFilter === filter ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{label}</button>)}
       </div>
       {loading ? <div className="flex justify-center py-16"><LoaderCircle className="size-7 animate-spin text-indigo-600" /></div> : visiblePosts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><MessagesSquare className="mx-auto size-10 text-indigo-300" /><h2 className="mt-3 font-bold text-slate-900">Chưa có bài viết</h2><p className="mt-1 text-sm text-slate-500">Hãy mở đầu cuộc thảo luận đầu tiên của cộng đồng.</p><button type="button" onClick={() => setCreating(true)} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Tạo bài viết</button></div> : <div className="space-y-3">{visiblePosts.map((post) => <article key={post.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
         <div className="flex items-start justify-between gap-4"><button type="button" onClick={() => { setComments([]); setSelectedId(post.id); window.history.replaceState(null, '', `/community?post=${post.id}`); }} className="flex min-w-0 flex-1 items-start gap-3 text-left"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-600">{post.authorName.slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2 text-sm font-bold text-slate-900">{post.authorName}<span className="font-normal text-slate-400">· {formatDate(post.createdAt)}</span><span className="font-normal text-slate-400">· {post.postType === 'QUESTION' ? 'Hỏi bài' : 'Thảo luận'}</span></span><h2 className="mt-2 text-base font-bold text-slate-900">{post.title}</h2>{getQuestionName(post.questionSnapshot) && <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm font-semibold leading-5 text-indigo-800">{getQuestionName(post.questionSnapshot)}</p>}<p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{post.content}</p></span></button>{(user?.id === post.authorId || user?.role === 'ADMIN') && <button type="button" onClick={() => void removePost(post.id)} title="Xóa bài viết" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><Trash2 className="size-4" /></button>}</div>

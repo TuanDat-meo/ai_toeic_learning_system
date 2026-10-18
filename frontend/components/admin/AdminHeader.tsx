@@ -44,7 +44,7 @@ const pageNames: Record<string, string> = {
   "/admin/content/questions": "Ngân hàng câu hỏi",
   "/admin/content/mock-tests": "Đề thi thử",
   "/admin/support/reports": "Phản hồi & Báo lỗi",
-  "/admin/support/chat": "Tin nhắn hỗ trợ",
+  "/admin/community": "Cộng đồng",
   "/admin/support/announcements": "Quản lý Thông báo",
   "/admin/billing/subscriptions": "Quản lý Gói học",
   "/admin/billing/transactions": "Lịch sử Giao dịch",
