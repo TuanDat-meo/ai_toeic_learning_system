@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ClipboardCheck, Sparkles } from "lucide-react";
 import { TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "@/app/admin/content/mock-tests/mockData";
@@ -84,6 +84,14 @@ export default function StudentMockTestsPage() {
     reading: number;
     correctCount: number;
   } | null>(null);
+
+  useEffect(() => {
+    const isTaking = Boolean(examModalTest && examStarted && !examSubmitted);
+    window.dispatchEvent(new CustomEvent('toeic:mock-exam-state', { detail: { isTaking } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('toeic:mock-exam-state', { detail: { isTaking: false } }));
+    };
+  }, [examModalTest, examStarted, examSubmitted]);
 
   // State Luyện tập từng phần (Practice Mode)
   const [practiceModalTest, setPracticeModalTest] = useState<TestItem | null>(null);

@@ -1,3 +1,3 @@
-import { AdminChatView } from '@/components/admin/support/AdminChatView';
+import { redirect } from 'next/navigation';
 
-export default function AdminChatPage() { return <AdminChatView />; }
+export default function AdminChatPage() { redirect('/admin/community'); }

@@ -44,7 +44,7 @@ const navigationItems: NavigationItem[] = [
   { label: 'Ngữ pháp', href: '/grammar', icon: Brain, color: 'text-teal-400' },
   { label: 'Từ vựng', href: '/vocabulary', icon: BookA, color: 'text-emerald-400' },
   { label: 'Thi thử', href: '/mock-tests', icon: ClipboardCheck, color: 'text-orange-400' },
-  { label: 'Cộng đồng', href: '/community', icon: MessagesSquare, color: 'text-indigo-400' },
+  { label: 'Cộng đồng', href: '/community?feed=all', icon: MessagesSquare, color: 'text-indigo-400' },
 ];
 
 const DEFAULT_STUDY_STATS_SNAPSHOT = JSON.stringify([null, null]);
@@ -181,7 +181,8 @@ export function Header() {
 
         <nav aria-label="Điều hướng học tập" className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navigationItems.map(({ label, href, icon: Icon, color }) => {
-            const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+            const routePath = href.split('?')[0];
+            const active = pathname === routePath || (routePath !== '/dashboard' && pathname.startsWith(`${routePath}/`));
             const className = `inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold transition sm:px-3.5 sm:text-sm ${
               active
                 ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/10'

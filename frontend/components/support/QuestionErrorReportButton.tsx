@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from 'next/navigation';
 import { Flag, LoaderCircle, Send, X } from "lucide-react";
 import { createSupportReport, type SupportReportCategory } from "@/lib/api/support";
 import { createCommunityPost } from '@/lib/api/community';
@@ -16,7 +15,6 @@ type Props = {
 };
 
 export function QuestionErrorReportButton({ source, questionRef, relatedContent, questionSnapshot, onSubmitted, compact = false }: Props) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<SupportReportCategory>("QUESTION_ERROR");
   const [details, setDetails] = useState("");
@@ -26,6 +24,7 @@ export function QuestionErrorReportButton({ source, questionRef, relatedContent,
   const [communityTitle, setCommunityTitle] = useState('');
   const [communityDetails, setCommunityDetails] = useState('');
   const [communityBusy, setCommunityBusy] = useState(false);
+  const [createdCommunityPostUrl, setCreatedCommunityPostUrl] = useState('');
 
   async function submit() {
     if (details.trim().length < 5) {
@@ -86,7 +85,7 @@ export function QuestionErrorReportButton({ source, questionRef, relatedContent,
       setCommunityTitle('');
       setCommunityDetails('');
       setCommunityOpen(false);
-      router.push(`/community?post=${post.id}`);
+      setCreatedCommunityPostUrl(`/community?post=${post.id}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể gửi câu hỏi đến cộng đồng.');
     } finally {
@@ -98,6 +97,7 @@ export function QuestionErrorReportButton({ source, questionRef, relatedContent,
     <button type="button" onClick={() => { setError(''); setCommunityOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-semibold transition cursor-pointer">
       <Send className="w-3.5 h-3.5" /><span>Hỏi cộng đồng</span>
     </button>
+    {createdCommunityPostUrl && <a href={createdCommunityPostUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold transition hover:bg-emerald-100">Đã đăng câu hỏi · Xem bài viết ↗</a>}
     <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 hover:border-rose-200 text-slate-700 text-xs font-semibold transition cursor-pointer">
       <Flag className="w-3.5 h-3.5 text-rose-500" /><span>{compact ? "Báo lỗi" : "Báo lỗi câu hỏi"}</span>
     </button>
