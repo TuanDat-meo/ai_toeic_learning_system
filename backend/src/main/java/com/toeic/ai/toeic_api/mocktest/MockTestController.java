@@ -37,13 +37,6 @@ public class MockTestController {
         return mockTestService.getTestQuestions(testId);
     }
 
-    // ✅ Endpoint mới: lấy lịch sử các lần thi của người dùng
-    @GetMapping("/api/mock-tests/{testId}/history")
-    public List<MockTestAttempt> getHistory(@PathVariable int testId, Authentication authentication) {
-        UUID userId = extractUserId(authentication);
-        return mockTestService.getHistoryAttempts(testId, userId);
-    }
-
     @PostMapping("/api/mock-tests/submit")
     @ResponseStatus(HttpStatus.CREATED)
     public MockTestAttempt submitAttempt(@RequestBody SubmitMockTestRequest request, Authentication authentication) {

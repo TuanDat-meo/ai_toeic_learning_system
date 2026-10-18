@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Brain, Sparkles, Layers } from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
+import { getGrammarTopics, saveGrammarProgress } from "@/lib/api/grammar";
 import { StudentGrammarGrid } from "@/components/student/grammar/StudentGrammarGrid";
 import {
   GrammarTopicDetailModal,
@@ -12,35 +13,54 @@ import {
 
 export default function StudentGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Modal State
   const [theoryTopic, setTheoryTopic] = useState<GrammarTopicItem | null>(null);
   const [quizActive, setQuizActive] = useState<boolean>(false);
   const [activeTopicForQuiz, setActiveTopicForQuiz] = useState<GrammarTopicItem | null>(null);
 
+  const loadTopics = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getGrammarTopics();
+      if (data && data.length > 0) {
+        setTopics(data);
+      } else {
+        setTopics(INITIAL_GRAMMAR_TOPICS);
+      }
+    } catch (err) {
+      console.warn("Could not load topics from server, using fallback data:", err);
+      setTopics(INITIAL_GRAMMAR_TOPICS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTopics();
+  }, [loadTopics]);
+
   const startTopicQuiz = (topic: GrammarTopicItem) => {
-    if (topic.questions.length === 0) return;
+    if (!topic.questions || topic.questions.length === 0) return;
     setActiveTopicForQuiz(topic);
     setQuizActive(true);
   };
 
-  const handleRecordResult = (topicId: string, isCorrect: boolean) => {
-    setTopics((prev) =>
-      prev.map((t) => {
-        if (t.id === topicId) {
-          return {
-            ...t,
-            studiedCount: (t.studiedCount || 0) + 1,
-            correctCount: isCorrect ? (t.correctCount || 0) + 1 : t.correctCount || 0,
-          };
-        }
-        return t;
-      })
-    );
+  const handleRecordResult = async (topicId: string, isCorrect: boolean) => {
+    try {
+      const topic = topics.find((t) => t.id === topicId);
+      const total = topic?.questions?.length || 1;
+      const completed = Math.min(total, (topic?.completedQuestions || 0) + 1);
+      const status = completed >= total ? "Đã hoàn thành" : "Đang học";
+      await saveGrammarProgress(topicId, completed, total, status);
+    } catch (err) {
+      console.error("Lỗi lưu tiến độ ngữ pháp:", err);
+    }
   };
 
   const totalQuestionsCount = React.useMemo(() => {
-    return topics.reduce((acc, t) => acc + t.questions.length, 0);
+    return topics.reduce((acc, t) => acc + (t.questions ? t.questions.length : 0), 0);
   }, [topics]);
 
   return (
@@ -89,7 +109,7 @@ export default function StudentGrammarPage() {
       {activeTopicForQuiz && (
         <GrammarQuizModal
           isOpen={quizActive}
-          title={`Luyện tập: ${activeTopicForQuiz.title} (${activeTopicForQuiz.code})`}
+          title={`Luyện tập: ${activeTopicForQuiz.titleVi || activeTopicForQuiz.title} (${activeTopicForQuiz.code})`}
           questions={activeTopicForQuiz.questions}
           activeTopic={activeTopicForQuiz}
           onClose={() => {

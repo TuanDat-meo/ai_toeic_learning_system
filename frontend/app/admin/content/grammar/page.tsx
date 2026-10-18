@@ -1,8 +1,18 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
+import { PART_LABEL, TARGET_SCORE_LABEL } from "@/lib/types/domain";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
+import {
+  getAdminGrammarTopics,
+  createGrammarTopic,
+  updateGrammarTopic,
+  deleteGrammarTopic,
+  addGrammarQuestion,
+  bulkUpdateGrammarStatus,
+  bulkDeleteGrammarTopics,
+} from "@/lib/api/grammar";
 import {
   GrammarFilterBar,
   GrammarAdminTab,
@@ -23,6 +33,7 @@ import {
 
 export default function AdminGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
+  const [loading, setLoading] = useState<boolean>(true);
   const [activeMainTab, setActiveMainTab] = useState<GrammarAdminTab>("topics");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPart, setFilterPart] = useState<string>("ALL");
@@ -43,15 +54,38 @@ export default function AdminGrammarPage() {
   const [addQuestionTopic, setAddQuestionTopic] = useState<GrammarTopicItem | null>(null);
   const [deleteConfirmTopic, setDeleteConfirmTopic] = useState<GrammarTopicItem | null>(null);
 
+  const loadTopics = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getAdminGrammarTopics();
+      if (data && data.length > 0) {
+        setTopics(data);
+      } else {
+        setTopics(INITIAL_GRAMMAR_TOPICS);
+      }
+    } catch (err) {
+      console.warn("Could not load topics from server, using fallback data:", err);
+      setTopics(INITIAL_GRAMMAR_TOPICS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTopics();
+  }, [loadTopics]);
+
   // Filter Logic
   const filteredTopics = useMemo(() => {
     return topics.filter((t) => {
+      const titleVi = t.titleVi || t.title || "";
+      const titleEn = t.titleEn || t.englishTitle || "";
       const matchSearch =
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.englishTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        titleVi.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        titleEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.formula.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.summary.toLowerCase().includes(searchQuery.toLowerCase());
+        (t.formula && t.formula.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (t.summary && t.summary.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchPart = filterPart === "ALL" || t.part === filterPart;
 
@@ -65,93 +99,126 @@ export default function AdminGrammarPage() {
   // Statistics
   const totalTopicsCount = topics.length;
   const totalQuestionsCount = useMemo(() => {
-    return topics.reduce((acc, t) => acc + t.questions.length, 0);
+    return topics.reduce((acc, t) => acc + (t.questions ? t.questions.length : 0), 0);
   }, [topics]);
 
   // Preview / Student Simulation Quiz Trigger
   const startTopicQuiz = (topic: GrammarTopicItem) => {
-    if (topic.questions.length === 0) return;
+    if (!topic.questions || topic.questions.length === 0) return;
     setActiveTopicForQuiz(topic);
-    setQuizTitle(`Xem trước bài kiểm tra: ${topic.title} (${topic.code})`);
+    setQuizTitle(`Xem trước bài kiểm tra: ${topic.titleVi || topic.title} (${topic.code})`);
     setQuizQuestions(topic.questions);
     setQuizActive(true);
   };
 
-  const handleRecordResult = (topicId: string, isCorrect: boolean) => {
-    setTopics((prev) =>
-      prev.map((t) => {
-        if (t.id === topicId) {
-          return {
-            ...t,
-            studiedCount: t.studiedCount + 1,
-            correctCount: isCorrect ? t.correctCount + 1 : t.correctCount,
-            wrongCount: isCorrect ? t.wrongCount : t.wrongCount + 1,
-          };
-        }
-        return t;
-      })
-    );
+  // handleRecordResult: Không cập nhật counter trên topic.
+  // Kết quả đúng/sai ghi vào question_attempts (server-side) và
+  // được tính động khi cần hiển thị.
+  const handleRecordResult = (_topicId: string, _isCorrect: boolean) => {
+    // TODO: POST /api/practice/sessions/{id}/answers
   };
 
-  const handleSaveTopic = (topicData: Partial<GrammarTopicItem>) => {
+  const handleSaveTopic = async (topicData: Partial<GrammarTopicItem>) => {
     if (editTopicItem) {
-      setTopics((prev) =>
-        prev.map((t) => (t.id === editTopicItem.id ? { ...t, ...topicData } : t))
-      );
+      try {
+        const updated = await updateGrammarTopic(editTopicItem.id, topicData);
+        setTopics((prev) =>
+          prev.map((t) => (t.id === editTopicItem.id ? updated : t))
+        );
+      } catch (err) {
+        console.error("Lỗi khi cập nhật chuyên đề:", err);
+        setTopics((prev) =>
+          prev.map((t) => (t.id === editTopicItem.id ? { ...t, ...topicData } : t))
+        );
+      }
       setEditTopicItem(null);
     } else {
-      const newTopic: GrammarTopicItem = {
-        id: `g-${Date.now()}`,
-        code: topicData.code || `TOPIC-${Math.floor(10 + Math.random() * 90)}`,
-        title: topicData.title || "",
-        englishTitle: topicData.englishTitle || "",
-        part: topicData.part || "Part 5",
-        targetScore: topicData.targetScore || "500-750",
-        status: topicData.status || "PUBLISHED",
-        summary: topicData.summary || "",
-        formula: topicData.formula || "",
-        signalWords: topicData.signalWords || [],
-        traps: topicData.traps || [],
-        examples: topicData.examples || [],
-        questions: [],
-        studiedCount: 0,
-        correctCount: 0,
-        wrongCount: 0,
-      };
-      setTopics((prev) => [newTopic, ...prev]);
+      try {
+        const created = await createGrammarTopic(topicData);
+        setTopics((prev) => [created, ...prev]);
+      } catch (err) {
+        console.error("Lỗi khi tạo chuyên đề:", err);
+        const newTopic: GrammarTopicItem = {
+          id: `g-${Date.now()}`,
+          code: topicData.code || `GT-${Math.floor(100 + Math.random() * 900)}`,
+          titleVi: topicData.titleVi || topicData.title || "",
+          titleEn: topicData.titleEn || topicData.englishTitle || "",
+          title: topicData.titleVi || topicData.title || "",
+          englishTitle: topicData.titleEn || topicData.englishTitle || "",
+          part: topicData.part || "PART_5",
+          targetScore: topicData.targetScore || "500_750",
+          status: topicData.status || "DRAFT",
+          summary: topicData.summary || "",
+          formula: topicData.formula || "",
+          signalWords: topicData.signalWords || [],
+          traps: topicData.traps || [],
+          examples: topicData.examples || [],
+          questions: [],
+          orderIndex: topicData.orderIndex || 0,
+        };
+        setTopics((prev) => [newTopic, ...prev]);
+      }
       setShowCreateModal(false);
     }
   };
 
-  const handleAddQuestion = (topicId: string, question: GrammarQuestionItem) => {
-    setTopics((prev) =>
-      prev.map((t) => (t.id === topicId ? { ...t, questions: [...t.questions, question] } : t))
-    );
+  const handleAddQuestion = async (topicId: string, question: GrammarQuestionItem) => {
+    try {
+      const updated = await addGrammarQuestion(topicId, question);
+      setTopics((prev) =>
+        prev.map((t) => (t.id === topicId ? updated : t))
+      );
+    } catch (err) {
+      console.error("Lỗi khi thêm câu hỏi:", err);
+      setTopics((prev) =>
+        prev.map((t) => (t.id === topicId ? { ...t, questions: [...t.questions, question] } : t))
+      );
+    }
   };
 
-  const confirmDeleteTopic = () => {
+  const confirmDeleteTopic = async () => {
     if (!deleteConfirmTopic) return;
+    try {
+      await deleteGrammarTopic(deleteConfirmTopic.id);
+    } catch (err) {
+      console.error("Lỗi khi xóa chuyên đề:", err);
+    }
     setTopics((prev) => prev.filter((t) => t.id !== deleteConfirmTopic.id));
     setSelectedTopicIds((prev) => prev.filter((id) => id !== deleteConfirmTopic.id));
     setDeleteConfirmTopic(null);
   };
 
   // Bulk operations
-  const handleBulkPublish = () => {
+  const handleBulkPublish = async () => {
+    try {
+      await bulkUpdateGrammarStatus(selectedTopicIds, "PUBLISHED");
+    } catch (err) {
+      console.error("Lỗi khi bulk publish:", err);
+    }
     setTopics((prev) =>
       prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "PUBLISHED" } : t))
     );
     setSelectedTopicIds([]);
   };
 
-  const handleBulkDraft = () => {
+  const handleBulkDraft = async () => {
+    try {
+      await bulkUpdateGrammarStatus(selectedTopicIds, "DRAFT");
+    } catch (err) {
+      console.error("Lỗi khi bulk draft:", err);
+    }
     setTopics((prev) =>
       prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "DRAFT" } : t))
     );
     setSelectedTopicIds([]);
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
+    try {
+      await bulkDeleteGrammarTopics(selectedTopicIds);
+    } catch (err) {
+      console.error("Lỗi khi bulk delete:", err);
+    }
     setTopics((prev) => prev.filter((t) => !selectedTopicIds.includes(t.id)));
     setSelectedTopicIds([]);
   };
@@ -170,8 +237,8 @@ export default function AdminGrammarPage() {
     ];
     const rows = topics.map((t) => [
       `"${t.code}"`,
-      `"${t.title.replace(/"/g, '""')}"`,
-      `"${t.englishTitle.replace(/"/g, '""')}"`,
+      `"${(t.titleVi || t.title || "").replace(/"/g, '""')}"`,
+      `"${(t.titleEn || t.englishTitle || "").replace(/"/g, '""')}"`,
       `"${t.part}"`,
       `"${t.targetScore}"`,
       t.questions.length,

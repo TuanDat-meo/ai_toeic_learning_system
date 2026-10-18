@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { ClipboardCheck, Sparkles } from "lucide-react";
-import { TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
+import { MockTest, MockTestQuestion, TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "@/app/admin/content/mock-tests/mockData";
 import { StudentMockTestCardGrid } from "@/components/student/mock-tests/StudentMockTestCardGrid";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";

@@ -37,13 +37,17 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
 
   const filteredWords = useMemo(() => {
     return words.filter((w) => {
+      const meaningText = w.meaning || w.meanings?.[0]?.meaning || "";
+      const ipaText = w.ipa || "";
+      const posText = w.partOfSpeech || w.pos || "";
+      const levelText = w.level || (w.cefrLevel as string) || "";
       const matchKey =
         keyword.trim() === "" ||
         w.word.toLowerCase().includes(keyword.toLowerCase()) ||
-        w.meaning.toLowerCase().includes(keyword.toLowerCase()) ||
-        w.ipa.toLowerCase().includes(keyword.toLowerCase());
-      const matchPos = posFilter === "ALL" || w.partOfSpeech.toLowerCase() === posFilter.toLowerCase();
-      const matchLevel = levelFilter === "ALL" || w.level === levelFilter;
+        meaningText.toLowerCase().includes(keyword.toLowerCase()) ||
+        ipaText.toLowerCase().includes(keyword.toLowerCase());
+      const matchPos = posFilter === "ALL" || posText.toLowerCase() === posFilter.toLowerCase();
+      const matchLevel = levelFilter === "ALL" || levelText === levelFilter;
       return matchKey && matchPos && matchLevel;
     });
   }, [words, keyword, posFilter, levelFilter]);
@@ -130,14 +134,14 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap inline-flex items-center">
-                        {w.level}
+                        {w.level || w.cefrLevel || "B2"}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-slate-800 max-w-xs truncate">
-                      {w.meaning}
+                      {w.meaning || w.meanings?.[0]?.meaning}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 italic max-w-xs truncate">
-                      &quot;{w.example}&quot;
+                      &quot;{w.example || w.meanings?.[0]?.example}&quot;
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">

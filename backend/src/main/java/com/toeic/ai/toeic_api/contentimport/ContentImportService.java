@@ -21,6 +21,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.toeic.ai.toeic_api.grammar.GrammarService;
+import com.toeic.ai.toeic_api.vocabulary.VocabularyService;
 
 @Service
 public class ContentImportService {
@@ -31,14 +33,19 @@ public class ContentImportService {
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final ImportFileParser fileParser;
     private final ContentPayloadValidator validator;
+    private final GrammarService grammarService;
+    private final VocabularyService vocabularyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ContentImportService(JdbcTemplate jdbcTemplate, ImportFileParser fileParser,
-            ContentPayloadValidator validator) {
+            ContentPayloadValidator validator, GrammarService grammarService,
+            VocabularyService vocabularyService) {
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
         this.fileParser = fileParser;
         this.validator = validator;
+        this.grammarService = grammarService;
+        this.vocabularyService = vocabularyService;
     }
 
     @Transactional
@@ -191,9 +198,19 @@ public class ContentImportService {
                     batch.contentType().name(), item.dedupeKey(), item.title(),
                     toJson(item.normalizedData()), item.id(), publishedBy);
             if (inserted == 1) {
+                if (batch.contentType() == ContentType.GRAMMAR) {
+                    grammarService.syncFromImportItem(item.normalizedData());
+                } else if (batch.contentType() == ContentType.VOCABULARY) {
+                    vocabularyService.syncFromImportItem(item.normalizedData());
+                }
                 jdbcTemplate.update("UPDATE import_items SET status = 'PUBLISHED' WHERE id = ?", item.id());
                 publishedCount++;
             } else {
+                if (batch.contentType() == ContentType.GRAMMAR) {
+                    grammarService.syncFromImportItem(item.normalizedData());
+                } else if (batch.contentType() == ContentType.VOCABULARY) {
+                    vocabularyService.syncFromImportItem(item.normalizedData());
+                }
                 UUID duplicateId = findContentId(batch.contentType(), item.dedupeKey());
                 jdbcTemplate.update(
                         "UPDATE import_items SET status = 'DUPLICATE', duplicate_of_content_id = ? WHERE id = ?",

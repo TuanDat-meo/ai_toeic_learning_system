@@ -11,217 +11,17 @@ import {
   Eye,
   CheckCircle2,
   Clock,
-  Layers,
 } from "lucide-react";
-import { TestItem } from "@/app/admin/content/vocabulary/types";
-import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
-import { useItemProgress } from "@/lib/practiceProgress";
+import { TestItem, getTestCategoryKey, getCategoryLabel } from "@/app/admin/content/vocabulary/types";
 
 interface VocabularyTestGridProps {
   tests: TestItem[];
-  activeSubCategory: "all" | "2024" | "2026" | "600_essential" | "2023";
-  setActiveSubCategory: (cat: "all" | "2024" | "2026" | "600_essential" | "2023") => void;
+  activeSubCategory: string;
+  setActiveSubCategory: (cat: string) => void;
   onOpenEditTest: (test: TestItem, e?: React.MouseEvent) => void;
   onOpenDeleteTest: (test: TestItem, e?: React.MouseEvent) => void;
   onOpenWordList: (test: TestItem) => void;
   onOpenPreview: (test: TestItem) => void;
-}
-
-function AdminVocabGridCard({
-  test,
-  onOpenEditTest,
-  onOpenDeleteTest,
-  onOpenWordList,
-  onOpenPreview,
-}: {
-  test: TestItem;
-  onOpenEditTest: (test: TestItem, e?: React.MouseEvent) => void;
-  onOpenDeleteTest: (test: TestItem, e?: React.MouseEvent) => void;
-  onOpenWordList: (test: TestItem) => void;
-  onOpenPreview: (test: TestItem) => void;
-}) {
-  const totalWords = test.words?.length || test.wordCount || 30;
-  const progress = useItemProgress(`vocab-${test.id}`, totalWords);
-
-  return (
-    <div className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all flex flex-col justify-between">
-      <div>
-        {/* Card Header */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-              {test.year}
-            </span>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              Xuất bản
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={(e) => onOpenEditTest(test, e)}
-              className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600 transition cursor-pointer"
-              title="Chỉnh sửa thông tin bộ"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => onOpenDeleteTest(test, e)}
-              className="p-1 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
-              title="Xóa bộ từ"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Card Title & Info */}
-        <h3 className="text-base font-bold text-slate-900 mt-3 group-hover:text-blue-600 transition-colors">
-          {test.title}
-        </h3>
-        <div className="mt-2 space-y-1 text-xs text-slate-500">
-          <p className="font-semibold text-slate-700">
-            Quy mô: <span className="text-blue-600 font-bold">{test.wordCount} từ vựng</span>
-          </p>
-          <p className="flex items-center gap-1 text-[11px] text-slate-400">
-            <Clock className="w-3 h-3" />
-            Cập nhật: Hệ thống chuẩn hóa
-          </p>
-        </div>
-
-        {/* Thanh tiến độ học viên */}
-        <div className="mt-3.5 p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
-          <PracticeProgressBar
-            completed={progress.completedQuestions}
-            total={totalWords}
-            unit="từ"
-          />
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1 font-medium">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              Đã học: <strong className="text-slate-800 font-mono">{progress.completedQuestions}</strong> từ
-            </span>
-            <span className="font-mono text-slate-400">
-              Còn lại: <strong className="text-slate-600 font-mono">{Math.max(0, totalWords - progress.completedQuestions)}</strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onOpenWordList(test)}
-          className="flex-1 py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-          title="Mở danh sách từ để quản lý, sửa nghĩa và thêm từ"
-        >
-          <FolderOpen className="w-3.5 h-3.5" />
-          Quản lý từ ({test.words?.length || test.wordCount})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onOpenPreview(test)}
-          className="py-2 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-          title="Xem trước giao diện học viên"
-        >
-          <Eye className="w-3.5 h-3.5 text-slate-500" />
-          Xem trước
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function AdminVocabTableRow({
-  test,
-  onOpenWordList,
-  onOpenPreview,
-  onOpenEditTest,
-  onOpenDeleteTest,
-}: {
-  test: TestItem;
-  onOpenWordList: (test: TestItem) => void;
-  onOpenPreview: (test: TestItem) => void;
-  onOpenEditTest: (test: TestItem, e?: React.MouseEvent) => void;
-  onOpenDeleteTest: (test: TestItem, e?: React.MouseEvent) => void;
-}) {
-  const totalWords = test.words?.length || test.wordCount || 30;
-  const progress = useItemProgress(`vocab-${test.id}`, totalWords);
-
-  return (
-    <tr className="hover:bg-slate-50/80 transition-colors">
-      <td className="py-3.5 px-4 font-bold text-slate-900">
-        {test.title}
-      </td>
-      <td className="py-3.5 px-4 text-slate-600">
-        {test.category === "2026"
-          ? "ETS 2026"
-          : test.category === "600_essential"
-          ? "600 Essential Words"
-          : "ETS 2023"}
-      </td>
-      <td className="py-3.5 px-4">
-        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
-          {test.year}
-        </span>
-      </td>
-      <td className="py-3.5 px-4 font-semibold text-blue-600">
-        {test.wordCount} từ
-      </td>
-      <td className="py-3.5 px-4 min-w-[170px]">
-        <PracticeProgressBar
-          completed={progress.completedQuestions}
-          total={totalWords}
-          unit="từ"
-        />
-      </td>
-      <td className="py-3.5 px-4">
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-          Đang phát hành
-        </span>
-      </td>
-      <td className="py-3.5 px-4 text-right">
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            type="button"
-            onClick={() => onOpenWordList(test)}
-            className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white font-semibold text-xs transition cursor-pointer"
-          >
-            Quản lý từ
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenPreview(test)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs transition cursor-pointer"
-          >
-            Xem trước
-          </button>
-          <button
-            type="button"
-            onClick={(e) => onOpenEditTest(test, e)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
-            title="Sửa"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => onOpenDeleteTest(test, e)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-            title="Xóa"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
 }
 
 export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
@@ -236,17 +36,35 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
+  const isAll = !activeSubCategory || activeSubCategory.toLowerCase() === "all";
+
+  // Tự động gom nhóm các phân loại thực tế đang có trong danh sách tests
+  const dynamicCategories = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; count: number }>();
+    tests.forEach((t) => {
+      const key = getTestCategoryKey(t);
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { key, label: getCategoryLabel(key), count: 1 });
+      }
+    });
+    return Array.from(map.values());
+  }, [tests]);
+
   const filteredTests = useMemo(() => {
     return tests.filter((t) => {
-      const matchCat =
-        activeSubCategory === "all" ? true : t.category === activeSubCategory;
+      const matchCat = isAll || getTestCategoryKey(t) === activeSubCategory;
+      const titleStr = t.title || t.nameVi || t.nameEn || "";
+      const yearStr = t.year ? String(t.year) : "";
       const matchSearch =
         searchQuery.trim() === "" ||
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.year.toLowerCase().includes(searchQuery.toLowerCase());
+        titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        yearStr.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCat && matchSearch;
     });
-  }, [tests, activeSubCategory, searchQuery]);
+  }, [tests, activeSubCategory, isAll, searchQuery]);
 
   return (
     <div className="space-y-5 animate-in fade-in duration-150">
@@ -271,57 +89,27 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
               type="button"
               onClick={() => setActiveSubCategory("all")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                activeSubCategory === "all"
+                isAll
                   ? "bg-white text-blue-600 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Tất cả ({tests.length})
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubCategory("2024")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                activeSubCategory === "2024"
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              ETS 2024 ({tests.filter((t) => t.category === "2024").length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubCategory("2026")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                activeSubCategory === "2026"
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              ETS 2026 ({tests.filter((t) => t.category === "2026").length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubCategory("600_essential")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                activeSubCategory === "600_essential"
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              600 Từ căn bản ({tests.filter((t) => t.category === "600_essential").length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubCategory("2023")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                activeSubCategory === "2023"
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              ETS 2023 ({tests.filter((t) => t.category === "2023").length})
-            </button>
+            {dynamicCategories.map((cat) => (
+              <button
+                key={cat.key}
+                type="button"
+                onClick={() => setActiveSubCategory(cat.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                  activeSubCategory === cat.key
+                    ? "bg-white text-blue-600 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {cat.label} ({cat.count})
+              </button>
+            ))}
           </div>
 
           <div className="shrink-0 flex items-center border border-slate-200 rounded-xl p-0.5 bg-slate-50">
@@ -357,14 +145,81 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
       {viewMode === "grid" ? (
         <div className="grid gap-4.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
           {filteredTests.map((t) => (
-            <AdminVocabGridCard
+            <div
               key={t.id}
-              test={t}
-              onOpenEditTest={onOpenEditTest}
-              onOpenDeleteTest={onOpenDeleteTest}
-              onOpenWordList={onOpenWordList}
-              onOpenPreview={onOpenPreview}
-            />
+              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all flex flex-col justify-between"
+            >
+              <div>
+                {/* Card Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                      {t.year}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      Xuất bản
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => onOpenEditTest(t, e)}
+                      className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-blue-600 transition cursor-pointer"
+                      title="Chỉnh sửa thông tin bộ"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => onOpenDeleteTest(t, e)}
+                      className="p-1 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                      title="Xóa bộ từ"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Card Title & Info */}
+                <h3 className="text-base font-bold text-slate-900 mt-3 group-hover:text-blue-600 transition-colors">
+                  {t.title}
+                </h3>
+                <div className="mt-2 space-y-1 text-xs text-slate-500">
+                  <p className="font-semibold text-slate-700">
+                    Quy mô: <span className="text-blue-600 font-bold">{t.wordCount} từ vựng</span>
+                  </p>
+                  <p className="flex items-center gap-1 text-[11px] text-slate-400">
+                    <Clock className="w-3 h-3" />
+                    Cập nhật: Hệ thống chuẩn hóa
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenWordList(t)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Mở danh sách từ để quản lý, sửa nghĩa và thêm từ"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  Quản lý từ ({t.words?.length || t.wordCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onOpenPreview(t)}
+                  className="py-2 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                  title="Xem trước giao diện học viên"
+                >
+                  <Eye className="w-3.5 h-3.5 text-slate-500" />
+                  Xem trước
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       ) : (
@@ -378,21 +233,72 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                   <th className="py-3 px-4">Phân loại</th>
                   <th className="py-3 px-4">Năm / Bộ đề</th>
                   <th className="py-3 px-4">Số lượng từ</th>
-                  <th className="py-3 px-4">Tiến độ học viên</th>
                   <th className="py-3 px-4">Trạng thái</th>
                   <th className="py-3 px-4 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredTests.map((t) => (
-                  <AdminVocabTableRow
-                    key={t.id}
-                    test={t}
-                    onOpenWordList={onOpenWordList}
-                    onOpenPreview={onOpenPreview}
-                    onOpenEditTest={onOpenEditTest}
-                    onOpenDeleteTest={onOpenDeleteTest}
-                  />
+                  <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-bold text-slate-900">
+                      {t.title}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600">
+                      {t.category === "2026"
+                        ? "ETS 2026"
+                        : t.category === "600_essential"
+                        ? "600 Essential Words"
+                        : "ETS 2023"}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
+                        {t.year}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-semibold text-blue-600">
+                      {t.wordCount} từ
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Đang phát hành
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onOpenWordList(t)}
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white font-semibold text-xs transition cursor-pointer"
+                        >
+                          Quản lý từ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenPreview(t)}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs transition cursor-pointer"
+                        >
+                          Xem trước
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => onOpenEditTest(t, e)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                          title="Sửa"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => onOpenDeleteTest(t, e)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          title="Xóa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>

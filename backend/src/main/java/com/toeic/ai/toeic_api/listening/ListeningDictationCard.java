@@ -4,15 +4,15 @@ import java.time.Instant;
 import java.util.List;
 
 public record ListeningDictationCard(
-    String id,
-    int testNumber,
-    String part,
-    String year,
-    int totalQuestions,
-    int completedQuestions,
-    String status,
-    int notesCount,
-    List<ListeningDictationQuestion> questions,
-    Instant createdAt,
-    Instant updatedAt
+        String id,
+        int testNumber,
+        String part,
+        String year,
+        int totalQuestions,
+        int completedQuestions,
+        String status,
+        int progressPercent,
+        List<ListeningDictationQuestion> questions,
+        Instant createdAt,
+        Instant updatedAt
 ) {}

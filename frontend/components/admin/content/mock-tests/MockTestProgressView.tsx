@@ -30,7 +30,7 @@ export const MockTestProgressView: React.FC<MockTestProgressViewProps> = ({
       ? Math.round(completedTests.reduce((acc, cur) => acc + (cur.score || 0), 0) / completedTests.length)
       : 0;
 
-  const allAttempts = currentTests.flatMap((t) => t.historyAttempts);
+  const allAttempts = currentTests.flatMap((t) => t.historyAttempts || []);
 
   return (
     <div className="space-y-6">
