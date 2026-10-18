@@ -1,7 +1,34 @@
 import { apiRequest, writeAuthRequest } from './client';
 import type { VocabularyTestSet, WordItem } from '@/app/admin/content/vocabulary/types';
+import type { ContentStatus } from '@/lib/types/domain';
 
-function mapWord(w: any): WordItem {
+interface RawWordItem {
+  id: string;
+  word: string;
+  ipa?: string;
+  partOfSpeech?: string;
+  pos?: string;
+  meaning?: string;
+  example?: string;
+  exampleMeaning?: string;
+  exampleVi?: string;
+  level?: string;
+  starred?: boolean;
+  status?: string;
+  setId?: string;
+}
+
+interface RawVocabularyTestSet {
+  id: string;
+  title?: string;
+  year?: string | number;
+  category?: string;
+  wordCount?: number;
+  status?: string;
+  words?: RawWordItem[];
+}
+
+function mapWord(w: RawWordItem): WordItem {
   return {
     id: w.id,
     word: w.word,
@@ -15,21 +42,21 @@ function mapWord(w: any): WordItem {
     level: w.level || 'B1',
     starred: w.starred ?? false,
     bookmarked: w.starred ?? false,
-    status: w.status || 'NEW',
+    status: (w.status as ContentStatus) || 'PUBLISHED',
     testId: w.setId,
   };
 }
 
-function mapSet(s: any): VocabularyTestSet {
+function mapSet(s: RawVocabularyTestSet): VocabularyTestSet {
   const words = Array.isArray(s.words) ? s.words.map(mapWord) : [];
   return {
     id: s.id,
     code: s.id,
-    title: s.title,
-    nameVi: s.title,
-    nameEn: s.title,
-    name: s.title,
-    year: s.year || '2024',
+    title: s.title || '',
+    nameVi: s.title || '',
+    nameEn: s.title || '',
+    name: s.title || '',
+    year: s.year ? String(s.year) : '2024',
     category: s.category || '2024',
     wordCount: s.wordCount ?? words.length,
     status: s.status || 'PUBLISHED',
@@ -40,7 +67,7 @@ function mapSet(s: any): VocabularyTestSet {
 export async function getVocabularySets(category?: string): Promise<VocabularyTestSet[]> {
   try {
     const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-    const list = await apiRequest<any[]>(`/api/vocabulary/sets${query}`);
+    const list = await apiRequest<RawVocabularyTestSet[]>(`/api/vocabulary/sets${query}`);
     return Array.isArray(list) ? list.map(mapSet) : [];
   } catch (error) {
     console.error('getVocabularySets error:', error);
@@ -51,7 +78,7 @@ export async function getVocabularySets(category?: string): Promise<VocabularyTe
 export async function getAdminVocabularySets(category?: string): Promise<VocabularyTestSet[]> {
   try {
     const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-    const list = await apiRequest<any[]>(`/api/admin/vocabulary/sets${query}`);
+    const list = await apiRequest<RawVocabularyTestSet[]>(`/api/admin/vocabulary/sets${query}`);
     return Array.isArray(list) ? list.map(mapSet) : [];
   } catch (error) {
     console.error('getAdminVocabularySets error:', error);
@@ -60,7 +87,7 @@ export async function getAdminVocabularySets(category?: string): Promise<Vocabul
 }
 
 export async function getVocabularySet(setId: string): Promise<VocabularyTestSet> {
-  const data = await apiRequest<any>(`/api/vocabulary/sets/${setId}`);
+  const data = await apiRequest<RawVocabularyTestSet>(`/api/vocabulary/sets/${setId}`);
   return mapSet(data);
 }
 
@@ -71,7 +98,7 @@ export async function createVocabularySet(data: {
   category?: string;
   status?: string;
 }): Promise<VocabularyTestSet> {
-  const res = await writeAuthRequest<any>('POST', '/api/admin/vocabulary/sets', {
+  const res = await writeAuthRequest<RawVocabularyTestSet>('POST', '/api/admin/vocabulary/sets', {
     id: data.id,
     title: data.title,
     year: data.year ? String(data.year) : '2024',
@@ -90,7 +117,7 @@ export async function updateVocabularySet(
     status?: string;
   }
 ): Promise<VocabularyTestSet> {
-  const res = await writeAuthRequest<any>('PUT', `/api/admin/vocabulary/sets/${id}`, {
+  const res = await writeAuthRequest<RawVocabularyTestSet>('PUT', `/api/admin/vocabulary/sets/${id}`, {
     title: data.title,
     year: data.year ? String(data.year) : '2024',
     category: data.category || '2024',
@@ -116,7 +143,7 @@ export async function addVocabularyWord(
     level?: string;
   }
 ): Promise<WordItem> {
-  const res = await writeAuthRequest<any>('POST', `/api/admin/vocabulary/sets/${setId}/words`, {
+  const res = await writeAuthRequest<RawWordItem>('POST', `/api/admin/vocabulary/sets/${setId}/words`, {
     id: data.id,
     word: data.word,
     ipa: data.ipa || '',
@@ -141,7 +168,7 @@ export async function updateVocabularyWord(
     level?: string;
   }
 ): Promise<WordItem> {
-  const res = await writeAuthRequest<any>('PUT', `/api/admin/vocabulary/words/${wordId}`, {
+  const res = await writeAuthRequest<RawWordItem>('PUT', `/api/admin/vocabulary/words/${wordId}`, {
     word: data.word,
     ipa: data.ipa || '',
     partOfSpeech: data.partOfSpeech || 'Noun',

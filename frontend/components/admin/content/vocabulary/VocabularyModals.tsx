@@ -184,7 +184,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
             </div>
 
             <div className="divide-y divide-slate-100">
-              {wordListModalTest.words?.map((w: any, index: number) => (
+              {wordListModalTest.words?.map((w: WordItem, index: number) => (
                 <div key={w.id} className="py-3.5 flex items-start justify-between gap-3">
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2">

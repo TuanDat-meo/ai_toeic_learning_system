@@ -75,6 +75,7 @@ export function login(email: string, password: string) {
 
 export function startGoogleLogin(flow: 'login' | 'signup') {
   if (typeof window !== 'undefined') {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign(`${API_BASE_URL}/api/auth/google/${flow}`);
   }
 }

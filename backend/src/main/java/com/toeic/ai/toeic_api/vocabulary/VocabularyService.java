@@ -299,6 +299,13 @@ public class VocabularyService {
             setId = "ets2024-t1";
         }
 
+        // Ensure target set exists in vocabulary_test_sets to satisfy foreign key constraint
+        jdbc.update("""
+                INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status, created_at, updated_at)
+                VALUES (?, ?, '2024', 'General', 0, 'PUBLISHED', now(), now())
+                ON CONFLICT (id) DO NOTHING
+                """, setId, "Bộ từ vựng: " + setId);
+
         // Upsert into vocabulary_items
         List<String> existing = jdbc.query(
                 "SELECT id FROM vocabulary_items WHERE set_id = ? AND LOWER(word) = LOWER(?) LIMIT 1",

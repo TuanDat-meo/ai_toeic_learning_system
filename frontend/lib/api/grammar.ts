@@ -1,7 +1,29 @@
 import { apiRequest, writeAuthRequest } from './client';
 import type { GrammarTopicItem, GrammarQuestionItem } from '@/app/admin/content/grammar/types';
 
-function mapGrammarTopic(t: any): GrammarTopicItem {
+interface RawGrammarTopic {
+  id: string;
+  code?: string;
+  title?: string;
+  titleVi?: string;
+  titleEn?: string;
+  englishTitle?: string;
+  part?: string;
+  targetScore?: string;
+  status?: string;
+  summary?: string;
+  formula?: string;
+  signalWords?: string[];
+  traps?: string[];
+  examples?: Array<{ sentence?: string; translation?: string; analysis?: string; en?: string; vi?: string }>;
+  questions?: GrammarQuestionItem[];
+  orderIndex?: number;
+  totalQuestions?: number;
+  completedQuestions?: number;
+  userStatus?: string;
+}
+
+function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
   const titleVi = t.title || t.titleVi || '';
   const titleEn = t.englishTitle || t.titleEn || titleVi;
 
@@ -19,7 +41,13 @@ function mapGrammarTopic(t: any): GrammarTopicItem {
     formula: t.formula || '',
     signalWords: Array.isArray(t.signalWords) ? t.signalWords : [],
     traps: Array.isArray(t.traps) ? t.traps : [],
-    examples: Array.isArray(t.examples) ? t.examples : [],
+    examples: Array.isArray(t.examples)
+      ? t.examples.map((ex) => ({
+          sentence: ex.sentence || ex.en || '',
+          translation: ex.translation || ex.vi || '',
+          ...(ex.analysis ? { analysis: ex.analysis } : {}),
+        }))
+      : [],
     questions: Array.isArray(t.questions) ? t.questions : [],
     orderIndex: t.orderIndex ?? 0,
     totalQuestions: t.totalQuestions ?? (Array.isArray(t.questions) ? t.questions.length : 0),
@@ -30,7 +58,7 @@ function mapGrammarTopic(t: any): GrammarTopicItem {
 
 export async function getGrammarTopics(): Promise<GrammarTopicItem[]> {
   try {
-    const list = await apiRequest<any[]>('/api/grammar/topics');
+    const list = await apiRequest<RawGrammarTopic[]>('/api/grammar/topics');
     return Array.isArray(list) ? list.map(mapGrammarTopic) : [];
   } catch (error) {
     console.error('getGrammarTopics error:', error);
@@ -40,7 +68,7 @@ export async function getGrammarTopics(): Promise<GrammarTopicItem[]> {
 
 export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[]> {
   try {
-    const list = await apiRequest<any[]>('/api/admin/grammar/topics');
+    const list = await apiRequest<RawGrammarTopic[]>('/api/admin/grammar/topics');
     return Array.isArray(list) ? list.map(mapGrammarTopic) : [];
   } catch (error) {
     console.error('getAdminGrammarTopics error:', error);
@@ -49,7 +77,7 @@ export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[]> {
 }
 
 export async function getGrammarTopic(id: string): Promise<GrammarTopicItem> {
-  const data = await apiRequest<any>(`/api/grammar/topics/${id}`);
+  const data = await apiRequest<RawGrammarTopic>(`/api/grammar/topics/${id}`);
   return mapGrammarTopic(data);
 }
 
@@ -71,7 +99,7 @@ export async function createGrammarTopic(topicData: Partial<GrammarTopicItem>): 
     questions: topicData.questions,
     orderIndex: topicData.orderIndex,
   };
-  const res = await writeAuthRequest<any>('POST', '/api/admin/grammar/topics', payload);
+  const res = await writeAuthRequest<RawGrammarTopic>('POST', '/api/admin/grammar/topics', payload);
   return mapGrammarTopic(res);
 }
 
@@ -93,7 +121,7 @@ export async function updateGrammarTopic(id: string, topicData: Partial<GrammarT
     questions: topicData.questions,
     orderIndex: topicData.orderIndex,
   };
-  const res = await writeAuthRequest<any>('PUT', `/api/admin/grammar/topics/${id}`, payload);
+  const res = await writeAuthRequest<RawGrammarTopic>('PUT', `/api/admin/grammar/topics/${id}`, payload);
   return mapGrammarTopic(res);
 }
 
@@ -102,7 +130,7 @@ export async function deleteGrammarTopic(id: string): Promise<void> {
 }
 
 export async function addGrammarQuestion(topicId: string, question: GrammarQuestionItem): Promise<GrammarTopicItem> {
-  const res = await writeAuthRequest<any>('POST', `/api/admin/grammar/topics/${topicId}/questions`, question);
+  const res = await writeAuthRequest<RawGrammarTopic>('POST', `/api/admin/grammar/topics/${topicId}/questions`, question);
   return mapGrammarTopic(res);
 }
 

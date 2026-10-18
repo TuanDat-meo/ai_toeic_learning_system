@@ -92,7 +92,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
             </div>
 
             <div className="divide-y divide-slate-100">
-              {wordListModalTest.words?.map((w: any, index: number) => (
+              {wordListModalTest.words?.map((w: WordItem, index: number) => (
                 <div key={w.id} className="py-3.5 flex items-start justify-between gap-3 hover:bg-slate-50/60 px-2 rounded-xl transition-colors">
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -348,10 +348,10 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
               if (!currentWord) return null;
 
               // Lấy các phương án gây nhiễu từ các từ khác trong bộ từ
-              const otherWords = (gameModalTest.words || []).filter((w: any) => w.id !== currentWord.id);
+              const otherWords = (gameModalTest.words || []).filter((w: WordItem) => w.id !== currentWord.id);
               const distractors = otherWords
                 .slice(0, 3)
-                .map((w: any) => w.meaning || w.meanings?.[0]?.meaning || "");
+                .map((w: WordItem) => w.meaning || "");
               
               while (distractors.length < 3) {
                 distractors.push("Hoãn lại cuộc họp quan trọng của ban giám đốc");
