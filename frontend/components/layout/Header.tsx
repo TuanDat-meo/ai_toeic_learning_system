@@ -55,25 +55,24 @@ export function Header() {
   const [logoutError, setLogoutError] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isDoubleTapLookup, setIsDoubleTapLookup] = useState(true);
-  const [studyStats] = useState(() => {
-    if (typeof window === "undefined") {
-      return { streak: 1, minutes: 25, score: 685 };
-    }
+  const [studyStats, setStudyStats] = useState({ streak: 1, minutes: 25, score: 685 });
+  const profileMenuRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
     try {
-      const rawScore = localStorage.getItem("toeic_dashboard_latest_score");
+      const rawScore = localStorage.getItem('toeic_dashboard_latest_score');
       const scoreObj = rawScore ? JSON.parse(rawScore) : null;
-      const rawTracker = localStorage.getItem("toeic_study_tracker_data");
+      const rawTracker = localStorage.getItem('toeic_study_tracker_data');
       const trackerObj = rawTracker ? JSON.parse(rawTracker) : null;
-      return {
+      setStudyStats({
         streak: trackerObj?.currentStreak || 3,
         minutes: trackerObj?.todayMinutes || 35,
         score: scoreObj?.total || 685,
-      };
+      });
     } catch {
-      return { streak: 1, minutes: 25, score: 685 };
+      // Keep the same deterministic defaults rendered by the server.
     }
-  });
-  const profileMenuRef = useRef<HTMLDetailsElement>(null);
+  }, []);
 
   useEffect(() => {
 
