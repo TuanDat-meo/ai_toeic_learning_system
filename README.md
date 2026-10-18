@@ -34,7 +34,7 @@ Mục tiêu là hỗ trợ học viên tổ chức việc học TOEIC, quản l�
 ### Prototype hoặc chưa hoàn thiện
 
 - Các màn hình admin nội dung (ngoài luồng import mới), analytics, recommendation, billing và hỗ trợ vẫn chủ yếu dùng mock data, state phía trình duyệt hoặc `localStorage`. Dữ liệu đã publish qua import được lưu trong kho nội dung JSON nhưng chưa được các màn hình học tập hiện tại sử dụng; cần tích hợp ở bước tiếp theo.
-- Có schema pgvector và biến mẫu `GEMINI_API_KEY`, nhưng không tìm thấy dịch vụ Gemini/RAG được nối trong backend hiện tại. Không xem các số liệu demo trên giao diện là dữ liệu thực.
+- Chat gia sư AI TOEIC đã được kết nối Gemini qua backend; cần cấu hình `GEMINI_API_KEY` để sử dụng.
 - Chưa có frontend test script, cấu hình coverage, hoặc workflow triển khai tự động.
 
 ## Công nghệ
@@ -44,7 +44,7 @@ Mục tiêu là hỗ trợ học viên tổ chức việc học TOEIC, quản l�
 | Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS 4, ESLint 9 |
 | Backend | Java 25, Spring Boot 4.1, Spring Security, Spring MVC, Spring Data JPA, Bean Validation, Spring Mail |
 | Database | PostgreSQL 16; image `pgvector/pgvector:pg16`; Flyway migrations |
-| AI | Gemini được nêu trong cấu hình mẫu và nội dung prototype; tích hợp runtime chưa được triển khai trong backend hiện tại |
+| AI | Gemini API (`gemini-3.8-flash`) qua backend; học viên có thể trò chuyện với AI, API key chỉ lưu ở server |
 | Build/triển khai | Maven Wrapper, npm, Docker, Docker Compose |
 | CI | GitHub Actions: Gitleaks, chính sách branch/commit, frontend lint/build, backend Maven verify |
 
@@ -154,7 +154,7 @@ Trên Windows PowerShell dùng `.\mvnw.cmd spring-boot:run`. Frontend đọc `NE
 | `FRONTEND_URL` | Backend | URL frontend nhận kết quả OAuth; mặc định trong source là localhost. |
 | `SESSION_COOKIE_SAME_SITE`, `SESSION_COOKIE_SECURE` | Backend | Cấu hình cookie phiên. Khi frontend và API ở hai site khác nhau, dùng `none` và `true` trên HTTPS; nếu cùng site có thể giữ `lax`. |
 | `NEXT_PUBLIC_API_URL` | Frontend build | Base URL backend được đóng vào bundle frontend. |
-| `GEMINI_API_KEY`, `JWT_SECRET`, `JWT_EXPIRATION` | Mẫu `.env` | Có trong template nhưng chưa được ứng dụng hiện tại đọc để thực hiện Gemini hoặc JWT auth. |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Backend | API key Gemini và model; mặc định là `gemini-3.8-flash`. |
 
 ### Google OAuth trên môi trường triển khai
 

@@ -64,6 +64,7 @@ export function CommunityPage() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [comments, setComments] = useState<CommunityComment[]>([]);
+  const [openCommentsPostId, setOpenCommentsPostId] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -71,6 +72,7 @@ export function CommunityPage() {
   const [content, setContent] = useState('');
   const [commentText, setCommentText] = useState('');
   const [error, setError] = useState('');
+  const [feedFilter, setFeedFilter] = useState<'ALL' | 'QUESTION' | 'DISCUSSION'>('ALL');
 
   useEffect(() => {
     let active = true;
@@ -104,14 +106,28 @@ export function CommunityPage() {
     finally { setSubmitting(false); }
   }
 
-  async function submitComment(event: React.FormEvent<HTMLFormElement>) {
+  async function toggleComments(postId: string) {
+    if (openCommentsPostId === postId) {
+      setOpenCommentsPostId('');
+      return;
+    }
+    setOpenCommentsPostId(postId);
+    setCommentText('');
+    try {
+      setComments(await getCommunityComments(postId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể tải bình luận.');
+    }
+  }
+
+  async function submitComment(event: React.FormEvent<HTMLFormElement>, postId: string) {
     event.preventDefault();
-    if (!selectedId || !commentText.trim()) return;
+    if (!postId || !commentText.trim()) return;
     setSubmitting(true); setError('');
     try {
-      const comment = await createCommunityComment(selectedId, commentText.trim());
+      const comment = await createCommunityComment(postId, commentText.trim());
       setComments((current) => [...current, comment]); setCommentText('');
-      setPosts((current) => current.map((post) => post.id === selectedId ? { ...post, commentCount: post.commentCount + 1 } : post));
+      setPosts((current) => current.map((post) => post.id === postId ? { ...post, commentCount: post.commentCount + 1 } : post));
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể gửi bình luận.'); }
     finally { setSubmitting(false); }
   }
@@ -126,14 +142,17 @@ export function CommunityPage() {
   }
 
   const selected = posts.find((post) => post.id === selectedId);
+  const visiblePosts = posts.filter((post) => feedFilter === 'ALL' || post.postType === feedFilter);
 
-  return <div className="mx-auto w-full max-w-6xl">
-    <header className="mb-6 rounded-2xl bg-gradient-to-br from-indigo-700 via-blue-700 to-sky-600 p-6 text-white shadow-lg sm:p-8">
-      <div className="flex items-start justify-between gap-4">
-        <div><p className="flex items-center gap-2 text-sm font-semibold text-blue-100"><MessagesSquare className="size-4" /> CỘNG ĐỒNG TOEIC AI</p><h1 className="mt-2 text-2xl font-extrabold sm:text-3xl">Cùng nhau tháo gỡ câu hỏi khó</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">Chia sẻ cách học, đặt câu hỏi TOEIC và trao đổi với mọi người. Tất cả tài khoản đều có thể tham gia.</p></div>
-        {!selected && <button type="button" onClick={() => setCreating((value) => !value)} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50"><Plus className="size-4" /> Tạo bài viết</button>}
-      </div>
-    </header>
+  return <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto max-w-[660px]">
+    {!selected && <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <button type="button" onClick={() => setCreating((value) => !value)} className="flex w-full items-center gap-3 text-left">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-base font-semibold text-white">{user?.fullName?.slice(0, 1) || 'N'}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-slate-500">{user?.fullName ? `${user.fullName} ơi, bạn đang nghĩ gì thế?` : 'Bạn đang nghĩ gì thế?'}</span>
+        <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"><Plus className="size-4" /> Đăng bài</span>
+      </button>
+    </section>}
 
     {error && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
     {creating && <form onSubmit={(event) => void submitPost(event)} className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -148,16 +167,25 @@ export function CommunityPage() {
       <div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-extrabold text-slate-900">{selected.title}</h2>{getQuestionName(selected.questionSnapshot) && <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-base font-semibold leading-6 text-indigo-800">{getQuestionName(selected.questionSnapshot)}</p>}<p className="mt-2 text-xs text-slate-500">{selected.authorName} · {formatDate(selected.createdAt)}</p></div>{(user?.id === selected.authorId || user?.role === 'ADMIN') && <button type="button" onClick={() => void removePost(selected.id)} title="Xóa bài viết" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"><Trash2 className="size-4" /></button>}</div>
       <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-slate-700">{selected.content}</p>
       {selected.questionSnapshot && <QuestionSnapshot snapshot={selected.questionSnapshot} showQuestionText={false} />}
-      <div className="mt-8 border-t border-slate-200 pt-5"><h3 className="mb-4 flex items-center gap-2 font-bold text-slate-900"><MessageCircle className="size-4 text-indigo-600" /> Thảo luận ({comments.length})</h3>
-        <div className="space-y-3">{comments.map((comment) => <article key={comment.id} className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-800">{comment.authorName}<span className="ml-2 font-normal text-slate-400">{formatDate(comment.createdAt)}</span></p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{comment.content}</p></article>)}{comments.length === 0 && <p className="text-sm text-slate-500">Chưa có bình luận. Hãy bắt đầu trao đổi nhé.</p>}</div>
-        <form onSubmit={(event) => void submitComment(event)} className="mt-4 flex flex-col gap-2 sm:flex-row"><textarea required maxLength={3000} rows={2} value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Viết bình luận..." className="min-w-0 flex-1 resize-y rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-indigo-500" /><button disabled={submitting || !commentText.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-60"><Send className="size-4" /> Gửi</button></form>
-      </div>
     </section> : <>
-      {loading ? <div className="flex justify-center py-16"><LoaderCircle className="size-7 animate-spin text-indigo-600" /></div> : posts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><MessagesSquare className="mx-auto size-10 text-indigo-300" /><h2 className="mt-3 font-bold text-slate-900">Chưa có bài viết</h2><p className="mt-1 text-sm text-slate-500">Hãy mở đầu cuộc thảo luận đầu tiên của cộng đồng.</p><button type="button" onClick={() => setCreating(true)} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Tạo bài viết</button></div> : <div className="space-y-3">{posts.map((post) => <article key={post.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
-        <div className="flex items-start justify-between gap-4"><button type="button" onClick={() => { setComments([]); setSelectedId(post.id); window.history.replaceState(null, '', `/community?post=${post.id}`); }} className="min-w-0 flex-1 text-left"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${post.postType === 'QUESTION' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}`}>{post.postType === 'QUESTION' ? 'Câu hỏi TOEIC' : 'Thảo luận'}</span><h2 className="mt-2 text-xl font-extrabold text-slate-900">{post.title}</h2>{getQuestionName(post.questionSnapshot) && <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm font-semibold leading-5 text-indigo-800">{getQuestionName(post.questionSnapshot)}</p>}<p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{post.content}</p></button>{(user?.id === post.authorId || user?.role === 'ADMIN') && <button type="button" onClick={() => void removePost(post.id)} title="Xóa bài viết" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"><Trash2 className="size-4" /></button>}</div>
-        {post.questionSnapshot && <p className="mt-3 text-xs font-medium text-indigo-700">Đính kèm câu hỏi và đáp án tham khảo</p>}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500"><span>{post.authorName} · {formatDate(post.createdAt)}</span><span className="inline-flex items-center gap-1"><MessageCircle className="size-3.5" /> {post.commentCount} bình luận</span></div>
+      <div className="mb-3 flex gap-5 border-b border-slate-200 text-sm font-semibold text-slate-500">
+        <span className="border-b-2 border-blue-600 px-2 py-3 text-blue-700">Bảng tin</span>
+        <span className="px-2 py-3">Cộng đồng</span>
+        <span className="px-2 py-3">Thảo luận</span>
+      </div>
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        {([['ALL', 'Tất cả'], ['QUESTION', 'Hỏi bài'], ['DISCUSSION', 'Thảo luận']] as const).map(([filter, label]) => <button key={filter} type="button" onClick={() => setFeedFilter(filter)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${feedFilter === filter ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{label}</button>)}
+      </div>
+      {loading ? <div className="flex justify-center py-16"><LoaderCircle className="size-7 animate-spin text-indigo-600" /></div> : visiblePosts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><MessagesSquare className="mx-auto size-10 text-indigo-300" /><h2 className="mt-3 font-bold text-slate-900">Chưa có bài viết</h2><p className="mt-1 text-sm text-slate-500">Hãy mở đầu cuộc thảo luận đầu tiên của cộng đồng.</p><button type="button" onClick={() => setCreating(true)} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Tạo bài viết</button></div> : <div className="space-y-3">{visiblePosts.map((post) => <article key={post.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
+        <div className="flex items-start justify-between gap-4"><button type="button" onClick={() => { setComments([]); setSelectedId(post.id); window.history.replaceState(null, '', `/community?post=${post.id}`); }} className="flex min-w-0 flex-1 items-start gap-3 text-left"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-600">{post.authorName.slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2 text-sm font-bold text-slate-900">{post.authorName}<span className="font-normal text-slate-400">· {formatDate(post.createdAt)}</span><span className="font-normal text-slate-400">· {post.postType === 'QUESTION' ? 'Hỏi bài' : 'Thảo luận'}</span></span><h2 className="mt-2 text-base font-bold text-slate-900">{post.title}</h2>{getQuestionName(post.questionSnapshot) && <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm font-semibold leading-5 text-indigo-800">{getQuestionName(post.questionSnapshot)}</p>}<p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{post.content}</p></span></button>{(user?.id === post.authorId || user?.role === 'ADMIN') && <button type="button" onClick={() => void removePost(post.id)} title="Xóa bài viết" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><Trash2 className="size-4" /></button>}</div>
+        {post.questionSnapshot && <button type="button" onClick={() => { setComments([]); setSelectedId(post.id); window.history.replaceState(null, '', `/community?post=${post.id}`); }} className="mt-4 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left text-sm"><span className="flex items-center gap-2 font-semibold text-slate-800"><BookOpenText className="size-4 text-blue-600" />{getQuestionName(post.questionSnapshot) || 'Câu hỏi TOEIC đính kèm'}</span><span className="font-semibold text-blue-600">Xem bài ›</span></button>}
+        <div className="mt-4 flex items-center gap-5 border-t border-slate-100 pt-3 text-sm text-slate-500"><button type="button" onClick={() => void toggleComments(post.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-blue-600 hover:bg-blue-50"><MessageCircle className="size-4" /> {post.commentCount}</button></div>
+        {openCommentsPostId === post.id && <div className="-mx-5 mt-3 border-t border-slate-100 px-5 pt-4">
+          <div className="space-y-3">{comments.map((comment) => <article key={comment.id} className="flex items-start gap-2.5"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">{comment.authorName.slice(0, 1).toUpperCase()}</span><div className="min-w-0 rounded-2xl bg-slate-100 px-3 py-2"><p className="text-xs font-bold text-slate-800">{comment.authorName}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-slate-700">{comment.content}</p></div><span className="shrink-0 pt-1 text-[11px] text-slate-400">{formatDate(comment.createdAt)}</span></article>)}{comments.length === 0 && <p className="pl-10 text-sm text-slate-500">Chưa có bình luận. Hãy bắt đầu trò chuyện nhé.</p>}</div>
+          <form onSubmit={(event) => void submitComment(event, post.id)} className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2"><input required maxLength={3000} value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Viết bình luận..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" /><button type="submit" disabled={submitting || !commentText.trim()} aria-label="Gửi bình luận" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"><Send className="size-4" /></button></form>
+        </div>}
       </article>)}</div>}
     </>}
+    </div>
   </div>;
 }

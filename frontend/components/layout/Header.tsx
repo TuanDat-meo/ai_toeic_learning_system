@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import {
   BookA,
@@ -47,6 +47,28 @@ const navigationItems: NavigationItem[] = [
   { label: 'Cộng đồng', href: '/community', icon: MessagesSquare, color: 'text-indigo-400' },
 ];
 
+const DEFAULT_STUDY_STATS_SNAPSHOT = JSON.stringify([null, null]);
+
+function subscribeStudyStats(onStoreChange: () => void) {
+  window.addEventListener('storage', onStoreChange);
+  return () => window.removeEventListener('storage', onStoreChange);
+}
+
+function getStudyStatsSnapshot() {
+  try {
+    return JSON.stringify([
+      localStorage.getItem('toeic_dashboard_latest_score'),
+      localStorage.getItem('toeic_study_tracker_data'),
+    ]);
+  } catch {
+    return 'unavailable';
+  }
+}
+
+function getServerStudyStatsSnapshot() {
+  return DEFAULT_STUDY_STATS_SNAPSHOT;
+}
+
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,14 +77,15 @@ export function Header() {
   const [logoutError, setLogoutError] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isDoubleTapLookup, setIsDoubleTapLookup] = useState(true);
-  const [studyStats] = useState(() => {
-    if (typeof window === "undefined") {
-      return { streak: 1, minutes: 25, score: 685 };
-    }
+  const studyStatsSnapshot = useSyncExternalStore(
+    subscribeStudyStats,
+    getStudyStatsSnapshot,
+    getServerStudyStatsSnapshot,
+  );
+  const studyStats = useMemo(() => {
     try {
-      const rawScore = localStorage.getItem("toeic_dashboard_latest_score");
+      const [rawScore, rawTracker] = JSON.parse(studyStatsSnapshot) as [string | null, string | null];
       const scoreObj = rawScore ? JSON.parse(rawScore) : null;
-      const rawTracker = localStorage.getItem("toeic_study_tracker_data");
       const trackerObj = rawTracker ? JSON.parse(rawTracker) : null;
       return {
         streak: trackerObj?.currentStreak || 3,
@@ -72,7 +95,7 @@ export function Header() {
     } catch {
       return { streak: 1, minutes: 25, score: 685 };
     }
-  });
+  }, [studyStatsSnapshot]);
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
