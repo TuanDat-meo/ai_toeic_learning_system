@@ -5,11 +5,9 @@ import {
   Search,
   BookOpen,
   Play,
-  Lightbulb,
   AlertTriangle,
   Layers,
   Sparkles,
-  Award,
 } from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 

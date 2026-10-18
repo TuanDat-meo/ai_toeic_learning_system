@@ -6,6 +6,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class ToeicApiApplication {
 
+	static {
+		System.setProperty("java.net.preferIPv4Stack", "true");
+	}
+
 	public static void main(String[] args) {
 		SpringApplication.run(ToeicApiApplication.class, args);
 	}
