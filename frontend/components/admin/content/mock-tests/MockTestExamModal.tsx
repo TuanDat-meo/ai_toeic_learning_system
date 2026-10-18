@@ -309,7 +309,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                                   {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
                                 </div>
                                 <span className="text-sm font-semibold">
-                                  ({optKey}) {optVal}
+                                  ({optKey}) {String(optVal)}
                                 </span>
                               </button>
                             );

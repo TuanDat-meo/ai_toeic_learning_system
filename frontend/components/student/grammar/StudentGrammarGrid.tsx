@@ -31,10 +31,12 @@ export const StudentGrammarGrid: React.FC<StudentGrammarGridProps> = ({
   const filteredTopics = useMemo(() => {
     return topics.filter((t) => {
       const q = searchQuery.toLowerCase().trim();
+      const topicTitle = (t.title || t.titleVi || "").toLowerCase();
+      const topicEnTitle = (t.englishTitle || t.titleEn || "").toLowerCase();
       const matchSearch =
         !q ||
-        t.title.toLowerCase().includes(q) ||
-        t.englishTitle.toLowerCase().includes(q) ||
+        topicTitle.includes(q) ||
+        topicEnTitle.includes(q) ||
         t.code.toLowerCase().includes(q) ||
         t.formula.toLowerCase().includes(q) ||
         t.summary.toLowerCase().includes(q) ||
@@ -153,9 +155,9 @@ export const StudentGrammarGrid: React.FC<StudentGrammarGridProps> = ({
 
                   {/* Title & Info */}
                   <h3 className="text-base font-bold text-slate-900 mt-3 group-hover:text-blue-600 transition-colors line-clamp-1">
-                    {topic.title}
+                    {topic.titleVi || topic.title}
                   </h3>
-                  <p className="text-xs text-slate-400 italic mt-0.5">{topic.englishTitle}</p>
+                  <p className="text-xs text-slate-400 italic mt-0.5">{topic.titleEn || topic.englishTitle}</p>
 
                   {/* Formula Callout */}
                   <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-100">

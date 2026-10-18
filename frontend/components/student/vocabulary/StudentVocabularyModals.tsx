@@ -78,7 +78,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   {wordListModalTest.title}
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                    {wordListModalTest.words.length} từ vựng
+                    {(wordListModalTest.words || []).length} từ vựng
                   </span>
                 </h3>
               </div>
@@ -92,7 +92,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
             </div>
 
             <div className="divide-y divide-slate-100">
-              {wordListModalTest.words.map((w, index) => (
+              {wordListModalTest.words?.map((w: any, index: number) => (
                 <div key={w.id} className="py-3.5 flex items-start justify-between gap-3 hover:bg-slate-50/60 px-2 rounded-xl transition-colors">
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -178,12 +178,12 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 Flashcard • {flashcardModalTest.title}
               </span>
               <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full">
-                {flashcardIndex + 1} / {flashcardModalTest.words.length}
+                {flashcardIndex + 1} / {(flashcardModalTest.words || []).length}
               </span>
             </div>
 
             {(() => {
-              const currentWord = flashcardModalTest.words[flashcardIndex];
+              const currentWord = (flashcardModalTest.words || [])[flashcardIndex];
               if (!currentWord) return null;
 
               return (
@@ -268,10 +268,10 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      Math.min(flashcardModalTest.words.length - 1, prev + 1)
+                      Math.min((flashcardModalTest.words || []).length - 1, prev + 1)
                     );
                   }}
-                  disabled={flashcardIndex >= flashcardModalTest.words.length - 1}
+                  disabled={flashcardIndex >= (flashcardModalTest.words || []).length - 1}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1"
                 >
                   Từ tiếp theo <ChevronRight className="w-4 h-4" />
@@ -284,7 +284,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      prev < flashcardModalTest.words.length - 1 ? prev + 1 : 0
+                      prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
                     );
                   }}
                   className="flex-1 py-2 px-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer text-center"
@@ -296,7 +296,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      prev < flashcardModalTest.words.length - 1 ? prev + 1 : 0
+                      prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
                     );
                   }}
                   className="flex-1 py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer text-center"
@@ -308,7 +308,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      prev < flashcardModalTest.words.length - 1 ? prev + 1 : 0
+                      prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
                     );
                   }}
                   className="flex-1 py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition cursor-pointer text-center"
@@ -344,20 +344,21 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
             </div>
 
             {(() => {
-              const currentWord = gameModalTest.words[gameQuestionIndex];
+              const currentWord = (gameModalTest.words || [])[gameQuestionIndex];
               if (!currentWord) return null;
 
               // Lấy các phương án gây nhiễu từ các từ khác trong bộ từ
-              const otherWords = gameModalTest.words.filter((w) => w.id !== currentWord.id);
+              const otherWords = (gameModalTest.words || []).filter((w: any) => w.id !== currentWord.id);
               const distractors = otherWords
                 .slice(0, 3)
-                .map((w) => w.meaning);
+                .map((w: any) => w.meaning || w.meanings?.[0]?.meaning || "");
               
               while (distractors.length < 3) {
                 distractors.push("Hoãn lại cuộc họp quan trọng của ban giám đốc");
               }
 
-              const options = [currentWord.meaning, ...distractors.slice(0, 3)].sort(
+              const curMeaning = currentWord.meaning || currentWord.meanings?.[0]?.meaning || "";
+              const options = [curMeaning, ...distractors.slice(0, 3)].sort(
                 (a, b) => a.localeCompare(b)
               );
 
@@ -454,7 +455,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                         onClick={() => {
                           setGameSelectedOption(null);
                           setGameAnswerChecked(false);
-                          if (gameQuestionIndex < gameModalTest.words.length - 1) {
+                          if (gameQuestionIndex < (gameModalTest.words || []).length - 1) {
                             setGameQuestionIndex((prev) => prev + 1);
                           } else {
                             alert(
@@ -465,7 +466,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                         }}
                         className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        {gameQuestionIndex < gameModalTest.words.length - 1
+                        {gameQuestionIndex < (gameModalTest.words || []).length - 1
                           ? "Từ tiếp theo 👉"
                           : "Xem tổng kết & Kết thúc 🎉"}
                       </button>

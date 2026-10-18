@@ -85,9 +85,11 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {topics.map((topic) => {
                   const isSelected = selectedTopicIds.includes(topic.id);
-                  const isStudied = topic.studiedCount > 0;
+                  const studiedCount = topic.studiedCount ?? 0;
+                  const correctCount = topic.correctCount ?? 0;
+                  const isStudied = studiedCount > 0;
                   const accuracy = isStudied
-                    ? Math.round((topic.correctCount / topic.studiedCount) * 100)
+                    ? Math.round((correctCount / studiedCount) * 100)
                     : 75; // Default estimate baseline
 
                   return (
@@ -111,8 +113,8 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                             {topic.code}
                           </span>
                           <div>
-                            <p className="font-bold text-slate-900 leading-snug">{topic.title}</p>
-                            <p className="text-[11px] text-slate-400 italic">{topic.englishTitle}</p>
+                            <p className="font-bold text-slate-900 leading-snug">{topic.titleVi || topic.title}</p>
+                            <p className="text-[11px] text-slate-400 italic">{topic.titleEn || topic.englishTitle}</p>
                           </div>
                         </div>
                       </td>
@@ -148,7 +150,7 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-[11px] font-bold">
                             <span className="text-slate-500">
-                              {topic.studiedCount > 0 ? `${topic.studiedCount} lượt` : "Mới phát hành"}
+                              {studiedCount > 0 ? `${studiedCount} lượt` : "Mới phát hành"}
                             </span>
                             <span className={accuracy >= 70 ? "text-emerald-600" : "text-amber-600"}>
                               {accuracy}%
@@ -244,9 +246,11 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
           {topics.map((topic) => {
             const isSelected = selectedTopicIds.includes(topic.id);
             const totalQ = topic.questions.length;
-            const isStudied = topic.studiedCount > 0;
+            const studiedCount = topic.studiedCount ?? 0;
+            const correctCount = topic.correctCount ?? 0;
+            const isStudied = studiedCount > 0;
             const accuracy = isStudied
-              ? Math.round((topic.correctCount / topic.studiedCount) * 100)
+              ? Math.round((correctCount / studiedCount) * 100)
               : 75;
 
             return (
@@ -304,9 +308,9 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                       onClick={() => onOpenTheoryModal(topic)}
                       className="text-base font-extrabold text-slate-900 hover:text-blue-600 transition cursor-pointer leading-snug"
                     >
-                      {topic.title}
+                      {topic.titleVi || topic.title}
                     </h3>
-                    <p className="text-xs text-slate-500 font-medium italic">{topic.englishTitle}</p>
+                    <p className="text-xs text-slate-500 font-medium italic">{topic.titleEn || topic.englishTitle}</p>
                   </div>
 
                   {/* Formula Box */}

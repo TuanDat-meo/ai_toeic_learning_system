@@ -51,8 +51,8 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
                 Target {topic.targetScore}
               </span>
             </div>
-            <h2 className="text-xl font-black text-slate-900">{topic.title}</h2>
-            <p className="text-xs text-slate-500 font-medium italic">{topic.englishTitle}</p>
+            <h2 className="text-xl font-black text-slate-900">{topic.titleVi || topic.title}</h2>
+            <p className="text-xs text-slate-500 font-medium italic">{topic.titleEn || topic.englishTitle}</p>
           </div>
 
           <button
@@ -232,7 +232,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
-              {currentTopic ? `Chỉnh sửa: ${currentTopic.title}` : "Thêm chủ điểm ngữ pháp mới"}
+              {currentTopic ? `Chỉnh sửa: ${currentTopic.titleVi || currentTopic.title}` : "Thêm chủ điểm ngữ pháp mới"}
             </h2>
             <p className="text-xs text-slate-500">Cập nhật thông tin lý thuyết & mẹo bẫy chuẩn ETS</p>
           </div>
@@ -250,9 +250,13 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
             e.preventDefault();
             const form = e.target as HTMLFormElement;
             const formData = new FormData(form);
+            const titleViVal = formData.get("title") as string;
+            const titleEnVal = formData.get("englishTitle") as string;
             onSave({
-              title: formData.get("title") as string,
-              englishTitle: formData.get("englishTitle") as string,
+              titleVi: titleViVal,
+              titleEn: titleEnVal,
+              title: titleViVal,
+              englishTitle: titleEnVal,
               part: (formData.get("part") as string || "Part 5") as unknown as never,
               targetScore: (formData.get("targetScore") as string || "All") as unknown as never,
               formula: formData.get("formula") as string,
@@ -268,7 +272,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               <input
                 type="text"
                 name="title"
-                defaultValue={currentTopic?.title || ""}
+                defaultValue={currentTopic?.titleVi || currentTopic?.title || ""}
                 required
                 className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500"
               />
@@ -278,7 +282,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               <input
                 type="text"
                 name="englishTitle"
-                defaultValue={currentTopic?.englishTitle || ""}
+                defaultValue={currentTopic?.titleEn || currentTopic?.englishTitle || ""}
                 required
                 className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500"
               />
@@ -384,7 +388,7 @@ export const GrammarDeleteModal: React.FC<GrammarDeleteModalProps> = ({
         <div>
           <h3 className="text-base font-bold text-slate-900">Xóa chủ điểm ngữ pháp?</h3>
           <p className="text-xs text-slate-500 mt-1">
-            Bạn có chắc chắn muốn xóa &quot;{currentTopic.title}&quot;? Dữ liệu câu hỏi luyện tập liên quan sẽ bị loại bỏ.
+            Bạn có chắc chắn muốn xóa &quot;{currentTopic.titleVi || currentTopic.title}&quot;? Dữ liệu câu hỏi luyện tập liên quan sẽ bị loại bỏ.
           </p>
         </div>
         <div className="flex justify-center gap-2 pt-2">
@@ -435,7 +439,7 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <h3 className="font-bold text-base text-slate-900">Thêm câu hỏi trắc nghiệm mới</h3>
-            <p className="text-xs text-slate-500">Thêm câu hỏi vào chủ điểm &quot;{topic.title}&quot;</p>
+            <p className="text-xs text-slate-500">Thêm câu hỏi vào chủ điểm &quot;{topic.titleVi || topic.title}&quot;</p>
           </div>
           <button
             type="button"

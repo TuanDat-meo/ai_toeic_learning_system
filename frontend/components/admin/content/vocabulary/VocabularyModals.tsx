@@ -26,7 +26,8 @@ interface VocabularyModalsProps {
   showCreateTestModal: boolean;
   editingTest: TestItem | null;
   onCloseTestForm: () => void;
-  onSaveTestForm: (title: string, year: string, category: "2024" | "2026" | "600_essential" | "2023") => void;
+  onSaveTestForm: (title: string, year: string, category: string) => void;
+  existingCategories?: string[];
 
   // Delete Test modal
   deleteTestConfirm: TestItem | null;
@@ -68,6 +69,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   editingTest,
   onCloseTestForm,
   onSaveTestForm,
+  existingCategories = [],
   deleteTestConfirm,
   onCloseDeleteTest,
   onConfirmDeleteTest,
@@ -92,7 +94,9 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   // Test form state
   const [testTitle, setTestTitle] = useState("");
   const [testYear, setTestYear] = useState("2024");
-  const [testCategory, setTestCategory] = useState<"2024" | "2026" | "600_essential" | "2023">("2024");
+  const [testCategory, setTestCategory] = useState<string>("2024");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
 
   // Word form state
   const [wordText, setWordText] = useState("");
@@ -105,25 +109,37 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   React.useEffect(() => {
     if (editingTest) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTestTitle(editingTest.title);
-      setTestYear(editingTest.year);
-      setTestCategory(editingTest.category);
+      setTestTitle(editingTest.title || editingTest.nameVi || "");
+      setTestYear(String(editingTest.year || "2024"));
+      const cat = String(editingTest.category || "2024");
+      const standardList = ["2024", "2026", "600_essential", "2023", "HACKERS", "BUSINESS", "COLLOCATIONS"];
+      if (standardList.includes(cat) || existingCategories.includes(cat)) {
+        setTestCategory(cat);
+        setIsCustomCategory(false);
+        setCustomCategoryInput("");
+      } else {
+        setTestCategory("__CUSTOM__");
+        setIsCustomCategory(true);
+        setCustomCategoryInput(cat);
+      }
     } else {
       setTestTitle("");
       setTestYear("2024");
       setTestCategory("2024");
+      setIsCustomCategory(false);
+      setCustomCategoryInput("");
     }
-  }, [editingTest, showCreateTestModal]);
+  }, [editingTest, showCreateTestModal, existingCategories]);
 
   React.useEffect(() => {
     if (editingWord) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setWordText(editingWord.word);
-      setWordIpa(editingWord.ipa);
-      setWordPos(editingWord.partOfSpeech);
-      setWordMeaning(editingWord.meaning);
-      setWordExample(editingWord.example);
-      setWordLevel(editingWord.level);
+      setWordText(editingWord.word || "");
+      setWordIpa(editingWord.ipa || "");
+      setWordPos(editingWord.partOfSpeech || editingWord.pos || "Verb");
+      setWordMeaning(editingWord.meaning || editingWord.meanings?.[0]?.meaning || "");
+      setWordExample(editingWord.example || editingWord.meanings?.[0]?.example || "");
+      setWordLevel(editingWord.level || (editingWord.cefrLevel as string) || "B2");
     } else {
       setWordText("");
       setWordIpa("");
@@ -168,7 +184,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
             </div>
 
             <div className="divide-y divide-slate-100">
-              {wordListModalTest.words.map((w, index) => (
+              {wordListModalTest.words?.map((w: any, index: number) => (
                 <div key={w.id} className="py-3.5 flex items-start justify-between gap-3">
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2">
@@ -257,12 +273,12 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 Flashcard • {flashcardModalTest.title}
               </span>
               <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full">
-                {flashcardIndex + 1} / {flashcardModalTest.words.length}
+                {flashcardIndex + 1} / {(flashcardModalTest.words || []).length}
               </span>
             </div>
 
             {(() => {
-              const currentWord = flashcardModalTest.words[flashcardIndex];
+              const currentWord = (flashcardModalTest.words || [])[flashcardIndex];
               if (!currentWord) return null;
 
               return (
@@ -342,7 +358,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      prev < flashcardModalTest.words.length - 1 ? prev + 1 : 0
+                      prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
                     );
                   }}
                   className="flex-1 py-2 px-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all cursor-pointer text-center"
@@ -354,7 +370,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      prev < flashcardModalTest.words.length - 1 ? prev + 1 : 0
+                      prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
                     );
                   }}
                   className="flex-1 py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition-all cursor-pointer text-center"
@@ -366,7 +382,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   onClick={() => {
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
-                      prev < flashcardModalTest.words.length - 1 ? prev + 1 : 0
+                      prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
                     );
                   }}
                   className="flex-1 py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-all cursor-pointer text-center"
@@ -402,7 +418,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
             </div>
 
             {(() => {
-              const currentWord = gameModalTest.words[gameQuestionIndex];
+              const currentWord = (gameModalTest.words || [])[gameQuestionIndex];
               if (!currentWord) return null;
 
               const options = [
@@ -472,7 +488,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                         setGameAnswerChecked(false);
                         setGameSelectedOption(null);
                         setGameQuestionIndex((prev) =>
-                          prev < gameModalTest.words.length - 1 ? prev + 1 : 0
+                          prev < (gameModalTest.words || []).length - 1 ? prev + 1 : 0
                         );
                       }}
                       className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
@@ -507,7 +523,8 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                onSaveTestForm(testTitle, testYear, testCategory);
+                const finalCategory = isCustomCategory ? (customCategoryInput.trim() || "Khác") : testCategory;
+                onSaveTestForm(testTitle, testYear, finalCategory);
               }}
               className="space-y-4 text-xs"
             >
@@ -516,7 +533,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Test 5 (ETS 2026)"
+                  placeholder="Ví dụ: Test 5 (ETS 2026) hoặc Hackers TOEIC"
                   value={testTitle}
                   onChange={(e) => setTestTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
@@ -534,18 +551,81 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Thao tác phân loại</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomCategory(!isCustomCategory);
+                      if (!isCustomCategory) {
+                        setCustomCategoryInput("");
+                      }
+                    }}
+                    className="w-full py-2 px-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-700 font-bold transition-all flex items-center justify-center gap-1 cursor-pointer text-[11px]"
+                  >
+                    {isCustomCategory ? "← Chọn danh sách có sẵn" : "✏️ Tự gõ phân loại mới"}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isCustomCategory ? "Nhập tên phân loại mới *" : "Chọn phân loại *"}
+                </label>
+                {!isCustomCategory ? (
                   <select
                     value={testCategory}
-                    onChange={(e) => setTestCategory(e.target.value as "2024" | "2026" | "600_essential" | "2023")}
+                    onChange={(e) => {
+                      if (e.target.value === "__CUSTOM__") {
+                        setIsCustomCategory(true);
+                        setCustomCategoryInput("");
+                      } else {
+                        setTestCategory(e.target.value);
+                      }
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                   >
-                    <option value="2024">ETS 2024</option>
-                    <option value="2026">ETS 2026</option>
-                    <option value="600_essential">600 Essential Words</option>
-                    <option value="2023">ETS 2023</option>
+                    <optgroup label="Danh mục phổ biến">
+                      <option value="2024">ETS 2024</option>
+                      <option value="2026">ETS 2026</option>
+                      <option value="600_essential">600 Essential Words</option>
+                      <option value="2023">ETS 2023</option>
+                      <option value="HACKERS">Hackers TOEIC</option>
+                      <option value="BUSINESS">Kinh tế &amp; Công sở (Business)</option>
+                      <option value="COLLOCATIONS">Cụm từ Collocations</option>
+                    </optgroup>
+                    {existingCategories.filter(
+                      (c) => !["2024", "2026", "600_essential", "2023", "HACKERS", "BUSINESS", "COLLOCATIONS"].includes(c)
+                    ).length > 0 && (
+                      <optgroup label="Danh mục khác hiện có trong hệ thống">
+                        {existingCategories
+                          .filter(
+                            (c) =>
+                              !["2024", "2026", "600_essential", "2023", "HACKERS", "BUSINESS", "COLLOCATIONS"].includes(c)
+                          )
+                          .map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    <option value="__CUSTOM__">+ Tự nhập phân loại mới khác...</option>
                   </select>
-                </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ví dụ: YBM 2024, Từ vựng Part 7, Kinh tế..."
+                      value={customCategoryInput}
+                      onChange={(e) => setCustomCategoryInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-blue-400 bg-blue-50/20 text-xs font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      💡 Phân loại này sẽ tự động xuất hiện thành một tab lọc ngoài màn hình chính.
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button

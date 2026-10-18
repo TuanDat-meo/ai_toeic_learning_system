@@ -174,7 +174,7 @@ export default function AdminMockTestsPage() {
     setEditingTest(test);
     setTestFormTitle(test.title);
     setTestFormVolId(test.volId as "vol1" | "vol2");
-    setTestFormDifficulty(test.difficulty);
+    setTestFormDifficulty((test.difficulty as "Khó" | "Trung bình" | "Vừa sức") || "Khó");
     setShowCreateTestModal(true);
   };
 

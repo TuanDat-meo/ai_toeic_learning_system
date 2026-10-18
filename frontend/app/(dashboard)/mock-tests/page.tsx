@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { ClipboardCheck, Sparkles } from "lucide-react";
-import { TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
+import { MockTest, MockTestQuestion, TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "@/app/admin/content/mock-tests/mockData";
 import { StudentMockTestCardGrid } from "@/components/student/mock-tests/StudentMockTestCardGrid";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
@@ -131,8 +131,8 @@ export default function StudentMockTestsPage() {
     return () => clearInterval(timer);
   }, [examStarted, examSubmitted, examTimeRemaining]);
 
-  const handleStartExamNow = () => {
-    const mins = parseInt(examDurationType, 10);
+  const handleStartExamNow = (_customParts?: string[], customMinutes?: number) => {
+    const mins = customMinutes ?? parseInt(examDurationType, 10);
     setExamTimeRemaining(mins * 60);
     setExamStarted(true);
     setExamSubmitted(false);
@@ -141,17 +141,26 @@ export default function StudentMockTestsPage() {
     setExamResultScore(null);
   };
 
-  const handleSubmitExam = () => {
+  const handleSubmitExam = (effectiveQuestions?: PracticeQuestion[]) => {
     setExamSubmitted(true);
+    const questionsToGrade = effectiveQuestions && effectiveQuestions.length > 0 ? effectiveQuestions : SAMPLE_EXAM_QUESTIONS;
     let correct = 0;
-    SAMPLE_EXAM_QUESTIONS.forEach((q) => {
+    let correctLC = 0;
+    let correctRC = 0;
+    questionsToGrade.forEach((q) => {
       if (examAnswers[q.id] === q.correctAnswer) {
         correct += 1;
+        const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(q.part);
+        if (isListening) correctLC++;
+        else correctRC++;
       }
     });
-    const estTotal = Math.min(990, Math.round((correct / SAMPLE_EXAM_QUESTIONS.length) * 990));
-    const estLC = Math.round(estTotal * 0.52);
-    const estRC = estTotal - estLC;
+
+    const isFullScale = questionsToGrade.length >= 200;
+    const estLC = isFullScale ? Math.min(495, correctLC * 5) : correctLC * 5;
+    const estRC = isFullScale ? Math.min(495, correctRC * 5) : correctRC * 5;
+    const estTotal = isFullScale ? Math.min(990, estLC + estRC) : correct * 5;
+
     setExamResultScore({
       total: estTotal,
       listening: estLC,

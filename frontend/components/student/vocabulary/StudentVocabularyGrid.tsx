@@ -6,17 +6,15 @@ import {
   BookOpen,
   RotateCcw,
   Gamepad2,
-  Clock,
   Sparkles,
   Layers,
-  GraduationCap,
 } from "lucide-react";
-import { TestItem } from "@/app/admin/content/vocabulary/types";
+import { TestItem, getTestCategoryKey, getCategoryLabel } from "@/app/admin/content/vocabulary/types";
 
 interface StudentVocabularyGridProps {
   tests: TestItem[];
-  activeSubCategory: "all" | "2024" | "2026" | "600_essential" | "2023";
-  setActiveSubCategory: (cat: "all" | "2024" | "2026" | "600_essential" | "2023") => void;
+  activeSubCategory: string;
+  setActiveSubCategory: (cat: string) => void;
   onOpenWordList: (test: TestItem) => void;
   onOpenFlashcards: (test: TestItem) => void;
   onOpenGame: (test: TestItem) => void;
@@ -32,17 +30,35 @@ export const StudentVocabularyGrid: React.FC<StudentVocabularyGridProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
+  const isAll = !activeSubCategory || activeSubCategory.toLowerCase() === "all";
+
+  // Tự động gom nhóm các phân loại thực tế đang có trong danh sách tests
+  const dynamicCategories = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; count: number }>();
+    tests.forEach((t) => {
+      const key = getTestCategoryKey(t);
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { key, label: getCategoryLabel(key), count: 1 });
+      }
+    });
+    return Array.from(map.values());
+  }, [tests]);
+
   const filteredTests = useMemo(() => {
     return tests.filter((t) => {
-      const matchCat =
-        activeSubCategory === "all" ? true : t.category === activeSubCategory;
+      const matchCat = isAll || getTestCategoryKey(t) === activeSubCategory;
+      const titleStr = t.title || t.nameVi || t.nameEn || "";
+      const yearStr = t.year ? String(t.year) : "";
       const matchSearch =
         searchQuery.trim() === "" ||
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.year.toLowerCase().includes(searchQuery.toLowerCase());
+        titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        yearStr.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCat && matchSearch;
     });
-  }, [tests, activeSubCategory, searchQuery]);
+  }, [tests, activeSubCategory, isAll, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -60,52 +76,33 @@ export const StudentVocabularyGrid: React.FC<StudentVocabularyGridProps> = ({
           />
         </div>
 
-        {/* Danh mục bộ từ */}
+        {/* Danh mục bộ từ tự động hiển thị theo dữ liệu thực tế */}
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveSubCategory("all")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-              activeSubCategory === "all"
+              isAll
                 ? "bg-white text-blue-600 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
             Tất cả ({tests.length})
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubCategory("2024")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-              activeSubCategory === "2024"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            ETS 2024 ({tests.filter((t) => t.category === "2024").length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubCategory("2026")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-              activeSubCategory === "2026"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            ETS 2026 ({tests.filter((t) => t.category === "2026").length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubCategory("600_essential")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-              activeSubCategory === "600_essential"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            600 Từ thiết yếu ({tests.filter((t) => t.category === "600_essential").length})
-          </button>
+          {dynamicCategories.map((cat) => (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={() => setActiveSubCategory(cat.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                activeSubCategory === cat.key
+                  ? "bg-white text-blue-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {cat.label} ({cat.count})
+            </button>
+          ))}
         </div>
       </div>
 
