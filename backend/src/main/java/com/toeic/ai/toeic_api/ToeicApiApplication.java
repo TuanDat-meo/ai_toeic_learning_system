@@ -8,6 +8,7 @@ public class ToeicApiApplication {
 
 	static {
 		System.setProperty("java.net.preferIPv4Stack", "true");
+		System.setProperty("java.net.preferIPv4Addresses", "true");
 	}
 
 	public static void main(String[] args) {

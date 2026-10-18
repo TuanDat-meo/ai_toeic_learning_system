@@ -121,12 +121,9 @@ jobs:
       - name: Verify backend
         working-directory: backend
         env:
-          DB_URL: jdbc:postgresql://127.0.0.1:5432/toeic_ai_learning
+          DB_URL: jdbc:postgresql://localhost:5432/toeic_ai_learning
           DB_USERNAME: postgres
           DB_PASSWORD: ci-password
-          SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/toeic_ai_learning
-          SPRING_DATASOURCE_USERNAME: postgres
-          SPRING_DATASOURCE_PASSWORD: ci-password
         run: |
           chmod +x ./mvnw
           ./mvnw --batch-mode --no-transfer-progress verify
