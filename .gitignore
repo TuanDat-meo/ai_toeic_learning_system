@@ -1,0 +1,36 @@
+# Local data and generation scripts
+data/
+database/
+scripts/
+
+# Large learning media is stored outside Git and mounted into the frontend container.
+/frontend/public/audio/
+/frontend/public/ets_2024_lc/
+/frontend/public/ets_2024_lc1/
+/frontend/public/ets_lc1/
+/frontend/public/ets_rc1/
+/frontend/public/ets_transcript1/
+/frontend/public/images/
+
+# Environment files
+.env
+.env.*
+!.env.example
+.env*.local
+
+# Build and dependency artifacts
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+build/
+dist/
+backend/target/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.idea
+*.log
+public/audio/
+public/ets_2024_lc/
+public/ets_2024_lc1/
+public/ets_lc1/
+public/ets_rc1/
+public/ets_transcript1/
+public/images/
