@@ -70,7 +70,7 @@ export default function StudentVocabularyPage() {
 
   // Tính tổng số từ trong kho
   const totalWordsCount = React.useMemo(() => {
-    return tests.reduce((acc, curr) => acc + (curr.words?.length || curr.wordCount || 0), 0);
+    return tests.reduce((acc, curr) => acc + (curr.words ? curr.words.length : (curr.wordCount ?? 0)), 0);
   }, [tests]);
 
   return (

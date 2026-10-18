@@ -66,7 +66,7 @@ public class VocabularyService {
                     s.title(),
                     s.year(),
                     s.category(),
-                    Math.max(s.wordCount(), words.size()),
+                    words.size(),
                     s.status(),
                     words
             ));
@@ -85,7 +85,7 @@ public class VocabularyService {
 
         VocabularyTestSet set = sets.get(0);
         List<VocabularyWord> words = getWordsForSet(setId, userId);
-        return new VocabularyTestSet(set.id(), set.title(), set.year(), set.category(), Math.max(set.wordCount(), words.size()), set.status(), words);
+        return new VocabularyTestSet(set.id(), set.title(), set.year(), set.category(), words.size(), set.status(), words);
     }
 
     public List<VocabularyWord> getWordsForSet(String setId, UUID userId) {
@@ -340,15 +340,26 @@ public class VocabularyService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void seedInitialDataIfEmpty() {
-        Integer count = jdbc.queryForObject("SELECT count(*) FROM vocabulary_test_sets", Integer.class);
-        if (count == null || count == 0) {
-            jdbc.update("""
-                    INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status)
-                    VALUES ('ets2024-t1', 'ETS 2024 - Test 1 Vocabulary', '2024', '2024', 8, 'PUBLISHED'),
-                           ('ets2024-t2', 'ETS 2024 - Test 2 Vocabulary', '2024', '2024', 8, 'PUBLISHED'),
-                           ('600-essential', '600 Từ Vựng Thiết Yếu Cho TOEIC', '2024', '600_essential', 10, 'PUBLISHED')
-                    """);
+        // Ensure default sets exist
+        jdbc.update("""
+                INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status)
+                VALUES ('ets2024-t1', 'ETS 2024 - Test 1 Vocabulary', '2024', '2024', 8, 'PUBLISHED')
+                ON CONFLICT (id) DO NOTHING
+                """);
+        jdbc.update("""
+                INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status)
+                VALUES ('ets2024-t2', 'ETS 2024 - Test 2 Vocabulary', '2024', '2024', 8, 'PUBLISHED')
+                ON CONFLICT (id) DO NOTHING
+                """);
+        jdbc.update("""
+                INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status)
+                VALUES ('600-essential', '600 Từ Vựng Thiết Yếu Cho TOEIC', '2024', '600_essential', 10, 'PUBLISHED')
+                ON CONFLICT (id) DO NOTHING
+                """);
 
+        // Seed words for ets2024-t1 if empty
+        Integer t1WordCount = jdbc.queryForObject("SELECT count(*) FROM vocabulary_items WHERE set_id = 'ets2024-t1'", Integer.class);
+        if (t1WordCount == null || t1WordCount == 0) {
             String[][] wordsT1 = {
                 {"w-1", "negotiate", "/nəˈɡoʊʃieɪt/", "Verb", "Đàm phán, thương lượng hợp đồng", "The executive team successfully negotiated a lucrative distribution agreement.", "Ban điều hành đã thương lượng thành công thỏa thuận phân phối.", "B2", "true"},
                 {"w-2", "invoice", "/ˈɪnvɔɪs/", "Noun", "Hóa đơn thanh toán hàng hóa", "All invoices must be submitted to the finance department by the end of each month.", "Tất cả hóa đơn phải được nộp cho bộ phận tài chính vào cuối tháng.", "B1", "false"},
@@ -365,6 +376,57 @@ public class VocabularyService {
                 jdbc.update("""
                         INSERT INTO vocabulary_items (id, set_id, word, ipa, part_of_speech, meaning, example, example_meaning, level, starred, order_index)
                         VALUES (?, 'ets2024-t1', ?, ?, ?, ?, ?, ?, ?, ?::boolean, ?)
+                        ON CONFLICT (id) DO NOTHING
+                        """, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], Boolean.parseBoolean(w[8]), i);
+            }
+        }
+
+        // Seed words for ets2024-t2 if empty
+        Integer t2WordCount = jdbc.queryForObject("SELECT count(*) FROM vocabulary_items WHERE set_id = 'ets2024-t2'", Integer.class);
+        if (t2WordCount == null || t2WordCount == 0) {
+            String[][] wordsT2 = {
+                {"w-t2-1", "compromise", "/ˈkɑːmprəmaɪz/", "Noun", "Sự thỏa hiệp, thỏa thuận nhượng bộ", "The management reached a compromise with the union over working hours.", "Ban quản lý đã đạt được thỏa thuận thỏa hiệp với công đoàn về giờ làm việc.", "B2", "true"},
+                {"w-t2-2", "delegate", "/ˈdelɪɡeɪt/", "Verb", "Ủy thác, phân công nhiệm vụ", "A successful manager knows how to delegate responsibilities effectively.", "Một người quản lý thành công biết cách phân công trách nhiệm một cách hiệu quả.", "B2", "false"},
+                {"w-t2-3", "facilitate", "/fəˈsɪlɪteɪt/", "Verb", "Tạo điều kiện thuận lợi, hỗ trợ tiến trình", "The new software is designed to facilitate communication between departments.", "Phần mềm mới được thiết kế để tạo điều kiện liên lạc thuận lợi giữa các phòng ban.", "B2", "false"},
+                {"w-t2-4", "mandatory", "/ˈmændətɔːri/", "Adjective", "Bắt buộc theo quy định", "Attendance at the workplace safety workshop is mandatory for all personnel.", "Tham dự hội thảo an toàn lao động là bắt buộc đối với tất cả nhân viên.", "B1", "true"},
+                {"w-t2-5", "lucrative", "/ˈluːkrətɪv/", "Adjective", "Sinh lợi nhiều, mang lại lợi nhuận cao", "The merger opened up lucrative opportunities in the international market.", "Vụ sáp nhập đã mở ra những cơ hội sinh lời lớn tại thị trường quốc tế.", "B2", "false"},
+                {"w-t2-6", "reimburse", "/ˌriːɪmˈbɜːrs/", "Verb", "Hoàn trả chi phí, bồi hoàn tiền", "The company will reimburse travel expenses within five business days.", "Công ty sẽ hoàn trả các khoản chi phí đi lại trong vòng năm ngày làm việc.", "B1", "true"},
+                {"w-t2-7", "preliminary", "/prɪˈlɪmɪneri/", "Adjective", "Sơ bộ, mở đầu, chuẩn bị", "The preliminary findings of the financial audit will be released tomorrow.", "Các kết quả sơ bộ của đợt kiểm toán tài chính sẽ được công bố vào ngày mai.", "B2", "false"},
+                {"w-t2-8", "tenant", "/ˈtenənt/", "Noun", "Người thuê nhà, bên thuê mặt bằng", "All tenants are required to follow the building noise regulations after 10 PM.", "Tất cả khách thuê được yêu cầu tuân thủ quy định về tiếng ồn sau 10 giờ tối.", "B1", "false"}
+            };
+
+            for (int i = 0; i < wordsT2.length; i++) {
+                String[] w = wordsT2[i];
+                jdbc.update("""
+                        INSERT INTO vocabulary_items (id, set_id, word, ipa, part_of_speech, meaning, example, example_meaning, level, starred, order_index)
+                        VALUES (?, 'ets2024-t2', ?, ?, ?, ?, ?, ?, ?, ?::boolean, ?)
+                        ON CONFLICT (id) DO NOTHING
+                        """, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], Boolean.parseBoolean(w[8]), i);
+            }
+        }
+
+        // Seed words for 600-essential if empty
+        Integer w600Count = jdbc.queryForObject("SELECT count(*) FROM vocabulary_items WHERE set_id = '600-essential'", Integer.class);
+        if (w600Count == null || w600Count == 0) {
+            String[][] words600 = {
+                {"w-600-1", "abide by", "/əˈbaɪd baɪ/", "Verb", "Tuân thủ, tuân theo hợp đồng", "Both parties agreed to abide by the terms stated in the agreement.", "Cả hai bên đã đồng ý tuân thủ các điều khoản được nêu trong hợp đồng.", "B1", "true"},
+                {"w-600-2", "agreement", "/əˈɡriːmənt/", "Noun", "Hợp đồng, sự thỏa thuận", "The commercial agreement was signed after weeks of negotiations.", "Hợp đồng thương mại đã được ký kết sau nhiều tuần đàm phán.", "A2", "false"},
+                {"w-600-3", "assurance", "/əˈʃʊrəns/", "Noun", "Sự cam đoan, sự bảo đảm", "The sales director gave his assurance that the delivery would arrive on schedule.", "Giám đốc bán hàng đã cam đoan rằng hàng sẽ đến đúng lịch trình.", "B2", "false"},
+                {"w-600-4", "cancellation", "/ˌkænsəˈleɪʃn/", "Noun", "Sự hủy bỏ, chấm dứt", "The client clause specifies penalty fees in case of late contract cancellation.", "Điều khoản khách hàng quy định mức phí phạt trong trường hợp hủy hợp đồng trễ.", "B1", "true"},
+                {"w-600-5", "determine", "/dɪˈtɜːrmɪn/", "Verb", "Xác định, quyết định một cách rõ ràng", "Market research helped the committee determine the most competitive retail price.", "Nghiên cứu thị trường đã giúp ủy ban xác định mức giá bán lẻ cạnh tranh nhất.", "B1", "false"},
+                {"w-600-6", "engage", "/ɪnˈɡeɪdʒ/", "Verb", "Tham gia, cam kết tham gia", "The firm decided to engage an external consulting agency for market entry.", "Công ty đã quyết định thuê một đơn vị tư vấn bên ngoài để tiếp cận thị trường.", "B2", "false"},
+                {"w-600-7", "establish", "/ɪˈstæblɪʃ/", "Verb", "Thiết lập, thành lập mối quan hệ", "The two enterprises collaborated to establish long-term strategic cooperation.", "Hai doanh nghiệp đã hợp tác nhằm thiết lập mối quan hệ chiến lược lâu dài.", "B1", "true"},
+                {"w-600-8", "obligate", "/ˈɑːblɪɡeɪt/", "Verb", "Bắt buộc, ràng buộc nghĩa vụ", "The confidentiality clause obligates employees to protect proprietary data.", "Điều khoản bảo mật ràng buộc nhân viên phải bảo vệ dữ liệu độc quyền.", "B2", "false"},
+                {"w-600-9", "party", "/ˈpɑːrti/", "Noun", "Bên tham gia hợp đồng / thỏa thuận", "The contract is only legally binding when signed by both interested parties.", "Hợp đồng chỉ có hiệu lực pháp lý khi được ký bởi cả hai bên liên quan.", "B1", "false"},
+                {"w-600-10", "provision", "/prəˈvɪʒn/", "Noun", "Điều khoản hợp đồng, sự dự phòng", "Under the provisions of the lease, rent will increase by three percent annually.", "Theo các điều khoản của hợp đồng thuê, tiền thuê sẽ tăng 3% hàng năm.", "B2", "true"}
+            };
+
+            for (int i = 0; i < words600.length; i++) {
+                String[] w = words600[i];
+                jdbc.update("""
+                        INSERT INTO vocabulary_items (id, set_id, word, ipa, part_of_speech, meaning, example, example_meaning, level, starred, order_index)
+                        VALUES (?, '600-essential', ?, ?, ?, ?, ?, ?, ?, ?::boolean, ?)
+                        ON CONFLICT (id) DO NOTHING
                         """, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], Boolean.parseBoolean(w[8]), i);
             }
         }
@@ -381,6 +443,12 @@ public class VocabularyService {
                 } catch (Exception ignored) {}
             }
         } catch (Exception ignored) {}
+
+        // Synchronize all set word counts to actual items count
+        jdbc.update("""
+                UPDATE vocabulary_test_sets s
+                SET word_count = (SELECT count(*) FROM vocabulary_items w WHERE w.set_id = s.id)
+                """);
     }
 
     private VocabularyTestSet mapSetSummary(ResultSet rs) throws SQLException {
