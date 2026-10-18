@@ -17,6 +17,7 @@ import {
   X,
   ExternalLink,
   CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import { AdminPageFrame, type AdminMetric } from "@/components/admin/AdminPageFrame";
 import {
@@ -51,6 +52,7 @@ export function AdminAnnouncementsView() {
   const [targetFilter, setTargetFilter] = useState<"ALL" | AnnouncementTarget>("ALL");
 
   const [editingItem, setEditingItem] = useState<Partial<Announcement> | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [previewItem, setPreviewItem] = useState<Announcement | null>(null);
   const [deletingItem, setDeletingItem] = useState<Announcement | null>(null);
 
@@ -123,6 +125,7 @@ export function AdminAnnouncementsView() {
   ];
 
   function openCreateModal() {
+    setFormErrors({});
     setEditingItem({
       title: "",
       summary: "",
@@ -136,16 +139,28 @@ export function AdminAnnouncementsView() {
   }
 
   async function handleSaveForm() {
-    if (!editingItem || !editingItem.title?.trim() || !editingItem.content?.trim()) {
-      alert("Vui lòng nhập đầy đủ Tiêu đề và Nội dung thông báo!");
+    if (!editingItem) return;
+    const title = editingItem.title?.trim() || "";
+    const summary = editingItem.summary?.trim() || "";
+    const content = editingItem.content?.trim() || "";
+    const actionUrl = editingItem.actionUrl?.trim() || "";
+    const errors: Record<string, string> = {};
+    if (!title) errors.title = "Vui lòng nhập tiêu đề thông báo.";
+    else if (title.length > 200) errors.title = "Tiêu đề không được vượt quá 200 ký tự.";
+    if (summary.length > 500) errors.summary = "Tóm tắt không được vượt quá 500 ký tự.";
+    if (!content) errors.content = "Vui lòng nhập nội dung chi tiết.";
+    else if (content.length > 10000) errors.content = "Nội dung không được vượt quá 10.000 ký tự.";
+    if (actionUrl.length > 500) errors.actionUrl = "Đường dẫn không được vượt quá 500 ký tự.";
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     try {
       const payload = {
-        title: editingItem.title.trim(), summary: editingItem.summary?.trim() || "",
-        content: editingItem.content.trim(), type: editingItem.type || "FEATURE_UPDATE",
+        title, summary,
+        content, type: editingItem.type || "FEATURE_UPDATE",
         target: editingItem.target || "ALL", status: editingItem.status || "ACTIVE",
-        isPinned: Boolean(editingItem.isPinned), actionUrl: editingItem.actionUrl?.trim() || "",
+        isPinned: Boolean(editingItem.isPinned), actionUrl,
       };
       const saved = editingItem.id
         ? await updateAnnouncement(editingItem.id, payload)
@@ -333,7 +348,7 @@ export function AdminAnnouncementsView() {
 
                   <button
                     type="button"
-                    onClick={() => setEditingItem(item)}
+                    onClick={() => { setFormErrors({}); setEditingItem(item); }}
                     className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-700 transition"
                     title="Chỉnh sửa"
                   >
@@ -368,7 +383,7 @@ export function AdminAnnouncementsView() {
               <h3 className="text-base font-bold text-slate-900">
                 {editingItem.id ? "Chỉnh sửa Thông báo" : "Tạo Thông báo mới"}
               </h3>
-              <button type="button" onClick={() => setEditingItem(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+              <button type="button" onClick={() => { setEditingItem(null); setFormErrors({}); }} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -378,22 +393,30 @@ export function AdminAnnouncementsView() {
                 <label className="block text-xs font-bold text-slate-800 mb-1">Tiêu đề thông báo *</label>
                 <input
                   type="text"
+                  maxLength={200}
+                  aria-invalid={Boolean(formErrors.title)}
+                  aria-describedby={formErrors.title ? "announcement-title-error" : undefined}
                   value={editingItem.title || ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })}
+                  onChange={(e) => { setEditingItem({ ...editingItem, title: e.target.value }); setFormErrors((current) => ({ ...current, title: "" })); }}
                   placeholder="Ví dụ: Cập nhật bộ đề thi ETS 2026..."
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className={`h-10 w-full rounded-xl border px-3 text-xs text-slate-800 outline-none focus:border-blue-500 ${formErrors.title ? "border-rose-400 bg-rose-50/40 focus:ring-2 focus:ring-rose-100" : "border-slate-200"}`}
                 />
+                {formErrors.title && <p id="announcement-title-error" role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0" />{formErrors.title}</p>}
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">Tóm tắt ngắn (vài câu)</label>
                 <input
                   type="text"
+                  maxLength={500}
+                  aria-invalid={Boolean(formErrors.summary)}
+                  aria-describedby={formErrors.summary ? "announcement-summary-error" : undefined}
                   value={editingItem.summary || ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, summary: e.target.value })}
+                  onChange={(e) => { setEditingItem({ ...editingItem, summary: e.target.value }); setFormErrors((current) => ({ ...current, summary: "" })); }}
                   placeholder="Mô tả ngắn xuất hiện ở danh sách..."
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className={`h-10 w-full rounded-xl border px-3 text-xs text-slate-800 outline-none focus:border-blue-500 ${formErrors.summary ? "border-rose-400 bg-rose-50/40 focus:ring-2 focus:ring-rose-100" : "border-slate-200"}`}
                 />
+                {formErrors.summary && <p id="announcement-summary-error" role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0" />{formErrors.summary}</p>}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -429,22 +452,30 @@ export function AdminAnnouncementsView() {
                 <label className="block text-xs font-bold text-slate-800 mb-1">Nội dung chi tiết *</label>
                 <textarea
                   rows={5}
+                  maxLength={10000}
+                  aria-invalid={Boolean(formErrors.content)}
+                  aria-describedby={formErrors.content ? "announcement-content-error" : undefined}
                   value={editingItem.content || ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, content: e.target.value })}
+                  onChange={(e) => { setEditingItem({ ...editingItem, content: e.target.value }); setFormErrors((current) => ({ ...current, content: "" })); }}
                   placeholder="Nội dung chi tiết của thông báo..."
-                  className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className={`w-full rounded-xl border p-3 text-xs text-slate-800 outline-none focus:border-blue-500 ${formErrors.content ? "border-rose-400 bg-rose-50/40 focus:ring-2 focus:ring-rose-100" : "border-slate-200"}`}
                 />
+                {formErrors.content && <p id="announcement-content-error" role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0" />{formErrors.content}</p>}
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">Đường dẫn liên kết (tùy chọn)</label>
                 <input
                   type="text"
+                  maxLength={500}
+                  aria-invalid={Boolean(formErrors.actionUrl)}
+                  aria-describedby={formErrors.actionUrl ? "announcement-action-url-error" : undefined}
                   value={editingItem.actionUrl || ""}
-                  onChange={(e) => setEditingItem({ ...editingItem, actionUrl: e.target.value })}
+                  onChange={(e) => { setEditingItem({ ...editingItem, actionUrl: e.target.value }); setFormErrors((current) => ({ ...current, actionUrl: "" })); }}
                   placeholder="Ví dụ: /mock-tests hoặc /billing/subscriptions"
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-800 outline-none focus:border-blue-500 font-mono"
+                  className={`h-10 w-full rounded-xl border px-3 text-xs text-slate-800 outline-none focus:border-blue-500 font-mono ${formErrors.actionUrl ? "border-rose-400 bg-rose-50/40 focus:ring-2 focus:ring-rose-100" : "border-slate-200"}`}
                 />
+                {formErrors.actionUrl && <p id="announcement-action-url-error" role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0" />{formErrors.actionUrl}</p>}
               </div>
 
               <div className="flex items-center gap-6 pt-2">
@@ -470,7 +501,7 @@ export function AdminAnnouncementsView() {
               </div>
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <button type="button" onClick={() => setEditingItem(null)} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                <button type="button" onClick={() => { setEditingItem(null); setFormErrors({}); }} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
                   Hủy
                 </button>
                 <button type="button" onClick={() => void handleSaveForm()} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">
