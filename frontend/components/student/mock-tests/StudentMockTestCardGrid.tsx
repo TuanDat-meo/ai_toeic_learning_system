@@ -8,6 +8,7 @@ import {
   Play,
   RotateCcw,
   Layers,
+  History,
 } from "lucide-react";
 import { TestItem } from "@/app/admin/content/mock-tests/types";
 import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
@@ -21,6 +22,7 @@ interface StudentMockTestCardGridProps {
   onOpenPractice: (test: TestItem) => void;
   onOpenTranscript: (test: TestItem) => void;
   onOpenVocab: (test: TestItem) => void;
+  onOpenHistory?: (test: TestItem) => void;
 }
 
 function StudentMockTestCardItem({
@@ -29,12 +31,14 @@ function StudentMockTestCardItem({
   onOpenPractice,
   onOpenTranscript,
   onOpenVocab,
+  onOpenHistory,
 }: {
   test: TestItem;
   onOpenExam: (test: TestItem) => void;
   onOpenPractice: (test: TestItem) => void;
   onOpenTranscript: (test: TestItem) => void;
   onOpenVocab: (test: TestItem) => void;
+  onOpenHistory?: (test: TestItem) => void;
 }) {
   const progress = useItemProgress(`mock-test-${test.id}`, 200);
 
@@ -116,11 +120,11 @@ function StudentMockTestCardItem({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
             onClick={() => onOpenTranscript(test)}
-            className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+            className="py-1.5 px-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
             title="Xem Transcript bài nghe & Dịch nghĩa"
           >
             <FileText className="w-3 h-3 text-blue-600" />
@@ -130,11 +134,21 @@ function StudentMockTestCardItem({
           <button
             type="button"
             onClick={() => onOpenVocab(test)}
-            className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+            className="py-1.5 px-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
             title="Xem từ vựng trọng tâm trong đề"
           >
             <Languages className="w-3 h-3 text-emerald-600" />
             Từ vựng
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenHistory?.(test)}
+            className="py-1.5 px-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+            title="Xem lịch sử các lần thi thử"
+          >
+            <History className="w-3 h-3 text-amber-600" />
+            Lịch sử
           </button>
         </div>
       </div>
@@ -150,6 +164,7 @@ export const StudentMockTestCardGrid: React.FC<StudentMockTestCardGridProps> = (
   onOpenPractice,
   onOpenTranscript,
   onOpenVocab,
+  onOpenHistory,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDifficulty, setFilterDifficulty] = useState("ALL");
@@ -247,6 +262,7 @@ export const StudentMockTestCardGrid: React.FC<StudentMockTestCardGridProps> = (
               onOpenPractice={onOpenPractice}
               onOpenTranscript={onOpenTranscript}
               onOpenVocab={onOpenVocab}
+              onOpenHistory={onOpenHistory}
             />
           ))}
         </div>

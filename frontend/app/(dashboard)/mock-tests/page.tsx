@@ -9,11 +9,12 @@ import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTes
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
 import { MockTestTranscriptModal } from "@/components/admin/content/mock-tests/MockTestTranscriptModal";
 import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTestVocabModal";
+import { MockTestHistoryModal } from "@/components/admin/content/mock-tests/MockTestHistoryModal";
 
 export default function StudentMockTestsPage() {
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2">("vol1");
-  const [testsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
-  const [testsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
+  const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
+  const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
 
   const currentTests = selectedVol === "vol1" ? testsVol1 : testsVol2;
 
@@ -105,9 +106,10 @@ export default function StudentMockTestsPage() {
   const [showVocabSection, setShowVocabSection] = useState(false);
   const [isVocabExpanded, setIsVocabExpanded] = useState(false);
 
-  // Modals Transcript & Từ vựng
+  // Modals Transcript & Từ vựng & Lịch sử
   const [transcriptModalTest, setTranscriptModalTest] = useState<TestItem | null>(null);
   const [vocabModalTest, setVocabModalTest] = useState<TestItem | null>(null);
+  const [historyModalTest, setHistoryModalTest] = useState<TestItem | null>(null);
   const [savedVocabBag, setSavedVocabBag] = useState<string[]>([]);
 
   // Audio state
@@ -130,6 +132,18 @@ export default function StudentMockTestsPage() {
     }
     return () => clearInterval(timer);
   }, [examStarted, examSubmitted, examTimeRemaining]);
+
+  // ✅ FIX 3: Timer đếm giờ cho Practice Mode — đồng hồ chạy đúng
+  React.useEffect(() => {
+    let practiceTimer: NodeJS.Timeout;
+    if (practiceModalTest && !isTimerPaused) {
+      practiceTimer = setInterval(() => {
+        setPracticeTimerSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(practiceTimer);
+  }, [practiceModalTest, isTimerPaused]);
+
 
   const handleStartExamNow = (_customParts?: string[], customMinutes?: number) => {
     const mins = customMinutes ?? parseInt(examDurationType, 10);
@@ -217,9 +231,11 @@ export default function StudentMockTestsPage() {
           setPracticeCurrentQIndex(0);
           setPracticeAnswers({});
           setPracticeChecked({});
+          setPracticeTimerSeconds(0); // ✅ Reset đồng hồ khi bắt đầu bài mới
         }}
         onOpenTranscript={(test) => setTranscriptModalTest(test)}
         onOpenVocab={(test) => setVocabModalTest(test)}
+        onOpenHistory={(test) => setHistoryModalTest(test)}
       />
 
       {/* MODAL 1: CHẾ ĐỘ THI THỬ (EXAM MODE) */}
@@ -248,7 +264,7 @@ export default function StudentMockTestsPage() {
           onClose={() => setExamModalTest(null)}
           onStartExamNow={handleStartExamNow}
           onSubmitExam={handleSubmitExam}
-          onOpenQuestionGrid={() => {}}
+          onOpenQuestionGrid={() => setIsQuestionGridOpen(true)}
         />
       )}
 
@@ -322,6 +338,25 @@ export default function StudentMockTestsPage() {
             );
           }}
           onClose={() => setVocabModalTest(null)}
+        />
+      )}
+
+      {/* MODAL 5: LỊCH SỬ LÀM BÀI */}
+      {historyModalTest && (
+        <MockTestHistoryModal
+          test={historyModalTest}
+          onClose={() => setHistoryModalTest(null)}
+          onClearHistory={(testId) => {
+            const clearAttempts = (list: TestItem[]) =>
+              list.map((t) => (t.id === testId ? { ...t, historyAttempts: [] } : t));
+            if (selectedVol === "vol1") {
+              setTestsVol1(clearAttempts);
+            } else {
+              setTestsVol2(clearAttempts);
+            }
+            setHistoryModalTest((prev) => (prev && prev.id === testId ? { ...prev, historyAttempts: [] } : prev));
+            triggerToast("Đã làm mới lịch sử thi thử!");
+          }}
         />
       )}
     </div>
