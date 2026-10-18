@@ -86,6 +86,8 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 }) => {
   const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
   const [isLocalQuestionGridOpen, setIsLocalQuestionGridOpen] = useState(false);
+  const [isLocalNotesModalOpen, setIsLocalNotesModalOpen] = useState(false);
+  const [userNotes, setUserNotes] = useState<{ [qId: number]: string }>({});
   const [selfAssessment, setSelfAssessment] = useState<{ [qId: number]: "clear" | "partial" | "hard" }>({});
 
   const baseQuestion = dictationModalCard.questions[activeDictationQIndex];
@@ -350,6 +352,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                           type="button"
                           onClick={() => {
                             playSfx("click");
+                            setIsLocalNotesModalOpen(true);
                             setIsNotesModalOpen(true);
                           }}
                           title="Ghi chú"
@@ -357,16 +360,19 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                         >
                           <FileText className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            playSfx("click");
-                            triggerToast("Đã gửi yêu cầu hỗ trợ giải đáp!");
+                        <QuestionErrorReportButton
+                          source="LISTENING"
+                          questionRef={`DICTATION-${q.id}`}
+                          relatedContent={`${dictationModalCard.part} • Test ${dictationModalCard.testNumber} (${dictationModalCard.year}) • Câu ${activeDictationQIndex + 1}`}
+                          questionSnapshot={{
+                            questionText: q.fullTranscript,
+                            part: dictationModalCard.part,
+                            audioUrl: q.audioUrl,
+                            translation: q.vietnameseTranslation,
                           }}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
-                        >
-                          Hỏi bài
-                        </button>
+                          compact
+                          onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)}
+                        />
                       </div>
                     </div>
 
@@ -1031,6 +1037,75 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                 >
                   Đóng danh sách
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL GHI CHÚ CÁ NHÂN */}
+        {isLocalNotesModalOpen && q && (
+          <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-slate-900">Ghi chú cá nhân</h3>
+                    <p className="text-xs text-slate-500">Câu {q.id} • {dictationModalCard.part}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLocalNotesModalOpen(false)}
+                  className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <textarea
+                rows={5}
+                value={userNotes[q.id] || ""}
+                onChange={(e) => setUserNotes({ ...userNotes, [q.id]: e.target.value })}
+                placeholder="Nhập ghi chú hoặc kiến thức cần nhớ cho câu này..."
+                className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
+              />
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = { ...userNotes };
+                    delete updated[q.id];
+                    setUserNotes(updated);
+                    triggerToast("Đã xóa ghi chú của câu hỏi này!");
+                  }}
+                  className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
+                >
+                  🗑 Xóa ghi chú
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsLocalNotesModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLocalNotesModalOpen(false);
+                      triggerToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                    }}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                  >
+                    Lưu ghi chú
+                  </button>
+                </div>
               </div>
             </div>
           </div>
