@@ -150,8 +150,17 @@ public class ListeningService {
                     updated_at = now()
                 """;
 
+        String status = req.status();
+        if (status == null || "Đang luyện tập".equals(status)) {
+            status = "IN_PROGRESS";
+        } else if ("Đã hoàn thành".equals(status)) {
+            status = "COMPLETED";
+        } else if ("Chưa bắt đầu".equals(status)) {
+            status = "NOT_STARTED";
+        }
+
         jdbc.update(upsert, userId, req.cardId(), req.completedQuestions(), req.totalQuestions(),
-                req.status() != null ? req.status() : "Đang luyện tập", req.lastQuestionIndex());
+                status, req.lastQuestionIndex());
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -165,11 +174,11 @@ public class ListeningService {
         // Tạo thẻ mẫu cho Test 1 Part 1
         jdbc.update("""
                 INSERT INTO listening_dictation_cards (id, test_number, part, year, total_questions, status)
-                VALUES ('t1-p1', 1, 'Part 1', '2024', 6, 'Chưa bắt đầu'),
-                       ('t1-p2', 1, 'Part 2', '2024', 25, 'Chưa bắt đầu'),
-                       ('t1-p3', 1, 'Part 3', '2024', 39, 'Chưa bắt đầu'),
-                       ('t1-p4', 1, 'Part 4', '2024', 30, 'Chưa bắt đầu'),
-                       ('t2-p1', 2, 'Part 1', '2024', 6, 'Chưa bắt đầu')
+                VALUES ('t1-p1', 1, 'Part 1', '2024', 6, 'NOT_STARTED'),
+                       ('t1-p2', 1, 'Part 2', '2024', 25, 'NOT_STARTED'),
+                       ('t1-p3', 1, 'Part 3', '2024', 39, 'NOT_STARTED'),
+                       ('t1-p4', 1, 'Part 4', '2024', 30, 'NOT_STARTED'),
+                       ('t2-p1', 2, 'Part 1', '2024', 6, 'NOT_STARTED')
                 """);
 
         // Seed các câu hỏi mẫu cho t1-p1
