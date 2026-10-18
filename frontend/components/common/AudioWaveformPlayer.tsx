@@ -302,7 +302,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
       <audio
         ref={audioRef}
         src={audioUrl || "/ets_2024_lc/audio/part1_test1.mp3"}
-        preload="auto"
+        preload="metadata"
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;
           if (Number.isFinite(d) && d > 0) setDuration(d);

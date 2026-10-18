@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
-import { login, startGoogleLogin } from '@/lib/api/auth';
+import { getHomePathForRole, login, startGoogleLogin } from '@/lib/api/auth';
 import { useEnterToSubmitAuthForm } from './useEnterToSubmitAuthForm';
 import { GoogleIcon } from './GoogleIcon';
 
@@ -48,7 +48,7 @@ export function LoginCredentialsForm({
     try {
       const user = await login(normalizedEmail, password);
       onAuthenticated?.();
-      router.replace(user.role === 'ADMIN' ? '/admin/overview' : '/dashboard');
+      router.replace(getHomePathForRole(user.role));
       router.refresh();
     } catch (requestError) {
       setServerError(requestError instanceof Error

@@ -1,18 +1,30 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { getCurrentUser, type AuthUser } from '@/lib/api/auth';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { getCurrentUser, getHomePathForRole, type AuthUser } from '@/lib/api/auth';
+
+const teacherAdminRoutes = ['/admin/content', '/admin/support', '/admin/community', '/admin/settings'];
+
+function canAccessAdminPath(user: AuthUser, pathname: string) {
+  if (user.role === 'ADMIN') return true;
+  return user.role === 'TEACHER' && teacherAdminRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+}
 
 export function RoleGuard({
   role,
   children,
 }: {
-  role: AuthUser['role'];
+  role: AuthUser['role'] | AuthUser['role'][];
   children: ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const allowedRoles = useMemo(() => Array.isArray(role) ? role : [role], [role]);
   const [checking, setChecking] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -20,10 +32,7 @@ export function RoleGuard({
     getCurrentUser()
       .then((user) => {
         if (!active) return;
-        if (user.role !== role) {
-          router.replace(user.role === 'ADMIN' ? '/admin/overview' : '/dashboard');
-          return;
-        }
+        setUser(user);
         setChecking(false);
       })
       .catch(() => {
@@ -33,9 +42,19 @@ export function RoleGuard({
     return () => {
       active = false;
     };
-  }, [role, router]);
+  }, [router]);
 
-  if (checking) {
+  const authorized = user !== null
+    && allowedRoles.includes(user.role)
+    && canAccessAdminPath(user, pathname);
+
+  useEffect(() => {
+    if (!checking && user && !authorized) {
+      router.replace(getHomePathForRole(user.role));
+    }
+  }, [authorized, checking, router, user]);
+
+  if (checking || !authorized) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-surface px-4">
         <p role="status" className="text-sm text-on-surface-variant">Đang xác thực tài khoản...</p>

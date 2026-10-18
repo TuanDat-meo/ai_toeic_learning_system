@@ -3,6 +3,15 @@ data/
 database/
 scripts/
 
+# Large learning media is stored outside Git and mounted into the frontend container.
+/frontend/public/audio/
+/frontend/public/ets_2024_lc/
+/frontend/public/ets_2024_lc1/
+/frontend/public/ets_lc1/
+/frontend/public/ets_rc1/
+/frontend/public/ets_transcript1/
+/frontend/public/images/
+
 # Environment files
 .env
 .env.*

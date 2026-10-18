@@ -62,6 +62,7 @@ public class SecurityConfig {
                 .userDetailsService(userAccountService)
                 .securityContext(context -> context.securityContextRepository(contextRepository))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/webhooks/sepay"))
                 .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                         request -> request.getServletPath().startsWith("/api/")))
@@ -84,6 +85,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/community/**").authenticated()
                         .requestMatchers("/api/announcements/**").hasRole("STUDENT")
                         .requestMatchers("/api/question-corrections/**").authenticated()
+                        .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
+                            "/api/admin/announcements", "/api/admin/announcements/**",
+                            "/api/admin/settings", "/api/admin/settings/**")
+                            .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .anyRequest().permitAll());

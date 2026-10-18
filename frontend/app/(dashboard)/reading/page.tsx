@@ -7,6 +7,8 @@ import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentReadingPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
@@ -20,6 +22,17 @@ export default function StudentReadingPage() {
       setToastMessage(null);
     }, 2800);
   };
+
+  async function startReadingPractice(card: ExerciseCardData): Promise<boolean> {
+    try {
+      await consumeLearningFeature("READING_PRACTICE");
+      setActivePracticeCard(card);
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể bắt đầu lượt luyện Reading.");
+      return false;
+    }
+  }
 
   // Web Audio SFX Synthesizer
   const playSfx = (type?: "correct" | "wrong" | "click") => {
@@ -69,18 +82,19 @@ export default function StudentReadingPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
             <BookOpen className="w-4 h-4 text-blue-600" />
             {cards.length} chuyên đề ({totalQuestionsCount.toLocaleString("vi-VN")} câu hỏi)
           </span>
+          <LearningQuotaBadge featureKey="READING_PRACTICE" />
         </div>
       </header>
 
       {/* Grid danh sách bài đọc cho học viên */}
       <StudentReadingCardGrid
         cards={cards}
-        onStartPractice={(card) => setActivePracticeCard(card)}
+        onStartPractice={(card) => { void startReadingPractice(card); }}
         onOpenTheory={(card) => setTheoryCard(card)}
       />
 
@@ -90,9 +104,11 @@ export default function StudentReadingPage() {
           card={theoryCard}
           onClose={() => setTheoryCard(null)}
           onStartPractice={() => {
-            const cardToStart = theoryCard;
-            setTheoryCard(null);
-            setActivePracticeCard(cardToStart);
+            if (theoryCard) {
+              void startReadingPractice(theoryCard).then((started) => {
+                if (started) setTheoryCard(null);
+              });
+            }
           }}
         />
       )}

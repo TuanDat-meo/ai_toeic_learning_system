@@ -352,7 +352,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
               const distractors = otherWords
                 .slice(0, 3)
                 .map((w: WordItem) => w.meaning || "");
-              
+
               while (distractors.length < 3) {
                 distractors.push("Hoãn lại cuộc họp quan trọng của ban giám đốc");
               }

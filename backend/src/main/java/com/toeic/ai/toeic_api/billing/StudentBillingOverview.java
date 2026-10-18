@@ -4,4 +4,5 @@ import java.util.List;
 
 public record StudentBillingOverview(
         StudentSubscription currentSubscription,
+        List<StudentSubscription> upcomingSubscriptions,
         List<StudentPaymentTransaction> transactions) { }

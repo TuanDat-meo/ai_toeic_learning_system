@@ -60,16 +60,20 @@ public class ChatController {
     @GetMapping("/api/chat/support/{threadId}/messages")
     public List<ChatMessage> supportMessages(@PathVariable UUID threadId, Authentication auth) {
         var user = users.findManagedUser(auth.getName());
-        return chat.supportMessages(threadId, user.id(), "ADMIN".equals(user.role()));
+        return chat.supportMessages(threadId, user.id(), isSupportAgent(user.role()));
     }
 
     @PostMapping("/api/chat/support/{threadId}/messages")
     @ResponseStatus(HttpStatus.CREATED)
     public ChatMessage sendSupport(@PathVariable UUID threadId, @Valid @RequestBody SendChatMessageRequest request, Authentication auth) {
         var user = users.findManagedUser(auth.getName());
-        return chat.sendSupport(threadId, user.id(), "ADMIN".equals(user.role()), request.content(), request.replyToId());
+        return chat.sendSupport(threadId, user.id(), isSupportAgent(user.role()), request.content(), request.replyToId());
     }
 
     @GetMapping("/api/admin/chat/support")
     public List<ChatThread> threads() { return chat.threads(); }
+
+    private boolean isSupportAgent(String role) {
+        return "ADMIN".equals(role) || "TEACHER".equals(role);
+    }
 }

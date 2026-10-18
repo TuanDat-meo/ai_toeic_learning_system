@@ -7,6 +7,12 @@ export type AuthUser = {
   role: 'ADMIN' | 'STUDENT' | 'TEACHER';
 };
 
+export function getHomePathForRole(role: AuthUser['role']) {
+  if (role === 'ADMIN') return '/admin/overview';
+  if (role === 'TEACHER') return '/admin/content/vocabulary';
+  return '/dashboard';
+}
+
 export type AccountActivity = {
   id: string;
   action: string;

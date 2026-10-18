@@ -7,6 +7,8 @@ import { INITIAL_TESTS } from "@/app/admin/content/vocabulary/mockData";
 import { getVocabularySets } from "@/lib/api/vocabulary";
 import { StudentVocabularyGrid } from "@/components/student/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/student/vocabulary/StudentVocabularyModals";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentVocabularyPage() {
   const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
@@ -17,6 +19,16 @@ export default function StudentVocabularyPage() {
   const [wordListModalTest, setWordListModalTest] = useState<VocabularyTestSet | null>(null);
   const [flashcardModalTest, setFlashcardModalTest] = useState<VocabularyTestSet | null>(null);
   const [gameModalTest, setGameModalTest] = useState<VocabularyTestSet | null>(null);
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
+
+  async function startVocabularyActivity(featureKey: string, open: () => void) {
+    try {
+      await consumeLearningFeature(featureKey);
+      open();
+    } catch (error) {
+      setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu hoạt động từ vựng.");
+    }
+  }
 
   const loadSets = useCallback(async () => {
     try {
@@ -63,6 +75,7 @@ export default function StudentVocabularyPage() {
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
+      {quotaMessage ? <div role="alert" className="fixed right-5 top-5 z-[70] max-w-sm rounded-xl bg-red-700 px-4 py-3 text-xs font-semibold text-white shadow-xl">{quotaMessage}</div> : null}
       {/* Header phong cách tinh tế, đơn giản, sạch sẽ giống Admin */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
         <div>
@@ -78,11 +91,12 @@ export default function StudentVocabularyPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
             <BookOpen className="w-4 h-4 text-blue-600" />
             {tests.length} bộ đề ({totalWordsCount.toLocaleString("vi-VN")} từ vựng)
           </span>
+          <LearningQuotaBadge featureKey="VOCABULARY" />
         </div>
       </header>
 
@@ -92,8 +106,8 @@ export default function StudentVocabularyPage() {
         activeSubCategory={activeSubCategory}
         setActiveSubCategory={setActiveSubCategory}
         onOpenWordList={(test) => setWordListModalTest(test)}
-        onOpenFlashcards={(test) => setFlashcardModalTest(test)}
-        onOpenGame={(test) => setGameModalTest(test)}
+        onOpenFlashcards={(test) => { void startVocabularyActivity("VOCABULARY_FLASHCARDS", () => setFlashcardModalTest(test)); }}
+        onOpenGame={(test) => { void startVocabularyActivity("VOCABULARY_GAME", () => setGameModalTest(test)); }}
       />
 
       {/* Các Modals học tập */}
@@ -101,14 +115,14 @@ export default function StudentVocabularyPage() {
         wordListModalTest={wordListModalTest}
         onCloseWordList={() => setWordListModalTest(null)}
         playAudio={playAudio}
-        onStartFlashcardsFromList={(test) => {
+        onStartFlashcardsFromList={(test) => { void startVocabularyActivity("VOCABULARY_FLASHCARDS", () => {
           setWordListModalTest(null);
           setFlashcardModalTest(test);
-        }}
-        onStartGameFromList={(test) => {
+        }); }}
+        onStartGameFromList={(test) => { void startVocabularyActivity("VOCABULARY_GAME", () => {
           setWordListModalTest(null);
           setGameModalTest(test);
-        }}
+        }); }}
         flashcardModalTest={flashcardModalTest}
         onCloseFlashcards={() => setFlashcardModalTest(null)}
         gameModalTest={gameModalTest}

@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
+  Banknote,
+  CircleCheck,
   Download,
   Eye,
   FileCheck,
+  Hourglass,
   Receipt,
   RefreshCw,
   RotateCcw,
@@ -32,14 +35,16 @@ const formatDateTime = (value?: string) => {
 const statusBadges: Record<TransactionStatus, { label: string; className: string }> = {
   SUCCESS: { label: "Thành công", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   PENDING: { label: "Chờ thanh toán", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  FAILED: { label: "Thất bại", className: "bg-rose-50 text-rose-700 border-rose-200" },
+  FAILED: { label: "Thanh toán thất bại", className: "bg-rose-50 text-rose-700 border-rose-200" },
   REFUNDED: { label: "Đã hoàn tiền", className: "bg-purple-50 text-purple-700 border-purple-200" },
+  EXPIRED: { label: "Đăng ký thất bại — quá hạn", className: "bg-slate-100 text-slate-700 border-slate-200" },
+  REVIEW_REQUIRED: { label: "Cần kiểm tra thanh toán", className: "bg-orange-50 text-orange-800 border-orange-200" },
 };
 
 const methodLabels: Record<PaymentMethod, { label: string; icon: string }> = {
   MOMO: { label: "Ví MoMo", icon: "MoMo" },
   VNPAY: { label: "VNPAY QR", icon: "VNPAY" },
-  BANK_TRANSFER: { label: "Chuyển khoản VietQR", icon: "Bank" },
+  BANK_TRANSFER: { label: "Chuyển khoản VietQR / SePay", icon: "Bank" },
   CREDIT_CARD: { label: "Thẻ Visa/Mastercard", icon: "Card" },
 };
 
@@ -106,9 +111,20 @@ export function AdminTransactionsView() {
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pageTransactions = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const successfulTransactions = transactions.filter((transaction) => transaction.status === "SUCCESS");
+  const pendingTransactions = transactions.filter((transaction) => transaction.status === "PENDING");
+  const reviewRequiredTransactions = transactions.filter((transaction) => transaction.status === "REVIEW_REQUIRED");
+  const refundedTransactions = transactions.filter((transaction) => transaction.status === "REFUNDED");
+  const receivedAmount = successfulTransactions.reduce((total, transaction) => total + transaction.amount, 0);
+  const pendingAmount = pendingTransactions.reduce((total, transaction) => total + transaction.amount, 0);
+  const reviewRequiredAmount = reviewRequiredTransactions.reduce((total, transaction) => total + transaction.amount, 0);
+  const refundedAmount = refundedTransactions.reduce((total, transaction) => total + transaction.amount, 0);
 
   async function handleConfirmPayment(tx: Transaction) {
     if (savingTransactionId) return;
+    if (tx.status === "REVIEW_REQUIRED" && !confirm(
+      "Chỉ xác nhận nếu bạn đã đối chiếu sao kê và xác minh khoản tiền thực sự đã vào tài khoản. Tiếp tục?",
+    )) return;
     setErrorMsg("");
     setSavingTransactionId(tx.id);
     try {
@@ -190,6 +206,44 @@ export function AdminTransactionsView() {
       </header>
 
       <div className="space-y-6">
+        <section aria-label="Tổng quan giao dịch" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <TransactionSummary
+            label="Đã thu thành công"
+            value={loading ? "—" : formatVnd(receivedAmount)}
+            detail={loading ? "Đang cập nhật" : `${successfulTransactions.length.toLocaleString("vi-VN")} giao dịch`}
+            icon={<CircleCheck className="h-5 w-5" aria-hidden="true" />}
+            tone="emerald"
+          />
+          <TransactionSummary
+            label="Chờ thanh toán"
+            value={loading ? "—" : formatVnd(pendingAmount)}
+            detail={loading ? "Đang cập nhật" : `${pendingTransactions.length.toLocaleString("vi-VN")} giao dịch`}
+            icon={<Hourglass className="h-5 w-5" aria-hidden="true" />}
+            tone="amber"
+          />
+          <TransactionSummary
+            label="Cần đối soát"
+            value={loading ? "—" : formatVnd(reviewRequiredAmount)}
+            detail={loading ? "Đang cập nhật" : `${reviewRequiredTransactions.length.toLocaleString("vi-VN")} giao dịch cần admin kiểm tra`}
+            icon={<Hourglass className="h-5 w-5" aria-hidden="true" />}
+            tone="amber"
+          />
+          <TransactionSummary
+            label="Đã hoàn tiền"
+            value={loading ? "—" : formatVnd(refundedAmount)}
+            detail={loading ? "Đang cập nhật" : `${refundedTransactions.length.toLocaleString("vi-VN")} giao dịch`}
+            icon={<RotateCcw className="h-5 w-5" aria-hidden="true" />}
+            tone="violet"
+          />
+          <TransactionSummary
+            label="Tổng số giao dịch"
+            value={loading ? "—" : transactions.length.toLocaleString("vi-VN")}
+            detail="Bao gồm mọi trạng thái"
+            icon={<Banknote className="h-5 w-5" aria-hidden="true" />}
+            tone="blue"
+          />
+        </section>
+
         <section aria-label="Tìm kiếm và lọc giao dịch" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -209,7 +263,7 @@ export function AdminTransactionsView() {
         </div>
         <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 lg:grid-cols-[auto_minmax(200px,1fr)_220px_auto] lg:items-center">
           <nav aria-label="Lọc theo trạng thái giao dịch" className="flex gap-1.5 overflow-x-auto pb-0.5">
-          {(["ALL", "SUCCESS", "PENDING", "FAILED", "REFUNDED"] as const).map((status) => {
+          {(["ALL", "SUCCESS", "PENDING", "REVIEW_REQUIRED", "EXPIRED", "FAILED", "REFUNDED"] as const).map((status) => {
             const label = status === "ALL" ? "Tất cả" : statusBadges[status].label;
             const count = status === "ALL" ? transactions.length : transactions.filter((transaction) => transaction.status === status).length;
             const selected = statusFilter === status;
@@ -298,16 +352,16 @@ export function AdminTransactionsView() {
                           <Eye className="h-4 w-4" aria-hidden="true" />
                         </button>
 
-                        {t.status === "PENDING" && (
+                        {(t.status === "PENDING" || t.status === "REVIEW_REQUIRED") && (
                           <button
                             type="button"
                             onClick={() => void handleConfirmPayment(t)}
                             disabled={savingTransactionId !== null}
                             className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-wait disabled:opacity-60"
-                            title="Xác nhận thanh toán thành công"
+                            title={t.status === "REVIEW_REQUIRED" ? "Đã kiểm tra và xác nhận khoản thanh toán" : "Xác nhận thanh toán thành công"}
                           >
                             {savingTransactionId === t.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
-                            {savingTransactionId === t.id ? "Đang lưu" : "Duyệt"}
+                            {savingTransactionId === t.id ? "Đang lưu" : t.status === "REVIEW_REQUIRED" ? "Xác nhận" : "Duyệt"}
                           </button>
                         )}
 
@@ -496,5 +550,30 @@ export function AdminTransactionsView() {
       )}
       </div>
     </main>
+  );
+}
+
+function TransactionSummary({ label, value, detail, icon, tone }: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: ReactNode;
+  tone: "emerald" | "amber" | "violet" | "blue";
+}) {
+  const styles = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    violet: "bg-violet-50 text-violet-700",
+    blue: "bg-blue-50 text-blue-700",
+  }[tone];
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${styles}`}>{icon}</span>
+      </div>
+      <p className="mt-3 break-words text-lg font-bold tracking-tight text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+    </article>
   );
 }

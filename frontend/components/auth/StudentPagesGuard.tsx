@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { getCurrentUser, getLearningOnboardingStatus } from '@/lib/api/auth';
+import { getCurrentUser, getHomePathForRole, getLearningOnboardingStatus } from '@/lib/api/auth';
 
 const studentRoutes = [
   '/dashboard',
@@ -39,21 +39,19 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
       try {
         const user = await getCurrentUser();
         if (!active) return;
-        if (user.role === 'ADMIN') {
-          router.replace('/admin/overview');
+        if (user.role !== 'STUDENT') {
+          router.replace(getHomePathForRole(user.role));
           return;
         }
-        if (user.role === 'STUDENT') {
-          try {
-            const onboarding = await getLearningOnboardingStatus();
-            if (!active) return;
-            if (onboarding?.state?.completed && pathname === '/onboarding') {
-              router.replace('/dashboard');
-              return;
-            }
-          } catch {
-            // Ignore onboarding status fetch error so learning routes remain accessible
+        try {
+          const onboarding = await getLearningOnboardingStatus();
+          if (!active) return;
+          if (onboarding?.state?.completed && pathname === '/onboarding') {
+            router.replace('/dashboard');
+            return;
           }
+        } catch {
+          // Ignore onboarding status fetch error so learning routes remain accessible
         }
         setAuthorizationError(null);
         setAuthorizedPath(pathname);

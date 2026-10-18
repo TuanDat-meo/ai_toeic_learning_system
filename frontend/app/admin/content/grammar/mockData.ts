@@ -1,5 +1,4 @@
 import { GrammarTopicItem } from "./types";
-
 export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
   // --- CHỦ ĐIỂM 1 (MỚI - ETS 2024): ĐẠI TỪ & TÍNH TỪ SỞ HỮU ---
   {
@@ -1432,5 +1431,3 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
     bookmarked: false
   }
 ];
-
-

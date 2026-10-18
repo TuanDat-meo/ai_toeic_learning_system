@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/learning-plans")
+@RequestMapping("/api")
 public class LearningPlanPublicController {
     private final SubscriptionService service;
 
@@ -15,8 +15,13 @@ public class LearningPlanPublicController {
         this.service = service;
     }
 
-    @GetMapping
+    @GetMapping("/learning-plans")
     public List<SubscriptionPlan> listAvailablePlans() {
         return service.listAvailablePlans();
+    }
+
+    @GetMapping("/learning-features")
+    public List<LearningFeature> listAvailableFeatures() {
+        return service.listAvailableFeatureCatalog();
     }
 }

@@ -11,17 +11,21 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { LEARNING_CAPABILITIES } from "@/lib/learning-capabilities";
 import {
   getSubscriptionPlans,
+  getLearningFeatures,
   getUserSubscriptions,
   createSubscriptionPlan,
+  createSubscriptionPlanReplacingActive,
   updateSubscriptionPlan,
+  updateSubscriptionPlanReplacingActive,
   deleteSubscriptionPlan,
   cancelUserSubscription,
   extendUserSubscription,
   type PlanInput,
   type LearningPlanCategory,
+  type LearningFeature,
+  type PlanEntitlement,
   type SubscriptionBillingCycle,
   type SubscriptionPlan,
   type SubscriptionPlanStatus,
@@ -43,7 +47,20 @@ const calculateDiscountPercent = (originalPrice: number, promotionalPrice: numbe
 const calculatePromotionalPrice = (originalPrice: number, discountPercent: number) =>
   Math.round(originalPrice * (1 - discountPercent / 100));
 
-type PlanField = "code" | "name" | "originalPrice" | "discountPercent" | "durationDays" | "offerStartsAt" | "offerEndsAt" | "maxAiQueriesPerDay";
+const generatePlanCode = (name: string, plans: SubscriptionPlan[]) => {
+  const base = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/Đ/g, "D")
+    .replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80).replace(/_+$/g, "") || "GOI_HOC";
+  const existingCodes = new Set(plans.map((plan) => plan.code.toUpperCase()));
+  let candidate = base;
+  let suffix = 2;
+  while (existingCodes.has(candidate)) {
+    const suffixText = `_${suffix++}`;
+    candidate = `${base.slice(0, 80 - suffixText.length).replace(/_+$/g, "")}${suffixText}`;
+  }
+  return candidate;
+};
+
+type PlanField = "code" | "name" | "badgeTag" | "originalPrice" | "discountPercent" | "durationDays" | "offerStartsAt" | "offerEndsAt" | "planCategory";
 const planCategoryLabels: Record<LearningPlanCategory, string> = {
   FREE: "Free",
   PRO: "Pro",
@@ -54,6 +71,7 @@ const planCategoryLabels: Record<LearningPlanCategory, string> = {
 export function AdminSubscriptionsView() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [userSubs, setUserSubs] = useState<UserSubscription[]>([]);
+  const [featureCatalog, setFeatureCatalog] = useState<LearningFeature[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"PLANS" | "SUBSCRIBERS">("PLANS");
   const [planSearch, setPlanSearch] = useState("");
@@ -65,6 +83,10 @@ export function AdminSubscriptionsView() {
   const [editingPlan, setEditingPlan] = useState<Partial<SubscriptionPlan> | null>(null);
   const [discountPercent, setDiscountPercent] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<PlanField, string>>>({});
+  const [featureErrors, setFeatureErrors] = useState<Record<string, string>>({});
+  const [confirmPlanReplacement, setConfirmPlanReplacement] = useState(false);
+  const [pendingPlanActivation, setPendingPlanActivation] = useState<SubscriptionPlan | null>(null);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [deletingPlan, setDeletingPlan] = useState<SubscriptionPlan | null>(null);
 
   const [feedbackMsg, setFeedbackMsg] = useState("");
@@ -78,9 +100,14 @@ export function AdminSubscriptionsView() {
     setLoading(true);
     setErrorMsg("");
     try {
-      const [plansData, subsData] = await Promise.all([getSubscriptionPlans(), getUserSubscriptions()]);
+      const [plansData, subsData, featuresData] = await Promise.all([
+        getSubscriptionPlans(),
+        getUserSubscriptions(),
+        getLearningFeatures(),
+      ]);
       setPlans(plansData);
       setUserSubs(subsData);
+      setFeatureCatalog(featuresData);
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : "Không tải được dữ liệu lượt mua gói học.");
     } finally {
@@ -95,17 +122,34 @@ export function AdminSubscriptionsView() {
 
   const filteredPlans = plans.filter((plan) => {
     const query = planSearch.trim().toLocaleLowerCase("vi-VN");
-    const matchesSearch = !query || [plan.name, plan.code, plan.badgeTag ?? "", ...plan.capabilityKeys.map((key) => LEARNING_CAPABILITIES.find((item) => item.key === key)?.label ?? key)].some((value) => value.toLocaleLowerCase("vi-VN").includes(query));
+    const matchesSearch = !query || [plan.name, plan.code, plan.badgeTag ?? "", ...Object.entries(plan.entitlements ?? {})
+      .filter(([, entitlement]) => entitlement.enabled)
+      .map(([key]) => featureCatalog.find((item) => item.key === key)?.name ?? key)]
+      .some((value) => value.toLocaleLowerCase("vi-VN").includes(query));
     return matchesSearch && (planStatusFilter === "ALL" || plan.status === planStatusFilter)
       && (planCategoryFilter === "ALL" || plan.planCategory === planCategoryFilter);
   });
   const pageCount = Math.max(1, Math.ceil(filteredPlans.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pagePlans = filteredPlans.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const conflictingActivePlan = editingPlan?.planCategory
+    ? plans.find((plan) => plan.planCategory === editingPlan.planCategory
+      && plan.status === "ACTIVE"
+      && plan.id !== editingPlan.id)
+    : undefined;
+  const activeCategoryWarning = conflictingActivePlan
+    ? `Đã có gói ${planCategoryLabels[conflictingActivePlan.planCategory]} "${conflictingActivePlan.name}" đang phát hành. Chuyển gói hiện tại sang bản nháp hoặc lưu trữ trước khi phát hành gói này.`
+    : "";
+  const pendingActivationConflict = pendingPlanActivation
+    ? plans.find((plan) => plan.id !== pendingPlanActivation.id
+      && plan.planCategory === pendingPlanActivation.planCategory
+      && plan.status === "ACTIVE")
+    : undefined;
 
   function openCreatePlanModal() {
     setErrorMsg("");
     setFieldErrors({});
+    setFeatureErrors({});
     setDiscountPercent(0);
     setEditingPlan({
       code: "",
@@ -118,7 +162,15 @@ export function AdminSubscriptionsView() {
       isPopular: false,
       features: [],
       capabilityKeys: [],
+      entitlements: Object.fromEntries(featureCatalog.map((feature) => [feature.key, {
+        enabled: false,
+        limit: feature.controlType === "METERED" ? 1 : null,
+        unit: feature.allowedUnits[0] ?? null,
+        period: feature.allowedPeriods.includes("DAY") ? "DAY" : feature.allowedPeriods[0] ?? null,
+        config: {},
+      }])),
       planCategory: "PRO",
+      aiAccessMode: "DISABLED",
       offerStartsAt: null,
       offerEndsAt: null,
       maxAiQueriesPerDay: 0,
@@ -130,6 +182,7 @@ export function AdminSubscriptionsView() {
   function openEditPlanModal(plan: SubscriptionPlan) {
     setErrorMsg("");
     setFieldErrors({});
+    setFeatureErrors({});
     setDiscountPercent(calculateDiscountPercent(plan.originalPrice, plan.promotionalPrice));
     setEditingPlan(plan);
   }
@@ -141,17 +194,17 @@ export function AdminSubscriptionsView() {
     const originalPrice = Number(plan.originalPrice);
     const promotionalPrice = calculatePromotionalPrice(originalPrice, discountPercent);
     const durationDays = Number(plan.durationDays);
-    const aiLimit = Number(plan.maxAiQueriesPerDay);
+    const badgeTag = plan.badgeTag?.trim() ?? "";
 
     if (!code) errors.code = "Vui lòng nhập mã gói học.";
     else if (code.length > 80 || !/^[A-Za-z0-9_-]+$/.test(code)) errors.code = "Mã chỉ gồm chữ không dấu, số, dấu gạch ngang hoặc gạch dưới (tối đa 80 ký tự).";
     if (!name) errors.name = "Vui lòng nhập tên gói học.";
     else if (name.length > 160) errors.name = "Tên gói học không được vượt quá 160 ký tự.";
+    if (badgeTag.length > 100) errors.badgeTag = "Nhãn Badge không được vượt quá 100 ký tự.";
     if (!Number.isInteger(originalPrice) || originalPrice < 0) errors.originalPrice = "Giá gốc phải là số nguyên từ 0 trở lên.";
     if (!Number.isFinite(discountPercent) || discountPercent < 0 || discountPercent > 100) errors.discountPercent = "Phần trăm giảm giá phải từ 0% đến 100%.";
     if (!Number.isInteger(promotionalPrice) || promotionalPrice < 0) errors.discountPercent = "Không tính được giá sau giảm hợp lệ.";
     if (plan.billingCycle !== "LIFETIME" && (!Number.isInteger(durationDays) || durationDays < 1)) errors.durationDays = "Thời hạn sử dụng phải từ 1 ngày trở lên.";
-    if (!Number.isInteger(aiLimit) || aiLimit < 0) errors.maxAiQueriesPerDay = "Hạn mức AI phải là số nguyên từ 0 trở lên.";
     if (plan.planCategory === "PROMOTION") {
       if (!plan.offerStartsAt) errors.offerStartsAt = "Vui lòng chọn thời điểm bắt đầu phát hành.";
       if (!plan.offerEndsAt) errors.offerEndsAt = "Vui lòng chọn thời điểm kết thúc phát hành.";
@@ -159,39 +212,151 @@ export function AdminSubscriptionsView() {
         errors.offerEndsAt = "Thời điểm kết thúc phải sau thời điểm bắt đầu.";
       }
     }
+    const nextFeatureErrors: Record<string, string> = {};
+    for (const [key, entitlement] of Object.entries(plan.entitlements ?? {})) {
+      const feature = featureCatalog.find((item) => item.key === key);
+      if (!feature) continue;
+      const prefix = `${key}.`;
+      if (feature.controlType === "METERED") {
+        if (entitlement.enabled && entitlement.limit !== null
+          && (!Number.isInteger(entitlement.limit) || entitlement.limit < 1)) {
+          nextFeatureErrors[`${prefix}limit`] = key === "READING_AI_ASK"
+            ? "Hạn mức của Hỏi AI về Reading phải lớn hơn 0 hoặc để trống để không giới hạn."
+            : `Hạn mức của ${feature.name} phải lớn hơn 0 hoặc để trống để không giới hạn.`;
+        }
+        if (entitlement.unit !== null && !feature.allowedUnits.includes(entitlement.unit)) {
+          nextFeatureErrors[`${prefix}unit`] = `Đơn vị hạn mức không hợp lệ cho ${feature.name}.`;
+        }
+        if (entitlement.period !== null && !feature.allowedPeriods.includes(entitlement.period)) {
+          nextFeatureErrors[`${prefix}period`] = `Chu kỳ hạn mức không hợp lệ cho ${feature.name}.`;
+        }
+        if (entitlement.enabled && (entitlement.unit === null || entitlement.period === null)) {
+          if (entitlement.unit === null) nextFeatureErrors[`${prefix}unit`] = `Vui lòng chọn đơn vị cho ${feature.name}.`;
+          if (entitlement.period === null) nextFeatureErrors[`${prefix}period`] = `Vui lòng chọn chu kỳ cho ${feature.name}.`;
+        }
+      } else if (entitlement.limit !== null || entitlement.unit !== null || entitlement.period !== null) {
+        nextFeatureErrors[`${prefix}settings`] = `${feature.name} chỉ hỗ trợ bật hoặc tắt.`;
+      }
+
+      const config = entitlement.config ?? {};
+      const fields = new Map(feature.configFields.map((field) => [field.key, field]));
+      for (const configKey of Object.keys(config)) {
+        if (!fields.has(configKey)) {
+          nextFeatureErrors[`${prefix}config.${configKey}`] = `Tham số ${configKey} không được hỗ trợ bởi ${feature.name}.`;
+        }
+      }
+      for (const field of feature.configFields) {
+        const value = config[field.key];
+        const errorKey = `${prefix}config.${field.key}`;
+        if (value === undefined || value === null) {
+          if (entitlement.enabled && field.required) {
+            nextFeatureErrors[errorKey] = `Vui lòng nhập ${field.label} của ${feature.name}.`;
+          }
+          continue;
+        }
+        if (value === "" && entitlement.enabled && field.required) {
+          nextFeatureErrors[errorKey] = `Vui lòng nhập ${field.label} của ${feature.name}.`;
+          continue;
+        }
+        const valid = field.type === "STRING" ? typeof value === "string"
+          : field.type === "INTEGER" ? typeof value === "number" && Number.isInteger(value)
+            : field.type === "NUMBER" ? typeof value === "number" && Number.isFinite(value)
+              : field.type === "BOOLEAN" ? typeof value === "boolean"
+                : field.type === "SELECT" ? typeof value === "string" && field.options.includes(value)
+                  : false;
+        if (!valid) nextFeatureErrors[errorKey] = `Giá trị ${field.label} không hợp lệ.`;
+      }
+    }
+
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    setFeatureErrors(nextFeatureErrors);
+    return Object.keys(errors).length === 0 && Object.keys(nextFeatureErrors).length === 0;
   }
 
   function clearFieldError(field: PlanField) {
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
   }
 
-  async function handleSavePlan() {
-    if (!editingPlan || !validatePlan(editingPlan)) return;
+  function clearFeatureError(key: string) {
+    setFeatureErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function handleSavePlan(replaceActive = false) {
+    if (!editingPlan) return;
+    if (!replaceActive && editingPlan.status === "ACTIVE" && conflictingActivePlan) {
+      setConfirmPlanReplacement(true);
+      return;
+    }
+    if (!validatePlan(editingPlan)) {
+      if (replaceActive) setConfirmPlanReplacement(false);
+      return;
+    }
 
     let nextList: SubscriptionPlan[];
     if (editingPlan.id) {
       const payload = toPlanInput(editingPlan);
-      const saved = await updateSubscriptionPlan(editingPlan.id, payload);
+      const saved = replaceActive
+        ? await updateSubscriptionPlanReplacingActive(editingPlan.id, payload)
+        : await updateSubscriptionPlan(editingPlan.id, payload);
       nextList = plans.map((p) => p.id === saved.id ? saved : p);
       showFeedback(`Đã cập nhật gói học "${saved.name}"`);
     } else {
-      const newPlan = await createSubscriptionPlan(toPlanInput(editingPlan));
+      const payload = toPlanInput(editingPlan);
+      const newPlan = replaceActive
+        ? await createSubscriptionPlanReplacingActive(payload)
+        : await createSubscriptionPlan(payload);
       nextList = [...plans, newPlan];
       showFeedback(`Đã tạo gói học "${newPlan.name}"`);
     }
 
     setPlans(nextList);
+    setConfirmPlanReplacement(false);
     setEditingPlan(null);
     await loadData();
   }
 
   async function togglePlanStatus(plan: SubscriptionPlan) {
     const nextStatus: SubscriptionPlanStatus = plan.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
+    const conflictingPlan = plans.find((existingPlan) =>
+      existingPlan.id !== plan.id
+      && existingPlan.planCategory === plan.planCategory
+      && existingPlan.status === "ACTIVE");
+    if (nextStatus === "ACTIVE" && conflictingPlan) {
+      setPendingPlanActivation(plan);
+      return;
+    }
     const updated = await updateSubscriptionPlan(plan.id, toPlanInput({ ...plan, status: nextStatus }));
     setPlans(plans.map((p) => p.id === plan.id ? updated : p));
     showFeedback(nextStatus === "ACTIVE" ? "Đã phát hành gói học" : "Đã tạm dừng gói học");
+  }
+
+  async function confirmPlanActivation() {
+    if (!pendingPlanActivation) return;
+    setErrorMsg("");
+    setIsSavingPlan(true);
+    try {
+      const updated = await updateSubscriptionPlanReplacingActive(
+        pendingPlanActivation.id,
+        toPlanInput({ ...pendingPlanActivation, status: "ACTIVE" }),
+      );
+      setPlans((current) => current.map((plan) => plan.id === updated.id
+        ? updated
+        : plan.planCategory === updated.planCategory && plan.status === "ACTIVE"
+          ? { ...plan, status: "DRAFT" }
+          : plan));
+      showFeedback(`Đã tạm dừng gói cùng nhóm và kích hoạt "${updated.name}".`);
+      setPendingPlanActivation(null);
+      await loadData();
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Không thể kích hoạt gói học.");
+    } finally {
+      setIsSavingPlan(false);
+    }
   }
 
   async function handleDeletePlanConfirm() {
@@ -216,7 +381,91 @@ export function AdminSubscriptionsView() {
   }
 
   function toPlanInput(plan: Partial<SubscriptionPlan>): PlanInput {
-    return { code: plan.code?.trim() || "", name: plan.name?.trim() || "", originalPrice: Number(plan.originalPrice ?? 0), promotionalPrice: Number(plan.promotionalPrice ?? 0), billingCycle: plan.billingCycle || "QUARTERLY", durationDays: Number(plan.durationDays ?? 90), badgeTag: plan.badgeTag || "", isPopular: Boolean(plan.isPopular), features: plan.features ?? [], capabilityKeys: plan.capabilityKeys ?? [], maxAiQueriesPerDay: Number(plan.maxAiQueriesPerDay ?? 0), status: plan.status || "DRAFT", planCategory: plan.planCategory || "PRO", offerStartsAt: plan.planCategory === "PROMOTION" ? plan.offerStartsAt ?? null : null, offerEndsAt: plan.planCategory === "PROMOTION" ? plan.offerEndsAt ?? null : null };
+    const entitlements = plan.entitlements ?? {};
+    const enabledCapabilityKeys = Object.entries(entitlements)
+      .filter(([key, entitlement]) => entitlement.enabled && featureCatalog.find((feature) => feature.key === key)?.category.toUpperCase() !== "AI")
+      .map(([key]) => key);
+    const aiEntitlement = entitlements.AI_ASSISTANT;
+    const legacyAiMode = !aiEntitlement?.enabled
+      ? "DISABLED"
+      : aiEntitlement.limit == null || aiEntitlement.period !== "DAY" || aiEntitlement.unit !== "requests"
+        ? "UNLIMITED"
+        : "LIMITED";
+    return {
+      code: plan.code?.trim() || "",
+      name: plan.name?.trim() || "",
+      originalPrice: Number(plan.originalPrice ?? 0),
+      promotionalPrice: Number(plan.promotionalPrice ?? 0),
+      billingCycle: plan.billingCycle || "QUARTERLY",
+      durationDays: Number(plan.durationDays ?? 90),
+      badgeTag: plan.badgeTag || "",
+      isPopular: Boolean(plan.isPopular),
+      features: plan.features ?? [],
+      capabilityKeys: enabledCapabilityKeys,
+      maxAiQueriesPerDay: legacyAiMode === "LIMITED" ? Number(aiEntitlement.limit) : 0,
+      aiAccessMode: legacyAiMode,
+      status: plan.status || "DRAFT",
+      planCategory: plan.planCategory || "PRO",
+      offerStartsAt: plan.planCategory === "PROMOTION" ? plan.offerStartsAt ?? null : null,
+      offerEndsAt: plan.planCategory === "PROMOTION" ? plan.offerEndsAt ?? null : null,
+      entitlements,
+    };
+  }
+
+  function updateFeatureEntitlement(key: string, updates: Partial<PlanEntitlement>) {
+    if (!editingPlan) return;
+    const feature = featureCatalog.find((item) => item.key === key);
+    const current = editingPlan.entitlements?.[key] ?? {
+      enabled: false,
+      limit: feature?.controlType === "METERED" ? 1 : null,
+      unit: feature?.allowedUnits[0] ?? null,
+      period: feature?.allowedPeriods.includes("DAY") ? "DAY" : feature?.allowedPeriods[0] ?? null,
+      config: {},
+    };
+    setEditingPlan({
+      ...editingPlan,
+      entitlements: {
+        ...editingPlan.entitlements,
+        [key]: { ...current, ...updates },
+      },
+    });
+  }
+
+  function setAllFeatureEntitlements(enabled: boolean) {
+    if (!editingPlan) return;
+    setEditingPlan({
+      ...editingPlan,
+      entitlements: {
+        ...editingPlan.entitlements,
+        ...Object.fromEntries(featureCatalog.map((feature) => {
+          const current = editingPlan.entitlements?.[feature.key] ?? {
+            enabled: false,
+            limit: feature.controlType === "METERED" ? 1 : null,
+            unit: feature.allowedUnits[0] ?? null,
+            period: feature.allowedPeriods.includes("DAY") ? "DAY" : feature.allowedPeriods[0] ?? null,
+            config: {},
+          };
+          return [feature.key, { ...current, enabled }];
+        })),
+      },
+    });
+    setFeatureErrors({});
+  }
+
+  function updateFeatureConfig(key: string, field: string, value: string | number | boolean | undefined) {
+    if (!editingPlan) return;
+    const current = editingPlan.entitlements?.[key] ?? {
+      enabled: false,
+      limit: null,
+      unit: null,
+      period: null,
+      config: {},
+    };
+    const config = { ...current.config };
+    if (value === undefined) delete config[field];
+    else config[field] = value;
+    updateFeatureEntitlement(key, { config });
+    clearFeatureError(`${key}.config.${field}`);
   }
 
   async function runAction(action: () => Promise<void>) {
@@ -225,17 +474,21 @@ export function AdminSubscriptionsView() {
     catch (error) { setErrorMsg(error instanceof Error ? error.message : "Thao tác chưa thể hoàn tất."); }
   }
 
-  async function runPlanSave() {
+  async function runPlanSave(replaceActive = false) {
     setErrorMsg("");
+    setIsSavingPlan(true);
     try {
-      await handleSavePlan();
+      await handleSavePlan(replaceActive);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể lưu gói học.";
       if (/mã gói/i.test(message)) setFieldErrors((current) => ({ ...current, code: message }));
       else if (/thời hạn/i.test(message)) setFieldErrors((current) => ({ ...current, durationDays: message }));
       else if (/giá/i.test(message)) setFieldErrors((current) => ({ ...current, discountPercent: message }));
+      else if (/đã có.*đang phát hành|gói.*đang phát hành/i.test(message)) setFieldErrors((current) => ({ ...current, planCategory: message }));
       else if (/phát hành|ưu đãi/i.test(message)) setFieldErrors((current) => ({ ...current, offerEndsAt: message }));
       else setErrorMsg(message);
+    } finally {
+      setIsSavingPlan(false);
     }
   }
 
@@ -249,7 +502,9 @@ export function AdminSubscriptionsView() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">{loading ? "Đang tải..." : `${plans.length.toLocaleString("vi-VN")} gói học`}</span>
-          {activeTab === "PLANS" ? <button type="button" onClick={openCreatePlanModal} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700"><span aria-hidden="true">+</span>Tạo gói học</button> : null}
+          {activeTab === "PLANS" ? <>
+            <button type="button" onClick={openCreatePlanModal} className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700"><span aria-hidden="true">+</span>Tạo gói học</button>
+          </> : null}
         </div>
       </header>
 
@@ -291,7 +546,7 @@ export function AdminSubscriptionsView() {
                         <td className="px-5 py-4"><div className="flex min-w-0 items-start gap-3"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${plan.isPopular ? "bg-blue-600" : "bg-slate-300"}`} /><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{plan.name}{plan.isPopular ? <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">Phổ biến</span> : null}</span><span className="mt-1 block font-mono text-xs text-slate-500">{plan.code}</span><span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan.planCategory === "PROMOTION" ? "bg-violet-50 text-violet-700" : plan.planCategory === "PREMIUM" ? "bg-amber-50 text-amber-700" : plan.planCategory === "PRO" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{planCategoryLabels[plan.planCategory]}</span>{plan.badgeTag ? <span className="mt-1 block text-xs text-slate-500">{plan.badgeTag}</span> : null}</span></div></td>
                         <td className="px-4 py-4"><span className="block text-sm font-semibold text-slate-900">{formatVnd(plan.promotionalPrice)}</span>{plan.originalPrice > plan.promotionalPrice ? <span className="mt-1 block text-xs text-slate-400 line-through">{formatVnd(plan.originalPrice)}</span> : null}</td>
                         <td className="px-4 py-4"><span className="block text-sm text-slate-800">Thời hạn sử dụng</span><span className="mt-1 block text-xs text-slate-500">{plan.billingCycle === "LIFETIME" ? "Không hết hạn" : `${plan.durationDays} ngày từ lúc mua thành công`}</span>{plan.planCategory === "PROMOTION" && plan.offerStartsAt && plan.offerEndsAt ? <span className="mt-2 block max-w-[170px] text-[11px] leading-4 text-violet-700">Phát hành: {new Date(plan.offerStartsAt).toLocaleString("vi-VN")} – {new Date(plan.offerEndsAt).toLocaleString("vi-VN")}</span> : null}</td>
-                        <td className="px-4 py-4"><ul className="max-w-xs space-y-1 text-xs text-slate-600">{(plan.capabilityKeys ?? []).slice(0, 3).map((key) => { const item = LEARNING_CAPABILITIES.find((capability) => capability.key === key); return <li key={`${plan.id}-${key}`} className="flex gap-1.5"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" /><span className="line-clamp-2">{item?.label ?? key}</span></li>; })}</ul>{plan.capabilityKeys.length > 3 ? <span className="mt-1 block text-[11px] text-slate-400">+{plan.capabilityKeys.length - 3} mục học khác</span> : null}{plan.capabilityKeys.length === 0 ? <span className="text-xs text-slate-400">Chưa chọn mục học</span> : null}<span className="mt-2 block text-xs font-medium text-slate-500">AI: {plan.maxAiQueriesPerDay} lượt/ngày</span></td>
+                        <td className="px-4 py-4"><ul className="max-w-xs space-y-1 text-xs text-slate-600">{Object.entries(plan.entitlements ?? {}).filter(([, entitlement]) => entitlement.enabled).slice(0, 3).map(([key, entitlement]) => { const item = featureCatalog.find((feature) => feature.key === key); const usage = entitlement.limit == null ? "" : ` · ${entitlement.limit} ${entitlement.unit ?? ""}/${entitlement.period ?? ""}`; return <li key={`${plan.id}-${key}`} className="flex gap-1.5"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" /><span className="line-clamp-2">{item?.name ?? key}{usage}</span></li>; })}</ul>{Object.values(plan.entitlements ?? {}).filter((entitlement) => entitlement.enabled).length > 3 ? <span className="mt-1 block text-[11px] text-slate-400">+{Object.values(plan.entitlements ?? {}).filter((entitlement) => entitlement.enabled).length - 3} quyền lợi khác</span> : null}{Object.values(plan.entitlements ?? {}).every((entitlement) => !entitlement.enabled) ? <span className="text-xs text-slate-400">Chưa cấp quyền lợi</span> : null}</td>
                         <td className="px-4 py-4 text-center text-sm font-semibold text-slate-800">{plan.purchaseCount.toLocaleString("vi-VN")}</td>
                         <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-medium ${plan.status === "ACTIVE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : plan.status === "ARCHIVED" ? "border-slate-200 bg-slate-100 text-slate-600" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{plan.status === "ACTIVE" ? "Đang phát hành" : plan.status === "ARCHIVED" ? "Đã lưu trữ" : "Bản nháp"}</span></td>
                         <td className="px-5 py-4"><div className="flex items-center justify-end gap-1"><button type="button" onClick={() => openEditPlanModal(plan)} title="Chỉnh sửa gói" aria-label={`Chỉnh sửa gói ${plan.name}`} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-50 hover:text-blue-700"><Edit size={16} aria-hidden="true" /></button><button type="button" disabled={plan.purchaseCount > 0} onClick={() => setDeletingPlan(plan)} title={plan.purchaseCount > 0 ? "Gói đã có lượt mua, không thể xóa" : "Xóa gói"} aria-label={`Xóa gói ${plan.name}`} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={16} aria-hidden="true" /></button><button type="button" disabled={plan.status === "ARCHIVED"} onClick={() => void runAction(() => togglePlanStatus(plan))} className="ml-1 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">{plan.status === "ACTIVE" ? "Tạm dừng" : "Kích hoạt"}</button></div></td>
@@ -355,17 +610,19 @@ export function AdminSubscriptionsView() {
                           className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
                             sub.status === "ACTIVE"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : sub.status === "CANCELLED" ? "bg-red-50 text-red-700 border-red-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                              : sub.status === "SCHEDULED"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : sub.status === "CANCELLED" ? "bg-red-50 text-red-700 border-red-200" : "bg-slate-100 text-slate-600 border-slate-200"
                           }`}
                         >
-                          {sub.status === "ACTIVE" ? "Đang có hiệu lực" : sub.status === "CANCELLED" ? "Đã thu hồi" : "Đã hết hạn"}
+                          {sub.status === "ACTIVE" ? "Đang có hiệu lực" : sub.status === "SCHEDULED" ? "Đang xếp lịch" : sub.status === "CANCELLED" ? "Đã thu hồi" : "Đã hết hạn"}
                         </span>
                       </td>
 
                       <td className="px-4 py-3.5 text-right">
                         <div className="inline-flex items-center gap-2">
                           {(sub.status === "ACTIVE" || sub.status === "EXPIRED") && sub.endDate && <button type="button" onClick={() => void runAction(() => handleExtendSubscription(sub))} className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100">Cộng 30 ngày</button>}
-                          {sub.status === "ACTIVE" && <button type="button" onClick={() => void runAction(() => handleCancelSubscription(sub))} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Thu hồi quyền</button>}
+                          {(sub.status === "ACTIVE" || sub.status === "SCHEDULED") && <button type="button" onClick={() => void runAction(() => handleCancelSubscription(sub))} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">{sub.status === "SCHEDULED" ? "Hủy lịch" : "Thu hồi quyền"}</button>}
                         </div>
                       </td>
                     </tr>
@@ -380,40 +637,44 @@ export function AdminSubscriptionsView() {
 
       {editingPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
               <h3 className="text-base font-bold text-slate-900">
                 {editingPlan.id ? "Chỉnh sửa gói học" : "Tạo gói học"}
               </h3>
-              <button type="button" onClick={() => setEditingPlan(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+              <button type="button" onClick={() => setEditingPlan(null)} disabled={isSavingPlan} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-50">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-                <div className="grid gap-3 sm:grid-cols-2">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6 text-xs">
+              {errorMsg ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800">{errorMsg}</div> : null}
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Mã gói học *</label>
                   <input
                     type="text"
                     value={editingPlan.code || ""}
-                    onChange={(e) => { setEditingPlan({ ...editingPlan, code: e.target.value }); clearFieldError("code"); }}
-                    aria-invalid={Boolean(fieldErrors.code)}
-                    aria-describedby={fieldErrors.code ? "plan-code-error" : undefined}
-                    placeholder="VIP_3MONTHS"
-                    className={`h-9 w-full rounded-xl border px-3 font-mono text-xs outline-none focus:border-blue-500 ${fieldErrors.code ? "border-red-400" : "border-slate-200"}`}
+                    readOnly
+                    placeholder="Tự tạo từ tên gói học"
+                    className="h-9 w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-xs text-slate-500 outline-none"
                   />
-                  {fieldErrors.code ? <p id="plan-code-error" role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.code}</p> : null}
+                  <p className="mt-1.5 text-[11px] text-slate-500">Mã được tự tạo từ tên gói và không thể chỉnh sửa.</p>
+                  {fieldErrors.code ? <p role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.code}</p> : null}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Nhãn Badge (tùy chọn)</label>
                   <input
                     type="text"
+                    maxLength={100}
                     value={editingPlan.badgeTag || ""}
-                    onChange={(e) => setEditingPlan({ ...editingPlan, badgeTag: e.target.value })}
+                    onChange={(e) => { setEditingPlan({ ...editingPlan, badgeTag: e.target.value }); clearFieldError("badgeTag"); }}
+                    aria-invalid={Boolean(fieldErrors.badgeTag)}
+                    aria-describedby={fieldErrors.badgeTag ? "plan-badge-error" : undefined}
                     placeholder="Tiết kiệm 30%"
-                    className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs outline-none focus:border-blue-500"
+                    className={`h-9 w-full rounded-xl border px-3 text-xs outline-none focus:border-blue-500 ${fieldErrors.badgeTag ? "border-red-400" : "border-slate-200"}`}
                   />
+                  <p id="plan-badge-error" role={fieldErrors.badgeTag ? "alert" : undefined} className="mt-1.5 min-h-4 text-[11px] text-red-600">{fieldErrors.badgeTag ?? ""}</p>
                 </div>
               </div>
 
@@ -422,13 +683,14 @@ export function AdminSubscriptionsView() {
                 <input
                   type="text"
                   value={editingPlan.name || ""}
-                  onChange={(e) => { setEditingPlan({ ...editingPlan, name: e.target.value }); clearFieldError("name"); }}
+                  maxLength={160}
+                  onChange={(e) => { const name = e.target.value; setEditingPlan({ ...editingPlan, name, ...(editingPlan.id ? {} : { code: generatePlanCode(name, plans) }) }); clearFieldError("name"); clearFieldError("code"); }}
                   aria-invalid={Boolean(fieldErrors.name)}
                   aria-describedby={fieldErrors.name ? "plan-name-error" : undefined}
                   placeholder="Gói TOEIC VIP 3 Tháng"
                   className={`h-10 w-full rounded-xl border px-3 text-xs text-slate-800 outline-none focus:border-blue-500 ${fieldErrors.name ? "border-red-400" : "border-slate-200"}`}
                 />
-                {fieldErrors.name ? <p id="plan-name-error" role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.name}</p> : null}
+                <p id="plan-name-error" role={fieldErrors.name ? "alert" : undefined} className="mt-1.5 min-h-4 text-[11px] text-red-600">{fieldErrors.name ?? ""}</p>
               </div>
 
               <fieldset>
@@ -440,11 +702,13 @@ export function AdminSubscriptionsView() {
                     ["PREMIUM", "Premium", "Gói cao cấp, quyền học có thể cấu hình."],
                     ["PROMOTION", "Ưu đãi", "Gói theo chương trình, có thời gian phát hành riêng."],
                   ] as const).map(([category, title, description]) => <label key={category} className={`flex cursor-pointer gap-2.5 rounded-xl border p-3 transition ${editingPlan.planCategory === category ? "border-blue-500 bg-blue-50/60 ring-1 ring-blue-500/20" : "border-slate-200 hover:border-slate-300"}`}>
-                    <input type="radio" name="planCategory" value={category} checked={editingPlan.planCategory === category} onChange={() => setEditingPlan({ ...editingPlan, planCategory: category, offerStartsAt: category === "PROMOTION" ? editingPlan.offerStartsAt ?? null : null, offerEndsAt: category === "PROMOTION" ? editingPlan.offerEndsAt ?? null : null })} className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                    <input type="radio" name="planCategory" value={category} checked={editingPlan.planCategory === category} onChange={() => { setEditingPlan({ ...editingPlan, planCategory: category, offerStartsAt: category === "PROMOTION" ? editingPlan.offerStartsAt ?? null : null, offerEndsAt: category === "PROMOTION" ? editingPlan.offerEndsAt ?? null : null }); clearFieldError("offerStartsAt"); clearFieldError("offerEndsAt"); clearFieldError("planCategory"); }} className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                     <span><span className="block text-xs font-semibold text-slate-900">{title}</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">{description}</span></span>
                   </label>)}
                 </div>
                 {editingPlan.planCategory === "PROMOTION" ? <p className="mt-2 text-[11px] leading-4 text-violet-700">Thời gian phát hành chỉ quyết định khi nào được mua; thời hạn sử dụng tính từ lúc mua thành công.</p> : null}
+                {activeCategoryWarning ? <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800">{activeCategoryWarning}</p> : null}
+                {fieldErrors.planCategory ? <p role="alert" className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-4 text-red-700">{fieldErrors.planCategory}</p> : null}
               </fieldset>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -510,6 +774,7 @@ export function AdminSubscriptionsView() {
                     onChange={(e) => {
                       const billingCycle = e.target.value as SubscriptionBillingCycle;
                       setEditingPlan({ ...editingPlan, billingCycle, durationDays: billingCycle === "LIFETIME" ? 0 : billingCycle === "MONTHLY" ? 30 : billingCycle === "QUARTERLY" ? 90 : 365 });
+                      clearFieldError("durationDays");
                     }}
                     className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none focus:border-blue-500"
                   >
@@ -520,29 +785,186 @@ export function AdminSubscriptionsView() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">Hạn ngạch AI Gemini / ngày</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editingPlan.maxAiQueriesPerDay ?? 0}
-                    onChange={(e) => { setEditingPlan({ ...editingPlan, maxAiQueriesPerDay: Number(e.target.value) }); clearFieldError("maxAiQueriesPerDay"); }}
-                    aria-invalid={Boolean(fieldErrors.maxAiQueriesPerDay)}
-                    aria-describedby={fieldErrors.maxAiQueriesPerDay ? "plan-ai-limit-error" : undefined}
-                    className={`h-9 w-full rounded-xl border px-3 text-xs outline-none focus:border-blue-500 font-mono ${fieldErrors.maxAiQueriesPerDay ? "border-red-400" : "border-slate-200"}`}
-                  />
-                  {fieldErrors.maxAiQueriesPerDay ? <p id="plan-ai-limit-error" role="alert" className="mt-1.5 text-[11px] text-red-600">{fieldErrors.maxAiQueriesPerDay}</p> : null}
-                </div>
               </div>
 
               <fieldset>
-                <legend className="mb-2 font-bold text-slate-800">Quyền học được mở</legend>
-                <p className="mb-3 text-[11px] leading-4 text-slate-500">Danh sách lấy từ các mục học viên. Trạng thái “Đang phát triển” cho biết mục học chưa được hoàn thiện ở khu vực học viên.</p>
-                <div className="h-56 space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 p-3">
-                  {LEARNING_CAPABILITIES.map((capability) => <label key={capability.key} className="flex cursor-pointer items-start justify-between gap-3 rounded-lg p-2 hover:bg-slate-50">
-                    <span className="flex items-start gap-2.5"><input type="checkbox" checked={(editingPlan.capabilityKeys ?? []).includes(capability.key)} onChange={(e) => { const current = editingPlan.capabilityKeys ?? []; setEditingPlan({ ...editingPlan, capabilityKeys: e.target.checked ? [...current, capability.key] : current.filter((key) => key !== capability.key) }); }} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600" /><span><span className="block text-xs font-semibold text-slate-800">{capability.label}</span><span className="mt-0.5 block text-[11px] text-slate-500">{capability.description}</span></span></span>
-                    <span className="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">{capability.availability === "IN_DEVELOPMENT" ? "Đang phát triển" : "Đang hoạt động"}</span>
-                  </label>)}
+                <legend className="mb-2 font-bold text-slate-800">Quyền lợi theo chức năng học viên</legend>
+                <p className="mb-3 text-[11px] leading-4 text-slate-500">Danh sách lấy từ các chức năng đã đăng ký trong ứng dụng; Admin chỉ bật/tắt và đặt hạn mức. Tính năng chưa sẵn sàng không thể sử dụng dù đã cấu hình ở đây.</p>
+                <label className="mb-3 flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={featureCatalog.length > 0 && featureCatalog.every((feature) => editingPlan.entitlements?.[feature.key]?.enabled)}
+                    ref={(element) => {
+                      if (element) {
+                        const selectedCount = featureCatalog.filter((feature) => editingPlan.entitlements?.[feature.key]?.enabled).length;
+                        element.indeterminate = selectedCount > 0 && selectedCount < featureCatalog.length;
+                      }
+                    }}
+                    onChange={(event) => setAllFeatureEntitlements(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                  />
+                  Chọn tất cả quyền lợi
+                </label>
+                <div className="max-h-[28rem] space-y-3 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 p-3">
+                  {featureCatalog.map((feature) => {
+                    const parentFeature = feature.parentFeatureKey
+                      ? featureCatalog.find((item) => item.key === feature.parentFeatureKey)
+                      : null;
+                    const parentEntitlement = parentFeature
+                      ? editingPlan.entitlements?.[parentFeature.key]
+                      : null;
+                    const entitlement = editingPlan.entitlements?.[feature.key] ?? {
+                      enabled: false,
+                      limit: feature.controlType === "METERED" ? 1 : null,
+                      unit: feature.allowedUnits[0] ?? null,
+                      period: feature.allowedPeriods.includes("DAY") ? "DAY" : feature.allowedPeriods[0] ?? null,
+                      config: {},
+                    };
+                    const statusLabel = {
+                      AVAILABLE: "Sẵn sàng",
+                      IN_DEVELOPMENT: "Đang phát triển",
+                      PLANNED: "Đã lên kế hoạch",
+                      DISABLED: "Đã vô hiệu hóa",
+                    }[feature.lifecycleStatus];
+                    return (
+                      <div key={feature.key} className={`rounded-lg border border-slate-100 p-3 ${parentFeature ? "ml-4 border-l-2 border-l-blue-100" : ""}`}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <label className="flex min-w-0 items-start gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={entitlement.enabled}
+                              onChange={(event) => {
+                                updateFeatureEntitlement(feature.key, { enabled: event.target.checked });
+                                clearFeatureError(`${feature.key}.settings`);
+                              }}
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+                            />
+                            <span>
+                              <span className="block text-xs font-semibold text-slate-800">{feature.name}</span>
+                              <span className="mt-0.5 block text-[11px] text-slate-500">{feature.description}</span>
+                              {parentFeature ? <span className="mt-1 block text-[10px] font-medium text-blue-700">Thuộc nhóm {parentFeature.name}</span> : null}
+                              {parentFeature && entitlement.enabled && !parentEntitlement?.enabled
+                                ? <span className="mt-1 block text-[10px] font-medium text-amber-700">Cần bật quyền {parentFeature.name} để học viên sử dụng chức năng này.</span>
+                                : null}
+                            </span>
+                          </label>
+                          <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${feature.lifecycleStatus === "AVAILABLE" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        {featureErrors[`${feature.key}.settings`] ? <p role="alert" className="mt-2 text-[11px] text-red-600">{featureErrors[`${feature.key}.settings`]}</p> : null}
+                        {feature.controlType === "METERED" ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            <div className="flex min-w-0 flex-col">
+                              <label htmlFor={`feature-${feature.key}-limit`} className="min-h-8 text-[11px] font-semibold text-slate-600">
+                                Hạn mức <span className="font-normal">(để trống = không giới hạn)</span>
+                              </label>
+                              <input
+                                id={`feature-${feature.key}-limit`}
+                                type="number"
+                                min={1}
+                                value={entitlement.limit ?? ""}
+                                onChange={(event) => {
+                                  updateFeatureEntitlement(feature.key, {
+                                    limit: event.target.value === "" ? null : event.target.valueAsNumber,
+                                  });
+                                  clearFeatureError(`${feature.key}.limit`);
+                                }}
+                                aria-invalid={Boolean(featureErrors[`${feature.key}.limit`])}
+                                aria-describedby={`feature-${feature.key}-limit-error`}
+                                className={`h-9 w-full rounded-lg border px-2 text-xs font-normal ${featureErrors[`${feature.key}.limit`] ? "border-red-400" : "border-slate-200"}`}
+                              />
+                              <p id={`feature-${feature.key}-limit-error`} role={featureErrors[`${feature.key}.limit`] ? "alert" : undefined} className="mt-1 min-h-8 text-[11px] leading-4 text-red-600">
+                                {featureErrors[`${feature.key}.limit`] ?? ""}
+                              </p>
+                            </div>
+                            <div className="flex min-w-0 flex-col">
+                              <label htmlFor={`feature-${feature.key}-unit`} className="min-h-8 text-[11px] font-semibold text-slate-600">Đơn vị</label>
+                              <select
+                                id={`feature-${feature.key}-unit`}
+                                value={entitlement.unit ?? ""}
+                                onChange={(event) => {
+                                  updateFeatureEntitlement(feature.key, { unit: event.target.value || null });
+                                  clearFeatureError(`${feature.key}.unit`);
+                                }}
+                                aria-invalid={Boolean(featureErrors[`${feature.key}.unit`])}
+                                aria-describedby={`feature-${feature.key}-unit-error`}
+                                className={`h-9 w-full rounded-lg border bg-white px-2 text-xs font-normal ${featureErrors[`${feature.key}.unit`] ? "border-red-400" : "border-slate-200"}`}
+                              >
+                                <option value="">Chọn đơn vị</option>
+                                {feature.allowedUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                              </select>
+                              <p id={`feature-${feature.key}-unit-error`} role={featureErrors[`${feature.key}.unit`] ? "alert" : undefined} className="mt-1 min-h-8 text-[11px] leading-4 text-red-600">
+                                {featureErrors[`${feature.key}.unit`] ?? ""}
+                              </p>
+                            </div>
+                            <div className="flex min-w-0 flex-col">
+                              <label htmlFor={`feature-${feature.key}-period`} className="min-h-8 text-[11px] font-semibold text-slate-600">Chu kỳ</label>
+                              <select
+                                id={`feature-${feature.key}-period`}
+                                value={entitlement.period ?? ""}
+                                onChange={(event) => {
+                                  updateFeatureEntitlement(feature.key, { period: (event.target.value || null) as PlanEntitlement["period"] });
+                                  clearFeatureError(`${feature.key}.period`);
+                                }}
+                                aria-invalid={Boolean(featureErrors[`${feature.key}.period`])}
+                                aria-describedby={`feature-${feature.key}-period-error`}
+                                className={`h-9 w-full rounded-lg border bg-white px-2 text-xs font-normal ${featureErrors[`${feature.key}.period`] ? "border-red-400" : "border-slate-200"}`}
+                              >
+                                <option value="">Chọn chu kỳ</option>
+                                {feature.allowedPeriods.map((period) => <option key={period} value={period}>
+                                  {period === "DAY" ? "Ngày" : period === "WEEK" ? "Tuần" : period === "MONTH" ? "Tháng" : "Thời hạn gói"}
+                                </option>)}
+                              </select>
+                              <p id={`feature-${feature.key}-period-error`} role={featureErrors[`${feature.key}.period`] ? "alert" : undefined} className="mt-1 min-h-8 text-[11px] leading-4 text-red-600">
+                                {featureErrors[`${feature.key}.period`] ?? ""}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+                        {feature.configFields.length > 0 ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {feature.configFields.map((field) => {
+                              const value = entitlement.config?.[field.key];
+                              const errorKey = `${feature.key}.config.${field.key}`;
+                              return <div key={field.key} className="flex min-w-0 flex-col">
+                                <label htmlFor={`feature-${feature.key}-config-${field.key}`} className="min-h-8 text-[11px] font-semibold text-slate-600">
+                                  {field.label}{field.required ? " *" : ""}
+                                </label>
+                                {field.type === "BOOLEAN" ? (
+                                  <input id={`feature-${feature.key}-config-${field.key}`} type="checkbox" checked={Boolean(value)} onChange={(event) => updateFeatureConfig(feature.key, field.key, event.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                                ) : field.type === "SELECT" ? (
+                                  <select id={`feature-${feature.key}-config-${field.key}`} value={typeof value === "string" ? value : ""} onChange={(event) => updateFeatureConfig(feature.key, field.key, event.target.value || undefined)} aria-invalid={Boolean(featureErrors[errorKey])} aria-describedby={`feature-${feature.key}-config-${field.key}-error`} className={`h-9 w-full rounded-lg border bg-white px-2 text-xs font-normal ${featureErrors[errorKey] ? "border-red-400" : "border-slate-200"}`}>
+                                    <option value="">Chọn giá trị</option>
+                                    {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                                  </select>
+                                ) : (
+                                  <input
+                                    id={`feature-${feature.key}-config-${field.key}`}
+                                    type={field.type === "INTEGER" || field.type === "NUMBER" ? "number" : "text"}
+                                    step={field.type === "INTEGER" ? 1 : "any"}
+                                    value={typeof value === "boolean" ? "" : value ?? ""}
+                                    onChange={(event) => updateFeatureConfig(
+                                      feature.key,
+                                      field.key,
+                                      event.target.value === "" ? undefined : field.type === "INTEGER" || field.type === "NUMBER" ? Number(event.target.value) : event.target.value,
+                                    )}
+                                    aria-invalid={Boolean(featureErrors[errorKey])}
+                                    aria-describedby={`feature-${feature.key}-config-${field.key}-error`}
+                                    className={`h-9 w-full rounded-lg border px-2 text-xs font-normal ${featureErrors[errorKey] ? "border-red-400" : "border-slate-200"}`}
+                                  />
+                                )}
+                                <p id={`feature-${feature.key}-config-${field.key}-error`} role={featureErrors[errorKey] ? "alert" : undefined} className="mt-1 min-h-8 text-[11px] leading-4 text-red-600">
+                                  {featureErrors[errorKey] ?? ""}
+                                </p>
+                              </div>;
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {featureCatalog.length === 0 ? <p className="p-3 text-xs text-slate-500">Danh mục tính năng chưa tải được.</p> : null}
                 </div>
               </fieldset>
 
@@ -559,7 +981,12 @@ export function AdminSubscriptionsView() {
 
                 <label className="flex items-center gap-2 font-semibold text-slate-700">
                   Trạng thái
-                  <select value={editingPlan.status || "DRAFT"} onChange={(e) => setEditingPlan({ ...editingPlan, status: e.target.value as SubscriptionPlanStatus })} className="h-9 rounded-lg border border-slate-200 bg-white px-2">
+                  <select value={editingPlan.status || "DRAFT"} onChange={(e) => {
+                    const status = e.target.value as SubscriptionPlanStatus;
+                    setEditingPlan({ ...editingPlan, status });
+                    clearFieldError("planCategory");
+                    if (status === "ACTIVE" && conflictingActivePlan) setConfirmPlanReplacement(true);
+                  }} className="h-9 rounded-lg border border-slate-200 bg-white px-2">
                     <option value="DRAFT">Bản nháp</option>
                     <option value="ACTIVE">Đang phát hành</option>
                     <option value="ARCHIVED">Đã lưu trữ</option>
@@ -567,18 +994,99 @@ export function AdminSubscriptionsView() {
                 </label>
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <button type="button" onClick={() => setEditingPlan(null)} className="rounded-xl px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100">
-                  Hủy
-                </button>
-                <button type="button" onClick={() => void runPlanSave()} className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
-                  {editingPlan.id ? "Lưu thay đổi" : "Tạo gói học"}
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button type="button" onClick={() => setEditingPlan(null)} className="rounded-xl px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100">
+                Hủy
+              </button>
+              <button type="button" disabled={isSavingPlan} onClick={() => void runPlanSave()} className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">
+                {isSavingPlan ? "Đang lưu..." : editingPlan.id ? "Lưu thay đổi" : "Tạo gói học"}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {confirmPlanReplacement && editingPlan && conflictingActivePlan ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="replace-active-plan-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h3 id="replace-active-plan-title" className="text-base font-bold text-slate-900">
+              Tạm dừng gói đang phát hành?
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Gói {planCategoryLabels[conflictingActivePlan.planCategory]} <strong className="text-slate-900">&quot;{conflictingActivePlan.name}&quot;</strong> đang phát hành.
+              Bạn có muốn tạm dừng gói này để phát hành gói <strong className="text-slate-900">&quot;{editingPlan.name || "mới"}&quot;</strong> không?
+            </p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Gói cũ sẽ chuyển sang bản nháp. Các lượt đăng ký hiện có của học viên không bị thu hồi.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSavingPlan}
+                onClick={() => setConfirmPlanReplacement(false)}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Không, quay lại
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPlan}
+                onClick={() => void runPlanSave(true)}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSavingPlan ? "Đang xử lý..." : "Tạm dừng và phát hành"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {pendingPlanActivation && pendingActivationConflict ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="activate-existing-plan-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h3 id="activate-existing-plan-title" className="text-base font-bold text-slate-900">
+              Tạm dừng gói đang phát hành?
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Gói {planCategoryLabels[pendingActivationConflict.planCategory]} <strong className="text-slate-900">&quot;{pendingActivationConflict.name}&quot;</strong> đang phát hành.
+              Bạn có muốn tạm dừng gói này để kích hoạt <strong className="text-slate-900">&quot;{pendingPlanActivation.name}&quot;</strong> không?
+            </p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Gói hiện tại sẽ chuyển sang bản nháp. Các lượt đăng ký hiện có của học viên không bị thu hồi.
+            </p>
+            {errorMsg ? <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{errorMsg}</p> : null}
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSavingPlan}
+                onClick={() => { setPendingPlanActivation(null); setErrorMsg(""); }}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Không, giữ nguyên
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPlan}
+                onClick={() => void confirmPlanActivation()}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSavingPlan ? "Đang xử lý..." : "Tạm dừng và kích hoạt"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {deletingPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
