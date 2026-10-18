@@ -174,7 +174,7 @@ export default function AdminMockTestsPage() {
     setEditingTest(test);
     setTestFormTitle(test.title);
     setTestFormVolId(test.volId as "vol1" | "vol2");
-    setTestFormDifficulty(test.difficulty);
+    setTestFormDifficulty((test.difficulty as "Khó" | "Trung bình" | "Vừa sức") || "Khó");
     setShowCreateTestModal(true);
   };
 
@@ -187,11 +187,11 @@ export default function AdminMockTestsPage() {
         list.map((t) =>
           t.id === editingTest.id
             ? {
-                ...t,
-                title: testFormTitle.trim(),
-                volId: testFormVolId,
-                difficulty: testFormDifficulty,
-              }
+              ...t,
+              title: testFormTitle.trim(),
+              volId: testFormVolId,
+              difficulty: testFormDifficulty,
+            }
             : t
         );
       if (editingTest.volId === "vol1") setTestsVol1(updateFn);
@@ -253,10 +253,10 @@ export default function AdminMockTestsPage() {
     const secs = customMinutes
       ? customMinutes * 60
       : examDurationType === "120"
-      ? 120 * 60
-      : examDurationType === "60"
-      ? 60 * 60
-      : 30 * 60;
+        ? 120 * 60
+        : examDurationType === "60"
+          ? 60 * 60
+          : 30 * 60;
     setExamTimeRemaining(secs);
     setExamSubmitted(false);
     setExamAnswers({});
@@ -300,13 +300,13 @@ export default function AdminMockTestsPage() {
         list.map((t) =>
           t.id === examModalTest.id
             ? {
-                ...t,
-                score: totalScore,
-                listeningScore: scaledListening,
-                readingScore: scaledReading,
-                status: `Đã hoàn thành (${totalScore}/${maxTotal})`,
-                completedAt: "Vừa xong",
-              }
+              ...t,
+              score: totalScore,
+              listeningScore: scaledListening,
+              readingScore: scaledReading,
+              status: `Đã hoàn thành (${totalScore}/${maxTotal})`,
+              completedAt: "Vừa xong",
+            }
             : t
         );
       if (examModalTest.volId === "vol1") setTestsVol1(updateFn);
@@ -484,14 +484,14 @@ export default function AdminMockTestsPage() {
               prev.map((t) =>
                 t.id === testId
                   ? {
-                      ...t,
-                      score: null,
-                      listeningScore: null,
-                      readingScore: null,
-                      status: "Chưa luyện tập",
-                      completedAt: null,
-                      historyAttempts: [],
-                    }
+                    ...t,
+                    score: null,
+                    listeningScore: null,
+                    readingScore: null,
+                    status: "Chưa luyện tập",
+                    completedAt: null,
+                    historyAttempts: [],
+                  }
                   : t
               );
             if (historyModalTest.volId === "vol1") setTestsVol1(clearFn);

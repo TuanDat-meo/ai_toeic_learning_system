@@ -85,4 +85,34 @@ class ContentPayloadValidatorTest {
 
         assertThat(result.errors()).hasSize(1);
     }
+
+    @Test
+    void normalizesGrammarPayloadWithExtendedFields() throws Exception {
+        var raw = new ObjectMapper().readTree("""
+                {
+                  "title": " Present Simple ",
+                  "rule": " S + V(s/es) ",
+                  "explanation": " Diễn tả thói quen hoặc sự thật. ",
+                  "part": "Part 5",
+                  "level": "350-500",
+                  "examples": [
+                    "She works every day.",
+                    {"sentence":"He plays tennis.","translation":"Anh ấy chơi tennis."}
+                  ],
+                  "signalWords": "always|usually|often",
+                  "traps": ["Bẫy chia động từ ngôi thứ 3 số ít"]
+                }
+                """);
+
+        var result = validator.validate(ContentType.GRAMMAR, raw);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.normalizedData().path("title").asText()).isEqualTo("Present Simple");
+        assertThat(result.normalizedData().path("rule").asText()).isEqualTo("S + V(s/es)");
+        assertThat(result.normalizedData().path("explanation").asText()).isEqualTo("Diễn tả thói quen hoặc sự thật.");
+        assertThat(result.normalizedData().path("part").asText()).isEqualTo("PART_5");
+        assertThat(result.normalizedData().path("examples")).hasSize(2);
+        assertThat(result.normalizedData().path("signalWords")).hasSize(3);
+        assertThat(result.normalizedData().path("traps")).hasSize(1);
+    }
 }

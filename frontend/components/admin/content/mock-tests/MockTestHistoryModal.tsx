@@ -37,14 +37,14 @@ export const MockTestHistoryModal: React.FC<MockTestHistoryModalProps> = ({
           </button>
         </div>
 
-        {test.historyAttempts.length === 0 ? (
+        {(!test.historyAttempts || test.historyAttempts.length === 0) ? (
           <div className="py-8 text-center space-y-2">
             <AlertCircle className="w-10 h-10 text-slate-300 mx-auto" />
             <p className="text-sm font-medium text-slate-500">Chưa có lượt thi nào cho đề này.</p>
           </div>
         ) : (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-            {test.historyAttempts.map((attempt) => (
+            {test.historyAttempts?.map((attempt: any) => (
               <div
                 key={attempt.id}
                 className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between"
@@ -68,7 +68,7 @@ export const MockTestHistoryModal: React.FC<MockTestHistoryModalProps> = ({
         )}
 
         <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-          {test.historyAttempts.length > 0 && (
+          {(test.historyAttempts && test.historyAttempts.length > 0) && (
             <button
               type="button"
               onClick={() => onClearHistory(test.id)}

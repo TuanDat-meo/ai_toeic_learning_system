@@ -1,4 +1,4 @@
-import { WordItem, TestItem } from "./types";
+import { WordItem, VocabularyTestSet } from "./types";
 import { ETS_2024_TESTS, ETS_2024_ALL_WORDS } from "./ets2024VocabData";
 
 export const SAMPLE_WORDS: WordItem[] = [
@@ -87,33 +87,33 @@ export const SAMPLE_WORDS: WordItem[] = [
   },
 ];
 
-export const INITIAL_TESTS: TestItem[] = [
+export const INITIAL_TESTS: VocabularyTestSet[] = [
   // 10 Tests chính thức từ bộ đề ETS 2024
   ...ETS_2024_TESTS,
 
-  // 10 Tests cho năm 2026
-  { id: "test-2026-1", year: "2026", title: "Test 1 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-2", year: "2026", title: "Test 2 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-3", year: "2026", title: "Test 3 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-4", year: "2026", title: "Test 4 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-5", year: "2026", title: "Test 5 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-6", year: "2026", title: "Test 6 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-7", year: "2026", title: "Test 7 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-8", year: "2026", title: "Test 8 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-9", year: "2026", title: "Test 9 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
-  { id: "test-2026-10", year: "2026", title: "Test 10 (ETS 2026)", wordCount: SAMPLE_WORDS.length, category: "2026", words: SAMPLE_WORDS },
+  // ETS 2026
+  { id: "test-2026-1",  code: "ETS_2026_TEST1",  nameVi: "Test 1 (ETS 2026)",  nameEn: "ETS 2026 Test 1",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-2",  code: "ETS_2026_TEST2",  nameVi: "Test 2 (ETS 2026)",  nameEn: "ETS 2026 Test 2",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-3",  code: "ETS_2026_TEST3",  nameVi: "Test 3 (ETS 2026)",  nameEn: "ETS 2026 Test 3",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-4",  code: "ETS_2026_TEST4",  nameVi: "Test 4 (ETS 2026)",  nameEn: "ETS 2026 Test 4",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-5",  code: "ETS_2026_TEST5",  nameVi: "Test 5 (ETS 2026)",  nameEn: "ETS 2026 Test 5",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-6",  code: "ETS_2026_TEST6",  nameVi: "Test 6 (ETS 2026)",  nameEn: "ETS 2026 Test 6",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-7",  code: "ETS_2026_TEST7",  nameVi: "Test 7 (ETS 2026)",  nameEn: "ETS 2026 Test 7",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-8",  code: "ETS_2026_TEST8",  nameVi: "Test 8 (ETS 2026)",  nameEn: "ETS 2026 Test 8",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-9",  code: "ETS_2026_TEST9",  nameVi: "Test 9 (ETS 2026)",  nameEn: "ETS 2026 Test 9",  year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
+  { id: "test-2026-10", code: "ETS_2026_TEST10", nameVi: "Test 10 (ETS 2026)", nameEn: "ETS 2026 Test 10", year: 2026, category: "ETS_EXAM",  status: "DRAFT",     wordCount: SAMPLE_WORDS.length },
 
-  // Bộ 600 Essential Words
-  { id: "essential-1", year: "Essential", title: "Contracts (Hợp đồng)", wordCount: SAMPLE_WORDS.length, category: "600_essential", words: SAMPLE_WORDS },
-  { id: "essential-2", year: "Essential", title: "Marketing (Tiếp thị)", wordCount: SAMPLE_WORDS.length, category: "600_essential", words: SAMPLE_WORDS },
-  { id: "essential-3", year: "Essential", title: "Warranties (Bảo hành)", wordCount: SAMPLE_WORDS.length, category: "600_essential", words: SAMPLE_WORDS },
-  { id: "essential-4", year: "Essential", title: "Office Equipment", wordCount: SAMPLE_WORDS.length, category: "600_essential", words: SAMPLE_WORDS },
-  { id: "essential-5", year: "Essential", title: "Human Resources", wordCount: SAMPLE_WORDS.length, category: "600_essential", words: SAMPLE_WORDS },
-  { id: "essential-6", year: "Essential", title: "Financial Reports", wordCount: SAMPLE_WORDS.length, category: "600_essential", words: SAMPLE_WORDS },
+  // 600 Essential Words
+  { id: "essential-1", code: "600_CONTRACTS",   nameVi: "Contracts (Hợp đồng)",      nameEn: "Contracts",      category: "ESSENTIAL", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "essential-2", code: "600_MARKETING",   nameVi: "Marketing (Tiếp thị)",      nameEn: "Marketing",      category: "ESSENTIAL", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "essential-3", code: "600_WARRANTIES",  nameVi: "Warranties (Bảo hành)",     nameEn: "Warranties",     category: "ESSENTIAL", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "essential-4", code: "600_OFFICE",      nameVi: "Office Equipment",          nameEn: "Office Equipment", category: "ESSENTIAL", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "essential-5", code: "600_HR",          nameVi: "Human Resources (Nhân sự)", nameEn: "Human Resources",  category: "ESSENTIAL", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "essential-6", code: "600_FINANCE",     nameVi: "Financial Reports (Tài chính)",nameEn: "Financial Reports",category: "ESSENTIAL", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
 
-  // Bộ 2023
-  { id: "test-2023-1", year: "2023", title: "Test 1 (ETS 2023)", wordCount: SAMPLE_WORDS.length, category: "2023", words: SAMPLE_WORDS },
-  { id: "test-2023-2", year: "2023", title: "Test 2 (ETS 2023)", wordCount: SAMPLE_WORDS.length, category: "2023", words: SAMPLE_WORDS },
-  { id: "test-2023-3", year: "2023", title: "Test 3 (ETS 2023)", wordCount: SAMPLE_WORDS.length, category: "2023", words: SAMPLE_WORDS },
-  { id: "test-2023-4", year: "2023", title: "Test 4 (ETS 2023)", wordCount: SAMPLE_WORDS.length, category: "2023", words: SAMPLE_WORDS },
+  // ETS 2023
+  { id: "test-2023-1", code: "ETS_2023_TEST1", nameVi: "Test 1 (ETS 2023)", nameEn: "ETS 2023 Test 1", year: 2023, category: "ETS_EXAM", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "test-2023-2", code: "ETS_2023_TEST2", nameVi: "Test 2 (ETS 2023)", nameEn: "ETS 2023 Test 2", year: 2023, category: "ETS_EXAM", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "test-2023-3", code: "ETS_2023_TEST3", nameVi: "Test 3 (ETS 2023)", nameEn: "ETS 2023 Test 3", year: 2023, category: "ETS_EXAM", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
+  { id: "test-2023-4", code: "ETS_2023_TEST4", nameVi: "Test 4 (ETS 2023)", nameEn: "ETS 2023 Test 4", year: 2023, category: "ETS_EXAM", status: "PUBLISHED", wordCount: SAMPLE_WORDS.length },
 ];

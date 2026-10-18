@@ -42,7 +42,7 @@ export const MockTestVocabModal: React.FC<MockTestVocabModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
-          {test.keyVocab.map((item, idx) => {
+          {test.keyVocab?.map((item: any, idx: number) => {
             const isSaved = savedVocabBag.includes(item.word);
 
             return (

@@ -1,9 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Sparkles } from "lucide-react";
-import { WordItem, TestItem } from "./types";
+import { WordItem, VocabularyTestSet, TestItem } from "./types";
+import { CONTENT_STATUS_LABEL } from "@/lib/types/domain";
 import { SAMPLE_WORDS, INITIAL_TESTS } from "./mockData";
+import {
+  getAdminVocabularySets,
+  createVocabularySet,
+  updateVocabularySet,
+  deleteVocabularySet,
+  addVocabularyWord,
+  updateVocabularyWord,
+  deleteVocabularyWord,
+} from "@/lib/api/vocabulary";
 import { VocabularyHeader } from "@/components/admin/content/vocabulary/VocabularyHeader";
 import { VocabularyTestGrid } from "@/components/admin/content/vocabulary/VocabularyTestGrid";
 import {
@@ -15,8 +25,9 @@ import { VocabularyModals } from "@/components/admin/content/vocabulary/Vocabula
 
 export default function VocabularyLearningPage() {
   const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "algorithm" | "analytics">("topics");
-  const [activeSubCategory, setActiveSubCategory] = useState<"all" | "2024" | "2026" | "600_essential" | "2023">("all");
-  const [tests, setTests] = useState<TestItem[]>(INITIAL_TESTS);
+  const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
+  const [tests, setTests] = useState<VocabularyTestSet[]>(INITIAL_TESTS);
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -30,11 +41,32 @@ export default function VocabularyLearningPage() {
   const [flashcardModalTest, setFlashcardModalTest] = useState<TestItem | null>(null);
   const [gameModalTest, setGameModalTest] = useState<TestItem | null>(null);
   const [showCreateTestModal, setShowCreateTestModal] = useState(false);
-  const [editingTest, setEditingTest] = useState<TestItem | null>(null);
-  const [deleteTestConfirm, setDeleteTestConfirm] = useState<TestItem | null>(null);
+  const [editingTest, setEditingTest] = useState<VocabularyTestSet | null>(null);
+  const [deleteTestConfirm, setDeleteTestConfirm] = useState<VocabularyTestSet | null>(null);
   const [showAddWordModal, setShowAddWordModal] = useState(false);
   const [editingWord, setEditingWord] = useState<WordItem | null>(null);
   const [deleteWordConfirm, setDeleteWordConfirm] = useState<WordItem | null>(null);
+
+  const loadSets = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getAdminVocabularySets();
+      if (data && data.length > 0) {
+        setTests(data);
+      } else {
+        setTests(INITIAL_TESTS);
+      }
+    } catch (err) {
+      console.warn("Could not load vocabulary sets from server, using fallback:", err);
+      setTests(INITIAL_TESTS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSets();
+  }, [loadSets]);
 
   // Audio synthesis
   const playAudio = (text: string) => {
@@ -66,6 +98,14 @@ export default function VocabularyLearningPage() {
     return Array.from(map.values());
   }, [tests]);
 
+  const existingCategories = React.useMemo(() => {
+    const set = new Set<string>();
+    tests.forEach((t) => {
+      if (t.category) set.add(t.category);
+    });
+    return Array.from(set);
+  }, [tests]);
+
   const totalWordsCount = allWordsCombined.length;
 
   // Export CSV
@@ -74,10 +114,10 @@ export default function VocabularyLearningPage() {
       ["ID", "Tên bộ từ", "Năm / Danh mục", "Số lượng từ", "Trạng thái"],
       ...tests.map((t) => [
         t.id,
-        `"${t.title.replace(/"/g, '""')}"`,
-        t.year,
+        `"${(t.nameVi || t.title || "").replace(/"/g, '""')}"`,
+        t.year ?? t.category,
         t.wordCount,
-        "Đang xuất bản",
+        (t.status && (CONTENT_STATUS_LABEL as Record<string, string>)[t.status]) ?? t.status ?? "DRAFT",
       ]),
     ];
     const csvContent =
@@ -94,37 +134,60 @@ export default function VocabularyLearningPage() {
   };
 
   // Test CRUD
-  const handleSaveTestForm = (title: string, year: string, category: "2024" | "2026" | "600_essential" | "2023") => {
+  const handleSaveTestForm = async (nameVi: string, year: string, category: any) => {
     if (editingTest) {
-      setTests((prev) =>
-        prev.map((t) => (t.id === editingTest.id ? { ...t, title, year, category } : t))
-      );
-      showToast(`Đã cập nhật bộ từ vựng "${title}"! 💾`);
+      try {
+        const updated = await updateVocabularySet(editingTest.id, { title: nameVi, year, category });
+        setTests((prev) =>
+          prev.map((t) => (t.id === editingTest.id ? { ...t, ...updated, words: t.words } : t))
+        );
+        showToast(`Đã cập nhật bộ từ vựng "${nameVi}"! 💾`);
+      } catch (err) {
+        console.error("Lỗi cập nhật bộ từ:", err);
+        setTests((prev) =>
+          prev.map((t) => (t.id === editingTest.id ? { ...t, nameVi, title: nameVi, year: parseInt(year) || undefined, category } : t))
+        );
+      }
       setEditingTest(null);
     } else {
-      const newTest: TestItem = {
-        id: `test-${Date.now()}`,
-        title,
-        year: year || "2026",
-        category,
-        wordCount: SAMPLE_WORDS.length,
-        words: [...SAMPLE_WORDS],
-      };
-      setTests((prev) => [newTest, ...prev]);
-      showToast(`Đã thêm bộ từ vựng "${title}" thành công! 🎉`);
+      try {
+        const created = await createVocabularySet({ title: nameVi, year, category });
+        setTests((prev) => [created, ...prev]);
+        showToast(`Đã thêm bộ từ vựng "${nameVi}" thành công! 🎉`);
+      } catch (err) {
+        console.error("Lỗi tạo bộ từ:", err);
+        const newTest: VocabularyTestSet = {
+          id: `test-${Date.now()}`,
+          code: `CUSTOM_${Date.now()}`,
+          nameVi,
+          nameEn: nameVi,
+          title: nameVi,
+          year: parseInt(year) || undefined,
+          category,
+          status: 'DRAFT',
+          wordCount: 0,
+          words: [],
+        };
+        setTests((prev) => [newTest, ...prev]);
+      }
       setShowCreateTestModal(false);
     }
   };
 
-  const handleConfirmDeleteTest = () => {
+  const handleConfirmDeleteTest = async () => {
     if (!deleteTestConfirm) return;
+    try {
+      await deleteVocabularySet(deleteTestConfirm.id);
+    } catch (err) {
+      console.error("Lỗi xóa bộ từ:", err);
+    }
     setTests((prev) => prev.filter((t) => t.id !== deleteTestConfirm.id));
-    showToast(`Đã xóa bộ từ vựng "${deleteTestConfirm.title}"! 🗑️`);
+    showToast(`Đã xóa bộ từ vựng "${deleteTestConfirm.title || deleteTestConfirm.nameVi}"! 🗑️`);
     setDeleteTestConfirm(null);
   };
 
   // Word CRUD
-  const handleSaveWordForm = (w: {
+  const handleSaveWordForm = async (w: {
     word: string;
     ipa: string;
     partOfSpeech: string;
@@ -135,31 +198,70 @@ export default function VocabularyLearningPage() {
     if (!wordListModalTest) return;
 
     if (editingWord) {
-      const updatedWords = wordListModalTest.words.map((item) =>
-        item.id === editingWord.id ? { ...item, ...w } : item
-      );
-      const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
-      setWordListModalTest(updatedTest);
-      setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
-      showToast(`Đã cập nhật từ vựng "${w.word}"! 💾`);
+      try {
+        const updatedWord = await updateVocabularyWord(editingWord.id, {
+          word: w.word,
+          ipa: w.ipa,
+          partOfSpeech: w.partOfSpeech,
+          meaning: w.meaning,
+          example: w.example,
+          level: w.level,
+        });
+        const updatedWords = (wordListModalTest.words || []).map((item: any) =>
+          item.id === editingWord.id ? updatedWord : item
+        );
+        const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+        setWordListModalTest(updatedTest);
+        setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+        showToast(`Đã cập nhật từ vựng "${w.word}"! 💾`);
+      } catch (err) {
+        console.error("Lỗi cập nhật từ:", err);
+        const updatedWords = (wordListModalTest.words || []).map((item: any) =>
+          item.id === editingWord.id ? { ...item, ...w } : item
+        );
+        const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+        setWordListModalTest(updatedTest);
+        setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+      }
       setEditingWord(null);
     } else {
-      const newWord: WordItem = {
-        id: `w-${Date.now()}`,
-        ...w,
-      };
-      const updatedWords = [newWord, ...wordListModalTest.words];
-      const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
-      setWordListModalTest(updatedTest);
-      setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
-      showToast(`Đã thêm từ vựng "${w.word}" vào bộ! 🎉`);
+      try {
+        const createdWord = await addVocabularyWord(wordListModalTest.id, {
+          word: w.word,
+          ipa: w.ipa,
+          partOfSpeech: w.partOfSpeech,
+          meaning: w.meaning,
+          example: w.example,
+          level: w.level,
+        });
+        const updatedWords = [createdWord, ...(wordListModalTest.words || [])];
+        const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+        setWordListModalTest(updatedTest);
+        setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+        showToast(`Đã thêm từ vựng "${w.word}" vào bộ! 🎉`);
+      } catch (err) {
+        console.error("Lỗi thêm từ:", err);
+        const newWord: WordItem = {
+          id: `w-${Date.now()}`,
+          ...w,
+        };
+        const updatedWords = [newWord, ...(wordListModalTest.words || [])];
+        const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
+        setWordListModalTest(updatedTest);
+        setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
+      }
     }
     setShowAddWordModal(false);
   };
 
-  const handleConfirmDeleteWord = () => {
+  const handleConfirmDeleteWord = async () => {
     if (!deleteWordConfirm || !wordListModalTest) return;
-    const updatedWords = wordListModalTest.words.filter((w) => w.id !== deleteWordConfirm.id);
+    try {
+      await deleteVocabularyWord(deleteWordConfirm.id);
+    } catch (err) {
+      console.error("Lỗi xóa từ:", err);
+    }
+    const updatedWords = (wordListModalTest.words || []).filter((w: any) => w.id !== deleteWordConfirm.id);
     const updatedTest = { ...wordListModalTest, words: updatedWords, wordCount: updatedWords.length };
     setWordListModalTest(updatedTest);
     setTests((prev) => prev.map((t) => (t.id === updatedTest.id ? updatedTest : t)));
@@ -245,6 +347,7 @@ export default function VocabularyLearningPage() {
         onCloseGame={() => setGameModalTest(null)}
         showCreateTestModal={showCreateTestModal}
         editingTest={editingTest}
+        existingCategories={existingCategories}
         onCloseTestForm={() => {
           setShowCreateTestModal(false);
           setEditingTest(null);

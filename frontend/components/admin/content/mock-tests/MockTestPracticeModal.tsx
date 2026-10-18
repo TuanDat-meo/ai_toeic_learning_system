@@ -804,7 +804,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
 
                   {/* VOCABULARY SECTION FOR MOCK TEST */}
                   {(() => {
-                    const vocabList = currentQ.vocabList || (test.keyVocab ? test.keyVocab.map((k) => ({
+                    const vocabList = currentQ.vocabList || (test.keyVocab ? test.keyVocab.map((k: any) => ({
                       word: k.word,
                       pos: k.pos,
                       level: "TOEIC",
@@ -830,7 +830,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                               const nextState = !isVocabExpanded;
                               setIsVocabExpanded(nextState);
                               const newMap: Record<string, boolean> = {};
-                              vocabList.forEach((v) => {
+                              vocabList.forEach((v: any) => {
                                 newMap[v.word] = nextState;
                               });
                               setExpandedWords(newMap);
@@ -843,7 +843,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                         </div>
 
                         <div className="space-y-3 pt-1 border-t border-amber-100">
-                          {vocabList.map((v, idx) => {
+                          {vocabList.map((v: any, idx: number) => {
                             const isExpanded = !!expandedWords[v.word] || isVocabExpanded;
 
                             return (
@@ -888,7 +888,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                                       <div className="space-y-1">
                                         <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
                                         <div className="flex flex-wrap gap-1.5">
-                                          {v.collocations.map((col, cIdx) => (
+                                          {v.collocations.map((col: any, cIdx: number) => (
                                             <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
                                               <strong>{col.en}</strong>: {col.vi}
                                             </span>

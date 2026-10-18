@@ -1,24 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { BookOpen, Layers } from "lucide-react";
-import { TestItem } from "@/app/admin/content/vocabulary/types";
+import { VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
 import { INITIAL_TESTS } from "@/app/admin/content/vocabulary/mockData";
+import { getVocabularySets } from "@/lib/api/vocabulary";
 import { StudentVocabularyGrid } from "@/components/student/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/student/vocabulary/StudentVocabularyModals";
 import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentVocabularyPage() {
-  const [activeSubCategory, setActiveSubCategory] = useState<
-    "all" | "2024" | "2026" | "600_essential" | "2023"
-  >("all");
-  const [tests] = useState<TestItem[]>(INITIAL_TESTS);
+  const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
+  const [tests, setTests] = useState<VocabularyTestSet[]>(INITIAL_TESTS);
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Modal State
-  const [wordListModalTest, setWordListModalTest] = useState<TestItem | null>(null);
-  const [flashcardModalTest, setFlashcardModalTest] = useState<TestItem | null>(null);
-  const [gameModalTest, setGameModalTest] = useState<TestItem | null>(null);
+  const [wordListModalTest, setWordListModalTest] = useState<VocabularyTestSet | null>(null);
+  const [flashcardModalTest, setFlashcardModalTest] = useState<VocabularyTestSet | null>(null);
+  const [gameModalTest, setGameModalTest] = useState<VocabularyTestSet | null>(null);
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
   async function startVocabularyActivity(featureKey: string, open: () => void) {
@@ -29,6 +29,27 @@ export default function StudentVocabularyPage() {
       setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu hoạt động từ vựng.");
     }
   }
+
+  const loadSets = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getVocabularySets();
+      if (data && data.length > 0) {
+        setTests(data);
+      } else {
+        setTests(INITIAL_TESTS);
+      }
+    } catch (err) {
+      console.warn("Could not load vocabulary sets from server, using fallback:", err);
+      setTests(INITIAL_TESTS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSets();
+  }, [loadSets]);
 
   // Audio synthesis phát âm tiếng Anh
   const playAudio = (text: string) => {
@@ -49,7 +70,7 @@ export default function StudentVocabularyPage() {
 
   // Tính tổng số từ trong kho
   const totalWordsCount = React.useMemo(() => {
-    return tests.reduce((acc, curr) => acc + (curr.words?.length || curr.wordCount), 0);
+    return tests.reduce((acc, curr) => acc + (curr.words?.length || curr.wordCount || 0), 0);
   }, [tests]);
 
   return (

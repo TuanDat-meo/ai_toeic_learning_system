@@ -44,7 +44,7 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
         q.questionText.toLowerCase().includes(search.toLowerCase()) ||
         q.explanation.toLowerCase().includes(search.toLowerCase()) ||
         (q.trapNote && q.trapNote.toLowerCase().includes(search.toLowerCase())) ||
-        topic.title.toLowerCase().includes(search.toLowerCase()) ||
+        (topic.title || topic.titleVi || "").toLowerCase().includes(search.toLowerCase()) ||
         topic.code.toLowerCase().includes(search.toLowerCase());
 
       const matchPart = selectedPart === "ALL" || q.part === selectedPart;
@@ -146,7 +146,7 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-slate-800">{topic.title}</span>
+                        <span className="font-semibold text-slate-800">{topic.titleVi || topic.title}</span>
                         <span className="text-[10px] text-slate-400 font-mono">{topic.code}</span>
                       </div>
                     </td>
@@ -181,7 +181,7 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                     <td className="py-3 px-4 text-center">
                       <button
                         type="button"
-                        onClick={() => setPreviewQ({ q, topicTitle: topic.title })}
+                        onClick={() => setPreviewQ({ q, topicTitle: topic.title || topic.titleVi || "" })}
                         className="p-1.5 rounded-xl border border-slate-200 hover:bg-blue-50 text-blue-600 transition cursor-pointer"
                         title="Xem chi tiết & giải thích"
                       >
@@ -302,7 +302,7 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
         list.push({
           id: `trap-${index}-${trapIdx}`,
           topicCode: t.code,
-          topicTitle: t.title,
+          topicTitle: t.title || t.titleVi || "",
           trapTitle: trap,
           frequency: trapIdx === 0 ? "Rất cao" : trapIdx === 1 ? "Cao" : "Trung bình",
           studentFailRate: Math.max(38, Math.min(82, 45 + ((index * 7 + trapIdx * 13) % 36))),

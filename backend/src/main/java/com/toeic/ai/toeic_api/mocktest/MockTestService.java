@@ -138,7 +138,7 @@ public class MockTestService {
 
         // Tạo 10 đề thi ETS 2024
         for (int i = 1; i <= 10; i++) {
-            String diff = i <= 3 ? "Vừa sức" : (i <= 7 ? "Trung bình" : "Khó");
+            String diff = i <= 3 ? "EASY" : (i <= 7 ? "MEDIUM" : "HARD");
             String keyVocab = "[{\"word\":\"feasible\",\"ipa\":\"/ˈfiːzəbl/\",\"pos\":\"Adj\",\"meaning\":\"Khả thi\",\"example\":\"A feasible solution.\"},{\"word\":\"expedite\",\"ipa\":\"/ˈekspədaɪt/\",\"pos\":\"Verb\",\"meaning\":\"Đẩy nhanh tiến độ\",\"example\":\"Expedite the shipping process.\"}]";
 
             jdbc.update("""

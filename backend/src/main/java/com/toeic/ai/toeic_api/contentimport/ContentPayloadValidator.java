@@ -21,9 +21,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class ContentPayloadValidator {
     private static final Set<String> VOCABULARY_FIELDS = Set.of(
             "word", "meaning", "pos", "partOfSpeech", "ipa", "example", "exampleEn",
-            "exampleVi", "topic", "level", "synonyms", "antonyms", "collocations");
+            "exampleVi", "topic", "category", "setId", "set_id", "level", "synonyms", "antonyms", "collocations");
     private static final Set<String> GRAMMAR_FIELDS = Set.of(
-            "title", "rule", "explanation", "part", "examples", "level");
+            "title", "titleVi", "titleEn", "englishTitle", "english_title",
+            "code", "rule", "formula", "explanation", "summary",
+            "part", "level", "targetScore", "target_score",
+            "examples", "signalWords", "signal_words", "traps", "questions");
     private static final Set<String> LISTENING_FIELDS = Set.of(
             "title", "part", "transcript", "audioUrl", "durationSeconds", "source", "difficulty");
     private static final Set<String> READING_FIELDS = Set.of(
@@ -72,6 +75,13 @@ public class ContentPayloadValidator {
         copyText(raw, out, "exampleEn", errors, false);
         copyText(raw, out, "exampleVi", errors, false);
         copyText(raw, out, "topic", errors, false);
+        if (raw.has("category")) copyText(raw, out, "category", errors, false);
+        if (raw.has("setId")) {
+            copyText(raw, out, "setId", errors, false);
+        } else if (raw.has("set_id")) {
+            copyText(raw, out, "set_id", errors, false);
+            if (out.has("set_id")) out.put("setId", out.remove("set_id").asText());
+        }
         copyText(raw, out, "level", errors, false);
         normalizeStringArray(raw, out, "synonyms", errors);
         normalizeStringArray(raw, out, "antonyms", errors);
@@ -79,13 +89,88 @@ public class ContentPayloadValidator {
     }
 
     private void normalizeGrammar(JsonNode raw, ObjectNode out, List<String> errors) {
-        copyText(raw, out, "title", errors, true);
-        copyText(raw, out, "rule", errors, true);
-        copyText(raw, out, "explanation", errors, true);
+        if (raw.has("title")) {
+            copyText(raw, out, "title", errors, true);
+        } else if (raw.has("titleVi")) {
+            copyText(raw, out, "titleVi", errors, true);
+            if (out.has("titleVi")) {
+                out.put("title", out.remove("titleVi").asText());
+            }
+        } else {
+            errors.add("Thiếu trường bắt buộc \"title\".");
+        }
+
+        if (raw.has("englishTitle")) {
+            copyText(raw, out, "englishTitle", errors, false);
+        } else if (raw.has("english_title")) {
+            copyText(raw, out, "english_title", errors, false);
+            if (out.has("english_title")) {
+                out.put("englishTitle", out.remove("english_title").asText());
+            }
+        } else if (raw.has("titleEn")) {
+            copyText(raw, out, "titleEn", errors, false);
+            if (out.has("titleEn")) {
+                out.put("englishTitle", out.remove("titleEn").asText());
+            }
+        }
+
+        copyText(raw, out, "code", errors, false);
+
+        if (raw.has("rule")) {
+            copyText(raw, out, "rule", errors, true);
+        } else if (raw.has("formula")) {
+            copyText(raw, out, "formula", errors, true);
+            if (out.has("formula")) {
+                out.put("rule", out.remove("formula").asText());
+            }
+        } else {
+            errors.add("Thiếu trường bắt buộc \"rule\" hoặc \"formula\".");
+        }
+
+        if (raw.has("explanation")) {
+            copyText(raw, out, "explanation", errors, true);
+        } else if (raw.has("summary")) {
+            copyText(raw, out, "summary", errors, true);
+            if (out.has("summary")) {
+                out.put("explanation", out.remove("summary").asText());
+            }
+        } else {
+            errors.add("Thiếu trường bắt buộc \"explanation\" hoặc \"summary\".");
+        }
+
         copyText(raw, out, "part", errors, false);
         if (out.has("part")) normalizePart(out, "part", errors);
-        copyText(raw, out, "level", errors, false);
-        normalizeStringArray(raw, out, "examples", errors);
+
+        if (raw.has("level")) {
+            copyText(raw, out, "level", errors, false);
+        } else if (raw.has("targetScore")) {
+            copyText(raw, out, "targetScore", errors, false);
+            if (out.has("targetScore")) {
+                out.put("level", out.remove("targetScore").asText());
+            }
+        } else if (raw.has("target_score")) {
+            copyText(raw, out, "target_score", errors, false);
+            if (out.has("target_score")) {
+                out.put("level", out.remove("target_score").asText());
+            }
+        }
+
+        normalizeExamples(raw, out, errors);
+
+        if (raw.has("signalWords")) {
+            normalizeStringArray(raw, out, "signalWords", errors);
+        } else if (raw.has("signal_words")) {
+            normalizeStringArray(raw, out, "signal_words", errors);
+            if (out.has("signal_words")) {
+                out.set("signalWords", out.remove("signal_words"));
+            }
+        }
+
+        normalizeStringArray(raw, out, "traps", errors);
+
+        if (raw.has("questions")) {
+            normalizeJsonArrayField(raw, out, "questions", errors);
+        }
     }
 
     private void normalizeListening(JsonNode raw, ObjectNode out, List<String> errors) {
@@ -232,6 +317,70 @@ public class ContentPayloadValidator {
             if (!text.isBlank()) normalized.add(text);
         }
         out.set(field, normalized);
+    }
+
+    private void normalizeExamples(JsonNode raw, ObjectNode out, List<String> errors) {
+        JsonNode value = raw.get("examples");
+        if (value == null || value.isNull() || (value.isTextual() && value.asText().isBlank())) {
+            return;
+        }
+        JsonNode array = value;
+        if (value.isTextual()) {
+            String text = value.asText().trim();
+            if (text.startsWith("[")) {
+                try {
+                    array = objectMapper.readTree(text);
+                } catch (Exception exception) {
+                    errors.add("Trường \"examples\" phải là mảng JSON hợp lệ.");
+                    return;
+                }
+            } else {
+                ArrayNode split = objectMapper.createArrayNode();
+                for (String part : text.split("\\|")) {
+                    if (!part.isBlank()) split.add(part);
+                }
+                array = split;
+            }
+        }
+        if (!array.isArray()) {
+            errors.add("Trường \"examples\" phải là một mảng.");
+            return;
+        }
+        ArrayNode normalized = objectMapper.createArrayNode();
+        for (JsonNode item : array) {
+            if (item.isObject()) {
+                ObjectNode obj = objectMapper.createObjectNode();
+                if (item.has("sentence")) obj.put("sentence", normalizeText(item.path("sentence").asText()));
+                if (item.has("translation")) obj.put("translation", normalizeText(item.path("translation").asText()));
+                if (item.has("analysis")) obj.put("analysis", normalizeText(item.path("analysis").asText()));
+                normalized.add(obj);
+            } else if (item.isValueNode()) {
+                String text = normalizeText(item.asText());
+                if (!text.isBlank()) normalized.add(text);
+            }
+        }
+        out.set("examples", normalized);
+    }
+
+    private void normalizeJsonArrayField(JsonNode raw, ObjectNode out, String field, List<String> errors) {
+        JsonNode value = raw.get(field);
+        if (value == null || value.isNull() || (value.isTextual() && value.asText().isBlank())) {
+            return;
+        }
+        JsonNode array = value;
+        if (value.isTextual()) {
+            try {
+                array = objectMapper.readTree(value.asText().trim());
+            } catch (Exception exception) {
+                errors.add("Trường \"" + field + "\" phải là mảng JSON hợp lệ.");
+                return;
+            }
+        }
+        if (!array.isArray()) {
+            errors.add("Trường \"" + field + "\" phải là một mảng.");
+            return;
+        }
+        out.set(field, array);
     }
 
     private void normalizeOptions(JsonNode raw, ObjectNode out, List<String> errors) {
