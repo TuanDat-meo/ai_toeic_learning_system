@@ -58,7 +58,7 @@ function mapSet(s: RawVocabularyTestSet): VocabularyTestSet {
     name: s.title || '',
     year: s.year ? String(s.year) : '2024',
     category: s.category || '2024',
-    wordCount: s.wordCount ?? words.length,
+    wordCount: Array.isArray(s.words) ? words.length : (s.wordCount ?? 0),
     status: s.status || 'PUBLISHED',
     words,
   };

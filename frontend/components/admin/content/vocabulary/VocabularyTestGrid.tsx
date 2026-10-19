@@ -188,7 +188,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                 </h3>
                 <div className="mt-2 space-y-1 text-xs text-slate-500">
                   <p className="font-semibold text-slate-700">
-                    Quy mô: <span className="text-blue-600 font-bold">{t.wordCount} từ vựng</span>
+                    Quy mô: <span className="text-blue-600 font-bold">{t.words ? t.words.length : (t.wordCount ?? 0)} từ vựng</span>
                   </p>
                   <p className="flex items-center gap-1 text-[11px] text-slate-400">
                     <Clock className="w-3 h-3" />
@@ -206,7 +206,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                   title="Mở danh sách từ để quản lý, sửa nghĩa và thêm từ"
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
-                  Quản lý từ ({t.words?.length || t.wordCount})
+                  Quản lý từ ({t.words ? t.words.length : (t.wordCount ?? 0)})
                 </button>
 
                 <button
@@ -256,7 +256,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-blue-600">
-                      {t.wordCount} từ
+                      {t.words ? t.words.length : (t.wordCount ?? 0)} từ
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">

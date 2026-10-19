@@ -132,7 +132,7 @@ export const StudentVocabularyGrid: React.FC<StudentVocabularyGridProps> = ({
               <div className="mt-2.5 space-y-1.5 text-xs text-slate-500">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Quy mô bộ từ:</span>
-                  <span className="text-blue-600 font-extrabold">{t.wordCount} từ vựng</span>
+                  <span className="text-blue-600 font-extrabold">{t.words ? t.words.length : (t.wordCount ?? 0)} từ vựng</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <Layers className="w-3.5 h-3.5" />
@@ -149,15 +149,16 @@ export const StudentVocabularyGrid: React.FC<StudentVocabularyGridProps> = ({
                 className="w-full py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                Xem danh sách từ ({t.words?.length || t.wordCount})
+                Xem danh sách từ ({t.words ? t.words.length : (t.wordCount ?? 0)})
               </button>
 
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => onOpenFlashcards(t)}
-                  className="py-2 px-2.5 rounded-xl border border-blue-200 bg-white hover:bg-blue-50 text-blue-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Lật thẻ Flashcard ghi nhớ"
+                  disabled={(t.words ? t.words.length : (t.wordCount ?? 0)) === 0}
+                  className="py-2 px-2.5 rounded-xl border border-blue-200 bg-white hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed text-blue-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  title={(t.words ? t.words.length : (t.wordCount ?? 0)) === 0 ? "Bộ từ chưa có từ vựng" : "Lật thẻ Flashcard ghi nhớ"}
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-blue-600" />
                   Flashcard
@@ -165,8 +166,9 @@ export const StudentVocabularyGrid: React.FC<StudentVocabularyGridProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenGame(t)}
-                  className="py-2 px-2.5 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 text-amber-800 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Chơi mini-game trắc nghiệm"
+                  disabled={(t.words ? t.words.length : (t.wordCount ?? 0)) === 0}
+                  className="py-2 px-2.5 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 disabled:opacity-40 disabled:cursor-not-allowed text-amber-800 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  title={(t.words ? t.words.length : (t.wordCount ?? 0)) === 0 ? "Bộ từ chưa có từ vựng" : "Chơi mini-game trắc nghiệm"}
                 >
                   <Gamepad2 className="w-3.5 h-3.5 text-amber-600" />
                   Mini-game
