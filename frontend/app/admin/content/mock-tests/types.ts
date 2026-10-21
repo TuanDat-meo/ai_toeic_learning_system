@@ -26,6 +26,7 @@ export interface MockTest {
   keyVocab?: any[];
   questions?: PracticeQuestion[];
   examCount?: number;
+  [key: string]: any;
 }
 
 /** Legacy alias cho UI components */
@@ -34,34 +35,35 @@ export type TestItem = MockTest;
 /** Câu hỏi trong đề thi — tái dùng ngân hàng questions. DB: mock_test_questions */
 export interface MockTestQuestion {
   id: number;
-  externalCode?: string;
+  externalCode?: string | null;
   part: ToeicPart | string;
   section?: 'LISTENING' | 'READING';
-  orderIndex?: number;         // 1..200
-  questionNum?: number;        // 1..200
+  orderIndex?: number | null;         // 1..200
+  questionNum?: number | null;        // 1..200
   questionText: string;
-  passage?: string;
-  bilingualPassage?: string;
-  audioUrl?: string;
-  imageUrl?: string;
+  passage?: string | null;
+  bilingualPassage?: string | null;
+  audioUrl?: string | null;
+  imageUrl?: string | null;
   options: { [key: string]: string };
-  groupTitle?: string;
-  groupId?: string;           // stimulus_id nếu thuộc Part 3–4
-  groupTotal?: number;
-  optionGlosses?: { [key: string]: string };
-  optionTranslations?: { [key: string]: string };
-  trapNote?: string;
-  note?: string;
-  evidence?: string;
-  step1?: string;
-  step2?: string;
-  step3?: string;
+  groupTitle?: string | null;
+  groupId?: string | null;           // stimulus_id nếu thuộc Part 3–4
+  groupTotal?: number | null;
+  optionGlosses?: { [key: string]: string } | null;
+  optionTranslations?: { [key: string]: string } | null;
+  trapNote?: string | null;
+  note?: string | null;
+  evidence?: string | null;
+  step1?: string | null;
+  step2?: string | null;
+  step3?: string | null;
   correctAnswer: string;
   explanation: string;
-  transcript?: string;
-  translation?: string;
-  difficulty?: QuestionDifficulty | string;
+  transcript?: string | null;
+  translation?: string | null;
+  difficulty?: QuestionDifficulty | string | null;
   vocabList?: VocabListItem[];
+  [key: string]: any;
 }
 
 /** Legacy alias cho UI components */

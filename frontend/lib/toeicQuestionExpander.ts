@@ -251,7 +251,7 @@ export function expandReadingQuestions(card: ExerciseCardData): SampleQuestion[]
       correctIndex: bankItem.correctIndex,
       explanation: bankItem.explanation,
       vocabList: [
-        { word: bankItem.options[bankItem.correctIndex], ipa: "/ˈpræktɪs/", meaning: "Đáp án chuẩn xác", example: { en: bankItem.q, vi: bankItem.vi } }
+        { word: bankItem.options[bankItem.correctIndex], ipa: "/ˈpræktɪs/", pos: "n.", level: "B1", meaning: "Đáp án chuẩn xác", example: { en: bankItem.q, vi: bankItem.vi } }
       ]
     });
   }

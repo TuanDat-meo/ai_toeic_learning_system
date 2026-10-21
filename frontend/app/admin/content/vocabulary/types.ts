@@ -57,6 +57,7 @@ export interface WordItem {
   bookmarked?: boolean;
   starred?: boolean;      // legacy alias for bookmarked
   topic?: string;
+  [key: string]: any;
 }
 
 /** Từ trong một bộ cụ thể — bổ sung orderIndex và note riêng. DB: vocabulary_set_words */

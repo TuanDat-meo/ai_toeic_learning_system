@@ -333,7 +333,7 @@ export function resetItemProgress(key: string, fallbackTotal: number = 0): ItemP
  *   không bao giờ bị thiếu (ví dụ ngoài badge báo 6 câu sai thì phiên làm lại sẽ có đủ 6 câu).
  * - Tự động đồng bộ wrongQuestionIds vào localStorage để khi làm đúng, số câu sai giảm dần chuẩn xác.
  */
-export function getRedoWrongQuestions<T extends { id?: number | string; questionNum?: string | number }>(
+export function getRedoWrongQuestions<T extends { id?: number | string | null; questionNum?: string | number | null }>(
   allQuestions: T[],
   progressKey: string,
   fallbackTotal = 0
