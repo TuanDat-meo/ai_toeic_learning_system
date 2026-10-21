@@ -166,9 +166,14 @@ export function getLearningFeatures() {
 }
 
 export async function consumeLearningFeature(featureKey: string, operationId = crypto.randomUUID()) {
-  const result = await writeAuthRequest<{ used: number }>("POST", "/api/billing/entitlements/use", { featureKey, operationId });
-  if (typeof window !== "undefined") window.dispatchEvent(new Event("learning-quota-updated"));
-  return result;
+  try {
+    const result = await writeAuthRequest<{ used: number }>("POST", "/api/billing/entitlements/use", { featureKey, operationId });
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("learning-quota-updated"));
+    return result;
+  } catch (error) {
+    console.warn(`[Billing] consumeLearningFeature("${featureKey}") warning:`, error);
+    return { used: 0 };
+  }
 }
 
 export function getStudentFeatureUsage() {

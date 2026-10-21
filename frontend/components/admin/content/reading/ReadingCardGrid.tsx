@@ -159,25 +159,19 @@ function ReadingGridItem({
           )}
         </div>
 
-        {/* Thanh tiến độ & Số câu hoàn thành */}
-        <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
-          <PracticeProgressBar
-            completed={completed}
-            total={fallbackTotal}
-            unit="câu"
-          />
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
-            <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold font-mono">
-                ✓ {progress.correctAnswers !== undefined ? progress.correctAnswers : card.correctAnswers} đúng
-              </span>
-              <span className="inline-flex items-center gap-0.5 text-rose-500 font-bold font-mono">
-                ✕ {progress.wrongAnswers !== undefined ? progress.wrongAnswers : card.wrongAnswers} sai
-              </span>
-            </div>
-            <span className="text-slate-400 font-medium font-mono">
-              Còn lại: {Math.max(0, fallbackTotal - completed)}
-            </span>
+        {/* Quy mô bài học (Admin chỉ hiển thị tổng số câu) */}
+        <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Tổng số câu hỏi:</span>
+            <strong className="text-blue-700 font-mono font-bold">{fallbackTotal} câu</strong>
+          </div>
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Thời gian chuẩn:</span>
+            <span className="font-mono text-slate-800 font-semibold">{(card as any).timeMinutes || 20} phút</span>
+          </div>
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Phần thi:</span>
+            <span className="text-slate-800 font-semibold">{(card as any).part || "Part 7"}</span>
           </div>
         </div>
       </div>
@@ -325,22 +319,11 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
   return (
     <div className="space-y-8">
       {/* NHÓM 1: 10 BỘ ĐỀ ETS 2024 */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>📚 10 Bộ Đề Thi Reading ETS 2024</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-extrabold font-mono">
-                {testCards.length} Đề
-              </span>
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Toàn bộ bài đọc Part 5, 6 và 7 chuẩn ngân hàng đề thi TOEIC ETS 2024.
-            </p>
-          </div>
-        </div>
-        {renderCardGrid(testCards)}
-      </section>
+      {testCards.length > 0 && (
+        <section className="space-y-3">
+          {renderCardGrid(testCards)}
+        </section>
+      )}
 
       {/* NHÓM 2: THEO CẤP ĐỘ ĐIỂM (LEVELS) */}
       {levelCards.length > 0 && (

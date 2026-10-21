@@ -75,9 +75,8 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   <th className="py-3.5 px-4 w-10"></th>
                   <th className="py-3.5 px-4 min-w-[240px]">Mã &amp; Chuyên đề</th>
                   <th className="py-3.5 px-4 min-w-[120px]">Phần thi</th>
-                  <th className="py-3.5 px-4 min-w-[150px]">Mục tiêu Band</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Số câu &amp; Bẫy</th>
-                  <th className="py-3.5 px-4 min-w-[170px]">Độ hiểu bài học viên</th>
+                  <th className="py-3.5 px-4 min-w-[170px]">Công thức trọng tâm</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>
                   <th className="py-3.5 px-4 text-center min-w-[160px]">Thao tác quản trị</th>
                 </tr>
@@ -121,19 +120,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-100 text-blue-800 whitespace-nowrap inline-flex items-center">
                           {topic.part}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap inline-flex items-center ${
-                            topic.targetScore === "750+"
-                              ? "bg-purple-100 text-purple-800"
-                              : topic.targetScore === "500-750"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          Target {topic.targetScore}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
@@ -278,17 +264,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800">
                         {topic.part}
                       </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                          topic.targetScore === "750+"
-                            ? "bg-purple-100 text-purple-800"
-                            : topic.targetScore === "500-750"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        Target {topic.targetScore}
-                      </span>
                     </div>
 
                     <span
@@ -314,8 +289,15 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   </div>
 
                   {/* Formula Box */}
-                  <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 font-mono text-[11px] font-bold text-slate-800 leading-relaxed overflow-x-auto">
-                    {topic.formula}
+                  <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-[11px] font-medium text-slate-700 leading-relaxed line-clamp-2">
+                    <span className="font-bold text-slate-900 mr-1">Công thức:</span>
+                    {(topic.formula || "")
+                      .replace(/###\s+\d+\.\s*/g, "")
+                      .replace(/###\s+/g, "")
+                      .replace(/\*\*/g, "")
+                      .replace(/`([^`]+)`/g, "$1")
+                      .replace(/\n+/g, " • ")
+                      .trim()}
                   </div>
 
                   {/* Summary Snippet */}
@@ -327,7 +309,7 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 pt-1">
                     <span>Ngân hàng: {totalQ} câu</span>
                     <span className="text-amber-600">{topic.traps.length} bẫy đề</span>
-                    <span className="text-emerald-600">{accuracy}% đúng</span>
+                    <span className="text-blue-600 font-bold">{topic.part}</span>
                   </div>
                 </div>
 

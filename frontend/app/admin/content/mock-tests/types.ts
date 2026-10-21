@@ -38,6 +38,7 @@ export interface MockTestQuestion {
   part: ToeicPart | string;
   section?: 'LISTENING' | 'READING';
   orderIndex?: number;         // 1..200
+  questionNum?: number;        // 1..200
   questionText: string;
   passage?: string;
   bilingualPassage?: string;
@@ -48,6 +49,7 @@ export interface MockTestQuestion {
   groupId?: string;           // stimulus_id nếu thuộc Part 3–4
   groupTotal?: number;
   optionGlosses?: { [key: string]: string };
+  optionTranslations?: { [key: string]: string };
   trapNote?: string;
   note?: string;
   evidence?: string;
@@ -64,6 +66,45 @@ export interface MockTestQuestion {
 
 /** Legacy alias cho UI components */
 export type PracticeQuestion = MockTestQuestion;
+
+export function normalizeToeicPart(p?: string): "Part 1" | "Part 2" | "Part 3" | "Part 4" | "Part 5" | "Part 6" | "Part 7" | string {
+  if (!p) return "Part 1";
+  const cleaned = p.toUpperCase().replace(/[\s_:-]+/g, "");
+  if (cleaned.includes("PART1")) return "Part 1";
+  if (cleaned.includes("PART2")) return "Part 2";
+  if (cleaned.includes("PART3")) return "Part 3";
+  if (cleaned.includes("PART4")) return "Part 4";
+  if (cleaned.includes("PART5")) return "Part 5";
+  if (cleaned.includes("PART6")) return "Part 6";
+  if (cleaned.includes("PART7")) return "Part 7";
+  return p;
+}
+
+import { enrichPracticeQuestion } from "@/lib/toeicQuestionEnricher";
+
+/**
+ * Trích xuất bản dịch tiếng Việt cho các đáp án A, B, C, D
+ */
+export function extractOptionTranslations(q: PracticeQuestion): Record<string, string> {
+  const enriched = enrichPracticeQuestion(q);
+  return enriched.optionTranslations || {};
+}
+
+/**
+ * Trích xuất câu hỏi tiếng Anh và tiếng Việt thực sự
+ */
+export function extractQuestionDetails(q: PracticeQuestion) {
+  const enriched = enrichPracticeQuestion(q);
+  return {
+    questionEn: enriched.questionText || "",
+    questionVi: enriched.translation || "",
+    optionTranslations: enriched.optionTranslations || {},
+    vocabList: enriched.vocabList || [],
+    trapNote: enriched.trapNote || "",
+    explanation: enriched.explanation || "",
+  };
+}
+
 
 /** Lịch sử làm bài thi (legacy format dùng trong modal và client API) */
 export interface HistoryAttempt {

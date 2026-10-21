@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Headphones, Sparkles, Volume2 } from "lucide-react";
+import { Sparkles, Volume2 } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData } from "@/app/admin/content/listening/types";
 import {
   INITIAL_DICTATION_CARDS,
@@ -19,12 +19,12 @@ import { StudentListeningPartTab } from "@/components/student/listening/StudentL
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
+import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
 
 export default function StudentListeningPage() {
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
-  const [selectedYear, setSelectedYear] = useState<"2026" | "2024" | "2023" | "2022">("2024");
+  const [selectedYear, setSelectedYear] = useState<"2024" | "2023" | "2022">("2024");
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
   async function startActivity(featureKey: string, open: () => void) {
@@ -35,6 +35,30 @@ export default function StudentListeningPage() {
       setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu hoạt động học.");
     }
   }
+
+  const openListeningQuiz = (card: LevelCategoryCardData, startIndex = 0, isRedo = false) => {
+    void startActivity("LISTENING_PART_PRACTICE", () => {
+      let cardToUse = card;
+      if (isRedo) {
+        const filtered = getRedoWrongQuestions(
+          card.questions || [],
+          `listening-quiz-${card.id}`,
+          card.questions?.length || card.totalQuestions || 10
+        );
+        cardToUse = {
+          ...card,
+          title: `${card.title} · Làm lại ${filtered.length} câu sai`,
+          questions: filtered,
+          totalQuestions: filtered.length,
+          originalTotalQuestions: card.questions?.length || card.totalQuestions || 10,
+        };
+      }
+      setQuizModalCard(cardToUse);
+      setActiveQuizQIndex(isRedo ? 0 : startIndex);
+      setQuizSelectedOption({});
+      setQuizAnswerChecked({});
+    });
+  };
 
   // Dữ liệu Cards
   const [dictationCards] = useState<DictationCardData[]>(INITIAL_DICTATION_CARDS);
@@ -175,18 +199,9 @@ export default function StudentListeningPage() {
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
             Luyện Thi TOEIC Listening Trọng Tâm
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Rèn luyện kỹ năng nghe qua Chép chính tả (Dictation) và bộ đề Part 1 đến Part 4 chuẩn ETS 2024.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
-            <Headphones className="w-4 h-4 text-blue-600" />
-            Đầy đủ Part 1, 2, 3, 4 &amp; Dictation Studio
-          </span>
-          <LearningQuotaBadge featureKey="LISTENING" />
-        </div>
+        
       </header>
 
       {/* Thanh tab chuyển đổi 5 dạng bài luyện nghe */}
@@ -221,10 +236,24 @@ export default function StudentListeningPage() {
           testsGrouped={testsGrouped}
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
-          handleOpenDictationPractice={(card) => {
+          handleOpenDictationPractice={(card, startIndex = 0, isRedo = false) => {
             void startActivity("LISTENING_DICTATION", () => {
-              setDictationModalCard(card);
-              setActiveDictationQIndex(0);
+              let cardToUse = card;
+              if (isRedo) {
+                const filtered = getRedoWrongQuestions(
+                  card.questions || [],
+                  `listening-dictation-${card.id}`,
+                  card.questions?.length || card.totalQuestions || 10
+                );
+                cardToUse = {
+                  ...card,
+                  questions: filtered,
+                  totalQuestions: filtered.length,
+                  originalTotalQuestions: card.questions?.length || card.totalQuestions || 10,
+                };
+              }
+              setDictationModalCard(cardToUse);
+              setActiveDictationQIndex(isRedo ? 0 : startIndex);
               setDictationUserInputs({});
               setDictationChecked({});
             });
@@ -241,12 +270,7 @@ export default function StudentListeningPage() {
           categorySectionSubtitle="Luyện nghe tranh theo ngữ cảnh người thao tác, đồ vật tĩnh và quang cảnh."
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={(card) => {
-            void startActivity("LISTENING_PART_PRACTICE", () => {
-              setQuizModalCard(card);
-              setActiveQuizQIndex(0);
-            });
-          }}
+          handleOpenQuizPractice={openListeningQuiz}
         />
       )}
 
@@ -259,12 +283,7 @@ export default function StudentListeningPage() {
           categorySectionSubtitle="Luyện phản xạ câu hỏi Wh-, Yes/No, câu hỏi lựa chọn và câu hỏi đuôi."
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={(card) => {
-            void startActivity("LISTENING_PART_PRACTICE", () => {
-              setQuizModalCard(card);
-              setActiveQuizQIndex(0);
-            });
-          }}
+          handleOpenQuizPractice={openListeningQuiz}
         />
       )}
 
@@ -277,12 +296,7 @@ export default function StudentListeningPage() {
           categorySectionSubtitle="Luyện nghe hội thoại nơi công sở, đặt hàng, đàm phán và giao tiếp hàng ngày."
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={(card) => {
-            void startActivity("LISTENING_PART_PRACTICE", () => {
-              setQuizModalCard(card);
-              setActiveQuizQIndex(0);
-            });
-          }}
+          handleOpenQuizPractice={openListeningQuiz}
         />
       )}
 
@@ -295,12 +309,7 @@ export default function StudentListeningPage() {
           categorySectionSubtitle="Luyện nghe thông báo phát thanh, tin nhắn thoại, bản tin giao thông và bài diễn thuyết."
           setVocabBagModalData={setVocabBagModalData}
           setTheoryModalData={setTheoryModalData}
-          handleOpenQuizPractice={(card) => {
-            void startActivity("LISTENING_PART_PRACTICE", () => {
-              setQuizModalCard(card);
-              setActiveQuizQIndex(0);
-            });
-          }}
+          handleOpenQuizPractice={openListeningQuiz}
         />
       )}
 

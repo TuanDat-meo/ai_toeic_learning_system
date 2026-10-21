@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
-import { PART_LABEL, TARGET_SCORE_LABEL } from "@/lib/types/domain";
+import { PART_LABEL } from "@/lib/types/domain";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import {
   getAdminGrammarTopics,
@@ -37,7 +37,6 @@ export default function AdminGrammarPage() {
   const [activeMainTab, setActiveMainTab] = useState<GrammarAdminTab>("topics");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPart, setFilterPart] = useState<string>("ALL");
-  const [filterScore, setFilterScore] = useState<string>("ALL");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
@@ -64,7 +63,7 @@ export default function AdminGrammarPage() {
         setTopics(INITIAL_GRAMMAR_TOPICS);
       }
     } catch (err) {
-      console.warn("Could not load topics from server, using fallback data:", err);
+      // Fallback data gracefully
       setTopics(INITIAL_GRAMMAR_TOPICS);
     } finally {
       setLoading(false);
@@ -89,12 +88,11 @@ export default function AdminGrammarPage() {
 
       const matchPart = filterPart === "ALL" || t.part === filterPart;
 
-      const matchScore = filterScore === "ALL" || t.targetScore === filterScore;
       const matchStatus = filterStatus === "ALL" || t.status === filterStatus;
 
-      return matchSearch && matchPart && matchScore && matchStatus;
+      return matchSearch && matchPart && matchStatus;
     });
-  }, [topics, searchQuery, filterPart, filterScore, filterStatus]);
+  }, [topics, searchQuery, filterPart, filterStatus]);
 
   // Statistics
   const totalTopicsCount = topics.length;
@@ -230,7 +228,6 @@ export default function AdminGrammarPage() {
       "Tên tiếng Việt",
       "Tên tiếng Anh",
       "Phần thi",
-      "Target Band",
       "Số câu hỏi",
       "Số bẫy đề",
       "Trạng thái",
@@ -240,7 +237,6 @@ export default function AdminGrammarPage() {
       `"${(t.titleVi || t.title || "").replace(/"/g, '""')}"`,
       `"${(t.titleEn || t.englishTitle || "").replace(/"/g, '""')}"`,
       `"${t.part}"`,
-      `"${t.targetScore}"`,
       t.questions.length,
       t.traps.length,
       `"${t.status}"`,
@@ -267,8 +263,6 @@ export default function AdminGrammarPage() {
         setSearchQuery={setSearchQuery}
         filterPart={filterPart}
         setFilterPart={setFilterPart}
-        filterScore={filterScore}
-        setFilterScore={setFilterScore}
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
         viewMode={viewMode}

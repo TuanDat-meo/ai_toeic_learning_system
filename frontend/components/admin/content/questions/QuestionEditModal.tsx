@@ -89,22 +89,44 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
 
   if (!isOpen) return null;
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formQuestionText.trim()) {
+      setErrorMessage("Vui lòng nhập nội dung câu hỏi trắc nghiệm.");
+      return;
+    }
+    if (!formOptA.trim() || !formOptB.trim()) {
+      setErrorMessage("Vui lòng nhập đầy đủ ít nhất 2 phương án A và B.");
+      return;
+    }
+    if (
+      (formPart === "Part 3" || formPart === "Part 4" || formPart === "Part 5" || formPart === "Part 6" || formPart === "Part 7") &&
+      (!formOptC.trim() || !formOptD.trim())
+    ) {
+      setErrorMessage(`Phần thi ${formPart} yêu cầu đầy đủ 4 phương án A, B, C, D.`);
+      return;
+    }
+    if (!formExplanation.trim()) {
+      setErrorMessage("Vui lòng nhập lời giải thích chi tiết cho câu hỏi.");
+      return;
+    }
+    setErrorMessage(null);
     onSave({
       part: formPart,
       skill: formSkill,
       difficulty: formDifficulty,
-      questionText: formQuestionText,
-      passage: formPassage,
-      imageUrl: formImageUrl,
-      audioUrl: formAudioUrl,
-      optA: formOptA,
-      optB: formOptB,
-      optC: formOptC,
-      optD: formOptD,
+      questionText: formQuestionText.trim(),
+      passage: formPassage.trim(),
+      imageUrl: formImageUrl.trim(),
+      audioUrl: formAudioUrl.trim(),
+      optA: formOptA.trim(),
+      optB: formOptB.trim(),
+      optC: formOptC.trim(),
+      optD: formOptD.trim(),
       correctAnswer: formCorrectAnswer,
-      explanation: formExplanation,
+      explanation: formExplanation.trim(),
       status: formStatus,
     });
   };
@@ -127,6 +149,12 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {errorMessage && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
+            ⚠️ {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">

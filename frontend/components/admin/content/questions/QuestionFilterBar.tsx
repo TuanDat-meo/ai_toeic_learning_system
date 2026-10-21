@@ -74,9 +74,6 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
-            ETS Standard
-          </span>
           <button
             type="button"
             onClick={() => {

@@ -9,12 +9,12 @@ import {
   Layers,
 } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
-import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
+import { StudentCardProgressAction } from "@/components/student/common/StudentCardProgressAction";
 import { useItemProgress } from "@/lib/practiceProgress";
 
 interface StudentReadingCardGridProps {
   cards: ExerciseCardData[];
-  onStartPractice: (card: ExerciseCardData) => void;
+  onStartPractice: (card: ExerciseCardData, startIndex?: number, isRedoWrong?: boolean) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
 }
 
@@ -24,7 +24,7 @@ function StudentReadingCardItem({
   onOpenTheory,
 }: {
   card: ExerciseCardData;
-  onStartPractice: (card: ExerciseCardData) => void;
+  onStartPractice: (card: ExerciseCardData, startIndex?: number, isRedoWrong?: boolean) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
 }) {
   const fallbackTotal = card.totalQuestions || 10;
@@ -53,45 +53,18 @@ function StudentReadingCardItem({
           )}
         </div>
 
-        {/* Khung chỉ số bài học & Thanh tiến độ */}
-        <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
-          <PracticeProgressBar
-            completed={completed}
-            total={fallbackTotal}
-            unit="câu"
+        {/* Khung thống kê và các nút điều khiển đúng chuẩn Ảnh 2 */}
+        <div className="pt-2">
+          <StudentCardProgressAction
+            progressKey={`reading-${card.id}`}
+            totalQuestions={card.totalQuestions || 30}
+            savedCount={(card as any).savedVocabCount || 2}
+            actionLabel="Học ngay"
+            onStart={(nextIdx) => onStartPractice(card, nextIdx, false)}
+            onRedoWrong={() => onStartPractice(card, 0, true)}
+            onOpenTheory={() => onOpenTheory(card)}
           />
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1 font-medium">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              Đã làm: <strong className="text-slate-800 font-mono">{completed}</strong> câu
-            </span>
-            <span className="font-mono text-slate-400">
-              Còn lại: <strong className="text-slate-600 font-mono">{Math.max(0, fallbackTotal - completed)}</strong>
-            </span>
-          </div>
         </div>
-      </div>
-
-      {/* Nút hành động học viên */}
-      <div className="pt-3.5 border-t border-slate-100 grid grid-cols-2 gap-2 mt-4">
-        <button
-          type="button"
-          onClick={() => onOpenTheory(card)}
-          className="py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-          title="Xem tóm tắt lý thuyết"
-        >
-          <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-          Lý thuyết
-        </button>
-        <button
-          type="button"
-          onClick={() => onStartPractice(card)}
-          className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-          title="Bắt đầu luyện tập bài đọc"
-        >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          Luyện tập
-        </button>
       </div>
     </div>
   );
@@ -106,6 +79,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<
     "all" | "grammar" | "part5" | "part6" | "part7"
   >("all");
+  const [selectedSeries, setSelectedSeries] = useState<"all" | "2024" | "2023" | "2022">("all");
 
   const filteredCards = useMemo(() => {
     return cards.filter((c) => {
@@ -119,14 +93,20 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
   }, [cards, selectedCategory, searchQuery]);
 
   // Phân chia thành 3 nhóm chuẩn:
-  // 1. 10 Bộ đề ETS 2024 (Full Test Part 5, 6, 7)
-  const testCards = filteredCards.filter(
-    (c) =>
+  // 1. Kho Bộ đề ETS 2024, 2023, 2022 (Full Test Part 5, 6, 7)
+  const testCards = filteredCards.filter((c) => {
+    const isTest =
       c.id.includes("-test-") ||
       (c.tag && c.tag.includes("Test")) ||
       c.title.includes("Test") ||
-      c.title.includes("Bộ đề")
-  );
+      c.title.includes("Bộ đề");
+    if (!isTest) return false;
+    if (selectedSeries === "all") return true;
+    if (selectedSeries === "2024") return c.title.includes("2024") || c.id.includes("2024") || (c.tag && c.tag.includes("2024"));
+    if (selectedSeries === "2023") return c.title.includes("2023") || c.id.includes("2023") || (c.tag && c.tag.includes("2023"));
+    if (selectedSeries === "2022") return c.title.includes("2022") || c.id.includes("2022") || (c.tag && c.tag.includes("2022"));
+    return true;
+  });
 
   // 2. Theo các Level điểm (Lv.1 Dưới 200 -> Lv.4 750-990+)
   const levelCards = filteredCards.filter(
@@ -163,9 +143,9 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
   return (
     <div className="space-y-6">
       {/* Thanh tìm kiếm & lọc thể loại */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {/* Tìm kiếm */}
-        <div className="relative w-full lg:w-80">
+        <div className="relative w-full lg:w-72 shrink-0">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -177,8 +157,32 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
         </div>
 
         {/* Lọc thể loại */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar">
+        <div className="flex-1 min-w-0 max-w-full flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar">
+        {/* Lọc Năm / Bộ đề ETS */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar">
           {[
+            { id: "all", label: "Tất cả năm" },
+            { id: "2024", label: "ETS 2024" },
+            { id: "2023", label: "ETS 2023" },
+            { id: "2022", label: "ETS 2022" },
+          ].map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSelectedSeries(s.id as "all" | "2024" | "2023" | "2022")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                selectedSeries === s.id
+                  ? "bg-white text-blue-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+          </div>
+
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl shrink-0">
+            {[
             { id: "all", label: "Tất cả dạng bài" },
             { id: "part5", label: "Part 5 (Điền từ)" },
             { id: "part6", label: "Part 6 (Điền đoạn)" },
@@ -198,28 +202,18 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
               {cat.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 
       {/* DANH SÁCH BÀI LÀM PHÂN THEO NHÓM */}
       <div className="space-y-8">
-        {/* NHÓM 1: 10 BỘ ĐỀ ETS 2024 */}
-        <section className="space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <span>📚 10 Bộ Đề Thi Reading ETS 2024</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-extrabold font-mono">
-                  {testCards.length} Đề
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Tuyển tập đề thi thực tế chuẩn format ETS 2024 với đầy đủ Part 5, 6 và 7.
-              </p>
-            </div>
-          </div>
-          {renderCardGrid(testCards)}
-        </section>
+        {/* NHÓM 1: 10 BỘ ĐỀ ETS 2024 (ẨN KHI KHÔNG CÓ ĐỀ) */}
+        {testCards.length > 0 && (
+          <section className="space-y-3.5">
+            {renderCardGrid(testCards)}
+          </section>
+        )}
 
         {/* NHÓM 2: THEO CẤP ĐỘ ĐIỂM (LEVELS) */}
         {levelCards.length > 0 && (

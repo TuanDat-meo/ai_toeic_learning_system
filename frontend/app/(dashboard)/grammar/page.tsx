@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Brain, Sparkles, Layers } from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
 import { getGrammarTopics, saveGrammarProgress } from "@/lib/api/grammar";
@@ -10,8 +9,6 @@ import {
   GrammarTopicDetailModal,
   GrammarQuizModal,
 } from "@/components/admin/content/grammar/GrammarModals";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
-import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
@@ -21,6 +18,8 @@ export default function StudentGrammarPage() {
   const [theoryTopic, setTheoryTopic] = useState<GrammarTopicItem | null>(null);
   const [quizActive, setQuizActive] = useState<boolean>(false);
   const [activeTopicForQuiz, setActiveTopicForQuiz] = useState<GrammarTopicItem | null>(null);
+  const [quizStartIndex, setQuizStartIndex] = useState<number>(0);
+  const [isQuizRedoWrong, setIsQuizRedoWrong] = useState<boolean>(false);
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
   const loadTopics = useCallback(async () => {
@@ -44,15 +43,11 @@ export default function StudentGrammarPage() {
     loadTopics();
   }, [loadTopics]);
 
-  const startTopicQuiz = async (topic: GrammarTopicItem) => {
-    if (!topic.questions || topic.questions.length === 0) return;
-    try {
-      await consumeLearningFeature("GRAMMAR_QUIZ");
-      setActiveTopicForQuiz(topic);
-      setQuizActive(true);
-    } catch (error) {
-      setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu bài quiz ngữ pháp.");
-    }
+  const startTopicQuiz = async (topic: GrammarTopicItem, startIndex = 0, isRedoWrong = false) => {
+    setActiveTopicForQuiz(topic);
+    setQuizStartIndex(startIndex);
+    setIsQuizRedoWrong(isRedoWrong);
+    setQuizActive(true);
   };
 
   const handleRecordResult = async (topicId: string, isCorrect: boolean) => {
@@ -60,10 +55,10 @@ export default function StudentGrammarPage() {
       const topic = topics.find((t) => t.id === topicId);
       const total = topic?.questions?.length || 1;
       const completed = Math.min(total, (topic?.completedQuestions || 0) + 1);
-      const status = completed >= total ? "Đã hoàn thành" : "Đang học";
+      const status = completed >= total ? "COMPLETED" : "IN_PROGRESS";
       await saveGrammarProgress(topicId, completed, total, status);
     } catch (err) {
-      console.error("Lỗi lưu tiến độ ngữ pháp:", err);
+      console.warn("Không thể đồng bộ tiến độ ngữ pháp lên máy chủ:", err);
     }
   };
 
@@ -85,24 +80,18 @@ export default function StudentGrammarPage() {
             Chuyên Đề Ngữ Pháp TOEIC Trọng Tâm
           </h1>
           <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Nắm vững công thức, dấu hiệu nhận biết Part 5, 6 &amp; 7 (ETS 2024), bẫy thường gặp và luyện trắc nghiệm giải thích chi tiết.
+            Hệ thống 25 chuyên đề ngữ pháp TOEIC trọng tâm từ cơ bản đến nâng cao (phát âm, từ loại, các thì, mệnh đề quan hệ, câu bị động, đảo ngữ...) kèm giải thích chi tiết.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
-            <Brain className="w-4 h-4 text-blue-600" />
-            {topics.length} chuyên đề ({totalQuestionsCount} câu bài tập)
-          </span>
-          <LearningQuotaBadge featureKey="GRAMMAR" />
-        </div>
+        
       </header>
 
       {/* Grid chuyên đề cho học viên */}
       <StudentGrammarGrid
         topics={topics}
         onOpenTheory={(topic) => setTheoryTopic(topic)}
-        onStartQuiz={(topic) => { void startTopicQuiz(topic); }}
+        onStartQuiz={(topic, sIdx, isRedo) => { void startTopicQuiz(topic, sIdx, isRedo); }}
       />
 
       {/* Modal Xem chi tiết lý thuyết (Công thức, Dấu hiệu, Bẫy, Ví dụ) */}
@@ -122,6 +111,8 @@ export default function StudentGrammarPage() {
           title={`Luyện tập: ${activeTopicForQuiz.titleVi || activeTopicForQuiz.title} (${activeTopicForQuiz.code})`}
           questions={activeTopicForQuiz.questions}
           activeTopic={activeTopicForQuiz}
+          initialIndex={quizStartIndex}
+          isRedoWrongOnly={isQuizRedoWrong}
           onClose={() => {
             setQuizActive(false);
             setActiveTopicForQuiz(null);

@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { expandReadingQuestions } from "@/lib/toeicQuestionExpander";
+import { recordQuestionAnswer, getItemProgress, getRedoWrongQuestions, saveItemProgress } from "@/lib/practiceProgress";
+
+import React, { useState, useMemo, useEffect } from "react";
 import { ExerciseCardData, ReadingSubPassage, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
-import { saveItemProgress } from "@/lib/practiceProgress";
 import {
   ArrowLeft,
   Languages,
@@ -34,6 +36,8 @@ import { QuestionErrorReportButton } from "@/components/support/QuestionErrorRep
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
 interface ReadingPracticeWorkspaceProps {
+  initialQuestionIndex?: number;
+  isRedoWrongOnly?: boolean;
   card: ExerciseCardData;
   onClose: () => void;
   playSfx: (type?: "correct" | "wrong" | "click") => void;
@@ -60,15 +64,27 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   onClose,
   playSfx,
   showToast,
+  initialQuestionIndex = 0,
+  isRedoWrongOnly = false,
 }) => {
+  // Đảm bảo bài đọc luôn có ĐẦY ĐỦ câu hỏi (ví dụ Part 5 đủ 30 câu từ 101-130)
+  const fullQuestions = useMemo(() => {
+    return expandReadingQuestions(card);
+  }, [card]);
+
+  // Nếu là chế độ redo câu sai, lấy chính xác danh sách câu bị sai (đảm bảo đủ đúng số lượng ngoài badge)
+  const activeQuestions = useMemo(() => {
+    if (!isRedoWrongOnly) return fullQuestions;
+    return getRedoWrongQuestions(fullQuestions, `reading-${card.id}`, card.totalQuestions || fullQuestions.length);
+  }, [fullQuestions, isRedoWrongOnly, card]);
   // Group questions by passage (for Part 6, Part 7) or individual questions (for Part 5)
   const passageGroups: PassageGroup[] = useMemo(() => {
     const hasPassages =
-      card.sampleQuestions.some((q) => !!q.passageText || (q.passages && q.passages.length > 0)) ||
+      activeQuestions.some((q) => !!q.passageText || (q.passages && q.passages.length > 0)) ||
       !!card.passageText ||
       (card.passages && card.passages.length > 0);
     if (!hasPassages) {
-      return card.sampleQuestions.map((q, idx) => ({
+      return activeQuestions.map((q, idx) => ({
         id: `q-${idx}`,
         startIndex: idx,
         questions: [{ question: q, globalIndex: idx }],
@@ -78,7 +94,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     const groups: PassageGroup[] = [];
     let curr: PassageGroup | null = null;
 
-    card.sampleQuestions.forEach((q, idx) => {
+    activeQuestions.forEach((q, idx) => {
       const pKey =
         q.passageTitle ||
         q.passageText ||
@@ -104,9 +120,19 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
     if (curr) groups.push(curr);
     return groups;
-  }, [card]);
+  }, [activeQuestions, card]);
 
-  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(() => {
+    if (isRedoWrongOnly) return 0;
+    if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
+      return Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1));
+    }
+    const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || 30);
+    if (prog && prog.completedQuestions > 0 && prog.completedQuestions < (card.totalQuestions || 30)) {
+      return Math.min(prog.completedQuestions, Math.max(0, passageGroups.length - 1));
+    }
+    return 0;
+  });
   const currentGroup = passageGroups[currentGroupIndex] || passageGroups[0];
   const isMultiQuestionGroup = currentGroup && currentGroup.questions.length > 1;
 
@@ -126,6 +152,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   // Track user selections: globalIndex -> selected option index
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
+    if (isRedoWrongOnly) return {};
     if (typeof window === "undefined") return {};
     try {
       const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
@@ -139,6 +166,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   
   // Track checked state: groupIndex -> boolean
   const [checkedGroups, setCheckedGroups] = useState<Record<number, boolean>>(() => {
+    if (isRedoWrongOnly) return {};
     if (typeof window === "undefined") return {};
     try {
       const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
@@ -151,8 +179,20 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   });
   const isCurrentGroupChecked = !!checkedGroups[currentGroupIndex];
 
+  useEffect(() => {
+    if (isRedoWrongOnly) {
+      setCurrentGroupIndex(0);
+      setUserAnswers({});
+      setCheckedGroups({});
+      setSessionCorrectCount(0);
+      setSessionWrongCount(0);
+    } else if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
+      setCurrentGroupIndex(Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1)));
+    }
+  }, [isRedoWrongOnly, initialQuestionIndex, passageGroups.length]);
+
   const [sessionCorrectCount, setSessionCorrectCount] = useState<number>(() => {
-    if (typeof window === "undefined") return 0;
+    if (typeof window === "undefined" || isRedoWrongOnly) return 0;
     try {
       const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
       if (saved) {
@@ -164,7 +204,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   });
 
   const [sessionWrongCount, setSessionWrongCount] = useState<number>(() => {
-    if (typeof window === "undefined") return 0;
+    if (typeof window === "undefined" || isRedoWrongOnly) return 0;
     try {
       const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
       if (saved) {
@@ -226,7 +266,24 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return () => clearInterval(interval);
   }, []);
 
-  const totalQuestionsCount = card.sampleQuestions.length;
+  const totalQuestionsCount = isRedoWrongOnly
+    ? activeQuestions.length
+    : (card.totalQuestions || fullQuestions.length);
+
+  const currentSessionCorrect = useMemo(() => {
+    let count = 0;
+    passageGroups.forEach((group, gIdx) => {
+      if (checkedGroups[gIdx]) {
+        group.questions.forEach((item) => {
+          const ans = userAnswers[item.globalIndex];
+          if (ans !== undefined && ans === item.question.correctIndex) {
+            count++;
+          }
+        });
+      }
+    });
+    return count;
+  }, [passageGroups, checkedGroups, userAnswers]);
   const currentGroupFirstQuestion: SampleQuestion = currentGroup?.questions?.[0]?.question || card.sampleQuestions[0];
   const questionRef = `READING-${card.id}-${currentGroupFirstQuestion?.questionNum || currentGroupIndex + 1}`;
 
@@ -280,6 +337,18 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         setSessionCorrectCount(nextCorrect);
         setSessionWrongCount(nextWrong);
 
+    currentGroup.questions.forEach((item) => {
+      const selected = nextAnswers[item.globalIndex] !== undefined ? nextAnswers[item.globalIndex] : userAnswers[item.globalIndex];
+      const isItemCorrect = selected === item.question.correctIndex;
+      const qIdentifier = item.question.questionNum || (item.globalIndex + 1);
+      recordQuestionAnswer(
+        `reading-${card.id}`,
+        qIdentifier,
+        isItemCorrect,
+        card.totalQuestions || fullQuestions.length
+      );
+    });
+
         if (groupCorrect === currentGroup.questions.length) {
           if (isSfxEnabled) playSfx("correct");
           showToast(`Xuất sắc! Đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
@@ -289,26 +358,42 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         }
       }
 
-      saveItemProgress(
-        `reading-${card.id}`,
-        Object.keys(nextAnswers).length,
-        card.totalQuestions || card.sampleQuestions.length,
-        undefined,
-        nextCorrect,
-        nextWrong
-      );
-
-      try {
-        localStorage.setItem(
-          `toeic_reading_answers_${card.id}`,
-          JSON.stringify({
-            answers: nextAnswers,
-            checkedGroups: nextChecked,
-            correctCount: nextCorrect,
-            wrongCount: nextWrong,
-          })
-        );
-      } catch {}
+      if (!isRedoWrongOnly) {
+        try {
+          localStorage.setItem(
+            `toeic_reading_answers_${card.id}`,
+            JSON.stringify({
+              answers: nextAnswers,
+              checkedGroups: nextChecked,
+              correctCount: nextCorrect,
+              wrongCount: nextWrong,
+            })
+          );
+        } catch {}
+      } else {
+        try {
+          const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            const updatedAnswers = { ...(parsed.answers || {}) };
+            currentGroup.questions.forEach((item) => {
+              const origIdx = fullQuestions.findIndex(
+                (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+              );
+              if (origIdx !== -1 && nextAnswers[item.globalIndex] !== undefined) {
+                updatedAnswers[origIdx] = nextAnswers[item.globalIndex];
+              }
+            });
+            localStorage.setItem(
+              `toeic_reading_answers_${card.id}`,
+              JSON.stringify({
+                ...parsed,
+                answers: updatedAnswers,
+              })
+            );
+          }
+        } catch {}
+      }
     } else {
       // For single-question items (Part 5): select and check immediately
       const correct = optIdx === correctIdx;
@@ -323,26 +408,51 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       setSessionCorrectCount(nextCorrect);
       setSessionWrongCount(nextWrong);
 
-      saveItemProgress(
-        `reading-${card.id}`,
-        Object.keys(nextAnswers).length,
-        card.totalQuestions || card.sampleQuestions.length,
-        undefined,
-        nextCorrect,
-        nextWrong
-      );
+    const singleItem = currentGroup.questions[0]?.question;
+    const qIdentifier = singleItem?.questionNum || (globalIndex + 1);
+    recordQuestionAnswer(
+      `reading-${card.id}`,
+      qIdentifier,
+      correct,
+      card.totalQuestions || fullQuestions.length
+    );
 
-      try {
-        localStorage.setItem(
-          `toeic_reading_answers_${card.id}`,
-          JSON.stringify({
-            answers: nextAnswers,
-            checkedGroups: nextChecked,
-            correctCount: nextCorrect,
-            wrongCount: nextWrong,
-          })
-        );
-      } catch {}
+      if (!isRedoWrongOnly) {
+        try {
+          localStorage.setItem(
+            `toeic_reading_answers_${card.id}`,
+            JSON.stringify({
+              answers: nextAnswers,
+              checkedGroups: nextChecked,
+              correctCount: nextCorrect,
+              wrongCount: nextWrong,
+            })
+          );
+        } catch {}
+      } else {
+        try {
+          const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            const updatedAnswers = { ...(parsed.answers || {}) };
+            currentGroup.questions.forEach((item) => {
+              const origIdx = fullQuestions.findIndex(
+                (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+              );
+              if (origIdx !== -1 && nextAnswers[item.globalIndex] !== undefined) {
+                updatedAnswers[origIdx] = nextAnswers[item.globalIndex];
+              }
+            });
+            localStorage.setItem(
+              `toeic_reading_answers_${card.id}`,
+              JSON.stringify({
+                ...parsed,
+                answers: updatedAnswers,
+              })
+            );
+          }
+        } catch {}
+      }
 
       if (correct) {
         if (isSfxEnabled) playSfx("correct");
@@ -380,26 +490,33 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setSessionCorrectCount(nextCorrect);
     setSessionWrongCount(nextWrong);
 
-    saveItemProgress(
-      `reading-${card.id}`,
-      Object.keys(userAnswers).length,
-      card.totalQuestions || card.sampleQuestions.length,
-      undefined,
-      nextCorrect,
-      nextWrong
-    );
-
-    try {
-      localStorage.setItem(
-        `toeic_reading_answers_${card.id}`,
-        JSON.stringify({
-          answers: userAnswers,
-          checkedGroups: nextChecked,
-          correctCount: nextCorrect,
-          wrongCount: nextWrong,
-        })
+    currentGroup.questions.forEach((item) => {
+      const selected = userAnswers[item.globalIndex];
+      const isItemCorrect = selected === item.question.correctIndex;
+      const qIdentifier = item.question.questionNum || (item.globalIndex + 1);
+      recordQuestionAnswer(
+        `reading-${card.id}`,
+        qIdentifier,
+        isItemCorrect,
+        card.totalQuestions || fullQuestions.length
       );
-    } catch {}
+    });
+
+
+
+    if (!isRedoWrongOnly) {
+      try {
+        localStorage.setItem(
+          `toeic_reading_answers_${card.id}`,
+          JSON.stringify({
+            answers: userAnswers,
+            checkedGroups: nextChecked,
+            correctCount: nextCorrect,
+            wrongCount: nextWrong,
+          })
+        );
+      } catch {}
+    }
 
     if (groupCorrect === currentGroup.questions.length) {
       if (isSfxEnabled) playSfx("correct");
@@ -421,26 +538,28 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setCheckedGroups(nextChecked);
     setUserAnswers(nextAnswers);
 
-    saveItemProgress(
-      `reading-${card.id}`,
-      Object.keys(nextAnswers).length,
-      card.totalQuestions || card.sampleQuestions.length,
-      undefined,
-      sessionCorrectCount,
-      sessionWrongCount
-    );
-
-    try {
-      localStorage.setItem(
-        `toeic_reading_answers_${card.id}`,
-        JSON.stringify({
-          answers: nextAnswers,
-          checkedGroups: nextChecked,
-          correctCount: sessionCorrectCount,
-          wrongCount: sessionWrongCount,
-        })
+    if (!isRedoWrongOnly) {
+      saveItemProgress(
+        `reading-${card.id}`,
+        Object.keys(nextAnswers).length,
+        card.totalQuestions || fullQuestions.length,
+        undefined,
+        sessionCorrectCount,
+        sessionWrongCount
       );
-    } catch {}
+
+      try {
+        localStorage.setItem(
+          `toeic_reading_answers_${card.id}`,
+          JSON.stringify({
+            answers: nextAnswers,
+            checkedGroups: nextChecked,
+            correctCount: sessionCorrectCount,
+            wrongCount: sessionWrongCount,
+          })
+        );
+      } catch {}
+    }
     showToast("Đã đặt lại để bạn làm lại bài tập đoạn này! ↺");
   };
 
@@ -608,17 +727,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               {energyScore}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/90 text-white text-xs font-extrabold shadow-2xs">
-              ✓ {sessionCorrectCount}/{totalQuestionsCount}
+              ✓ {currentSessionCorrect}/{totalQuestionsCount}
             </span>
-            <button
-              type="button"
-              onClick={() => setIsQuestionGridOpen(true)}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-2xs font-mono transition cursor-pointer"
-            >
-              {isMultiQuestionGroup
-                ? `Đoạn ${currentGroupIndex + 1}/${passageGroups.length}`
-                : `Câu ${currentGroup.startIndex + 1}/${totalQuestionsCount}`}
-            </button>
           </div>
         </div>
       </header>
@@ -1289,7 +1399,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             <Grid className="w-4 h-4" />
             <span>
               {isMultiQuestionGroup
-                ? `Đoạn ${currentGroupIndex + 1}/${passageGroups.length}`
+                ? `Đoạn ${currentGroupIndex + 1}/${passageGroups.length} (${totalQuestionsCount} câu)`
                 : `Câu ${currentGroup.startIndex + 1}/${totalQuestionsCount}`}
             </span>
           </button>

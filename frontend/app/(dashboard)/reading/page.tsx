@@ -1,18 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { BookOpen, Sparkles, Layers } from "lucide-react";
+import { Sparkles, Layers } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentReadingPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
+  const [readingStartIndex, setReadingStartIndex] = useState<number>(0);
+  const [isReadingRedoWrong, setIsReadingRedoWrong] = useState<boolean>(false);
   const [theoryCard, setTheoryCard] = useState<ExerciseCardData | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -23,9 +24,11 @@ export default function StudentReadingPage() {
     }, 2800);
   };
 
-  async function startReadingPractice(card: ExerciseCardData): Promise<boolean> {
+  async function startReadingPractice(card: ExerciseCardData, startIndex = 0, isRedo = false): Promise<boolean> {
     try {
       await consumeLearningFeature("READING_PRACTICE");
+      setReadingStartIndex(startIndex);
+      setIsReadingRedoWrong(isRedo);
       setActivePracticeCard(card);
       return true;
     } catch (error) {
@@ -77,24 +80,15 @@ export default function StudentReadingPage() {
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
             Luyện Thi TOEIC Reading Trọng Tâm
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Rèn luyện kỹ năng đọc hiểu Part 5, 6, 7 với bộ đề ETS 2024 và tính năng tra từ điển trực tiếp trên bài đọc.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
-            <BookOpen className="w-4 h-4 text-blue-600" />
-            {cards.length} chuyên đề ({totalQuestionsCount.toLocaleString("vi-VN")} câu hỏi)
-          </span>
-          <LearningQuotaBadge featureKey="READING_PRACTICE" />
-        </div>
+        
       </header>
 
       {/* Grid danh sách bài đọc cho học viên */}
       <StudentReadingCardGrid
         cards={cards}
-        onStartPractice={(card) => { void startReadingPractice(card); }}
+        onStartPractice={(card, sIdx, isRedo) => { void startReadingPractice(card, sIdx, isRedo); }}
         onOpenTheory={(card) => setTheoryCard(card)}
       />
 
@@ -117,7 +111,12 @@ export default function StudentReadingPage() {
       {activePracticeCard && (
         <ReadingPracticeWorkspace
           card={activePracticeCard}
-          onClose={() => setActivePracticeCard(null)}
+          initialQuestionIndex={readingStartIndex}
+          isRedoWrongOnly={isReadingRedoWrong}
+          onClose={() => {
+            setActivePracticeCard(null);
+            setIsReadingRedoWrong(false);
+          }}
           playSfx={playSfx}
           showToast={showToast}
         />
@@ -125,3 +124,4 @@ export default function StudentReadingPage() {
     </div>
   );
 }
+

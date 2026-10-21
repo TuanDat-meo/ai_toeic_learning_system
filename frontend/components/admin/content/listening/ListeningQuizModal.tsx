@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ArrowLeft,
   Languages,
@@ -31,7 +31,7 @@ import { LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/li
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
-import { saveItemProgress } from "@/lib/practiceProgress";
+import { saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
 
 interface ListeningQuizModalProps {
   quizModalCard: LevelCategoryCardData;
@@ -129,14 +129,16 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
   const updateCardStats = (q: DictationQuestion, chosen: string) => {
     const isCorrect = chosen === q.correctAnswer;
+    const totalQ = (quizModalCard as any).originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 10;
+    const progress = recordQuestionAnswer(`listening-quiz-${quizModalCard.id}`, q.id, isCorrect, totalQ);
     const updateCard = (c: LevelCategoryCardData): LevelCategoryCardData => {
       if (c.id === quizModalCard.id) {
         return {
           ...c,
-          completedQuestions: c.completedQuestions + 1,
-          correctCount: c.correctCount + (isCorrect ? 1 : 0),
-          wrongCount: c.wrongCount + (isCorrect ? 0 : 1),
-          status: "Đang học",
+          completedQuestions: progress.completedQuestions,
+          correctCount: progress.correctAnswers || 0,
+          wrongCount: progress.wrongAnswers || 0,
+          status: progress.status === "completed" ? "Đã hoàn thành" : "Đang học",
         };
       }
       return c;
@@ -159,6 +161,14 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     ? currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizAnswerChecked[q.id])
     : !!quizAnswerChecked[quizModalCard.questions[activeQuizQIndex]?.id];
   const isAllGroupAnswered = isGroupMode && currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizSelectedOption[q.id]);
+
+  const sessionCorrectCount = useMemo(() => {
+    return quizModalCard.questions.filter((q) => {
+      const selected = quizSelectedOption[q.id];
+      const isChecked = quizAnswerChecked[q.id];
+      return isChecked && selected !== undefined && selected === q.correctAnswer;
+    }).length;
+  }, [quizModalCard.questions, quizSelectedOption, quizAnswerChecked]);
 
   const combinedVocabItems = (() => {
     const map = new Map<
@@ -267,21 +277,13 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           </button>
 
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-bold shadow-2xs">
-              <Clock className="w-3.5 h-3.5" />
-              01:30
-            </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/90 text-white text-xs font-extrabold shadow-2xs">
               <Zap className="w-3.5 h-3.5 fill-white" />
               +50 XP
             </span>
-            <button
-              type="button"
-              onClick={() => setIsQuestionGridOpen(true)}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-2xs font-mono transition cursor-pointer"
-            >
-              Câu {activeQuizQIndex + 1}/{quizModalCard.questions.length}
-            </button>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/90 text-white text-xs font-extrabold shadow-2xs">
+              ✓ {sessionCorrectCount}/{quizModalCard.questions.length}
+            </span>
           </div>
         </div>
       </header>
@@ -675,8 +677,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                           playSfx("correct");
                                         }
 
-                                        const totalQ = quizModalCard.questions?.length || quizModalCard.totalQuestions || 10;
-                                        saveItemProgress(`listening-quiz-${quizModalCard.id}`, Object.keys(nextSelected).length, totalQ);
+
                                       }}
                                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
                                     >
@@ -957,8 +958,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                     setQuizSelectedOption(nextSelected);
                                     setQuizAnswerChecked({ ...quizAnswerChecked, [q.id]: true });
                                     updateCardStats(q, optKey);
-                                    const totalQ = quizModalCard.questions?.length || quizModalCard.totalQuestions || 10;
-                                    saveItemProgress(`listening-quiz-${quizModalCard.id}`, Object.keys(nextSelected).length, totalQ);
+
                                   }}
                                   className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${cardStyle}`}
                                 >
@@ -1192,7 +1192,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
             <span>
               {isGroupMode && currentGroupQuestions.length > 0
                 ? `Câu ${currentGroupQuestions[0].id >= 100 ? currentGroupQuestions[0].id % 100 : 1}-${currentGroupQuestions[currentGroupQuestions.length - 1].id >= 100 ? currentGroupQuestions[currentGroupQuestions.length - 1].id % 100 : currentGroupQuestions.length} / ${quizModalCard.questions.length}`
-                : `${activeQuizQIndex + 1}/${quizModalCard.questions.length}`}
+                : `Câu ${activeQuizQIndex + 1}/${quizModalCard.questions.length}`}
             </span>
           </button>
 

@@ -9,6 +9,7 @@ import { QuestionCardGridView } from "@/components/admin/content/questions/Quest
 import { QuestionPreviewModal } from "@/components/admin/content/questions/QuestionPreviewModal";
 import { QuestionEditModal } from "@/components/admin/content/questions/QuestionEditModal";
 import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
+import { exportToExcel } from "@/lib/exportExcel";
 
 
 export default function QuestionsPage() {
@@ -207,27 +208,55 @@ export default function QuestionsPage() {
   };
 
   const handleExportCsv = () => {
-    const headers = ["Mã câu", "Phần thi", "Kỹ năng", "Độ khó", "Nội dung câu hỏi", "Đáp án đúng", "Trạng thái"];
-    const rows = questions.map((q) => [
-      `"${q.code || q.id}"`,
-      `"${q.part}"`,
-      `"${q.skill}"`,
-      `"${q.difficulty}"`,
-      `"${q.questionText.replace(/"/g, '""')}"`,
-      `"${q.correctAnswer}"`,
-      `"${q.status}"`,
-    ]);
-    const csvContent =
-      "data:text/csv;charset=utf-8,\uFEFF" +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `toeic_question_bank_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Đã xuất danh sách câu hỏi ra tệp CSV thành công! 📊");
+    const dataToExport = questions.map((q, index) => {
+      const optA = q.options?.find(o => o.id === "A")?.text || "";
+      const optB = q.options?.find(o => o.id === "B")?.text || "";
+      const optC = q.options?.find(o => o.id === "C")?.text || "";
+      const optD = q.options?.find(o => o.id === "D")?.text || "";
+
+      return {
+        stt: index + 1,
+        code: q.code || `Q-${q.id}`,
+        part: q.part,
+        skill: q.skill,
+        difficulty: q.difficulty,
+        questionText: q.questionText,
+        optA,
+        optB,
+        optC,
+        optD,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation || "Xem chi tiết trong hệ thống",
+        status: q.status || "PUBLISHED",
+      };
+    });
+
+    exportToExcel({
+      filename: `ngan_hang_cau_hoi_toeic_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Ngân hàng câu hỏi",
+      title: "NGÂN HÀNG CÂU HỎI LUYỆN THI TOEIC CHUẨN ETS",
+      metadata: [
+        { label: "Ngày xuất báo cáo", value: new Date().toLocaleDateString("vi-VN") },
+        { label: "Tổng số câu hỏi", value: questions.length },
+      ],
+      columns: [
+        { header: "STT", key: "stt", width: 50, align: "center" },
+        { header: "Mã câu", key: "code", width: 90, align: "center" },
+        { header: "Phần thi", key: "part", width: 80, align: "center" },
+        { header: "Kỹ năng", key: "skill", width: 90, align: "center" },
+        { header: "Độ khó", key: "difficulty", width: 80, align: "center" },
+        { header: "Nội dung câu hỏi", key: "questionText", width: 280, align: "left" },
+        { header: "Lựa chọn A", key: "optA", width: 160, align: "left" },
+        { header: "Lựa chọn B", key: "optB", width: 160, align: "left" },
+        { header: "Lựa chọn C", key: "optC", width: 160, align: "left" },
+        { header: "Lựa chọn D", key: "optD", width: 160, align: "left" },
+        { header: "Đáp án đúng", key: "correctAnswer", width: 90, align: "center" },
+        { header: "Lời giải & Phân tích bẫy", key: "explanation", width: 280, align: "left" },
+        { header: "Trạng thái", key: "status", width: 100, align: "center" },
+      ],
+      data: dataToExport,
+    });
+    showToast("Đã xuất ngân hàng câu hỏi ra file Excel (.xls) có cấu trúc cột rõ ràng! 📊");
   };
 
   const handleImportCsvClick = () => {

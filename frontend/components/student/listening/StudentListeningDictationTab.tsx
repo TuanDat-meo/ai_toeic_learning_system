@@ -3,16 +3,16 @@
 import React from "react";
 import { Headphones, Languages, FileText, Layers } from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
-import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
+import { StudentCardProgressAction } from "@/components/student/common/StudentCardProgressAction";
 import { useItemProgress } from "@/lib/practiceProgress";
 
 interface StudentListeningDictationTabProps {
-  selectedYear: "2026" | "2024" | "2023" | "2022";
-  setSelectedYear: (year: "2026" | "2024" | "2023" | "2022") => void;
+  selectedYear: "2024" | "2023" | "2022";
+  setSelectedYear: (year: "2024" | "2023" | "2022") => void;
   testsGrouped: { [testNum: number]: DictationCardData[] };
   setVocabBagModalData: (data: { title: string; items: { word: string; ipa: string; meaning: string; example?: string }[] } | null) => void;
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
-  handleOpenDictationPractice: (card: DictationCardData) => void;
+  handleOpenDictationPractice: (card: DictationCardData, startIndex?: number, isRedoWrong?: boolean) => void;
 }
 
 function DictationCardItem({
@@ -22,7 +22,7 @@ function DictationCardItem({
   setTheoryModalData,
 }: {
   card: DictationCardData;
-  handleOpenDictationPractice: (card: DictationCardData) => void;
+  handleOpenDictationPractice: (card: DictationCardData, startIndex?: number, isRedoWrong?: boolean) => void;
   setVocabBagModalData: (data: { title: string; items: { word: string; ipa: string; meaning: string; example?: string }[] } | null) => void;
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
 }) {
@@ -51,53 +51,22 @@ function DictationCardItem({
           {cardDesc}
         </p>
 
-        {/* Tiến độ & Số câu hoàn thành */}
-        <div className="mt-3.5 p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
-          <PracticeProgressBar
-            completed={progress.completedQuestions}
-            total={card.totalQuestions}
-            unit="câu"
-          />
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1 font-medium">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              Đã làm: <strong className="text-slate-800 font-mono">{progress.completedQuestions}</strong> câu
-            </span>
-            <span className="font-mono text-slate-400">
-              Còn lại: <strong className="text-slate-600 font-mono">{Math.max(0, card.totalQuestions - progress.completedQuestions)}</strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Nút thao tác học viên */}
-      <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
-        <button
-          type="button"
-          onClick={() => handleOpenDictationPractice(card)}
-          className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-        >
-          <Headphones className="w-3.5 h-3.5" />
-          Luyện nghe chép ({card.totalQuestions} câu)
-        </button>
-
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() =>
+        {/* Thống kê và cụm nút thao tác chuẩn Ảnh 2 */}
+        <div className="pt-2">
+          <StudentCardProgressAction
+            progressKey={`listening-dictation-${card.id}`}
+            totalQuestions={card.totalQuestions}
+            savedCount={card.vocabItems?.length || 2}
+            actionLabel="Luyện nghe"
+            onStart={(nextIdx) => handleOpenDictationPractice(card, nextIdx, false)}
+            onRedoWrong={() => handleOpenDictationPractice(card, 0, true)}
+            onOpenSaved={() =>
               setVocabBagModalData({
                 title: `Túi từ vựng: ${cardTitle}`,
                 items: card.vocabItems || [],
               })
             }
-            className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
-          >
-            <Languages className="w-3 h-3 text-blue-600" />
-            Túi từ ({card.vocabItems?.length || 0})
-          </button>
-          <button
-            type="button"
-            onClick={() =>
+            onOpenTheory={() =>
               setTheoryModalData({
                 title: `Mẹo nghe: ${cardTitle}`,
                 summary: cardDesc,
@@ -108,11 +77,7 @@ function DictationCardItem({
                 ],
               })
             }
-            className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
-          >
-            <FileText className="w-3 h-3 text-amber-600" />
-            Mẹo nghe
-          </button>
+          />
         </div>
       </div>
     </div>
@@ -133,7 +98,7 @@ export const StudentListeningDictationTab: React.FC<StudentListeningDictationTab
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 mr-1">Bộ đề năm:</span>
-          {(["2026", "2024", "2023", "2022"] as const).map((year) => (
+          {(["2024", "2023", "2022"] as const).map((year) => (
             <button
               key={year}
               type="button"

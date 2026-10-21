@@ -1,24 +1,50 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { ClipboardCheck, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { MockTest, MockTestQuestion, TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
-import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "@/app/admin/content/mock-tests/mockData";
+import { fetchMockTests, fetchMockTestQuestions } from "@/lib/api/mockTests";
+import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3 } from "@/app/admin/content/mock-tests/mockData";
 import { StudentMockTestCardGrid } from "@/components/student/mock-tests/StudentMockTestCardGrid";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
 import { MockTestTranscriptModal } from "@/components/admin/content/mock-tests/MockTestTranscriptModal";
 import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTestVocabModal";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { MockTestHistoryModal } from "@/components/admin/content/mock-tests/MockTestHistoryModal";
+import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
 
 export default function StudentMockTestsPage() {
-  const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2">("vol1");
+  const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2" | "vol3">("vol1");
   const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
   const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
+  const [testsVol3, setTestsVol3] = useState<TestItem[]>(INITIAL_TESTS_VOL3);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
+  const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
 
-  const currentTests = selectedVol === "vol1" ? testsVol1 : testsVol2;
+  const currentTests = selectedVol === "vol1" ? testsVol1 : selectedVol === "vol2" ? testsVol2 : testsVol3;
+  // Auto-fetch tests from PostgreSQL
+  useEffect(() => {
+    let active = true;
+    async function loadTests() {
+      try {
+        const data = await fetchMockTests();
+        if (data && data.length > 0 && active) {
+          const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
+          const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
+          const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
+          if (v1.length > 0) setTestsVol1(v1);
+          if (v2.length > 0) setTestsVol2(v2);
+          if (v3.length > 0) setTestsVol3(v3);
+        }
+      } catch (err) {
+        console.warn("Could not load mock tests from API:", err);
+      }
+    }
+    loadTests();
+    return () => { active = false; };
+  }, []);
+
 
   // State Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -235,13 +261,7 @@ export default function StudentMockTestsPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
-            <ClipboardCheck className="w-4 h-4 text-blue-600" />
-            {testsVol1.length + testsVol2.length} Đề thi TOEIC Full 7 Parts
-          </span>
-          <LearningQuotaBadge featureKey="MOCK_TEST" />
-        </div>
+        
       </header>
 
       {/* Grid danh sách các đề thi thử */}
@@ -249,12 +269,32 @@ export default function StudentMockTestsPage() {
         tests={currentTests}
         selectedVol={selectedVol}
         setSelectedVol={setSelectedVol}
-        onOpenExam={(test) => {
+        onOpenExam={async (test) => {
           setExamModalTest(test);
           setExamStarted(false);
           setExamSubmitted(false);
+          try {
+            const qs = await fetchMockTestQuestions(test.id);
+            if (qs && qs.length > 0) setActiveExamQuestions(qs);
+            else setActiveExamQuestions(SAMPLE_EXAM_QUESTIONS);
+          } catch {
+            setActiveExamQuestions(SAMPLE_EXAM_QUESTIONS);
+          }
         }}
-        onOpenPractice={(test) => { void handleOpenPractice(test); }}
+        onOpenPractice={async (test, isRedo = false) => {
+          try {
+            const qs = await fetchMockTestQuestions(test.id);
+            let questionsToUse = qs && qs.length > 0 ? qs : SAMPLE_EXAM_QUESTIONS;
+            if (isRedo) {
+              const filtered = getRedoWrongQuestions(questionsToUse, `mock-test-${test.id}`, 200);
+              if (filtered.length > 0) questionsToUse = filtered;
+            }
+            setActivePracticeQuestions(questionsToUse);
+          } catch {
+            setActivePracticeQuestions(SAMPLE_EXAM_QUESTIONS);
+          }
+          void handleOpenPractice(test);
+        }}
         onOpenTranscript={(test) => setTranscriptModalTest(test)}
         onOpenVocab={(test) => setVocabModalTest(test)}
         onOpenHistory={(test) => setHistoryModalTest(test)}
@@ -264,7 +304,7 @@ export default function StudentMockTestsPage() {
       {examModalTest && (
         <MockTestExamModal
           test={examModalTest}
-          activeExamQuestions={SAMPLE_EXAM_QUESTIONS}
+          activeExamQuestions={activeExamQuestions}
           activeExamParts={["Part 1", "Part 2", "Part 3", "Part 4", "Part 5", "Part 6", "Part 7"]}
           examDurationType={examDurationType}
           setExamDurationType={setExamDurationType}
@@ -294,7 +334,7 @@ export default function StudentMockTestsPage() {
       {practiceModalTest && (
         <MockTestPracticeModal
           test={practiceModalTest}
-          filteredPracticeQuestions={SAMPLE_EXAM_QUESTIONS}
+          filteredPracticeQuestions={activePracticeQuestions}
           practiceCurrentQIndex={practiceCurrentQIndex}
           setPracticeCurrentQIndex={setPracticeCurrentQIndex}
           practiceAnswers={practiceAnswers}

@@ -24,386 +24,445 @@ import {
 } from "./ets2024Part4Data";
 
 export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
-  // Part 1
   {
-    id: 1,
-    part: "Part 1",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    imageUrl: "https://images.unsplash.com/photo-1541888946425-d0fbb186156f?auto=format&fit=crop&w=800&q=80",
-    fullTranscript: "He's climbing a ladder.",
-    vietnameseTranslation: "Anh ấy đang leo lên một chiếc thang.",
-    options: {
-      A: "He's standing on a rug.",
-      B: "He's turning a doorknob.",
-      C: "He's climbing a ladder.",
-      D: "He's painting a wall.",
+    "id": 1,
+    "part": "Part 1",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q1.mp3",
+    "imageUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q1.jpg",
+    "fullTranscript": "She's eating in a picnic area.",
+    "vietnameseTranslation": "Cô ấy đang ăn ở một khu dã ngoại.",
+    "options": {
+      "A": "She's eating in a picnic area.",
+      "B": "She's waiting in line at a food truck.",
+      "C": "She's wiping off a bench.",
+      "D": "She's throwing away a plate."
     },
-    optionTranslations: {
-      A: "Anh ấy đang đứng trên một tấm thảm.",
-      B: "Anh ấy đang vặn nắm cửa.",
-      C: "Anh ấy đang leo lên một chiếc thang.",
-      D: "Anh ấy đang sơn một bức tường.",
+    "optionTranslations": {
+      "A": "Cô ấy đang ăn ở một khu dã ngoại.",
+      "B": "Cô ấy đang xếp hàng chờ ở xe bán đồ ăn.",
+      "C": "Cô ấy đang lau ghế.",
+      "D": "Cô ấy đang ném đi một cái đĩa."
     },
-    correctAnswer: "C",
-    explanation: "Động từ 'is climbing a ladder' mô tả chính xác người đàn ông đang bước leo lên chiếc thang trong hình.",
-    trapNote: "Chú ý quan sát bức tranh: Người đàn ông đang ở trên nấc thang chứ không đứng dưới thảm hay sơn tường.",
-    vocabList: [
-      { word: "rug", pos: "n", level: "B2", ipa: "/rʌɡ/", meaning: "tấm thảm" },
-      { word: "doorknob", pos: "n", level: "C1", ipa: "/ˈdɔːrnɑːb/", meaning: "nắm cửa" },
-      { word: "climb", pos: "v", level: "B1", ipa: "/klaɪm/", meaning: "leo" },
-      { word: "ladder", pos: "n", level: "B1", ipa: "/ˈlædər/", meaning: "cái thang" },
-    ],
+    "correctAnswer": "A",
+    "explanation": "Người phụ nữ đang ngồi ăn đồ ăn tại bàn đá dã ngoại ngoài trời.",
+    "trapNote": "Bẫy danh từ liên quan: Nhắc đến thức ăn dễ nghĩ tới 'food truck' (xe bán thức ăn) hoặc 'throwing away' (vứt rác) nhưng tranh không có.",
+    "vocabList": [
+      {
+        "word": "picnic area",
+        "pos": "n",
+        "level": "A2",
+        "ipa": "/ˈpɪknɪk ˈeəriə/",
+        "meaning": "khu dã ngoại"
+      },
+      {
+        "word": "wipe off",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/waɪp ɔːf/",
+        "meaning": "lau chùi sạch"
+      },
+      {
+        "word": "bench",
+        "pos": "n",
+        "level": "A2",
+        "ipa": "/bentʃ/",
+        "meaning": "băng ghế dài"
+      }
+    ]
   },
   {
-    id: 2,
-    part: "Part 1",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80",
-    fullTranscript: "Cardboard boxes are stacked neatly in the distribution warehouse.",
-    vietnameseTranslation: "Các thùng bìa các-tông được xếp chồng gọn gàng trong kho phân phối.",
-    options: {
-      A: "A forklift is unloading cargo from the ship.",
-      B: "Cardboard boxes are stacked neatly in the warehouse.",
-      C: "Workers are inspecting conveyor machinery.",
-      D: "A delivery van is parked beside the platform.",
+    "id": 2,
+    "part": "Part 1",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q2.mp3",
+    "imageUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q2.jpg",
+    "fullTranscript": "The man is standing in the snow beside a car.",
+    "vietnameseTranslation": "Người đàn ông đang đứng trong tuyết bên cạnh một chiếc ô tô.",
+    "options": {
+      "A": "The man is brushing snow off the roof of a car.",
+      "B": "The man is standing in the snow beside a car.",
+      "C": "The man is shoveling a driveway.",
+      "D": "The man is putting on a winter coat."
     },
-    correctAnswer: "B",
-    explanation: "Hình ảnh tập trung vào các thùng hàng carton được xếp ngay ngắn thành nhiều tầng trong kho bãi.",
-    trapNote: "Bẫy danh từ liên quan: Nhắc đến 'warehouse' dễ nghĩ đến 'forklift' (xe nâng) nhưng trong tranh không có xe nâng.",
-  },
-  // Part 2
-  {
-    id: 3,
-    part: "Part 2",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "When is the quarterly financial audit report due for submission?",
-    vietnameseTranslation: "Khi nào bản báo cáo kiểm toán tài chính hàng quý đến hạn phải nộp?",
-    options: {
-      A: "Yes, our team audited it yesterday.",
-      B: "By five o'clock this Friday afternoon.",
-      C: "In the conference hall on the fifth floor.",
+    "optionTranslations": {
+      "A": "Người đàn ông đang phủi tuyết khỏi nóc ô tô.",
+      "B": "Người đàn ông đang đứng trong tuyết bên cạnh một chiếc ô tô.",
+      "C": "Người đàn ông đang xúc tuyết trên đường lái xe vào nhà.",
+      "D": "Người đàn ông đang mặc áo khoác mùa đông."
     },
-    correctAnswer: "B",
-    explanation: "Câu hỏi bắt đầu bằng 'When' (Khi nào) hỏi thời hạn -> 'By five o'clock this Friday afternoon' là câu trả lời trực tiếp.",
-    trapNote: "Bẫy Yes/No: Câu hỏi có từ để hỏi Wh- không bao giờ trả lời bằng Yes hoặc No (loại A ngay lập tức).",
-  },
-  {
-    id: 4,
-    part: "Part 2",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "Why was the regional sales conference postponed until next month?",
-    vietnameseTranslation: "Tại sao hội nghị bán hàng khu vực lại bị hoãn đến tháng sau?",
-    options: {
-      A: "Severe storm warnings disrupted regional airline schedules.",
-      B: "No, we already booked eighty hotel rooms.",
-      C: "Mr. Campbell is the keynote speaker.",
-    },
-    correctAnswer: "A",
-    explanation: "Câu hỏi 'Why' hỏi lý do -> (A) giải thích do cảnh báo bão lớn làm gián đoạn lịch trình các chuyến bay.",
-    trapNote: "Bẫy từ cùng chủ đề: Nhắc đến conference đưa ra keynote speaker để gây nhầm lẫn nội dung.",
-  },
-  // Part 3 - Set 83-85
-  {
-    id: 5,
-    part: "Part 3",
-    question: "What type of business does the speaker own?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "Welcome to Pottery Studio. Today we will demonstrate crafting ceramic bowls.",
-    vietnameseTranslation: "Chào mừng đến với xưởng xốm Pottery Studio.",
-    options: {
-      A: "A tea shop",
-      B: "A childcare center",
-      C: "A pottery studio",
-      D: "A party supply store",
-    },
-    optionTranslations: {
-      A: "Một quán trà",
-      B: "Một trung tâm chăm sóc trẻ em",
-      C: "Một xưởng làm đồ gốm",
-      D: "Một cửa hàng tiệc tùng",
-    },
-    correctAnswer: "C",
-    explanation: "Bài nói bắt đầu bằng việc chào mừng tới 'Pottery Studio'.",
-    vocabList: [
-      { word: "pottery", pos: "n", level: "B2", ipa: "/ˈpɑːtəri/", meaning: "nghề làm gốm, xưởng gốm" },
-      { word: "demonstrate", pos: "v", level: "B2", ipa: "/ˈdemənstreɪt/", meaning: "trình diễn, hướng dẫn" },
-    ],
+    "correctAnswer": "B",
+    "explanation": "Người đàn ông đang đứng cạnh xe, tay nắm cửa, xung quanh và trên xe phủ tuyết.",
+    "trapNote": "Bẫy hành động chưa xảy ra: Không cầm xẻng xúc tuyết (shoveling) hay quét tuyết nóc xe.",
+    "vocabList": [
+      {
+        "word": "brush off",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/brʌʃ ɔːf/",
+        "meaning": "phủi đi, quét sạch"
+      },
+      {
+        "word": "shovel",
+        "pos": "v",
+        "level": "B2",
+        "ipa": "/ˈʃʌvl/",
+        "meaning": "xúc tuyết"
+      },
+      {
+        "word": "driveway",
+        "pos": "n",
+        "level": "B1",
+        "ipa": "/ˈdraɪvweɪ/",
+        "meaning": "lối đi cho xe"
+      }
+    ]
   },
   {
-    id: 6,
-    part: "Part 3",
-    question: "What does the speaker imply when she says, \"you've worked here for five months now\"?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "You've worked here for five months now, so you should be familiar with this.",
-    vietnameseTranslation: "Bạn đã làm việc ở đây 5 tháng rồi, nên bạn đã đủ khả năng thực hiện.",
-    options: {
-      A: "The listener is capable of doing a task.",
-      B: "The listener should apply for a promotion.",
-      C: "The listener is taking too long to complete a project.",
-      D: "The listener qualifies for a salary raise.",
+    "id": 3,
+    "part": "Part 2",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q7.mp3",
+    "question": "How old is this building?",
+    "fullTranscript": "How old is this building? (A) To ship some materials. (B) About 10 years old. (C) Company offices I think.",
+    "vietnameseTranslation": "Tòa nhà này bao nhiêu tuổi? (A) Để vận chuyển một số vật liệu. (B) Khoảng 10 tuổi. (C) Tôi nghĩ là văn phòng công ty.",
+    "options": {
+      "A": "To ship some materials.",
+      "B": "About 10 years old.",
+      "C": "Company offices I think."
     },
-    optionTranslations: {
-      A: "Người nghe đủ khả năng thực hiện công việc.",
-      B: "Người nghe nên nộp đơn xin thăng chức.",
-      C: "Người nghe tốn quá nhiều thời gian hoàn thành dự án.",
-      D: "Người nghe đủ điều kiện tăng lương.",
+    "optionTranslations": {
+      "A": "Để vận chuyển một số vật liệu.",
+      "B": "Khoảng 10 tuổi.",
+      "C": "Tôi nghĩ là văn phòng công ty."
     },
-    correctAnswer: "A",
-    explanation: "Câu nói ngụ ý người nghe đã làm 5 tháng nên hoàn toàn đủ khả năng tự hoàn thành nhiệm vụ.",
+    "correctAnswer": "B",
+    "explanation": "Câu hỏi lý do hoặc cách thức (How). Phương án (B) 'About 10 years old.' giải thích nguyên nhân hoặc hướng xử lý phù hợp.",
+    "trapNote": "Bẫy từ vựng cùng trường nghĩa nhưng trả lời lạc đề câu hỏi.",
+    "vocabList": [
+      {
+        "word": "schedule",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/ˈʃedjuːl/",
+        "meaning": "lên lịch, sắp xếp"
+      },
+      {
+        "word": "confirm",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/kənˈfɜːm/",
+        "meaning": "xác nhận"
+      }
+    ]
   },
   {
-    id: 7,
-    part: "Part 3",
-    question: "What will the speakers do next?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "Now let's head over to the kiln room to inspect the fired clay products.",
-    vietnameseTranslation: "Bây giờ chúng ta hãy cùng sang phòng lò nung để hướng dẫn kỹ thuật.",
-    options: {
-      A: "Inspect an oven",
-      B: "Review a contract",
-      C: "Clean a storage room",
-      D: "Demonstrate a technique",
+    "id": 4,
+    "part": "Part 2",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q8.mp3",
+    "question": "Can you come to my jazz performance tonight?",
+    "fullTranscript": "Can you come to my jazz performance tonight? (A) I'm sorry I was late for the meeting. (B) Mostly just local musicians. (C) Sure I'll be there.",
+    "vietnameseTranslation": "Bạn có thể đến buổi biểu diễn nhạc jazz của tôi tối nay được không? (A) Tôi xin lỗi vì đã đến trễ cuộc họp. (B) Chủ yếu chỉ là nhạc sĩ địa phương. (C) Chắc chắn tôi sẽ ở đó.",
+    "options": {
+      "A": "I'm sorry I was late for the meeting.",
+      "B": "Mostly just local musicians.",
+      "C": "Sure I'll be there."
     },
-    optionTranslations: {
-      A: "Kiểm tra lò nung",
-      B: "Xem xét hợp đồng",
-      C: "Dọn dẹp phòng kho",
-      D: "Trình diễn một kỹ thuật mới",
+    "optionTranslations": {
+      "A": "Tôi xin lỗi vì đã đến muộn cuộc họp.",
+      "B": "Chủ yếu chỉ là nhạc sĩ địa phương.",
+      "C": "Chắc chắn tôi sẽ ở đó."
     },
-    correctAnswer: "D",
-    explanation: "Người nói mời tiếp tục theo dõi buổi thực hành trình diễn kỹ thuật.",
-  },
-  // Part 4 - Set 95-97
-  {
-    id: 8,
-    part: "Part 4",
-    question: "What is the main purpose of the announcement?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "Attention all staff, routine elevator maintenance is scheduled for this Friday.",
-    vietnameseTranslation: "Xin chú ý, lịch bảo trì thang máy định kỳ sẽ diễn ra vào thứ Sáu.",
-    options: {
-      A: "To report a schedule delay",
-      B: "To introduce a new department head",
-      C: "To announce a facility maintenance schedule",
-      D: "To invite staff to a company picnic",
-    },
-    optionTranslations: {
-      A: "Báo cáo việc chậm lịch trình",
-      B: "Giới thiệu trưởng bộ phận mới",
-      C: "Thông báo lịch bảo trì cơ sở vật chất",
-      D: "Mời nhân viên tham gia dã ngoại công ty",
-    },
-    correctAnswer: "C",
-    explanation: "Thông báo về việc bảo trì thang máy tòa nhà.",
+    "correctAnswer": "C",
+    "explanation": "Câu hỏi nghi vấn trợ động từ. Phương án (C) 'Sure I'll be there.' đưa ra phản hồi đồng ý, từ chối hoặc xác nhận thông tin chuẩn xác.",
+    "trapNote": "Bẫy lệch thì hoặc bẫy nhầm đại từ nhân xưng (he/she/they).",
+    "vocabList": [
+      {
+        "word": "schedule",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/ˈʃedjuːl/",
+        "meaning": "lên lịch, sắp xếp"
+      },
+      {
+        "word": "confirm",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/kənˈfɜːm/",
+        "meaning": "xác nhận"
+      }
+    ]
   },
   {
-    id: 9,
-    part: "Part 4",
-    question: "According to the speaker, what should employees do before Friday?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "Please archive all client files properly before Friday noon.",
-    vietnameseTranslation: "Vui lòng lưu trữ các tệp hồ sơ khách hàng trước trưa thứ Sáu.",
-    options: {
-      A: "Submit time sheets",
-      B: "Archive client files",
-      C: "Confirm hotel reservations",
-      D: "Update passwords",
+    "id": 5,
+    "part": "Part 3",
+    "question": "What eventdoesthe womanmention?",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q32_34.mp3",
+    "fullTranscript": "Thank you so much for organizing the annual company picnic jingle everybody seemed to enjoy it well we deserved it after working so hard this year I agree the food was great by the way especially the peach pie you made would you mind sharing the recipe it was delicious I found the recipe online I'll send you a link to the webpage there's a really helpful video that walks you through all the steps I recommend you watch it first all right thanks",
+    "vietnameseTranslation": "Cảm ơn bạn rất nhiều vì đã tổ chức buổi dã ngoại công ty hàng năm, mọi người dường như rất thích nó, chúng tôi xứng đáng được như vậy sau khi đã làm việc rất chăm chỉ trong năm nay. Tôi đồng ý rằng đồ ăn rất tuyệt, đặc biệt là món bánh đào bạn làm, bạn có phiền khi chia sẻ công thức nó rất ngon. Tôi đã tìm thấy công thức trên mạng. Tôi sẽ gửi cho bạn một liên kết đến trang web, có một video thực sự hữu ích hướng dẫn bạn qua tất cả các bước. Tôi khuyên bạn nên xem nó trước, cảm ơn.",
+    "options": {
+      "A": "Ajobfair",
+      "B": "A cooking class",
+      "C": "A fund-raiser",
+      "D": "A company picnic"
     },
-    optionTranslations: {
-      A: "Nộp bảng chấm công",
-      B: "Lưu trữ tệp hồ sơ khách hàng",
-      C: "Xác định đặt phòng khách sạn",
-      D: "Cập nhật mật khẩu",
+    "optionTranslations": {
+      "A": "hội chợ việc làm",
+      "B": "Lớp học nấu ăn",
+      "C": "Người gây quỹ",
+      "D": "Một chuyến dã ngoại của công ty"
     },
-    correctAnswer: "B",
-    explanation: "Yêu cầu nhân viên lưu trữ hồ sơ client files.",
+    "correctAnswer": "D",
+    "explanation": "Từ nội dung đối thoại, người nói đề cập trực tiếp đến thông tin liên quan đến phương án (D) 'A company picnic' (Chuyến dã ngoại của công ty).",
+    "vocabList": [
+      {
+        "word": "recommend",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/ˌrekəˈmend/",
+        "meaning": "khuyên, đề xuất"
+      }
+    ]
   },
   {
-    id: 10,
-    part: "Part 4",
-    question: "What will happen at 5:00 PM?",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    fullTranscript: "The main elevators will be shut down at 5:00 PM.",
-    vietnameseTranslation: "Thang máy chính sẽ ngừng hoạt động lúc 5:00 chiều.",
-    options: {
-      A: "The elevators will be shut down",
-      B: "The main lobby will be closed",
-      C: "A staff meeting will commence",
-      D: "A system backup will run",
+    "id": 6,
+    "part": "Part 3",
+    "question": "Whatdoes the womanask for?",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q32_34.mp3",
+    "fullTranscript": "Thank you so much for organizing the annual company picnic jingle everybody seemed to enjoy it well we deserved it after working so hard this year I agree the food was great by the way especially the peach pie you made would you mind sharing the recipe it was delicious I found the recipe online I'll send you a link to the webpage there's a really helpful video that walks you through all the steps I recommend you watch it first all right thanks",
+    "vietnameseTranslation": "Cảm ơn bạn rất nhiều vì đã tổ chức buổi dã ngoại công ty hàng năm, mọi người dường như rất thích nó, chúng tôi xứng đáng được như vậy sau khi đã làm việc rất chăm chỉ trong năm nay. Tôi đồng ý rằng đồ ăn rất tuyệt, đặc biệt là món bánh đào bạn làm, bạn có phiền khi chia sẻ công thức nó rất ngon. Tôi đã tìm thấy công thức trên mạng. Tôi sẽ gửi cho bạn một liên kết đến trang web, có một video thực sự hữu ích hướng dẫn bạn qua tất cả các bước. Tôi khuyên bạn nên xem nó trước, cảm ơn.",
+    "options": {
+      "A": "Aguest list",
+      "B": "A dessert recipe",
+      "C": "A business card",
+      "D": "A promotional code"
     },
-    optionTranslations: {
-      A: "Thang máy sẽ ngừng hoạt động",
-      B: "Sảnh chính sẽ bị đóng cửa",
-      C: "Cuộc họp nhân viên sẽ bắt đầu",
-      D: "Hệ thống sẽ chạy sao lưu",
+    "optionTranslations": {
+      "A": "Danh sách khách mời",
+      "B": "Một công thức món tráng miệng",
+      "C": "Một danh thiếp",
+      "D": "Mã khuyến mại"
     },
-    correctAnswer: "A",
-    explanation: "Thang máy chính ngắt điện bảo trì từ 5:00 chiều.",
+    "correctAnswer": "B",
+    "explanation": "Từ nội dung đối thoại, người nói đề cập trực tiếp đến thông tin liên quan đến phương án (B) 'A dessert recipe' (Một công thức món tráng miệng).",
+    "vocabList": [
+      {
+        "word": "recommend",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/ˌrekəˈmend/",
+        "meaning": "khuyên, đề xuất"
+      }
+    ]
   },
+  {
+    "id": 7,
+    "part": "Part 3",
+    "question": "Whatdoes the manrecommend doing?",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q32_34.mp3",
+    "fullTranscript": "Thank you so much for organizing the annual company picnic jingle everybody seemed to enjoy it well we deserved it after working so hard this year I agree the food was great by the way especially the peach pie you made would you mind sharing the recipe it was delicious I found the recipe online I'll send you a link to the webpage there's a really helpful video that walks you through all the steps I recommend you watch it first all right thanks",
+    "vietnameseTranslation": "Cảm ơn bạn rất nhiều vì đã tổ chức buổi dã ngoại công ty hàng năm, mọi người dường như rất thích nó, chúng tôi xứng đáng được như vậy sau khi đã làm việc rất chăm chỉ trong năm nay. Tôi đồng ý rằng đồ ăn rất tuyệt, đặc biệt là món bánh đào bạn làm, bạn có phiền khi chia sẻ công thức nó rất ngon. Tôi đã tìm thấy công thức trên mạng. Tôi sẽ gửi cho bạn một liên kết đến trang web, có một video thực sự hữu ích hướng dẫn bạn qua tất cả các bước. Tôi khuyên bạn nên xem nó trước, cảm ơn.",
+    "options": {
+      "A": "Returning some merchandise",
+      "B": "Watching a video",
+      "C": "Creating an account",
+      "D": "Reading a review"
+    },
+    "optionTranslations": {
+      "A": "Trả lại một số hàng hóa",
+      "B": "Đang xem video",
+      "C": "Tạo tài khoản",
+      "D": "Đọc đánh giá"
+    },
+    "correctAnswer": "B",
+    "explanation": "Từ nội dung đối thoại, người nói đề cập trực tiếp đến thông tin liên quan đến phương án (B) 'Watching a video' (Xem video).",
+    "vocabList": [
+      {
+        "word": "recommend",
+        "pos": "v",
+        "level": "B1",
+        "ipa": "/ˌrekəˈmend/",
+        "meaning": "khuyên, đề xuất"
+      },
+      {
+        "word": "merchandise",
+        "pos": "n",
+        "level": "B2",
+        "ipa": "/ˈmɜːrtʃəndaɪs/",
+        "meaning": "hàng hóa thương mại"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "part": "Part 4",
+    "question": "Whohas recordedthemessage?",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q71_73.mp3",
+    "fullTranscript": "You have reached the information line for the cranberry Apartments management office on Monday April 12th maintenance work will begin to repay the entire parking area adjacent to our buildings main entrance all cranberry residents should move buildings main entrance all cranberry residents should move their vehicles from their designated parking spots before 8:00 a.m. on Monday any Vehicles still in its spot after 8:00 a.m. will be towed at the owner's expense a map of alternate parking sites was mailed to residents last week and is also posted in the building Lobby",
+    "vietnameseTranslation": "Bạn đã đến đường dây thông tin của văn phòng quản lý Căn hộ cranberry vào Thứ Hai, ngày 12 tháng 4, công việc bảo trì sẽ bắt đầu hoàn trả toàn bộ khu vực đậu xe gần lối vào chính của tòa nhà của chúng tôi. Tất cả cư dân cranberry nên di chuyển lối vào chính của tòa nhà. Tất cả cư dân cranberry nên di chuyển phương tiện của mình khỏi điểm đậu xe được chỉ định trước 8 giờ sáng Thứ Hai. Bất kỳ phương tiện nào vẫn ở vị trí đó sau 8 giờ sáng sẽ được kéo bằng chi phí của chủ sở hữu. Bản đồ các địa điểm đỗ xe thay thế đã được gửi cho cư dân vào tuần trước và cũng sẽ được đăng tại sảnh tòa nhà",
+    "options": {
+      "A": "Acitymayor'soffice",
+      "B": "Amaintenance department",
+      "C": "An automobile dealership",
+      "D": "A building management office"
+    },
+    "optionTranslations": {
+      "A": "Văn phòng của thị trưởng thành phố",
+      "B": "Bộ phận bảo trì",
+      "C": "Một đại lý ô tô",
+      "D": "Văn phòng quản lý tòa nhà"
+    },
+    "correctAnswer": "D",
+    "explanation": "Từ nội dung bài nói, người nói đề cập trực tiếp đến thông tin liên quan đến phương án (D) 'A building management office' (Một văn phòng quản lý tòa nhà).",
+    "vocabList": [
+      {
+        "word": "maintenance",
+        "pos": "n",
+        "level": "B2",
+        "ipa": "/ˈmeɪntənəns/",
+        "meaning": "sự bảo trì, bảo dưỡng"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "part": "Part 4",
+    "question": "What are the listeners asked to do?",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q71_73.mp3",
+    "fullTranscript": "You have reached the information line for the cranberry Apartments management office on Monday April 12th maintenance work will begin to repay the entire parking area adjacent to our buildings main entrance all cranberry residents should move buildings main entrance all cranberry residents should move their vehicles from their designated parking spots before 8:00 a.m. on Monday any Vehicles still in its spot after 8:00 a.m. will be towed at the owner's expense a map of alternate parking sites was mailed to residents last week and is also posted in the building Lobby",
+    "vietnameseTranslation": "Bạn đã đến đường dây thông tin của văn phòng quản lý Căn hộ cranberry vào Thứ Hai, ngày 12 tháng 4, công việc bảo trì sẽ bắt đầu hoàn trả toàn bộ khu vực đậu xe gần lối vào chính của tòa nhà của chúng tôi. Tất cả cư dân cranberry nên di chuyển lối vào chính của tòa nhà. Tất cả cư dân cranberry nên di chuyển phương tiện của mình khỏi điểm đậu xe được chỉ định trước 8 giờ sáng Thứ Hai. Bất kỳ phương tiện nào vẫn ở vị trí đó sau 8 giờ sáng sẽ được kéo bằng chi phí của chủ sở hữu. Bản đồ các địa điểm đỗ xe thay thế đã được gửi cho cư dân vào tuần trước và cũng sẽ được đăng tại sảnh tòa nhà",
+    "options": {
+      "A": "Move their vehicies",
+      "B": "Pay their parking fines",
+      "C": "Use an alternate entrance",
+      "D": "Participate in a meeting"
+    },
+    "optionTranslations": {
+      "A": "Di chuyển phương tiện của họ",
+      "B": "Trả tiền phạt đỗ xe",
+      "C": "Sử dụng một lối vào thay thế",
+      "D": "Tham gia cuộc họp"
+    },
+    "correctAnswer": "A",
+    "explanation": "Từ nội dung bài nói, người nói đề cập trực tiếp đến thông tin liên quan đến phương án (A) 'Move their vehicies' (Di chuyển phương tiện của họ).",
+    "vocabList": [
+      {
+        "word": "maintenance",
+        "pos": "n",
+        "level": "B2",
+        "ipa": "/ˈmeɪntənəns/",
+        "meaning": "sự bảo trì, bảo dưỡng"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "part": "Part 4",
+    "question": "What does the speaker say was mailed last week?",
+    "audioUrl": "/api/media/ETS 2024/Audio_Cat_Tung_Cau/Test_01/q71_73.mp3",
+    "fullTranscript": "You have reached the information line for the cranberry Apartments management office on Monday April 12th maintenance work will begin to repay the entire parking area adjacent to our buildings main entrance all cranberry residents should move buildings main entrance all cranberry residents should move their vehicles from their designated parking spots before 8:00 a.m. on Monday any Vehicles still in its spot after 8:00 a.m. will be towed at the owner's expense a map of alternate parking sites was mailed to residents last week and is also posted in the building Lobby",
+    "vietnameseTranslation": "Bạn đã đến đường dây thông tin của văn phòng quản lý Căn hộ cranberry vào Thứ Hai, ngày 12 tháng 4, công việc bảo trì sẽ bắt đầu hoàn trả toàn bộ khu vực đậu xe gần lối vào chính của tòa nhà của chúng tôi. Tất cả cư dân cranberry nên di chuyển lối vào chính của tòa nhà. Tất cả cư dân cranberry nên di chuyển phương tiện của mình khỏi điểm đậu xe được chỉ định trước 8 giờ sáng Thứ Hai. Bất kỳ phương tiện nào vẫn ở vị trí đó sau 8 giờ sáng sẽ được kéo bằng chi phí của chủ sở hữu. Bản đồ các địa điểm đỗ xe thay thế đã được gửi cho cư dân vào tuần trước và cũng sẽ được đăng tại sảnh tòa nhà",
+    "options": {
+      "A": "Anelectionballot",
+      "B": "A maintenance plan",
+      "C": "A map",
+      "D": "A coupon"
+    },
+    "optionTranslations": {
+      "A": "Một lá phiếu bầu cử",
+      "B": "Kế hoạch bảo trì",
+      "C": "Một bản đồ",
+      "D": "Một phiếu giảm giá"
+    },
+    "correctAnswer": "C",
+    "explanation": "Từ nội dung bài nói, người nói đề cập trực tiếp đến thông tin liên quan đến phương án (C) 'A map' (Một bản đồ).",
+    "vocabList": [
+      {
+        "word": "maintenance",
+        "pos": "n",
+        "level": "B2",
+        "ipa": "/ˈmeɪntənəns/",
+        "meaning": "sự bảo trì, bảo dưỡng"
+      }
+    ]
+  }
 ];
+
+// --- ETS 2023 DICTATION CARDS (9 TESTS x 4 PARTS = 36 CARDS) ---
+export const ETS_2023_DICTATION_CARDS: DictationCardData[] = [];
+for (let t = 1; t <= 9; t++) {
+  const tPad = String(t).padStart(2, "0");
+  const parts = [
+    { part: "Part 1" as const, total: 6, qIdxs: [0, 1], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q1.mp3` },
+    { part: "Part 2" as const, total: 25, qIdxs: [2, 3], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q7.mp3` },
+    { part: "Part 3" as const, total: 39, qIdxs: [4, 5, 6], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q32_34.mp3` },
+    { part: "Part 4" as const, total: 30, qIdxs: [7, 8, 9], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q71_73.mp3` },
+  ];
+  for (const p of parts) {
+    ETS_2023_DICTATION_CARDS.push({
+      id: `ets2023-t${t}-p${p.part.replace("Part ", "")}`,
+      testNumber: t,
+      part: p.part,
+      year: "2023",
+      totalQuestions: p.total,
+      completedQuestions: 0,
+      status: "Chưa bắt đầu",
+      notesCount: 0,
+      vocabItems: [
+        { word: "agenda", ipa: "/əˈdʒendə/", meaning: "Chương trình nghị sự buổi họp", example: "Review the agenda beforehand." },
+        { word: "delegate", ipa: "/ˈdelɪɡət/", meaning: "Đại biểu tham dự", example: "Welcoming 500 delegates." },
+      ],
+      questions: p.qIdxs.map((idx) => {
+        const base = SAMPLE_DICTATION_QUESTIONS[idx] || SAMPLE_DICTATION_QUESTIONS[0];
+        return {
+          ...base,
+          audioUrl: p.audio,
+        };
+      }),
+    });
+  }
+}
+
+// --- ETS 2022 DICTATION CARDS (10 TESTS x 4 PARTS = 40 CARDS) ---
+export const ETS_2022_DICTATION_CARDS: DictationCardData[] = [];
+for (let t = 1; t <= 10; t++) {
+  const tPad = String(t).padStart(2, "0");
+  const parts = [
+    { part: "Part 1" as const, total: 6, qIdxs: [0, 1], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q1.mp3`, image: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q1.jpg` },
+    { part: "Part 2" as const, total: 25, qIdxs: [2, 3], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q7.mp3` },
+    { part: "Part 3" as const, total: 39, qIdxs: [4, 5, 6], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q32_34.mp3` },
+    { part: "Part 4" as const, total: 30, qIdxs: [7, 8, 9], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q71_73.mp3` },
+  ];
+  for (const p of parts) {
+    ETS_2022_DICTATION_CARDS.push({
+      id: `ets2022-t${t}-p${p.part.replace("Part ", "")}`,
+      testNumber: t,
+      part: p.part,
+      year: "2022",
+      totalQuestions: p.total,
+      completedQuestions: 0,
+      status: "Chưa bắt đầu",
+      notesCount: 0,
+      vocabItems: [
+        { word: "reimbursement", ipa: "/ˌriːɪmˈbɜːrsmənt/", meaning: "Khoản hoàn tiền công tác phí", example: "Submit receipts for reimbursement." },
+        { word: "itinerary", ipa: "/aɪˈtɪnəreri/", meaning: "Lịch trình công tác chi tiết", example: "Check your flight itinerary." },
+      ],
+      questions: p.qIdxs.map((idx) => {
+        const base = SAMPLE_DICTATION_QUESTIONS[idx] || SAMPLE_DICTATION_QUESTIONS[0];
+        return {
+          ...base,
+          audioUrl: p.audio,
+          imageUrl: p.image || base.imageUrl,
+        };
+      }),
+    });
+  }
+}
 
 export const INITIAL_DICTATION_CARDS: DictationCardData[] = [
   ...ETS_2024_DICTATION_CARDS,
   ...ETS_2024_PART2_DICTATION_CARDS,
   ...ETS_2024_PART3_DICTATION_CARDS,
   ...ETS_2024_PART4_DICTATION_CARDS,
-  // Test 1
-  {
-    id: "t1-p1",
-    testNumber: 1,
-    part: "Part 1",
-    year: "2026",
-    totalQuestions: 24,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [
-      { word: "boardroom", ipa: "/ˈbɔːrdruːm/", meaning: "Phòng họp ban giám đốc", example: "The executives gathered in the boardroom." },
-      { word: "stacked", ipa: "/stækt/", meaning: "Được xếp chồng lên nhau", example: "Boxes were stacked neatly." },
-    ],
-    questions: [SAMPLE_DICTATION_QUESTIONS[0], SAMPLE_DICTATION_QUESTIONS[1]],
-  },
-  {
-    id: "t1-p2",
-    testNumber: 1,
-    part: "Part 2",
-    year: "2026",
-    totalQuestions: 100,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [
-      { word: "audit", ipa: "/ˈɔːdɪt/", meaning: "Kiểm toán tài chính", example: "An annual audit is required." },
-      { word: "postpone", ipa: "/poʊˈspoʊn/", meaning: "Hoãn lại lịch trình", example: "The summit was postponed." },
-    ],
-    questions: [SAMPLE_DICTATION_QUESTIONS[2], SAMPLE_DICTATION_QUESTIONS[3]],
-  },
-  {
-    id: "t1-p3",
-    testNumber: 1,
-    part: "Part 3",
-    year: "2026",
-    totalQuestions: 111,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [
-      { word: "expedited", ipa: "/ˈekspədaɪtɪd/", meaning: "Hỏa tốc, xúc tiến nhanh", example: "We paid for expedited freight." },
-    ],
-    questions: [SAMPLE_DICTATION_QUESTIONS[4], SAMPLE_DICTATION_QUESTIONS[5], SAMPLE_DICTATION_QUESTIONS[6]],
-  },
-  {
-    id: "t1-p4",
-    testNumber: 1,
-    part: "Part 4",
-    year: "2026",
-    totalQuestions: 75,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [
-      { word: "relocate", ipa: "/ˌriːˈloʊkeɪt/", meaning: "Chuyển địa điểm, dời chỗ", example: "The boarding gate was relocated." },
-    ],
-    questions: [SAMPLE_DICTATION_QUESTIONS[7], SAMPLE_DICTATION_QUESTIONS[8], SAMPLE_DICTATION_QUESTIONS[9]],
-  },
-  // Test 2
-  {
-    id: "t2-p1",
-    testNumber: 2,
-    part: "Part 1",
-    year: "2026",
-    totalQuestions: 24,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[0], SAMPLE_DICTATION_QUESTIONS[1]],
-  },
-  {
-    id: "t2-p2",
-    testNumber: 2,
-    part: "Part 2",
-    year: "2026",
-    totalQuestions: 100,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[2], SAMPLE_DICTATION_QUESTIONS[3]],
-  },
-  {
-    id: "t2-p3",
-    testNumber: 2,
-    part: "Part 3",
-    year: "2026",
-    totalQuestions: 132,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[4], SAMPLE_DICTATION_QUESTIONS[5], SAMPLE_DICTATION_QUESTIONS[6]],
-  },
-  {
-    id: "t2-p4",
-    testNumber: 2,
-    part: "Part 4",
-    year: "2026",
-    totalQuestions: 79,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[7], SAMPLE_DICTATION_QUESTIONS[8], SAMPLE_DICTATION_QUESTIONS[9]],
-  },
-  // Test 3
-  {
-    id: "t3-p1",
-    testNumber: 3,
-    part: "Part 1",
-    year: "2026",
-    totalQuestions: 24,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[0], SAMPLE_DICTATION_QUESTIONS[1]],
-  },
-  {
-    id: "t3-p2",
-    testNumber: 3,
-    part: "Part 2",
-    year: "2026",
-    totalQuestions: 100,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[2], SAMPLE_DICTATION_QUESTIONS[3]],
-  },
-  {
-    id: "t3-p3",
-    testNumber: 3,
-    part: "Part 3",
-    year: "2026",
-    totalQuestions: 120,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[4], SAMPLE_DICTATION_QUESTIONS[5], SAMPLE_DICTATION_QUESTIONS[6]],
-  },
-  {
-    id: "t3-p4",
-    testNumber: 3,
-    part: "Part 4",
-    year: "2026",
-    totalQuestions: 82,
-    completedQuestions: 0,
-    status: "Chưa bắt đầu",
-    notesCount: 0,
-    vocabItems: [],
-    questions: [SAMPLE_DICTATION_QUESTIONS[7], SAMPLE_DICTATION_QUESTIONS[8], SAMPLE_DICTATION_QUESTIONS[9]],
-  },
+  ...ETS_2023_DICTATION_CARDS,
+  ...ETS_2022_DICTATION_CARDS,
 ];
 
 export const INITIAL_PART1_LEVELS: LevelCategoryCardData[] = ETS_2024_PART1_LEVELS;
@@ -472,14 +531,8 @@ export const INITIAL_PART1_CATEGORIES: LevelCategoryCardData[] = [
 ];
 
 export const INITIAL_PART2_LEVELS: LevelCategoryCardData[] = ETS_2024_PART2_LEVELS;
-
 export const INITIAL_PART2_CATEGORIES: LevelCategoryCardData[] = ETS_2024_PART2_CATEGORIES;
-
 export const INITIAL_PART3_LEVELS: LevelCategoryCardData[] = ETS_2024_PART3_LEVELS;
-
 export const INITIAL_PART3_CATEGORIES: LevelCategoryCardData[] = ETS_2024_PART3_CATEGORIES;
-
 export const INITIAL_PART4_LEVELS: LevelCategoryCardData[] = ETS_2024_PART4_LEVELS;
-
 export const INITIAL_PART4_CATEGORIES: LevelCategoryCardData[] = ETS_2024_PART4_CATEGORIES;
-

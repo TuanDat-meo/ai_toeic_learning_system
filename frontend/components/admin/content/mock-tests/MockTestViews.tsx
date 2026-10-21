@@ -284,7 +284,8 @@ export const MockTestScoreConversionView: React.FC = () => {
 interface CollectionsViewProps {
   vol1Count: number;
   vol2Count: number;
-  onNavigateToTests?: (volId: "vol1" | "vol2") => void;
+  vol3Count?: number;
+  onNavigateToTests?: (volId: "vol1" | "vol2" | "vol3") => void;
 }
 
 interface CollectionDetailItem {
@@ -311,6 +312,7 @@ interface CollectionDetailItem {
 export const MockTestCollectionsView: React.FC<CollectionsViewProps> = ({
   vol1Count,
   vol2Count,
+  vol3Count = 10,
   onNavigateToTests,
 }) => {
   const [selectedCol, setSelectedCol] = useState<CollectionDetailItem | null>(null);
@@ -318,7 +320,7 @@ export const MockTestCollectionsView: React.FC<CollectionsViewProps> = ({
   const collections: CollectionDetailItem[] = [
     {
       id: "col-vol1",
-      name: "Crack TOEIC Vol 1",
+      name: "ETS TOEIC 2024 Official",
       publisher: "ETS Academic Publisher",
       testsCount: vol1Count,
       year: "2024",
@@ -338,7 +340,7 @@ export const MockTestCollectionsView: React.FC<CollectionsViewProps> = ({
     },
     {
       id: "col-vol2",
-      name: "Crack TOEIC Vol 2",
+      name: "ETS TOEIC 2023 Official",
       publisher: "ETS Academic Publisher",
       testsCount: vol2Count,
       year: "2025",

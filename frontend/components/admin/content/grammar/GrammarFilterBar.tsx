@@ -23,8 +23,6 @@ interface GrammarFilterBarProps {
   setSearchQuery: (q: string) => void;
   filterPart: string;
   setFilterPart: (p: string) => void;
-  filterScore: string;
-  setFilterScore: (s: string) => void;
   filterStatus: string;
   setFilterStatus: (st: string) => void;
   viewMode: "table" | "grid";
@@ -46,8 +44,6 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
   setSearchQuery,
   filterPart,
   setFilterPart,
-  filterScore,
-  setFilterScore,
   filterStatus,
   setFilterStatus,
   viewMode,
@@ -73,9 +69,6 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[30px]">
             Quản lý chuyên đề ngữ pháp TOEIC
           </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
-            Hệ thống quản trị chuyên đề Part 5 &amp; 6, ngân hàng câu hỏi phân loại, ma trận bẫy đề và thống kê làm bài.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
@@ -182,16 +175,6 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
                 <option value="Part 7">Part 7 (Đọc hiểu & Cấu trúc câu)</option>
               </select>
 
-              <select
-                value={filterScore}
-                onChange={(e) => setFilterScore(e.target.value)}
-                className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
-              >
-                <option value="ALL">Tất cả mục tiêu điểm</option>
-                <option value="350-500">Mục tiêu 350 - 500</option>
-                <option value="500-750">Mục tiêu 500 - 750</option>
-                <option value="750+">Mục tiêu 750+</option>
-              </select>
 
               <select
                 value={filterStatus}
@@ -272,3 +255,4 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
     </div>
   );
 };
+

@@ -188,19 +188,40 @@ public class GrammarService {
 
     @Transactional
     public void saveProgress(UUID userId, String topicId, int completed, int total, String status) {
-        if (userId == null) return;
+        if (userId == null || topicId == null || topicId.isBlank()) return;
 
-        String upsert = """
-                INSERT INTO user_grammar_progress (user_id, topic_id, completed_questions, total_questions, status, updated_at)
-                VALUES (?, ?, ?, ?, ?, now())
-                ON CONFLICT (user_id, topic_id) DO UPDATE SET
-                    completed_questions = EXCLUDED.completed_questions,
-                    total_questions = EXCLUDED.total_questions,
-                    status = EXCLUDED.status,
-                    updated_at = now()
-                """;
+        String normalizedStatus = "NOT_STARTED";
+        if ("COMPLETED".equalsIgnoreCase(status) || "Đã hoàn thành".equalsIgnoreCase(status) || (total > 0 && completed >= total)) {
+            normalizedStatus = "COMPLETED";
+        } else if ("IN_PROGRESS".equalsIgnoreCase(status) || "Đang học".equalsIgnoreCase(status) || completed > 0) {
+            normalizedStatus = "IN_PROGRESS";
+        }
 
-        jdbc.update(upsert, userId, topicId, completed, total, status);
+        try {
+            Integer exists = jdbc.queryForObject("SELECT count(*) FROM grammar_topics WHERE id = ?", Integer.class, topicId);
+            if (exists == null || exists == 0) {
+                String code = topicId.toUpperCase().replace("-", "_");
+                jdbc.update("""
+                        INSERT INTO grammar_topics (id, code, title, english_title, part, target_score, status, summary, formula, signal_words, traps, examples, questions, order_index, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, 'Part 5', '350-500', 'PUBLISHED', '', '', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0, now(), now())
+                        ON CONFLICT (id) DO NOTHING
+                        """, topicId, code, "Chuyên đề " + topicId, "Topic " + topicId);
+            }
+
+            String upsert = """
+                    INSERT INTO user_grammar_progress (user_id, topic_id, completed_questions, total_questions, status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, now())
+                    ON CONFLICT (user_id, topic_id) DO UPDATE SET
+                        completed_questions = EXCLUDED.completed_questions,
+                        total_questions = EXCLUDED.total_questions,
+                        status = EXCLUDED.status,
+                        updated_at = now()
+                    """;
+
+            jdbc.update(upsert, userId, topicId, completed, total, normalizedStatus);
+        } catch (Exception e) {
+            System.err.println("Failed to save grammar progress for user " + userId + " topic " + topicId + ": " + e.getMessage());
+        }
     }
 
     @Transactional

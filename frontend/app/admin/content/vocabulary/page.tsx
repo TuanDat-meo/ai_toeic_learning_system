@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Sparkles } from "lucide-react";
 import { WordItem, VocabularyTestSet, TestItem } from "./types";
 import { CONTENT_STATUS_LABEL } from "@/lib/types/domain";
+import { exportToExcel } from "@/lib/exportExcel";
 import { SAMPLE_WORDS, INITIAL_TESTS } from "./mockData";
 import {
   getAdminVocabularySets,
@@ -110,27 +111,72 @@ export default function VocabularyLearningPage() {
 
   // Export CSV
   const handleExportCsv = () => {
-    const csvRows = [
-      ["ID", "Tên bộ từ", "Năm / Danh mục", "Số lượng từ", "Trạng thái"],
-      ...tests.map((t) => [
-        t.id,
-        `"${(t.nameVi || t.title || "").replace(/"/g, '""')}"`,
-        t.year ?? t.category,
-        t.wordCount,
-        (t.status && (CONTENT_STATUS_LABEL as Record<string, string>)[t.status]) ?? t.status ?? "DRAFT",
-      ]),
-    ];
-    const csvContent =
-      "data:text/csv;charset=utf-8,\uFEFF" +
-      csvRows.map((e) => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `danh_sach_bo_tu_vung_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Đã xuất danh sách bộ từ vựng ra file CSV thành công! 📊");
+    const wordsToExport: Array<Record<string, any>> = [];
+    let stt = 1;
+
+    tests.forEach((t) => {
+      const setName = t.nameVi || t.title || t.name || "Bộ từ vựng";
+      const setCategory = t.year ? `ETS ${t.year}` : t.category || "Cơ bản";
+      const setStatus = (t.status && (CONTENT_STATUS_LABEL as Record<string, string>)[t.status]) ?? t.status ?? "PUBLISHED";
+
+      if (t.words && t.words.length > 0) {
+        t.words.forEach((w) => {
+          wordsToExport.push({
+            stt: stt++,
+            setName: setName,
+            category: setCategory,
+            word: w.word,
+            ipa: w.ipa || "",
+            pos: w.partOfSpeech || w.pos || "",
+            level: w.cefrLevel || w.level || "B1",
+            meaning: w.meaning || (w.meanings && w.meanings[0]?.meaning) || "",
+            example: w.example || (w.meanings && w.meanings[0]?.example) || "",
+            exampleVi: w.exampleVi || (w.meanings && w.meanings[0]?.exampleVi) || "",
+            status: setStatus,
+          });
+        });
+      } else {
+        wordsToExport.push({
+          stt: stt++,
+          setName: setName,
+          category: setCategory,
+          word: "(Chưa có từ con)",
+          ipa: "",
+          pos: "",
+          level: "",
+          meaning: `Bộ từ gồm ${t.wordCount || 0} từ vựng`,
+          example: "",
+          exampleVi: "",
+          status: setStatus,
+        });
+      }
+    });
+
+    exportToExcel({
+      filename: `danh_sach_tu_vung_toeic_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Từ vựng TOEIC",
+      title: "HỆ THỐNG QUẢN LÝ TỪ VỰNG TIẾNG ANH TOEIC AI",
+      metadata: [
+        { label: "Ngày xuất báo cáo", value: new Date().toLocaleDateString("vi-VN") },
+        { label: "Tổng số bộ từ", value: tests.length },
+        { label: "Tổng số từ vựng", value: wordsToExport.length },
+      ],
+      columns: [
+        { header: "STT", key: "stt", width: 50, align: "center" },
+        { header: "Bộ từ vựng", key: "setName", width: 180, align: "left" },
+        { header: "Danh mục", key: "category", width: 110, align: "center" },
+        { header: "Từ vựng (Word)", key: "word", width: 140, align: "left" },
+        { header: "Phiên âm (IPA)", key: "ipa", width: 120, align: "center" },
+        { header: "Từ loại", key: "pos", width: 80, align: "center" },
+        { header: "Cấp độ", key: "level", width: 70, align: "center" },
+        { header: "Nghĩa tiếng Việt", key: "meaning", width: 220, align: "left" },
+        { header: "Câu ví dụ tiếng Anh", key: "example", width: 280, align: "left" },
+        { header: "Dịch ví dụ", key: "exampleVi", width: 250, align: "left" },
+        { header: "Trạng thái", key: "status", width: 110, align: "center" },
+      ],
+      data: wordsToExport,
+    });
+    showToast("Đã xuất danh sách từ vựng ra file Excel (.xls) có cấu trúc cột rõ ràng! 📊");
   };
 
   // Test CRUD

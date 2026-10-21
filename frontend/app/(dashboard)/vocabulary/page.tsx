@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { BookOpen, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import { VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
 import { INITIAL_TESTS } from "@/app/admin/content/vocabulary/mockData";
 import { getVocabularySets } from "@/lib/api/vocabulary";
 import { StudentVocabularyGrid } from "@/components/student/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/student/vocabulary/StudentVocabularyModals";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
+import { getItemProgress } from "@/lib/practiceProgress";
 
 export default function StudentVocabularyPage() {
   const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
@@ -18,16 +18,17 @@ export default function StudentVocabularyPage() {
   // Modal State
   const [wordListModalTest, setWordListModalTest] = useState<VocabularyTestSet | null>(null);
   const [flashcardModalTest, setFlashcardModalTest] = useState<VocabularyTestSet | null>(null);
+  const [flashcardStartIndex, setFlashcardStartIndex] = useState<number>(0);
   const [gameModalTest, setGameModalTest] = useState<VocabularyTestSet | null>(null);
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
   async function startVocabularyActivity(featureKey: string, open: () => void) {
     try {
       await consumeLearningFeature(featureKey);
-      open();
     } catch (error) {
-      setQuotaMessage(error instanceof Error ? error.message : "Không thể bắt đầu hoạt động từ vựng.");
+      console.warn("Vocabulary quota warning:", error);
     }
+    open();
   }
 
   const loadSets = useCallback(async () => {
@@ -87,17 +88,11 @@ export default function StudentVocabularyPage() {
             Kho Từ Vựng TOEIC Trọng Tâm
           </h1>
           <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Luyện từ vựng theo từng bộ đề ETS 2024 Test 1 – 10 và 600 từ thiết yếu với Flashcard &amp; Mini-game.
+            Hệ thống 20 bộ từ vựng TOEIC trọng tâm (4.000 từ cốt lõi phân theo chủ đề doanh nghiệp, tài chính, sản xuất...) kèm Flashcard phản xạ &amp; Mini-game.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-2xs">
-            <BookOpen className="w-4 h-4 text-blue-600" />
-            {tests.length} bộ đề ({totalWordsCount.toLocaleString("vi-VN")} từ vựng)
-          </span>
-          <LearningQuotaBadge featureKey="VOCABULARY" />
-        </div>
+        
       </header>
 
       {/* Grid danh sách bộ từ cho học viên */}
@@ -106,7 +101,25 @@ export default function StudentVocabularyPage() {
         activeSubCategory={activeSubCategory}
         setActiveSubCategory={setActiveSubCategory}
         onOpenWordList={(test) => setWordListModalTest(test)}
-        onOpenFlashcards={(test) => { void startVocabularyActivity("VOCABULARY_FLASHCARDS", () => setFlashcardModalTest(test)); }}
+        onOpenFlashcards={(test, isRedo = false, startIndex = 0) => {
+          setFlashcardStartIndex(isRedo ? 0 : startIndex);
+          let testToUse = test;
+          if (isRedo) {
+            const prog = getItemProgress(`vocab-${test.id}`, test.words ? test.words.length : 25);
+            const wrongList = prog.wrongQuestionIds || [];
+            const wrongIds = wrongList.map(String);
+            const allWords = test.words || [];
+            let filtered = allWords.filter((w, idx) => {
+              const wId = String(w.id || idx + 1);
+              return wrongIds.includes(wId) || wrongIds.includes(String(idx + 1));
+            });
+            if (filtered.length === 0) {
+              filtered = allWords.slice(0, Math.max(1, prog.wrongAnswers || 2));
+            }
+            testToUse = { ...test, words: filtered };
+          }
+          void startVocabularyActivity("VOCABULARY_FLASHCARDS", () => setFlashcardModalTest(testToUse));
+        }}
         onOpenGame={(test) => { void startVocabularyActivity("VOCABULARY_GAME", () => setGameModalTest(test)); }}
       />
 
@@ -125,6 +138,7 @@ export default function StudentVocabularyPage() {
         }); }}
         flashcardModalTest={flashcardModalTest}
         onCloseFlashcards={() => setFlashcardModalTest(null)}
+        initialFlashcardIndex={flashcardStartIndex}
         gameModalTest={gameModalTest}
         onCloseGame={() => setGameModalTest(null)}
       />

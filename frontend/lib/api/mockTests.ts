@@ -1,5 +1,6 @@
 import { apiRequest, writeAuthRequest } from './client';
-import { TestItem, PracticeQuestion, HistoryAttempt } from '@/app/admin/content/mock-tests/types';
+import { TestItem, PracticeQuestion, HistoryAttempt, normalizeToeicPart } from '@/app/admin/content/mock-tests/types';
+import { enrichPracticeQuestion } from '../toeicQuestionEnricher';
 
 export async function fetchMockTests(volId?: string): Promise<TestItem[]> {
   try {
@@ -13,7 +14,14 @@ export async function fetchMockTests(volId?: string): Promise<TestItem[]> {
 
 export async function fetchMockTestQuestions(testId: number): Promise<PracticeQuestion[]> {
   try {
-    return await apiRequest<PracticeQuestion[]>(`/api/mock-tests/${testId}/questions`);
+    const list = await apiRequest<PracticeQuestion[]>(`/api/mock-tests/${testId}/questions`);
+    if (Array.isArray(list)) {
+      return list.map((q) => enrichPracticeQuestion({
+        ...q,
+        part: normalizeToeicPart(q.part),
+      }));
+    }
+    return [];
   } catch (error) {
     console.warn(`Fallback to local mock questions for test ${testId}:`, error);
     return [];

@@ -80,19 +80,31 @@ export type VocabStatusFilter = 'ALL' | ContentStatus;
 export type VocabProgressFilter = 'ALL' | ProgressStatus;
 
 export function getTestCategoryKey(t: VocabularyTestSet): string {
+  const code = (t.code || t.id || "").toLowerCase();
+  const idNum = parseInt(code.replace(/[^0-9]/g, ""), 10);
+  
+  if (idNum >= 1 && idNum <= 3) return "corporate";
+  if (idNum >= 4 && idNum <= 6) return "finance_marketing";
+  if (idNum >= 7 && idNum <= 10) return "commerce_production";
+  if (idNum >= 11 && idNum <= 15) return "office_travel";
+  if (idNum >= 16 && idNum <= 20) return "tech_services";
+  
   const cat = t.category || "";
-  const yr = t.year ? String(t.year) : "";
-  if (cat === "2024" || yr === "2024") return "2024";
-  if (cat === "2026" || (cat === "ETS_EXAM" && yr === "2026")) return "2026";
-  if (cat === "2023" || (cat === "ETS_EXAM" && yr === "2023")) return "2023";
-  if (cat === "600_essential" || cat === "ESSENTIAL" || Boolean(t.code?.startsWith("600_"))) return "600_essential";
-  return cat || "Khác";
+  if (cat === "2024") return "2024";
+  if (cat === "2023") return "2023";
+  if (cat === "2022") return "2022";
+  return "essential";
 }
 
 export function getCategoryLabel(catKey: string): string {
+  if (catKey === "corporate") return "Quản trị & Nhân sự (Bộ 1-3)";
+  if (catKey === "finance_marketing") return "Tài chính & Tiếp thị (Bộ 4-6)";
+  if (catKey === "commerce_production") return "Thương mại & Sản xuất (Bộ 7-10)";
+  if (catKey === "office_travel") return "Văn phòng & Công tác (Bộ 11-15)";
+  if (catKey === "tech_services") return "Công nghệ & Dịch vụ (Bộ 16-20)";
   if (catKey === "2024") return "ETS 2024";
-  if (catKey === "2026") return "ETS 2026";
   if (catKey === "2023") return "ETS 2023";
-  if (catKey === "600_essential") return "600 Từ thiết yếu";
+  if (catKey === "2022") return "ETS 2022";
+  if (catKey === "essential") return "Từ vựng cốt lõi";
   return catKey;
 }

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { TestItem, PracticeQuestion } from "./types";
-import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2 } from "./mockData";
+import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3 } from "./mockData";
+import { fetchMockTests, fetchMockTestQuestions } from "@/lib/api/mockTests";
 
 import {
   MockTestHeader,
@@ -25,14 +26,39 @@ import { MockTestCreateModal } from "@/components/admin/content/mock-tests/MockT
 export default function AdminMockTestsPage() {
   // State quản lý tab & danh sách đề thi
   const [activeMainTab, setActiveMainTab] = useState<MockTestAdminTab>("tests");
-  const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2">("vol1");
+  const [selectedVol, setSelectedVol] = useState<"all" | "vol1" | "vol2" | "vol3">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDifficulty, setFilterDifficulty] = useState("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
   const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
+  const [testsVol3, setTestsVol3] = useState<TestItem[]>(INITIAL_TESTS_VOL3);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
+  const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Auto-fetch tests from PostgreSQL
+  useEffect(() => {
+    let active = true;
+    async function loadTests() {
+      try {
+        const data = await fetchMockTests();
+        if (data && data.length > 0 && active) {
+          const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
+          const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
+          const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
+          if (v1.length > 0) setTestsVol1(v1);
+          if (v2.length > 0) setTestsVol2(v2);
+          if (v3.length > 0) setTestsVol3(v3);
+        }
+      } catch (err) {
+        console.warn("Could not load mock tests for admin from API:", err);
+      }
+    }
+    loadTests();
+    return () => { active = false; };
+  }, []);
+
 
   // Toast notification
   const triggerToast = (msg: string) => {
@@ -126,10 +152,19 @@ export default function AdminMockTestsPage() {
   const [testFormTitle, setTestFormTitle] = useState("");
   const [testFormVolId, setTestFormVolId] = useState<"vol1" | "vol2">("vol1");
   const [testFormDifficulty, setTestFormDifficulty] = useState<"Khó" | "Trung bình" | "Vừa sức">("Trung bình");
+  const [testFormDescription, setTestFormDescription] = useState("");
+  const [testFormYear, setTestFormYear] = useState<number>(2024);
+  const [testFormDuration, setTestFormDuration] = useState<number>(120);
+  const [testFormTotalQuestions, setTestFormTotalQuestions] = useState<number>(200);
   const [deleteConfirmTest, setDeleteConfirmTest] = useState<TestItem | null>(null);
 
-  // Filtered Tests
-  const currentTests = selectedVol === "vol1" ? testsVol1 : testsVol2;
+  // Filtered Tests (hỗ trợ "all" hiển thị toàn bộ cả 3 bộ đề 2024, 2023, 2022)
+  const currentTests = useMemo(() => {
+    if (selectedVol === "vol1") return testsVol1;
+    if (selectedVol === "vol2") return testsVol2;
+    if (selectedVol === "vol3") return testsVol3;
+    return [...testsVol1, ...testsVol2, ...testsVol3];
+  }, [selectedVol, testsVol1, testsVol2, testsVol3]);
 
   const filteredCurrentTests = useMemo(() => {
     return currentTests.filter((t) => {
@@ -163,9 +198,13 @@ export default function AdminMockTestsPage() {
   // Handlers
   const handleOpenCreateTest = () => {
     setEditingTest(null);
-    setTestFormTitle(`Test ${(selectedVol === "vol1" ? testsVol1.length : testsVol2.length) + 1}`);
-    setTestFormVolId(selectedVol);
+    setTestFormTitle("");
+    setTestFormVolId(selectedVol === "vol3" ? "vol1" : (selectedVol as "vol1" | "vol2"));
     setTestFormDifficulty("Trung bình");
+    setTestFormDescription("");
+    setTestFormYear(2024);
+    setTestFormDuration(120);
+    setTestFormTotalQuestions(200);
     setShowCreateTestModal(true);
   };
 
@@ -174,13 +213,24 @@ export default function AdminMockTestsPage() {
     setEditingTest(test);
     setTestFormTitle(test.title);
     setTestFormVolId(test.volId as "vol1" | "vol2");
-    setTestFormDifficulty((test.difficulty as "Khó" | "Trung bình" | "Vừa sức") || "Khó");
+    setTestFormDifficulty((test.difficulty as "Khó" | "Trung bình" | "Vừa sức") || "Trung bình");
+    setTestFormDescription(test.description || "Đề thi thử TOEIC chuẩn ETS quốc tế đầy đủ 200 câu hỏi.");
+    setTestFormYear(test.year || 2024);
+    setTestFormDuration(test.durationMinutes || 120);
+    setTestFormTotalQuestions(test.totalQuestions || 200);
     setShowCreateTestModal(true);
   };
 
   const handleSaveTest = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!testFormTitle.trim()) return;
+    if (!testFormTitle.trim()) {
+      triggerToast("Vui lòng nhập tên đề thi thử! ⚠️");
+      return;
+    }
+    if (!testFormDescription.trim()) {
+      triggerToast("Vui lòng nhập mô tả / hướng dẫn cho đề thi! ⚠️");
+      return;
+    }
 
     if (editingTest) {
       const updateFn = (list: TestItem[]) =>
@@ -191,6 +241,10 @@ export default function AdminMockTestsPage() {
               title: testFormTitle.trim(),
               volId: testFormVolId,
               difficulty: testFormDifficulty,
+              description: testFormDescription.trim(),
+              year: testFormYear,
+              durationMinutes: testFormDuration,
+              totalQuestions: testFormTotalQuestions,
             }
             : t
         );
@@ -205,6 +259,10 @@ export default function AdminMockTestsPage() {
         volId: testFormVolId,
         title: testFormTitle.trim(),
         difficulty: testFormDifficulty,
+        description: testFormDescription.trim(),
+        year: testFormYear,
+        durationMinutes: testFormDuration,
+        totalQuestions: testFormTotalQuestions,
         score: null,
         listeningScore: null,
         readingScore: null,
@@ -323,7 +381,7 @@ export default function AdminMockTestsPage() {
 
   const handleExportCsv = () => {
     const headers = ["ID", "Tên đề thi", "Bộ sưu tập", "Độ khó", "Điểm TB", "Trạng thái"];
-    const rows = [...testsVol1, ...testsVol2].map((t) => [
+    const rows = [...testsVol1, ...testsVol2, ...testsVol3].map((t) => [
       t.id,
       `"${t.title.replace(/"/g, '""')}"`,
       `"${t.volId}"`,
@@ -378,7 +436,7 @@ export default function AdminMockTestsPage() {
       )}
 
       {activeMainTab === "submissions" && (
-        <MockTestSubmissionsView tests={[...testsVol1, ...testsVol2]} />
+        <MockTestSubmissionsView tests={[...testsVol1, ...testsVol2, ...testsVol3]} />
       )}
 
       {activeMainTab === "score_conversion" && (
@@ -389,6 +447,7 @@ export default function AdminMockTestsPage() {
         <MockTestCollectionsView
           vol1Count={testsVol1.length}
           vol2Count={testsVol2.length}
+          vol3Count={testsVol3.length}
           onNavigateToTests={(volId) => {
             setSelectedVol(volId);
             setActiveMainTab("tests");
@@ -544,6 +603,14 @@ export default function AdminMockTestsPage() {
           setTestFormVolId={setTestFormVolId}
           testFormDifficulty={testFormDifficulty}
           setTestFormDifficulty={setTestFormDifficulty}
+          testFormDescription={testFormDescription}
+          setTestFormDescription={setTestFormDescription}
+          testFormYear={testFormYear}
+          setTestFormYear={setTestFormYear}
+          testFormDuration={testFormDuration}
+          setTestFormDuration={setTestFormDuration}
+          testFormTotalQuestions={testFormTotalQuestions}
+          setTestFormTotalQuestions={setTestFormTotalQuestions}
           onSaveTest={handleSaveTest}
           onClose={() => setShowCreateTestModal(false)}
         />
