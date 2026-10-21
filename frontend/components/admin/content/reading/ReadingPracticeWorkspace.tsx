@@ -179,18 +179,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   });
   const isCurrentGroupChecked = !!checkedGroups[currentGroupIndex];
 
-  useEffect(() => {
-    if (isRedoWrongOnly) {
-      setCurrentGroupIndex(0);
-      setUserAnswers({});
-      setCheckedGroups({});
-      setSessionCorrectCount(0);
-      setSessionWrongCount(0);
-    } else if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
-      setCurrentGroupIndex(Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1)));
-    }
-  }, [isRedoWrongOnly, initialQuestionIndex, passageGroups.length]);
-
   const [sessionCorrectCount, setSessionCorrectCount] = useState<number>(() => {
     if (typeof window === "undefined" || isRedoWrongOnly) return 0;
     try {
@@ -214,6 +202,18 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     } catch {}
     return 0;
   });
+
+  useEffect(() => {
+    if (isRedoWrongOnly) {
+      setCurrentGroupIndex(0);
+      setUserAnswers({});
+      setCheckedGroups({});
+      setSessionCorrectCount(0);
+      setSessionWrongCount(0);
+    } else if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
+      setCurrentGroupIndex(Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1)));
+    }
+  }, [isRedoWrongOnly, initialQuestionIndex, passageGroups.length]);
 
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [energyScore, setEnergyScore] = useState(0);

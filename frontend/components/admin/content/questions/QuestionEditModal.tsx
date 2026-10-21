@@ -87,9 +87,9 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
     }
   }, [editingQuestion, isOpen]);
 
-  if (!isOpen) return null;
-
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

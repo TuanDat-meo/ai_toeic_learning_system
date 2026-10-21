@@ -187,7 +187,7 @@ export function parseFormulaText(text: string): ParsedSection[] {
     // 1) Transformation dạng Gốc vs Rút gọn
     const isGoc = line.match(/^\*?\s*\*?Gốc:\*?\s*(.*)/i);
     if (isGoc) {
-      let gocStr = isGoc[1].trim();
+      const gocStr = isGoc[1].trim();
       let rutgonStr = "";
       if (i + 1 < rawLines.length) {
         const nextLine = rawLines[i + 1].trim();
@@ -737,7 +737,7 @@ export const GrammarFormulaViewer: React.FC<GrammarFormulaViewerProps> = ({
       <div className="space-y-4">
         {filteredSections.length === 0 ? (
           <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs">
-            Không tìm thấy quy tắc nào khớp với từ khóa: <strong>"{searchFilter}"</strong>
+            Không tìm thấy quy tắc nào khớp với từ khóa: <strong>&quot;{searchFilter}&quot;</strong>
           </div>
         ) : (
           filteredSections.map((sec) => {
@@ -1026,7 +1026,7 @@ export const GrammarExamplesViewer: React.FC<{
     return (
       <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-1">
         <p className="font-bold text-slate-700">Đang cập nhật ví dụ minh họa cho chủ điểm này.</p>
-        <p className="text-slate-400">Bạn có thể bấm "Luyện tập ngay" ở góc dưới để làm 10 câu bài tập trắc nghiệm kèm giải thích chi tiết từng câu.</p>
+        <p className="text-slate-400">Bạn có thể bấm &quot;Luyện tập ngay&quot; ở góc dưới để làm 10 câu bài tập trắc nghiệm kèm giải thích chi tiết từng câu.</p>
       </div>
     );
   }
