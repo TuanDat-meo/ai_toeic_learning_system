@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ShoppingBag, Bookmark, FileText, Trash2, X } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
 import { SAMPLE_DICTATION_QUESTIONS } from "@/app/admin/content/listening/mockData";
@@ -299,6 +299,14 @@ interface DictationFormModalProps {
   showDictationModal: boolean;
   setShowDictationModal: (show: boolean) => void;
   editingDictationCard: DictationCardData | null;
+  dictationFormTitle: string;
+  setDictationFormTitle: (val: string) => void;
+  dictationFormAudioUrl: string;
+  setDictationFormAudioUrl: (val: string) => void;
+  dictationFormTranscript: string;
+  setDictationFormTranscript: (val: string) => void;
+  dictationFormTranslation: string;
+  setDictationFormTranslation: (val: string) => void;
   dictationFormTestNum: number;
   setDictationFormTestNum: (val: number) => void;
   dictationFormPart: "Part 1" | "Part 2" | "Part 3" | "Part 4";
@@ -314,6 +322,14 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
   showDictationModal,
   setShowDictationModal,
   editingDictationCard,
+  dictationFormTitle,
+  setDictationFormTitle,
+  dictationFormAudioUrl,
+  setDictationFormAudioUrl,
+  dictationFormTranscript,
+  setDictationFormTranscript,
+  dictationFormTranslation,
+  setDictationFormTranslation,
   dictationFormTestNum,
   setDictationFormTestNum,
   dictationFormPart,
@@ -324,16 +340,36 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
   setDictationFormQuestions,
   handleSaveDictation,
 }) => {
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   if (!showDictationModal) return null;
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dictationFormTitle.trim()) {
+      setErrorMsg("Vui lòng nhập tiêu đề bài nghe chép chính tả.");
+      return;
+    }
+    if (!dictationFormTranscript.trim()) {
+      setErrorMsg("Vui lòng nhập đoạn Transcript tiếng Anh để học viên nghe chép.");
+      return;
+    }
+    if (!dictationFormAudioUrl.trim()) {
+      setErrorMsg("Vui lòng cung cấp link file âm thanh (Audio URL / MP3).");
+      return;
+    }
+    setErrorMsg(null);
+    handleSaveDictation(e);
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
-            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Quản lý nội dung</span>
-            <h3 className="text-lg font-bold text-slate-900">
-              {editingDictationCard ? "Chỉnh sửa bài nghe" : "Thêm bài nghe chép mới"}
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Listening Studio • Dictation</span>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              {editingDictationCard ? "Chỉnh sửa bài nghe chép chính tả" : "Tạo bài nghe chép chính tả mới"}
             </h3>
           </div>
           <button
@@ -345,44 +381,61 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSaveDictation} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
+            ⚠️ {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={onSubmit} className="space-y-3.5 text-xs font-medium">
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">
+              Tiêu đề bài nghe <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Ví dụ: Test 1 - Part 1: Bối cảnh làm việc văn phòng"
+              value={dictationFormTitle}
+              onChange={(e) => {
+                setDictationFormTitle(e.target.value);
+                if (errorMsg) setErrorMsg(null);
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Test số</label>
+              <label className="block text-slate-700 font-bold mb-1">Test số</label>
               <select
                 value={dictationFormTestNum}
                 onChange={(e) => setDictationFormTestNum(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
               >
-                <option value={1}>Test 1</option>
-                <option value={2}>Test 2</option>
-                <option value={3}>Test 3</option>
-                <option value={4}>Test 4</option>
-                <option value={5}>Test 5</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={num}>Test {num}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Phần thi (Part)</label>
+              <label className="block text-slate-700 font-bold mb-1">Phần thi</label>
               <select
                 value={dictationFormPart}
                 onChange={(e) => setDictationFormPart(e.target.value as "Part 1" | "Part 2" | "Part 3" | "Part 4")}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
               >
-                <option value="Part 1">Part 1 (Mô tả tranh)</option>
-                <option value="Part 2">Part 2 (Hỏi & Đáp)</option>
+                <option value="Part 1">Part 1 (Tranh)</option>
+                <option value="Part 2">Part 2 (Hỏi đáp)</option>
                 <option value="Part 3">Part 3 (Hội thoại)</option>
                 <option value="Part 4">Part 4 (Bài nói)</option>
               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Năm đề thi</label>
+              <label className="block text-slate-700 font-bold mb-1">Năm đề thi</label>
               <select
                 value={dictationFormYear}
                 onChange={(e) => setDictationFormYear(e.target.value as "2026" | "2024" | "2023" | "2022")}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
               >
                 <option value="2026">ETS 2026</option>
                 <option value="2024">ETS 2024</option>
@@ -391,32 +444,81 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Số câu hỏi</label>
+              <label className="block text-slate-700 font-bold mb-1">Số câu chép</label>
               <input
                 type="number"
                 min={1}
-                max={200}
+                max={100}
                 value={dictationFormQuestions}
                 onChange={(e) => setDictationFormQuestions(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowDictationModal(false)}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-            >
-              {editingDictationCard ? "Lưu thay đổi" : "Tạo bài nghe"}
-            </button>
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">
+              Liên kết Audio MP3 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="https://example.com/audio/ets2024-test1-p1.mp3"
+              value={dictationFormAudioUrl}
+              onChange={(e) => {
+                setDictationFormAudioUrl(e.target.value);
+                if (errorMsg) setErrorMsg(null);
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Đường dẫn tệp âm thanh chuẩn tiếng Anh bản ngữ để học viên nghe chép.</p>
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">
+              Đoạn Transcript Tiếng Anh (Nội dung nghe chép) <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              placeholder="Ví dụ: Some workers are setting up a conference room for the annual shareholders meeting."
+              value={dictationFormTranscript}
+              onChange={(e) => {
+                setDictationFormTranscript(e.target.value);
+                if (errorMsg) setErrorMsg(null);
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">Bản dịch nghĩa Tiếng Việt</label>
+            <textarea
+              rows={2}
+              placeholder="Ví dụ: Một số công nhân đang sắp xếp phòng hội thảo cho cuộc họp cổ đông thường niên."
+              value={dictationFormTranslation}
+              onChange={(e) => setDictationFormTranslation(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <span className="text-[11px] text-slate-400">
+              <span className="text-red-500 font-bold">*</span> Bắt buộc nhập đầy đủ dữ liệu
+            </span>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowDictationModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                {editingDictationCard ? "Lưu thay đổi" : "Tạo bài nghe"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

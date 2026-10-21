@@ -7,8 +7,8 @@ import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
 import { useItemProgress } from "@/lib/practiceProgress";
 
 interface ListeningDictationTabProps {
-  selectedYear: "2026" | "2024" | "2023" | "2022";
-  setSelectedYear: (year: "2026" | "2024" | "2023" | "2022") => void;
+  selectedYear: "2024" | "2023" | "2022";
+  setSelectedYear: (year: "2024" | "2023" | "2022") => void;
   flaggedReviewIds: number[];
   testsGrouped: { [testNum: number]: DictationCardData[] };
   handleOpenAddDictation: () => void;
@@ -109,21 +109,15 @@ function AdminDictationCardItem({
           </span>
         </div>
 
-        {/* Thanh tiến độ */}
-        <div className="my-3 p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-2">
-          <PracticeProgressBar
-            completed={progress.completedQuestions}
-            total={card.totalQuestions}
-            unit="câu"
-          />
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1 font-medium">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              Đã làm: <strong className="text-slate-800 font-mono">{progress.completedQuestions}</strong> câu
-            </span>
-            <span className="font-mono text-slate-400">
-              Còn lại: <strong className="text-slate-600 font-mono">{Math.max(0, card.totalQuestions - progress.completedQuestions)}</strong>
-            </span>
+        {/* Thông tin quy mô quản trị (Admin chỉ hiển thị tổng số câu) */}
+        <div className="my-3 p-3 bg-slate-50/90 rounded-xl border border-slate-200/70 space-y-1.5 text-xs">
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Số câu nghe chép:</span>
+            <strong className="text-blue-700 font-mono font-bold">{card.totalQuestions} câu</strong>
+          </div>
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Năm xuất bản:</span>
+            <span className="font-mono text-slate-800 font-semibold">ETS {card.year}</span>
           </div>
         </div>
       </div>
@@ -165,7 +159,7 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Lọc Năm */}
         <div className="flex items-center gap-2">
-          {(["2026", "2024", "2023", "2022"] as const).map((year) => (
+          {(["2024", "2023", "2022"] as const).map((year) => (
             <button
               key={year}
               type="button"
@@ -176,7 +170,7 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
                   : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {year}
+              ETS {year}
             </button>
           ))}
         </div>

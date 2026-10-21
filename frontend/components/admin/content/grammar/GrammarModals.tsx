@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { expandGrammarQuestions } from "@/lib/toeicQuestionExpander";
+import { recordQuestionAnswer, getItemProgress } from "@/lib/practiceProgress";
+
+import React, { useState, useEffect, useMemo } from "react";
 import {
   X,
   BookOpen,
@@ -13,11 +16,19 @@ import {
   Award,
   RotateCcw,
   ArrowRight,
-  Clock,
+
 } from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/grammar/types";
-import { saveItemProgress } from "@/lib/practiceProgress";
+
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import {
+  GrammarFormulaViewer,
+  GrammarSignalsViewer,
+  GrammarTrapsViewer,
+  GrammarExamplesViewer,
+} from "./GrammarFormulaViewer";
+import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
+import { getGrammarTopic } from "@/lib/api/grammar";
 
 // ==========================================
 // 1. MODAL XEM CHI TIẾT CHỦ ĐIỂM NGỮ PHÁP
@@ -29,17 +40,78 @@ interface GrammarTopicDetailModalProps {
 }
 
 export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = ({
-  topic,
+  topic: topicProp,
   onClose,
   onStartQuiz,
 }) => {
   const [activeTab, setActiveTab] = useState<"formula" | "signals" | "traps" | "examples">("formula");
+  const [detailTopic, setDetailTopic] = useState<GrammarTopicItem | null>(topicProp);
 
+  useEffect(() => {
+    if (!topicProp) {
+      setDetailTopic(null);
+      return;
+    }
+
+    const mock = INITIAL_GRAMMAR_TOPICS.find(
+      (m) =>
+        m.id === topicProp.id ||
+        m.code === topicProp.code ||
+        (m.titleVi && topicProp.titleVi && m.titleVi.toLowerCase().includes(topicProp.titleVi.toLowerCase())) ||
+        (m.title && topicProp.title && m.title.toLowerCase().includes(topicProp.title.toLowerCase()))
+    );
+
+    const merged: GrammarTopicItem = {
+      ...topicProp,
+      examples:
+        topicProp.examples && topicProp.examples.length > 0 && topicProp.examples.some((e) => e.sentence)
+          ? topicProp.examples
+          : mock?.examples || [],
+      questions:
+        topicProp.questions && topicProp.questions.length > 0
+          ? topicProp.questions
+          : mock?.questions || [],
+      signalWords:
+        topicProp.signalWords && topicProp.signalWords.length > 0
+          ? topicProp.signalWords
+          : mock?.signalWords || [],
+      traps:
+        topicProp.traps && topicProp.traps.length > 0
+          ? topicProp.traps
+          : mock?.traps || [],
+      formula: topicProp.formula || mock?.formula || "",
+    };
+
+    setDetailTopic(merged);
+
+    if (topicProp.id) {
+      getGrammarTopic(topicProp.id)
+        .then((fetched) => {
+          if (fetched) {
+            setDetailTopic((prev) => ({
+              ...prev,
+              ...fetched,
+              examples:
+                fetched.examples && fetched.examples.length > 0 && fetched.examples.some((e) => e.sentence)
+                  ? fetched.examples
+                  : merged.examples,
+              questions:
+                fetched.questions && fetched.questions.length > 0
+                  ? fetched.questions
+                  : merged.questions,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [topicProp]);
+
+  const topic = detailTopic || topicProp;
   if (!topic) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
-      <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
         <div className="flex items-start justify-between pb-4 border-b border-slate-100">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -48,9 +120,6 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
               </span>
               <span className="px-2.5 py-1 rounded-xl text-xs font-extrabold bg-blue-100 text-blue-800">
                 {topic.part}
-              </span>
-              <span className="px-2.5 py-1 rounded-xl text-xs font-extrabold bg-emerald-100 text-emerald-800">
-                Target {topic.targetScore}
               </span>
             </div>
             <h2 className="text-xl font-black text-slate-900">{topic.titleVi || topic.title}</h2>
@@ -119,59 +188,30 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
 
         <div className="min-h-[160px] text-xs space-y-3">
           {activeTab === "formula" && (
-            <div className="space-y-3 animate-in fade-in">
-              <p className="font-bold text-slate-700">Công thức đóng khung chuẩn TOEIC:</p>
-              <div className="p-4 rounded-2xl bg-slate-900 text-emerald-400 font-mono text-sm font-bold shadow-inner">
-                {topic.formula}
-              </div>
+            <div className="animate-in fade-in">
+              <GrammarFormulaViewer
+                formulaText={topic.formula}
+                topicTitle={topic.titleVi || topic.title}
+                topicCode={topic.code}
+              />
             </div>
           )}
 
           {activeTab === "signals" && (
-            <div className="space-y-3 animate-in fade-in">
-              <p className="font-bold text-slate-700">Các từ/cụm từ dấu hiệu nhận biết nhanh trong bài thi:</p>
-              <div className="flex flex-wrap gap-2">
-                {topic.signalWords.map((word, idx) => (
-                  <span
-                    key={idx}
-                    className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-extrabold text-xs"
-                  >
-                    ✨ {word}
-                  </span>
-                ))}
-              </div>
+            <div className="animate-in fade-in">
+              <GrammarSignalsViewer signalWords={topic.signalWords} />
             </div>
           )}
 
           {activeTab === "traps" && (
-            <div className="space-y-2.5 animate-in fade-in">
-              <p className="font-bold text-slate-700">Cảnh báo bẫy ngữ pháp thường gặp:</p>
-              {topic.traps.map((trap, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-2xl bg-rose-50 border border-rose-100 text-rose-950 font-medium leading-relaxed flex items-start gap-2"
-                >
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <span>{trap}</span>
-                </div>
-              ))}
+            <div className="animate-in fade-in">
+              <GrammarTrapsViewer traps={topic.traps} />
             </div>
           )}
 
           {activeTab === "examples" && (
-            <div className="space-y-3 animate-in fade-in">
-              <p className="font-bold text-slate-700">Ví dụ câu chuẩn định dạng TOEIC:</p>
-              {topic.examples.map((ex, idx) => (
-                <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                  <p className="font-bold text-slate-900">{ex.sentence}</p>
-                  <p className="text-slate-600 italic">Dịch: {ex.translation}</p>
-                  {ex.analysis && (
-                    <p className="text-[11px] text-blue-700 font-semibold pt-1 border-t border-slate-200">
-                      💡 Phân tích: {ex.analysis}
-                    </p>
-                  )}
-                </div>
-              ))}
+            <div className="animate-in fade-in">
+              <GrammarExamplesViewer examples={topic.examples} topicCode={topic.code} />
             </div>
           )}
         </div>
@@ -252,8 +292,28 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
             e.preventDefault();
             const form = e.target as HTMLFormElement;
             const formData = new FormData(form);
-            const titleViVal = formData.get("title") as string;
-            const titleEnVal = formData.get("englishTitle") as string;
+            const titleViVal = (formData.get("title") as string || "").trim();
+            const titleEnVal = (formData.get("englishTitle") as string || "").trim();
+            const formulaVal = (formData.get("formula") as string || "").trim();
+            const summaryVal = (formData.get("summary") as string || "").trim();
+
+            if (!titleViVal) {
+              alert("Vui lòng nhập tên chủ điểm ngữ pháp Tiếng Việt!");
+              return;
+            }
+            if (!titleEnVal) {
+              alert("Vui lòng nhập tên chủ điểm Tiếng Anh!");
+              return;
+            }
+            if (!formulaVal) {
+              alert("Vui lòng nhập công thức / cấu trúc cốt lõi!");
+              return;
+            }
+            if (!summaryVal) {
+              alert("Vui lòng nhập tóm tắt ngắn gọn kỹ năng!");
+              return;
+            }
+
             onSave({
               titleVi: titleViVal,
               titleEn: titleEnVal,
@@ -261,8 +321,8 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               englishTitle: titleEnVal,
               part: (formData.get("part") as string || "Part 5") as unknown as never,
               targetScore: (formData.get("targetScore") as string || "All") as unknown as never,
-              formula: formData.get("formula") as string,
-              summary: formData.get("summary") as string,
+              formula: formulaVal,
+              summary: summaryVal,
             });
             onClose();
           }}
@@ -291,7 +351,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Phần thi áp dụng (Part)</label>
               <select
@@ -305,28 +365,16 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">Target Score mục tiêu</label>
-              <select
-                name="targetScore"
-                defaultValue={currentTopic?.targetScore || "500-750"}
-                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white"
-              >
-                <option value="350-500">Lv.1 350 - 500 (Nền tảng)</option>
-                <option value="500-750">Lv.2 500 - 750 (Trung cấp)</option>
-                <option value="750+">Lv.3 750+ (Nâng cao)</option>
-              </select>
-            </div>
           </div>
 
           <div>
-            <label className="block text-slate-700 font-bold mb-1">Công thức đóng khung chính</label>
-            <input
-              type="text"
+            <label className="block text-slate-700 font-bold mb-1">Công thức đóng khung chính (Hỗ trợ Markdown: ### Tiêu đề, - **TỪ KHÓA:** Giải thích)</label>
+            <textarea
               name="formula"
+              rows={6}
               defaultValue={currentTopic?.formula || ""}
               required
-              className="w-full p-2.5 rounded-xl border border-slate-200 font-mono text-emerald-700 font-bold"
+              className="w-full p-3 rounded-xl border border-slate-200 font-mono text-xs font-semibold text-slate-800 leading-relaxed focus:outline-hidden focus:border-blue-500"
             />
           </div>
 
@@ -358,7 +406,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+          </div>
   );
 };
 
@@ -457,18 +505,33 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
             e.preventDefault();
             const form = e.target as HTMLFormElement;
             const formData = new FormData(form);
+            const qText = (formData.get("questionText") as string || "").trim();
+            const optA = (formData.get("optA") as string || "").trim();
+            const optB = (formData.get("optB") as string || "").trim();
+            const optC = (formData.get("optC") as string || "").trim();
+            const optD = (formData.get("optD") as string || "").trim();
+            const expl = (formData.get("explanation") as string || "").trim();
+
+            if (!qText) {
+              alert("Vui lòng nhập nội dung câu hỏi!");
+              return;
+            }
+            if (!optA || !optB || !optC || !optD) {
+              alert("Vui lòng nhập đầy đủ cả 4 phương án A, B, C, D!");
+              return;
+            }
+            if (!expl) {
+              alert("Vui lòng nhập lời giải thích chi tiết cho câu hỏi!");
+              return;
+            }
+
             const newQ: GrammarQuestionItem = {
               id: `q-${Date.now()}`,
               part: topic.part.includes("6") ? "Part 6" : "Part 5",
-              questionText: formData.get("questionText") as string,
-              options: {
-                A: formData.get("optA") as string,
-                B: formData.get("optB") as string,
-                C: formData.get("optC") as string,
-                D: formData.get("optD") as string,
-              },
+              questionText: qText,
+              options: { A: optA, B: optB, C: optC, D: optD },
               correctAnswer: formData.get("correctAnswer") as "A" | "B" | "C" | "D",
-              explanation: formData.get("explanation") as string,
+              explanation: expl,
             };
             onAddQuestion(topic.id, newQ);
             onClose();
@@ -574,6 +637,8 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
 // 5. MODAL LUYỆN TẬP QUIZ NGỮ PHÁP FULLSCREEN
 // ==========================================
 interface GrammarQuizModalProps {
+  initialIndex?: number;
+  isRedoWrongOnly?: boolean;
   isOpen: boolean;
   title: string;
   questions: GrammarQuestionItem[];
@@ -585,40 +650,57 @@ interface GrammarQuizModalProps {
 export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
   isOpen,
   title,
-  questions,
+  questions: rawQuestions,
   onClose,
   activeTopic,
   onRecordResult,
+  initialIndex = 0,
+  isRedoWrongOnly = false,
 }) => {
+  // Đảm bảo bài luôn có đủ 30 câu hỏi thực tế chuẩn TOEIC Part 5
+  const fullQuestions = useMemo(() => {
+    const topicTitle = activeTopic?.titleVi || activeTopic?.title || "Ngữ pháp";
+    return expandGrammarQuestions(rawQuestions, topicTitle, 30);
+  }, [rawQuestions, activeTopic]);
+
+  // Nếu là chế độ redo câu sai, lọc các câu bị sai
+  const questions = useMemo(() => {
+    if (!isRedoWrongOnly || !activeTopic) return fullQuestions;
+    const prog = getItemProgress(`grammar-${activeTopic.id}`, fullQuestions.length);
+    const wrongList = prog.wrongQuestionIds || [];
+    const wrongIds = wrongList.map((id) => String(id));
+    if (wrongIds.length === 0) {
+      const fallbackCount = Math.max(1, prog.wrongAnswers || 2);
+      return fullQuestions.slice(0, fallbackCount);
+    }
+    const filtered = fullQuestions.filter((q, idx) => {
+      const qIdStr = String(q.id || "");
+      const idxStr = String(idx + 1);
+      const idx0Str = String(idx);
+      return wrongIds.some(
+        (wid) => wid === qIdStr || wid === idxStr || wid === idx0Str || qIdStr.endsWith(`-${wid}`) || qIdStr.endsWith(`_${wid}`)
+      );
+    });
+    return filtered.length > 0 ? filtered : fullQuestions.slice(0, Math.max(1, prog.wrongAnswers || 2));
+  }, [fullQuestions, isRedoWrongOnly, activeTopic]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<"A" | "B" | "C" | "D" | null>(null);
   const [isAnswerChecked, setIsAnswerChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(0);
+
 
   useEffect(() => {
     if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCurrentIndex(0);
+      // Tiếp tục làm từ câu tiếp theo (nếu làm 5 câu thì mở câu 6)
+      const targetStart = isRedoWrongOnly ? 0 : Math.min(initialIndex, Math.max(0, questions.length - 1));
+      setCurrentIndex(targetStart);
       setSelectedAnswer(null);
       setIsAnswerChecked(false);
       setScore(0);
       setQuizFinished(false);
-      setTimerSeconds(0);
     }
-  }, [isOpen]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isOpen && !quizFinished) {
-      interval = setInterval(() => setTimerSeconds((prev) => prev + 1), 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isOpen, quizFinished]);
-
+  }, [isOpen, initialIndex, isRedoWrongOnly, questions.length]);
   if (!isOpen || questions.length === 0) return null;
 
   const currentQ = questions[currentIndex];
@@ -634,7 +716,8 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     }
 
     if (activeTopic) {
-      saveItemProgress(`grammar-${activeTopic.id}`, currentIndex + 1, questions.length);
+      // Ghi nhận kết quả: Nếu câu này vốn sai mà nay làm đúng thì số câu sai TỰ ĐỘNG GIẢM DẦN!
+      recordQuestionAnswer(`grammar-${activeTopic.id}`, currentQ.id, isCorrect, questions.length);
       if (onRecordResult) {
         onRecordResult(activeTopic.id, isCorrect);
       }
@@ -657,15 +740,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     setIsAnswerChecked(false);
     setScore(0);
     setQuizFinished(false);
-    setTimerSeconds(0);
   };
-
-  const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto">
@@ -679,12 +754,6 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {!quizFinished && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-mono font-bold">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <span>{formatTimer(timerSeconds)}</span>
-              </div>
-            )}
             <button
               type="button"
               onClick={onClose}
@@ -827,9 +896,6 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
 
             <div className="space-y-1">
               <h2 className="text-2xl font-extrabold text-slate-900">Hoàn Thành Bài Luyện Tập!</h2>
-              <p className="text-xs text-slate-500">
-                Thời gian hoàn thành: <strong className="text-blue-600">{formatTimer(timerSeconds)}</strong>
-              </p>
             </div>
 
             <div className="inline-flex items-center gap-6 px-8 py-3.5 rounded-2xl bg-slate-50 border border-slate-200">

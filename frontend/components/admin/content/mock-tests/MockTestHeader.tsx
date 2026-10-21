@@ -18,8 +18,8 @@ export type MockTestAdminTab = "tests" | "submissions" | "score_conversion" | "c
 interface MockTestHeaderProps {
   activeMainTab: MockTestAdminTab;
   setActiveMainTab: (tab: MockTestAdminTab) => void;
-  selectedVol: "vol1" | "vol2";
-  setSelectedVol: (vol: "vol1" | "vol2") => void;
+  selectedVol: "all" | "vol1" | "vol2" | "vol3";
+  setSelectedVol: (vol: "all" | "vol1" | "vol2" | "vol3") => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   filterDifficulty: string;
@@ -28,6 +28,7 @@ interface MockTestHeaderProps {
   setViewMode: (v: "table" | "grid") => void;
   vol1Count: number;
   vol2Count: number;
+  vol3Count?: number;
   onOpenCreateTest: () => void;
   onExportCsv: () => void;
 }
@@ -45,6 +46,7 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
   setViewMode,
   vol1Count,
   vol2Count,
+  vol3Count = 0,
   onOpenCreateTest,
   onExportCsv,
 }) => {
@@ -97,7 +99,7 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
           }`}
         >
           <BookOpen className="w-4 h-4" />
-          <span>Ngân hàng đề thi ({vol1Count + vol2Count})</span>
+          <span>Ngân hàng đề thi ({vol1Count + vol2Count + (vol3Count || 0)})</span>
         </button>
 
         <button
@@ -162,6 +164,17 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
               <div className="shrink-0 flex items-center p-1 bg-slate-100 rounded-2xl border border-slate-200">
                 <button
                   type="button"
+                  onClick={() => setSelectedVol("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    selectedVol === "all"
+                      ? "bg-white text-blue-600 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Tất cả ({vol1Count + vol2Count + (vol3Count || 0)})
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSelectedVol("vol1")}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                     selectedVol === "vol1"
@@ -169,7 +182,7 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Crack TOEIC Vol 1 ({vol1Count})
+                  ETS 2024 ({vol1Count})
                 </button>
                 <button
                   type="button"
@@ -180,7 +193,18 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  Crack TOEIC Vol 2 ({vol2Count})
+                  ETS 2023 ({vol2Count})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVol("vol3")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    selectedVol === "vol3"
+                      ? "bg-white text-blue-600 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  ETS 2022 ({vol3Count || 0})
                 </button>
               </div>
 

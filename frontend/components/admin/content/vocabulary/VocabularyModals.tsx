@@ -91,6 +91,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   const [gameSelectedOption, setGameSelectedOption] = useState<number | null>(null);
   const [gameAnswerChecked, setGameAnswerChecked] = useState(false);
 
+  // Error states
+  const [testFormError, setTestFormError] = useState<string | null>(null);
+  const [wordFormError, setWordFormError] = useState<string | null>(null);
+
   // Test form state
   const [testTitle, setTestTitle] = useState("");
   const [testYear, setTestYear] = useState("2024");
@@ -528,11 +532,25 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 {editingTest ? "Sửa bộ từ vựng" : "Thêm bộ từ vựng mới"}
               </h3>
             </div>
+            {testFormError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
+                ⚠️ {testFormError}
+              </div>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!testTitle.trim()) {
+                  setTestFormError("Vui lòng nhập tên bộ từ vựng (không được để trống).");
+                  return;
+                }
+                if (isCustomCategory && !customCategoryInput.trim()) {
+                  setTestFormError("Vui lòng nhập tên phân loại tùy chỉnh mới.");
+                  return;
+                }
+                setTestFormError(null);
                 const finalCategory = isCustomCategory ? (customCategoryInput.trim() || "Khác") : testCategory;
-                onSaveTestForm(testTitle, testYear, finalCategory);
+                onSaveTestForm(testTitle.trim(), testYear, finalCategory);
               }}
               className="space-y-4 text-xs"
             >
@@ -705,15 +723,33 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 {editingWord ? "Chỉnh sửa từ vựng" : "Thêm từ vựng mới"}
               </h3>
             </div>
+            {wordFormError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
+                ⚠️ {wordFormError}
+              </div>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!wordText.trim()) {
+                  setWordFormError("Vui lòng nhập từ tiếng Anh.");
+                  return;
+                }
+                if (!wordMeaning.trim()) {
+                  setWordFormError("Vui lòng nhập định nghĩa tiếng Việt.");
+                  return;
+                }
+                if (!wordExample.trim()) {
+                  setWordFormError("Vui lòng nhập câu ví dụ thực tế chuẩn TOEIC.");
+                  return;
+                }
+                setWordFormError(null);
                 onSaveWordForm({
-                  word: wordText,
-                  ipa: wordIpa,
+                  word: wordText.trim(),
+                  ipa: wordIpa.trim(),
                   partOfSpeech: wordPos,
-                  meaning: wordMeaning,
-                  example: wordExample,
+                  meaning: wordMeaning.trim(),
+                  example: wordExample.trim(),
                   level: wordLevel,
                 });
               }}

@@ -152,15 +152,10 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
               <div>
                 {/* Card Header */}
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                      {t.year}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      Xuất bản
-                    </span>
-                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Xuất bản
+                  </span>
 
                   <div className="flex items-center gap-1">
                     <button

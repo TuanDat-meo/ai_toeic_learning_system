@@ -2,6 +2,7 @@
 data/
 database/
 scripts/
+scratch/
 
 # Large learning media is stored outside Git and mounted into the frontend container.
 /frontend/public/audio/

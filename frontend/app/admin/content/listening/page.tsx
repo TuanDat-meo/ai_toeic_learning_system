@@ -24,6 +24,7 @@ import { ListeningDictationTab } from "@/components/admin/content/listening/List
 import { ListeningPartTab } from "@/components/admin/content/listening/ListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
+import { exportToExcel } from "@/lib/exportExcel";
 import {
   VocabBagModal,
   TheoryModal,
@@ -39,7 +40,7 @@ export default function ListeningPage() {
   // --- STATES CHÍNH ---
   const [activeAdminTab, setActiveAdminTab] = useState<ListeningAdminTab>("listening_units");
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
-  const [selectedYear, setSelectedYear] = useState<"2026" | "2024" | "2023" | "2022">("2024");
+  const [selectedYear, setSelectedYear] = useState<"2024" | "2023" | "2022">("2024");
 
   // Dữ liệu cards
   const [dictationCards, setDictationCards] = useState<DictationCardData[]>(INITIAL_DICTATION_CARDS);
@@ -143,10 +144,14 @@ export default function ListeningPage() {
   // CRUD Dictation
   const [showDictationModal, setShowDictationModal] = useState(false);
   const [editingDictationCard, setEditingDictationCard] = useState<DictationCardData | null>(null);
+  const [dictationFormTitle, setDictationFormTitle] = useState("");
+  const [dictationFormAudioUrl, setDictationFormAudioUrl] = useState("");
+  const [dictationFormTranscript, setDictationFormTranscript] = useState("");
+  const [dictationFormTranslation, setDictationFormTranslation] = useState("");
   const [dictationFormTestNum, setDictationFormTestNum] = useState(1);
   const [dictationFormPart, setDictationFormPart] = useState<"Part 1" | "Part 2" | "Part 3" | "Part 4">("Part 1");
-  const [dictationFormYear, setDictationFormYear] = useState<"2026" | "2024" | "2023" | "2022">("2026");
-  const [dictationFormQuestions, setDictationFormQuestions] = useState(24);
+  const [dictationFormYear, setDictationFormYear] = useState<"2026" | "2024" | "2023" | "2022">("2024");
+  const [dictationFormQuestions, setDictationFormQuestions] = useState(10);
   const [deleteDictationConfirm, setDeleteDictationConfirm] = useState<DictationCardData | null>(null);
 
   // CRUD Level / Category
@@ -163,16 +168,25 @@ export default function ListeningPage() {
   // Handlers
   const handleOpenAddDictation = () => {
     setEditingDictationCard(null);
+    setDictationFormTitle("");
+    setDictationFormAudioUrl("");
+    setDictationFormTranscript("");
+    setDictationFormTranslation("");
     setDictationFormTestNum(1);
     setDictationFormPart("Part 1");
     setDictationFormYear(selectedYear);
-    setDictationFormQuestions(24);
+    setDictationFormQuestions(10);
     setShowDictationModal(true);
   };
 
   const handleOpenEditDictation = (card: DictationCardData, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setEditingDictationCard(card);
+    const q1 = card.questions?.[0];
+    setDictationFormTitle(`Test ${card.testNumber} - ${card.part}`);
+    setDictationFormAudioUrl(q1?.audioUrl || "");
+    setDictationFormTranscript(q1?.fullTranscript || "");
+    setDictationFormTranslation(q1?.vietnameseTranslation || "");
     setDictationFormTestNum(card.testNumber);
     setDictationFormPart(card.part);
     setDictationFormYear(card.year);
@@ -182,15 +196,44 @@ export default function ListeningPage() {
 
   const handleSaveDictation = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dictationFormTitle.trim()) {
+      triggerToast("Vui lòng nhập tiêu đề bài nghe chép! ⚠️");
+      return;
+    }
+    if (!dictationFormTranscript.trim()) {
+      triggerToast("Vui lòng nhập transcript đoạn nghe! ⚠️");
+      return;
+    }
+    if (!dictationFormAudioUrl.trim()) {
+      triggerToast("Vui lòng nhập đường dẫn Audio MP3! ⚠️");
+      return;
+    }
+
     if (editingDictationCard) {
       setDictationCards((prev) =>
         prev.map((c) =>
           c.id === editingDictationCard.id
-            ? { ...c, testNumber: dictationFormTestNum, part: dictationFormPart, year: dictationFormYear, totalQuestions: dictationFormQuestions }
+            ? {
+                ...c,
+                testNumber: dictationFormTestNum,
+                part: dictationFormPart,
+                year: dictationFormYear,
+                totalQuestions: dictationFormQuestions,
+                questions: [
+                  {
+                    id: 1,
+                    part: dictationFormPart,
+                    audioUrl: dictationFormAudioUrl.trim(),
+                    fullTranscript: dictationFormTranscript.trim(),
+                    vietnameseTranslation: dictationFormTranslation.trim(),
+                    explanation: "Luyện nghe chép chính tả và nắm bắt từ khóa trọng tâm.",
+                  },
+                ],
+              }
             : c
         )
       );
-      triggerToast(`Đã cập nhật bài nghe ${dictationFormPart} - Test ${dictationFormTestNum}! 💾`);
+      triggerToast(`Đã cập nhật bài nghe "${dictationFormTitle}"! 💾`);
     } else {
       const newCard: DictationCardData = {
         id: `dict-${Date.now()}`,
@@ -202,10 +245,19 @@ export default function ListeningPage() {
         status: "Chưa bắt đầu",
         notesCount: 0,
         vocabItems: [],
-        questions: [...SAMPLE_DICTATION_QUESTIONS.slice(0, 2)],
+        questions: [
+          {
+            id: 1,
+            part: dictationFormPart,
+            audioUrl: dictationFormAudioUrl.trim(),
+            fullTranscript: dictationFormTranscript.trim(),
+            vietnameseTranslation: dictationFormTranslation.trim(),
+            explanation: "Luyện nghe chép chính tả và nắm bắt từ khóa trọng tâm.",
+          },
+        ],
       };
       setDictationCards((prev) => [newCard, ...prev]);
-      triggerToast(`Đã thêm bài nghe ${newCard.part} - Test ${newCard.testNumber}! 🎉`);
+      triggerToast(`Đã thêm bài nghe "${dictationFormTitle}" thành công! 🎉`);
     }
     setShowDictationModal(false);
   };
@@ -397,24 +449,76 @@ export default function ListeningPage() {
   }, [filteredDictationCards]);
 
   const handleExportCsv = () => {
-    const headers = ["ID", "Tên bài", "Phần thi", "Cấp độ/Chủ đề", "Số câu hỏi", "Trạng thái"];
-    const rows = [
-      ...dictationCards.map((c) => [c.id, `"Test ${c.testNumber} - ${c.part}"`, `"${c.part}"`, `"${c.year}"`, c.totalQuestions, `"PUBLISHED"`]),
-      ...part1Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
-      ...part2Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
-      ...part3Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
-      ...part4Levels.map((l) => [l.id, `"${l.title}"`, `"${l.part}"`, `"${l.targetLevel || ""}"`, l.totalQuestions, `"PUBLISHED"`]),
+    let stt = 1;
+    const dataToExport = [
+      ...dictationCards.map((c) => ({
+        stt: stt++,
+        type: "Nghe chép chính tả",
+        part: c.part,
+        title: `Test ${c.testNumber} - ${c.part} (${c.year})`,
+        year: c.year,
+        questionsCount: c.totalQuestions,
+        status: "PUBLISHED",
+      })),
+      ...part1Levels.map((l) => ({
+        stt: stt++,
+        type: "Luyện nghe Part 1 theo cấp độ",
+        part: l.part,
+        title: l.title,
+        year: l.targetLevel || "Mọi cấp độ",
+        questionsCount: l.totalQuestions,
+        status: "PUBLISHED",
+      })),
+      ...part2Levels.map((l) => ({
+        stt: stt++,
+        type: "Luyện nghe Part 2 theo cấp độ",
+        part: l.part,
+        title: l.title,
+        year: l.targetLevel || "Mọi cấp độ",
+        questionsCount: l.totalQuestions,
+        status: "PUBLISHED",
+      })),
+      ...part3Levels.map((l) => ({
+        stt: stt++,
+        type: "Luyện nghe Part 3 theo cấp độ",
+        part: l.part,
+        title: l.title,
+        year: l.targetLevel || "Mọi cấp độ",
+        questionsCount: l.totalQuestions,
+        status: "PUBLISHED",
+      })),
+      ...part4Levels.map((l) => ({
+        stt: stt++,
+        type: "Luyện nghe Part 4 theo cấp độ",
+        part: l.part,
+        title: l.title,
+        year: l.targetLevel || "Mọi cấp độ",
+        questionsCount: l.totalQuestions,
+        status: "PUBLISHED",
+      })),
     ];
-    const csvContent =
-      "data:text/csv;charset=utf-8,\uFEFF" +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `toeic_listening_curriculum_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    exportToExcel({
+      filename: `chuong_trinh_listening_toeic_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Listening TOEIC",
+      title: "HỆ THỐNG QUẢN LÝ BÀI LUYỆN TOEIC LISTENING COMPREHENSION",
+      metadata: [
+        { label: "Ngày xuất báo cáo", value: new Date().toLocaleDateString("vi-VN") },
+        { label: "Năm lọc hiện tại", value: selectedYear },
+        { label: "Tổng số bài học & chủ điểm", value: dataToExport.length },
+      ],
+      columns: [
+        { header: "STT", key: "stt", width: 50, align: "center" },
+        { header: "Hình thức luyện tập", key: "type", width: 180, align: "left" },
+        { header: "Phần thi", key: "part", width: 90, align: "center" },
+        { header: "Tên bài luyện / Chủ điểm", key: "title", width: 250, align: "left" },
+        { header: "Năm / Target Level", key: "year", width: 140, align: "center" },
+        { header: "Số câu hỏi", key: "questionsCount", width: 90, align: "center" },
+        { header: "Trạng thái", key: "status", width: 110, align: "center" },
+      ],
+      data: dataToExport,
+    });
+    triggerToast("Đã xuất chương trình Listening ra file Excel (.xls) có cấu trúc cột rõ ràng! 📊");
   };
 
   return (
@@ -640,6 +744,14 @@ export default function ListeningPage() {
         showDictationModal={showDictationModal}
         setShowDictationModal={setShowDictationModal}
         editingDictationCard={editingDictationCard}
+        dictationFormTitle={dictationFormTitle}
+        setDictationFormTitle={setDictationFormTitle}
+        dictationFormAudioUrl={dictationFormAudioUrl}
+        setDictationFormAudioUrl={setDictationFormAudioUrl}
+        dictationFormTranscript={dictationFormTranscript}
+        setDictationFormTranscript={setDictationFormTranscript}
+        dictationFormTranslation={dictationFormTranslation}
+        setDictationFormTranslation={setDictationFormTranslation}
         dictationFormTestNum={dictationFormTestNum}
         setDictationFormTestNum={setDictationFormTestNum}
         dictationFormPart={dictationFormPart}

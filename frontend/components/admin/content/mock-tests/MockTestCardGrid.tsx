@@ -46,34 +46,42 @@ function MockTestTableRow({
 
   return (
     <tr className="hover:bg-slate-50/70 transition">
-      <td className="py-3.5 px-4 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-xs shrink-0">
-            #{test.id}
-          </div>
+      <td className="py-3.5 px-4">
+        <div className="flex items-start gap-2.5">
           <div>
             <p className="font-bold text-slate-900 leading-snug">{test.title}</p>
-            <span className="text-[10px] text-slate-400 font-mono">
-              TOEIC-FULL-200Q
-            </span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">#{test.id}</span>
+              <span className="text-[10px] text-slate-400">200Q · 120 min</span>
+            </div>
           </div>
         </div>
       </td>
 
       <td className="py-3.5 px-4 whitespace-nowrap">
         <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap inline-flex items-center">
-          {test.volId === "vol1" ? "Crack Vol 1" : "Crack Vol 2"}
+          {test.year ? `ETS ${test.year}` : (test.volId === "vol1" ? "ETS 2024" : test.volId === "vol2" ? "ETS 2023" : "ETS 2022")}
         </span>
       </td>
 
-      <td className="py-3.5 px-4 min-w-[200px]">
-        <div className="space-y-1">
+      <td className="py-3.5 px-4 min-w-[220px]">
+        <div className="min-w-[190px] space-y-1">
           <PracticeProgressBar
             completed={progress.completedQuestions}
             total={progress.totalQuestions || 200}
             compact
             unit="câu"
           />
+          {progress.completedQuestions > 0 && (
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 whitespace-nowrap px-0.5">
+              <span className="text-emerald-600 font-bold inline-flex items-center gap-0.5">
+                ✓ {progress.correctAnswers ?? progress.completedQuestions} đúng
+              </span>
+              <span className="text-rose-500 font-bold inline-flex items-center gap-0.5">
+                ✕ {progress.wrongAnswers ?? 0} sai
+              </span>
+            </div>
+          )}
         </div>
       </td>
 
@@ -91,7 +99,7 @@ function MockTestTableRow({
         </span>
       </td>
 
-      <td className="py-3.5 px-4 min-w-[160px]">
+      <td className="py-3.5 px-4 min-w-[160px] whitespace-nowrap">
         <div className="space-y-0.5">
           <span className="text-xs font-bold text-slate-800 block">
             Điểm TB: {estimatedScore} / 990
@@ -180,7 +188,7 @@ function MockTestGridItem({
         {/* Header */}
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
-            {test.volId === "vol1" ? "Crack Vol 1" : "Crack Vol 2"}
+            {test.year ? `ETS ${test.year}` : (test.volId === "vol1" ? "ETS 2024" : test.volId === "vol2" ? "ETS 2023" : "ETS 2022")}
           </span>
           <span
             className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
@@ -203,21 +211,19 @@ function MockTestGridItem({
           <p className="text-xs text-slate-400 mt-0.5">200 câu • 120 phút • 7 Parts</p>
         </div>
 
-        {/* Progress Bar */}
-        <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-2">
-          <PracticeProgressBar
-            completed={progress.completedQuestions}
-            total={progress.totalQuestions || 200}
-            unit="câu"
-          />
-          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1 font-medium">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              Đã làm: <strong className="text-slate-800 font-mono">{progress.completedQuestions}</strong> câu
-            </span>
-            <span className="font-mono text-slate-400">
-              Còn lại: <strong className="text-slate-600 font-mono">{Math.max(0, (progress.totalQuestions || 200) - progress.completedQuestions)}</strong>
-            </span>
+        {/* Thông tin quy mô quản trị nội dung (Admin chỉ hiển thị tổng số câu) */}
+        <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Tổng số câu hỏi:</span>
+            <strong className="text-blue-700 font-mono font-bold">200 câu</strong>
+          </div>
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Thời gian chuẩn:</span>
+            <span className="font-mono text-slate-800 font-semibold">120 phút</span>
+          </div>
+          <div className="flex justify-between items-center text-slate-600">
+            <span className="font-medium">Cấu trúc đề thi:</span>
+            <span className="text-slate-800 font-semibold">Part 1 - Part 7</span>
           </div>
         </div>
 
@@ -316,7 +322,7 @@ export const MockTestCardGrid: React.FC<MockTestCardGridProps> = ({
                 <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
                   <th className="py-3.5 px-4 min-w-[200px]">Tên đề thi &amp; Mã</th>
                   <th className="py-3.5 px-4 min-w-[120px]">Tập đề</th>
-                  <th className="py-3.5 px-4 min-w-[200px]">Tiến độ bài thi</th>
+                  <th className="py-3.5 px-4 min-w-[220px]">Tiến độ bài thi</th>
                   <th className="py-3.5 px-4 min-w-[110px]">Độ khó</th>
                   <th className="py-3.5 px-4 min-w-[150px]">Lượt thi &amp; Thang điểm</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>

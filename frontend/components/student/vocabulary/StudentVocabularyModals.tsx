@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X, Volume2, Gamepad2, ChevronLeft, ChevronRight, RotateCcw, BookOpen } from "lucide-react";
 import { WordItem, TestItem } from "@/app/admin/content/vocabulary/types";
+import { recordQuestionAnswer } from "@/lib/practiceProgress";
 
 interface StudentVocabularyModalsProps {
   // Word list modal
@@ -15,6 +16,7 @@ interface StudentVocabularyModalsProps {
   // Flashcards modal
   flashcardModalTest: TestItem | null;
   onCloseFlashcards: () => void;
+  initialFlashcardIndex?: number;
 
   // Game modal
   gameModalTest: TestItem | null;
@@ -29,6 +31,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
   onStartGameFromList,
   flashcardModalTest,
   onCloseFlashcards,
+  initialFlashcardIndex = 0,
   gameModalTest,
   onCloseGame,
 }) => {
@@ -47,7 +50,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
   if (flashcardModalTest !== prevFlashcardTest) {
     setPrevFlashcardTest(flashcardModalTest);
     if (flashcardModalTest) {
-      setFlashcardIndex(0);
+      setFlashcardIndex(initialFlashcardIndex || 0);
       setIsFlipped(false);
     }
   }
@@ -301,6 +304,9 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <button
                   type="button"
                   onClick={() => {
+                    const totalW = (flashcardModalTest.words || []).length;
+                    const curWord = (flashcardModalTest.words || [])[flashcardIndex];
+                    recordQuestionAnswer(`vocab-${flashcardModalTest.id}`, (curWord as any)?.id || flashcardIndex + 1, false, totalW);
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
                       prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0
@@ -325,6 +331,9 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <button
                   type="button"
                   onClick={() => {
+                    const totalW = (flashcardModalTest.words || []).length;
+                    const curWord = (flashcardModalTest.words || [])[flashcardIndex];
+                    recordQuestionAnswer(`vocab-${flashcardModalTest.id}`, (curWord as any)?.id || flashcardIndex + 1, true, totalW);
                     setIsFlipped(false);
                     setFlashcardIndex((prev) =>
                       prev < (flashcardModalTest.words || []).length - 1 ? prev + 1 : 0

@@ -22,6 +22,7 @@ import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTh
 import { ReadingCreateCardModal } from "@/components/admin/content/reading/ReadingCreateCardModal";
 import { ReadingDeleteCardModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
+import { exportToExcel } from "@/lib/exportExcel";
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
@@ -129,7 +130,10 @@ export default function ReadingLearningPage() {
 
   const handleSaveCard = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cardFormTitle.trim()) return;
+    if (!cardFormTitle.trim()) {
+      showToast("Vui lòng nhập tên chủ điểm đọc! ⚠️");
+      return;
+    }
 
     const rulesArr = cardFormTheoryRules
       .split("\n")
@@ -207,25 +211,38 @@ export default function ReadingLearningPage() {
   };
 
   const handleExportCsv = () => {
-    const headers = ["ID", "Tên chuyên đề", "Phần thi", "Thẻ gắn", "Số câu hỏi", "Trạng thái"];
-    const rows = cards.map((c) => [
-      `"${c.id}"`,
-      `"${c.title.replace(/"/g, '""')}"`,
-      `"${c.category}"`,
-      `"${c.tag || ""}"`,
-      c.totalQuestions,
-      `"PUBLISHED"`,
-    ]);
-    const csvContent =
-      "data:text/csv;charset=utf-8,\uFEFF" +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `toeic_reading_curriculum_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const dataToExport = cards.map((c, index) => ({
+      stt: index + 1,
+      id: c.id,
+      title: c.title,
+      part: c.category.toUpperCase(),
+      category: c.tag || c.subtitle || c.category,
+      questionsCount: c.totalQuestions,
+      time: "20 phút",
+      status: "PUBLISHED",
+    }));
+
+    exportToExcel({
+      filename: `chuong_trinh_reading_toeic_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Reading TOEIC",
+      title: "HỆ THỐNG QUẢN LÝ BÀI LUYỆN TOEIC READING COMPREHENSION",
+      metadata: [
+        { label: "Ngày xuất báo cáo", value: new Date().toLocaleDateString("vi-VN") },
+        { label: "Tổng số bài học", value: cards.length },
+      ],
+      columns: [
+        { header: "STT", key: "stt", width: 50, align: "center" },
+        { header: "Mã bài", key: "id", width: 100, align: "center" },
+        { header: "Tên bài đọc / Chuyên đề", key: "title", width: 240, align: "left" },
+        { header: "Phần thi", key: "part", width: 90, align: "center" },
+        { header: "Phân loại / Thẻ", key: "category", width: 140, align: "center" },
+        { header: "Số câu hỏi", key: "questionsCount", width: 90, align: "center" },
+        { header: "Thời gian làm bài", key: "time", width: 120, align: "center" },
+        { header: "Trạng thái", key: "status", width: 110, align: "center" },
+      ],
+      data: dataToExport,
+    });
+    showToast("Đã xuất chương trình Reading ra file Excel (.xls) có cấu trúc cột rõ ràng! 📊");
   };
 
   // Render Full Screen Workspace if Practice Started (Preview Mode)

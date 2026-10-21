@@ -76,14 +76,23 @@ export async function getVocabularySets(category?: string): Promise<VocabularyTe
 }
 
 export async function getAdminVocabularySets(category?: string): Promise<VocabularyTestSet[]> {
+  const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
   try {
-    const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
     const list = await apiRequest<RawVocabularyTestSet[]>(`/api/admin/vocabulary/sets${query}`);
-    return Array.isArray(list) ? list.map(mapSet) : [];
-  } catch (error) {
-    console.error('getAdminVocabularySets error:', error);
-    throw error;
+    if (Array.isArray(list) && list.length > 0) {
+      return list.map(mapSet);
+    }
+  } catch {
+    try {
+      const publicList = await apiRequest<RawVocabularyTestSet[]>(`/api/vocabulary/sets${query}`);
+      if (Array.isArray(publicList) && publicList.length > 0) {
+        return publicList.map(mapSet);
+      }
+    } catch {
+      // Return empty so callers use fallback gracefully
+    }
   }
+  return [];
 }
 
 export async function getVocabularySet(setId: string): Promise<VocabularyTestSet> {

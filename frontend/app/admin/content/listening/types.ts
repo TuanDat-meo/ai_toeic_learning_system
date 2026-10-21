@@ -84,6 +84,8 @@ export interface DictationCardData {
   notesCount: number;
   vocabItems: { word: string; ipa: string; meaning: string; example?: string }[];
   questions: DictationQuestion[];
+  originalTotalQuestions?: number;
+  [key: string]: any;
 }
 
 /** @deprecated — dùng ListeningQuestion thay thế */
@@ -131,4 +133,6 @@ export interface LevelCategoryCardData {
   rules: string[];
   vocabBag: { word: string; ipa: string; meaning: string }[];
   questions: DictationQuestion[];
+  originalTotalQuestions?: number;
+  [key: string]: any;
 }

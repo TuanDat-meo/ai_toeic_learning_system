@@ -42,7 +42,7 @@ export function LearningOnboardingPrompt() {
           Hoàn thiện mục tiêu học tập ({onboardingStep}/5)
         </h2>
         <p className="mt-2 text-sm leading-6 text-on-surface-variant sm:text-base">
-          Cho Đậu TOEIC biết điểm mục tiêu, điểm hiện tại và ngày thi để theo dõi tiến độ ngay trên trang chủ. Mất khoảng 2 phút.
+          Cho TOEIC AI biết điểm mục tiêu, điểm hiện tại và ngày thi để theo dõi tiến độ ngay trên trang chủ. Mất khoảng 2 phút.
         </p>
       </div>
       <Link
