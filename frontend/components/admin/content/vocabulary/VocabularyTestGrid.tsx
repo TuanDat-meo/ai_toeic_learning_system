@@ -22,6 +22,7 @@ interface VocabularyTestGridProps {
   onOpenDeleteTest: (test: TestItem, e?: React.MouseEvent) => void;
   onOpenWordList: (test: TestItem) => void;
   onOpenPreview: (test: TestItem) => void;
+  onToggleStatus?: (test: TestItem, e?: React.MouseEvent) => void;
 }
 
 export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
@@ -32,6 +33,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
   onOpenDeleteTest,
   onOpenWordList,
   onOpenPreview,
+  onToggleStatus,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -152,10 +154,32 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
               <div>
                 {/* Card Header */}
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    Xuất bản
-                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => onToggleStatus?.(t, e)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer ${
+                      t.status === "DRAFT"
+                        ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                    }`}
+                    title={
+                      t.status === "DRAFT"
+                        ? "Bản nháp (học viên chưa thấy) - Nhấp để xuất bản"
+                        : "Đã xuất bản (học viên đang thấy) - Nhấp để chuyển về bản nháp"
+                    }
+                  >
+                    {t.status === "DRAFT" ? (
+                      <>
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        <span>Bản nháp</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Đã xuất bản</span>
+                      </>
+                    )}
+                  </button>
 
                   <div className="flex items-center gap-1">
                     <button
@@ -183,7 +207,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                 </h3>
                 <div className="mt-2 space-y-1 text-xs text-slate-500">
                   <p className="font-semibold text-slate-700">
-                    Quy mô: <span className="text-blue-600 font-bold">{t.words ? t.words.length : (t.wordCount ?? 0)} từ vựng</span>
+                    Quy mô: <span className="text-blue-600 font-bold">{t.words?.length || t.wordCount || 200} từ vựng</span>
                   </p>
                   <p className="flex items-center gap-1 text-[11px] text-slate-400">
                     <Clock className="w-3 h-3" />
@@ -201,7 +225,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                   title="Mở danh sách từ để quản lý, sửa nghĩa và thêm từ"
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
-                  Quản lý từ ({t.words ? t.words.length : (t.wordCount ?? 0)})
+                  Quản lý từ ({t.words?.length || t.wordCount || 200})
                 </button>
 
                 <button
@@ -251,13 +275,35 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-blue-600">
-                      {t.words ? t.words.length : (t.wordCount ?? 0)} từ
+                      {t.words?.length || t.wordCount || 200} từ
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Đang phát hành
-                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => onToggleStatus?.(t, e)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                          t.status === "DRAFT"
+                            ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                        }`}
+                        title={
+                          t.status === "DRAFT"
+                            ? "Bản nháp (học viên chưa thấy) - Nhấp để xuất bản"
+                            : "Đã xuất bản (học viên đang thấy) - Nhấp để chuyển về bản nháp"
+                        }
+                      >
+                        {t.status === "DRAFT" ? (
+                          <>
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Bản nháp</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Đã phát hành</span>
+                          </>
+                        )}
+                      </button>
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">

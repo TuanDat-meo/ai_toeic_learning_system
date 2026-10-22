@@ -10,6 +10,7 @@ import { QuestionPreviewModal } from "@/components/admin/content/questions/Quest
 import { QuestionEditModal } from "@/components/admin/content/questions/QuestionEditModal";
 import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
 import { exportToExcel } from "@/lib/exportExcel";
+import { playUnifiedAnswerSound } from "@/lib/sound";
 
 
 export default function QuestionsPage() {
@@ -23,21 +24,8 @@ export default function QuestionsPage() {
   };
 
   // Web Audio SFX
-  const playSfx = (type?: "correct" | "wrong" | "click" | string) => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.setValueAtTime(type === "click" ? 440 : 520, ctx.currentTime);
-      gain.gain.setValueAtTime(0.08, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.08);
-    } catch {}
+  const playSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
   // Audio Speech Synthesis

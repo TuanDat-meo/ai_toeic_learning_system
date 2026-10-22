@@ -29,6 +29,7 @@ import { QuestionErrorReportButton } from "@/components/support/QuestionErrorRep
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 import { saveItemProgress } from "@/lib/practiceProgress";
 import { saveListeningProgress } from "@/lib/api/listening";
+import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 
 interface ListeningDictationModalProps {
   dictationModalCard: DictationCardData;
@@ -881,16 +882,53 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                           <p className="text-xs font-mono font-medium text-slate-500">{v.ipa}</p>
                           <p className="text-xs font-bold text-slate-800">{v.meaning}</p>
 
-                          {isExpanded && v.example && (
-                            <div className="p-2.5 rounded-xl bg-white border border-blue-100 text-slate-800 space-y-0.5 pt-2">
-                              <p className="font-semibold text-blue-950">
-                                &quot;{typeof v.example === "string" ? v.example : v.example.en}&quot;
-                              </p>
-                              {typeof v.example === "object" && v.example.vi && (
-                                <p className="text-slate-600 italic">{v.example.vi}</p>
-                              )}
-                            </div>
-                          )}
+                          {isExpanded && (() => {
+                            const detail = getEnrichedVocabDetail(v, q.fullTranscript || q.question || "");
+                            return (
+                              <div className="pt-3 border-t border-blue-200/60 space-y-3 animate-in fade-in duration-150">
+                                {/* 1. Lời giải thích chi tiết & ngữ cảnh */}
+                                <div className="space-y-1">
+                                  <div className="font-bold text-blue-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>💡 Giải thích chi tiết &amp; Ngữ cảnh bài thi:</span>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-white border border-blue-200 text-slate-800 leading-relaxed text-xs">
+                                    {detail.explanation}
+                                  </div>
+                                </div>
+
+                                {/* 2. Ví dụ câu thực tế */}
+                                {detail.example && (
+                                  <div className="space-y-1">
+                                    <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                      <span>📝 Ví dụ câu trong đề thi:</span>
+                                    </div>
+                                    <div className="p-3 rounded-xl bg-white border border-slate-200 text-slate-800 space-y-1 text-xs">
+                                      <p className="font-semibold text-slate-900">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                      {typeof detail.example === "object" && detail.example.vi && (
+                                        <p className="text-slate-600 italic">👉 {detail.example.vi}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 3. Cụm từ hay gặp */}
+                                {detail.collocations && detail.collocations.length > 0 && (
+                                  <div className="space-y-1">
+                                    <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                      <span>🔗 Cụm từ hay gặp (Collocations):</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {detail.collocations.map((col: any, cIdx: number) => (
+                                        <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-900 text-xs">
+                                          <strong>{col.en}</strong>: {col.vi}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}

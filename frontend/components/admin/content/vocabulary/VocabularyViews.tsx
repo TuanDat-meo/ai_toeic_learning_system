@@ -119,7 +119,7 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
                         </span>
                         <button
                           type="button"
-                          onClick={() => playAudio(w.word)}
+                          onClick={() => playAudio(w.audio || w.audioUrl || w.word)}
                           className="p-1 rounded-full hover:bg-blue-100 text-slate-500 hover:text-blue-600 transition"
                           title="Phát âm thanh"
                         >

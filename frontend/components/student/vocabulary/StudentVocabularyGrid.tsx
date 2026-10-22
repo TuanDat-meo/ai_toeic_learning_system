@@ -20,7 +20,7 @@ interface StudentVocabularyGridProps {
   setActiveSubCategory: (cat: string) => void;
   onOpenWordList: (test: TestItem) => void;
   onOpenFlashcards: (test: TestItem, isRedo?: boolean, startIndex?: number) => void;
-  onOpenGame: (test: TestItem) => void;
+  onOpenGame: (test: TestItem, isRedo?: boolean) => void;
 }
 
 function VocabCardItem({
@@ -32,9 +32,9 @@ function VocabCardItem({
   t: TestItem;
   onOpenWordList: (test: TestItem) => void;
   onOpenFlashcards: (test: TestItem, isRedo?: boolean, startIndex?: number) => void;
-  onOpenGame: (test: TestItem) => void;
+  onOpenGame: (test: TestItem, isRedo?: boolean) => void;
 }) {
-  const wordCount = t.words ? t.words.length : (t.wordCount ?? 0);
+  const wordCount = t.words?.length || t.wordCount || 200;
   const progressKey = `vocab-${t.id}`;
   const progress = useItemProgress(progressKey, wordCount || 25);
   const completed = progress.completedQuestions || 0;
@@ -91,12 +91,12 @@ function VocabCardItem({
           {wrong > 0 && (
             <button
               type="button"
-              onClick={() => onOpenFlashcards(t, true, 0)}
-              className="text-[11px] font-bold text-red-600 hover:text-red-700 inline-flex items-center gap-1 cursor-pointer"
-              title={`Ôn lại ${wrong} từ chưa nhớ`}
+              onClick={() => onOpenGame(t, true)}
+              className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-lg inline-flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs"
+              title={`Làm lại ${wrong} câu sai trong Mini-game`}
             >
-              <RotateCcw className="w-3 h-3" />
-              Ôn từ sai
+              <RotateCcw className="w-3 h-3 text-red-500 stroke-[2.5]" />
+              Làm lại {wrong} câu sai
             </button>
           )}
         </div>
@@ -125,13 +125,21 @@ function VocabCardItem({
           </button>
           <button
             type="button"
-            onClick={() => onOpenGame(t)}
+            onClick={() => onOpenGame(t, false)}
             disabled={wordCount === 0}
             className="py-2.5 px-2 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 disabled:opacity-40 disabled:cursor-not-allowed text-amber-900 text-xs font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
             title={wordCount === 0 ? "Bộ từ chưa có từ vựng" : "Chơi mini-game trắc nghiệm phản xạ"}
           >
             <Gamepad2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span className="truncate">Mini-game</span>
+            {wrong > 0 && (
+              <span
+                className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center animate-pulse shadow-xs"
+                title={`${wrong} câu sai cần làm lại`}
+              >
+                {wrong}
+              </span>
+            )}
           </button>
         </div>
       </div>

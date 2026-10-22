@@ -647,7 +647,7 @@ export function AdminSubscriptionsView() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6 text-xs">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto custom-scrollbar p-6 text-xs">
               {errorMsg ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800">{errorMsg}</div> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -805,7 +805,7 @@ export function AdminSubscriptionsView() {
                   />
                   Chọn tất cả quyền lợi
                 </label>
-                <div className="max-h-[28rem] space-y-3 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 p-3">
+                <div className="max-h-[28rem] space-y-3 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 p-3 custom-scrollbar">
                   {featureCatalog.map((feature) => {
                     const parentFeature = feature.parentFeatureKey
                       ? featureCatalog.find((item) => item.key === feature.parentFeatureKey)

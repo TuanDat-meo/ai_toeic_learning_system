@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Layers } from "lucide-react";
 import { VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
-import { INITIAL_TESTS } from "@/app/admin/content/vocabulary/mockData";
+import { INITIAL_TESTS, VOCAB_AUDIO_MAP } from "@/app/admin/content/vocabulary/mockData";
 import { getVocabularySets } from "@/lib/api/vocabulary";
 import { StudentVocabularyGrid } from "@/components/student/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/student/vocabulary/StudentVocabularyModals";
@@ -34,15 +34,54 @@ export default function StudentVocabularyPage() {
   const loadSets = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getVocabularySets();
-      if (data && data.length > 0) {
-        setTests(data);
-      } else {
-        setTests(INITIAL_TESTS);
+      let rawList: VocabularyTestSet[] = [];
+      const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_vocab_tests") : null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Merge words từ INITIAL_TESTS vào các set bị thiếu words
+            rawList = parsed.map((d: VocabularyTestSet) => {
+              const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
+              const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
+              return {
+                ...d,
+                words,
+                wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
+              };
+            });
+          }
+        } catch {}
       }
+
+      if (rawList.length === 0) {
+        try {
+          const data = await getVocabularySets();
+          if (data && data.length > 0) {
+            rawList = data.map((d) => {
+              const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
+              const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
+              return {
+                ...d,
+                words,
+                wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
+              };
+            });
+          }
+        } catch {}
+      }
+
+      if (rawList.length === 0) {
+        rawList = INITIAL_TESTS;
+      }
+
+      // CHỈ HIỂN THỊ CÁC BỘ TỪ ĐÃ XUẤT BẢN CHO HỌC VIÊN
+      const published = rawList.filter((t) => t.status !== "DRAFT" && t.status !== "Bản nháp");
+      setTests(published);
     } catch (err) {
       console.warn("Could not load vocabulary sets from server, using fallback:", err);
-      setTests(INITIAL_TESTS);
+      const published = INITIAL_TESTS.filter((t) => t.status !== "DRAFT");
+      setTests(published);
     } finally {
       setLoading(false);
     }
@@ -50,19 +89,32 @@ export default function StudentVocabularyPage() {
 
   useEffect(() => {
     loadSets();
+    const handleSync = () => { loadSets(); };
+    window.addEventListener("toeic-vocab-tests-updated", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("toeic-vocab-tests-updated", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
   }, [loadSets]);
 
-  // Audio synthesis phát âm tiếng Anh
-  const playAudio = (text: string) => {
-    if (!text.trim()) return;
-    if (text.startsWith("http://") || text.startsWith("https://")) {
-      const audio = new Audio(text);
+  // Audio synthesis phát âm tiếng Anh chuẩn MP3 hoặc fallback
+  const playAudio = (textOrUrl: string) => {
+    if (!textOrUrl?.trim()) return;
+    if (textOrUrl.startsWith("/") || textOrUrl.startsWith("http://") || textOrUrl.startsWith("https://")) {
+      const audio = new Audio(textOrUrl);
+      audio.play().catch(() => {});
+      return;
+    }
+    const mapped = VOCAB_AUDIO_MAP[textOrUrl.toLowerCase().trim()];
+    if (mapped) {
+      const audio = new Audio(mapped);
       audio.play().catch(() => {});
       return;
     }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(textOrUrl);
       utterance.lang = "en-US";
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
@@ -120,7 +172,47 @@ export default function StudentVocabularyPage() {
           }
           void startVocabularyActivity("VOCABULARY_FLASHCARDS", () => setFlashcardModalTest(testToUse));
         }}
-        onOpenGame={(test) => { void startVocabularyActivity("VOCABULARY_GAME", () => setGameModalTest(test)); }}
+        onOpenGame={(test, isRedo = false) => {
+          let testToUse = test;
+          if (isRedo) {
+            const prog = getItemProgress(`vocab-${test.id}`, test.words ? test.words.length : 25);
+            const wrongList = prog.wrongQuestionIds || [];
+            const wrongIds = wrongList.map(String);
+            const allWords = test.words || [];
+            let filtered = allWords.filter((w, idx) => {
+              const wId = String((w as any)?.id || "");
+              const wWord = String(w.word || "");
+              const idx1 = String(idx + 1);
+              const idx0 = String(idx);
+              return wrongIds.some(
+                (wid) =>
+                  wid === wId ||
+                  wid === wWord ||
+                  wid === idx1 ||
+                  wid === idx0 ||
+                  (wId && wId.endsWith(`-${wid}`)) ||
+                  (wId && wId.endsWith(`_${wid}`))
+              );
+            });
+            if (filtered.length === 0) {
+              filtered = allWords.slice(0, Math.max(1, prog.wrongAnswers || 2));
+            }
+            testToUse = {
+              ...test,
+              words: filtered,
+              isRedoMode: true,
+              allWords: test.words,
+              originalTotalWords: test.words?.length || test.wordCount || 200,
+            } as any;
+          } else {
+            testToUse = {
+              ...test,
+              allWords: test.words,
+              originalTotalWords: test.words?.length || test.wordCount || 200,
+            } as any;
+          }
+          void startVocabularyActivity("VOCABULARY_GAME", () => setGameModalTest(testToUse));
+        }}
       />
 
       {/* Các Modals học tập */}

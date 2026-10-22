@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Sparkles } from "lucide-react";
-import { MockTest, MockTestQuestion, TestItem, PracticeQuestion } from "@/app/admin/content/mock-tests/types";
-import { fetchMockTests, fetchMockTestQuestions } from "@/lib/api/mockTests";
+import { MockTest, MockTestQuestion, TestItem, PracticeQuestion, normalizeToeicPart } from "@/app/admin/content/mock-tests/types";
+import { fetchMockTests, fetchMockTestQuestions, submitMockTestAttempt } from "@/lib/api/mockTests";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3 } from "@/app/admin/content/mock-tests/mockData";
 import { StudentMockTestCardGrid } from "@/components/student/mock-tests/StudentMockTestCardGrid";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
@@ -12,7 +12,8 @@ import { MockTestTranscriptModal } from "@/components/admin/content/mock-tests/M
 import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTestVocabModal";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { MockTestHistoryModal } from "@/components/admin/content/mock-tests/MockTestHistoryModal";
-import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
+import { getItemProgress, getRedoWrongQuestions, saveItemProgress } from "@/lib/practiceProgress";
+import { playUnifiedAnswerSound } from "@/lib/sound";
 
 export default function StudentMockTestsPage() {
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2" | "vol3">("vol1");
@@ -21,29 +22,53 @@ export default function StudentMockTestsPage() {
   const [testsVol3, setTestsVol3] = useState<TestItem[]>(INITIAL_TESTS_VOL3);
   const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
   const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
+  const [activeTranscriptQuestions, setActiveTranscriptQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
 
-  const currentTests = selectedVol === "vol1" ? testsVol1 : selectedVol === "vol2" ? testsVol2 : testsVol3;
-  // Auto-fetch tests from PostgreSQL
-  useEffect(() => {
-    let active = true;
-    async function loadTests() {
+  const rawCurrentTests = selectedVol === "vol1" ? testsVol1 : selectedVol === "vol2" ? testsVol2 : testsVol3;
+  // CHỈ HIỂN THỊ CÁC ĐỀ THI ĐÃ XUẤT BẢN / PHÁT HÀNH CHO HỌC VIÊN
+  const currentTests = useMemo(() => {
+    return rawCurrentTests.filter((t) => t.status !== "DRAFT" && t.status !== "Bản nháp");
+  }, [rawCurrentTests]);
+
+  const loadTests = useCallback(async () => {
+    if (typeof window !== "undefined") {
       try {
-        const data = await fetchMockTests();
-        if (data && data.length > 0 && active) {
-          const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
-          const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
-          const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
-          if (v1.length > 0) setTestsVol1(v1);
-          if (v2.length > 0) setTestsVol2(v2);
-          if (v3.length > 0) setTestsVol3(v3);
-        }
-      } catch (err) {
-        console.warn("Could not load mock tests from API:", err);
-      }
+        const r1 = localStorage.getItem("toeic_mock_tests_v1");
+        const r2 = localStorage.getItem("toeic_mock_tests_v2");
+        const r3 = localStorage.getItem("toeic_mock_tests_v3");
+        let foundLocal = false;
+        if (r1) { const p1 = JSON.parse(r1); if (Array.isArray(p1) && p1.length > 0) { setTestsVol1(p1); foundLocal = true; } }
+        if (r2) { const p2 = JSON.parse(r2); if (Array.isArray(p2) && p2.length > 0) { setTestsVol2(p2); foundLocal = true; } }
+        if (r3) { const p3 = JSON.parse(r3); if (Array.isArray(p3) && p3.length > 0) { setTestsVol3(p3); foundLocal = true; } }
+        if (foundLocal) return;
+      } catch {}
     }
-    loadTests();
-    return () => { active = false; };
+
+    try {
+      const data = await fetchMockTests();
+      if (data && data.length > 0) {
+        const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
+        const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
+        const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
+        if (v1.length > 0) setTestsVol1(v1);
+        if (v2.length > 0) setTestsVol2(v2);
+        if (v3.length > 0) setTestsVol3(v3);
+      }
+    } catch (err) {
+      console.warn("Could not load mock tests from API:", err);
+    }
   }, []);
+
+  useEffect(() => {
+    loadTests();
+    const handleSync = () => { loadTests(); };
+    window.addEventListener("toeic-mock-tests-updated", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("toeic-mock-tests-updated", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, [loadTests]);
 
 
   // State Toast Notification
@@ -54,42 +79,12 @@ export default function StudentMockTestsPage() {
   };
 
   // Sound Effects Synthesizer
-  const playSfx = (type: "correct" | "wrong" | "incorrect" | "click") => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      if (type === "correct") {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.2);
-      } else if (type === "wrong" || type === "incorrect") {
-        osc.frequency.setValueAtTime(220, ctx.currentTime);
-        osc.frequency.setValueAtTime(160, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(400, ctx.currentTime);
-        gain.gain.setValueAtTime(0.05, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.05);
-      }
-    } catch {}
+  const playSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
-  const playPracticeSfx = (type: "correct" | "wrong" | "click") => {
-    playSfx(type);
+  const playPracticeSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
   const formatTime = (sec: number) => {
@@ -208,25 +203,37 @@ export default function StudentMockTestsPage() {
     }
   };
 
-  const handleSubmitExam = (effectiveQuestions?: PracticeQuestion[]) => {
+  const handleSubmitExam = async (effectiveQuestions?: PracticeQuestion[]) => {
     setExamSubmitted(true);
     const questionsToGrade = effectiveQuestions && effectiveQuestions.length > 0 ? effectiveQuestions : SAMPLE_EXAM_QUESTIONS;
     let correct = 0;
     let correctLC = 0;
     let correctRC = 0;
+    const wrongQuestionIds: (string | number)[] = [];
+    const answeredQuestionIds: (string | number)[] = [];
     questionsToGrade.forEach((q) => {
-      if (examAnswers[q.id] === q.correctAnswer) {
-        correct += 1;
-        const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(q.part);
-        if (isListening) correctLC++;
-        else correctRC++;
+      const userAns = examAnswers[q.id];
+      if (userAns !== undefined && userAns !== null && userAns !== "") {
+        answeredQuestionIds.push(q.id);
+        if (userAns === q.correctAnswer) {
+          correct += 1;
+          const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(normalizeToeicPart(q.part));
+          if (isListening) correctLC++;
+          else correctRC++;
+        } else {
+          wrongQuestionIds.push(q.id);
+        }
       }
     });
 
-    const isFullScale = questionsToGrade.length >= 200;
-    const estLC = isFullScale ? Math.min(495, correctLC * 5) : correctLC * 5;
-    const estRC = isFullScale ? Math.min(495, correctRC * 5) : correctRC * 5;
-    const estTotal = isFullScale ? Math.min(990, estLC + estRC) : correct * 5;
+    // Mỗi câu làm đúng là 5 điểm
+    const estLC = correctLC * 5;
+    const estRC = correctRC * 5;
+    const estTotal = correct * 5;
+
+    const wrongCount = wrongQuestionIds.length;
+    const answeredCount = answeredQuestionIds.length;
+    const totalCount = questionsToGrade.length || 200;
 
     setExamResultScore({
       total: estTotal,
@@ -234,7 +241,39 @@ export default function StudentMockTestsPage() {
       reading: estRC,
       correctCount: correct,
     });
-    triggerToast("Đã nộp bài thi thành công!");
+
+    if (examModalTest) {
+      saveItemProgress(
+        `mock-test-${examModalTest.id}`,
+        answeredCount,
+        totalCount,
+        estTotal,
+        correct,
+        wrongCount,
+        wrongQuestionIds,
+        undefined,
+        answeredQuestionIds
+      );
+      const durationSec = examDurationType === "120"
+        ? Math.max(1, 120 * 60 - examTimeRemaining)
+        : examDurationType === "60"
+        ? Math.max(1, 60 * 60 - examTimeRemaining)
+        : Math.max(1, 30 * 60 - examTimeRemaining);
+
+      void submitMockTestAttempt({
+        testId: examModalTest.id,
+        testTitle: examModalTest.title,
+        volId: examModalTest.volId,
+        score: estTotal,
+        listeningScore: estLC,
+        readingScore: estRC,
+        correctCount: correct,
+        totalCount: questionsToGrade.length,
+        durationSeconds: durationSec,
+      });
+    }
+
+    triggerToast(`Đã nộp bài! Bạn đạt ${estTotal}/${questionsToGrade.length * 5} điểm (${correct}/${questionsToGrade.length} câu đúng - 5 điểm/câu). Kết quả đã gửi qua Admin!`);
   };
 
   return (
@@ -295,7 +334,16 @@ export default function StudentMockTestsPage() {
           }
           void handleOpenPractice(test);
         }}
-        onOpenTranscript={(test) => setTranscriptModalTest(test)}
+        onOpenTranscript={async (test) => {
+          try {
+            const qs = await fetchMockTestQuestions(test.id);
+            if (qs && qs.length > 0) setActiveTranscriptQuestions(qs);
+            else setActiveTranscriptQuestions(SAMPLE_EXAM_QUESTIONS);
+          } catch {
+            setActiveTranscriptQuestions(SAMPLE_EXAM_QUESTIONS);
+          }
+          setTranscriptModalTest(test);
+        }}
         onOpenVocab={(test) => setVocabModalTest(test)}
         onOpenHistory={(test) => setHistoryModalTest(test)}
       />
@@ -384,7 +432,7 @@ export default function StudentMockTestsPage() {
       {transcriptModalTest && (
         <MockTestTranscriptModal
           test={transcriptModalTest}
-          questions={SAMPLE_EXAM_QUESTIONS}
+          questions={activeTranscriptQuestions}
           onClose={() => setTranscriptModalTest(null)}
         />
       )}

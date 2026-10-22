@@ -1,10 +1,8 @@
 "use client";
 
 import React from "react";
-import { Plus, Bookmark, Pencil, Trash2, Languages, FileText, Headphones, ChevronRight, Layers } from "lucide-react";
+import { Plus, Bookmark, Pencil, Trash2, Languages, FileText, Headphones, ChevronRight } from "lucide-react";
 import { DictationCardData } from "@/app/admin/content/listening/types";
-import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
-import { useItemProgress } from "@/lib/practiceProgress";
 
 interface ListeningDictationTabProps {
   selectedYear: "2024" | "2023" | "2022";
@@ -35,8 +33,6 @@ function AdminDictationCardItem({
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
   handleOpenDictationPractice: (card: DictationCardData) => void;
 }) {
-  const progress = useItemProgress(`listening-dictation-${card.id}`, card.totalQuestions);
-
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-200 transition-all flex flex-col justify-between">
       <div>

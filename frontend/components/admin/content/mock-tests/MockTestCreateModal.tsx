@@ -8,8 +8,8 @@ interface MockTestCreateModalProps {
   editingTest: TestItem | null;
   testFormTitle: string;
   setTestFormTitle: (val: string) => void;
-  testFormVolId: "vol1" | "vol2";
-  setTestFormVolId: (val: "vol1" | "vol2") => void;
+  testFormVolId: "vol1" | "vol2" | "vol3";
+  setTestFormVolId: (val: "vol1" | "vol2" | "vol3") => void;
   testFormDifficulty: "Khó" | "Trung bình" | "Vừa sức";
   setTestFormDifficulty: (val: "Khó" | "Trung bình" | "Vừa sức") => void;
   testFormDescription: string;
@@ -20,6 +20,8 @@ interface MockTestCreateModalProps {
   setTestFormDuration: (val: number) => void;
   testFormTotalQuestions: number;
   setTestFormTotalQuestions: (val: number) => void;
+  testFormStatus?: string;
+  setTestFormStatus?: (val: string) => void;
   onSaveTest: (e: React.FormEvent) => void;
   onClose: () => void;
 }
@@ -40,6 +42,8 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
   setTestFormDuration,
   testFormTotalQuestions,
   setTestFormTotalQuestions,
+  testFormStatus = "PUBLISHED",
+  setTestFormStatus,
   onSaveTest,
   onClose,
 }) => {
@@ -132,11 +136,12 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
                 <label className="block text-slate-700 font-bold mb-1">Bộ đề (Volume)</label>
                 <select
                   value={testFormVolId}
-                  onChange={(e) => setTestFormVolId(e.target.value as "vol1" | "vol2")}
+                  onChange={(e) => setTestFormVolId(e.target.value as "vol1" | "vol2" | "vol3")}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
                 >
                   <option value="vol1">Crack TOEIC Vol 1 (ETS 2024)</option>
                   <option value="vol2">Crack TOEIC Vol 2 (ETS 2023)</option>
+                  <option value="vol3">Crack TOEIC Vol 3 (ETS 2022)</option>
                 </select>
               </div>
 
@@ -166,6 +171,39 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
                   <option value="Khó">Khó (Mục tiêu 750 - 990)</option>
                 </select>
               </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200/60">
+              <label className="block text-slate-700 font-bold mb-1.5">Trạng thái phát hành</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTestFormStatus?.("PUBLISHED")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    (testFormStatus || "PUBLISHED") === "PUBLISHED"
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-800 ring-2 ring-emerald-100"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>✓ Xuất bản ngay (Học viên thấy)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestFormStatus?.("DRAFT")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    testFormStatus === "DRAFT"
+                      ? "bg-amber-50 border-amber-300 text-amber-800 ring-2 ring-amber-100"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>⏱️ Bản nháp (Chỉ Admin)</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {(testFormStatus || "PUBLISHED") === "PUBLISHED"
+                  ? "Học viên sẽ nhìn thấy và làm bài thi này ngay trên trang Luyện thi thử."
+                  : "Chỉ Admin nhìn thấy đề thi này. Học viên sẽ không thấy cho đến khi Admin xuất bản."}
+              </p>
             </div>
           </div>
 

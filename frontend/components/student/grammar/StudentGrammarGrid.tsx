@@ -30,8 +30,8 @@ function StudentGrammarCardItem({
 
   return (
     <div className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
-      <div>
-        {/* Card Header */}
+      <div className="space-y-3">
+        {/* Card Header (Đã loại bỏ khung Target 350-750+) */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
@@ -49,29 +49,15 @@ function StudentGrammarCardItem({
         </div>
 
         {/* Title & Info */}
-        <h3 className="text-base font-bold text-slate-900 mt-3 group-hover:text-blue-600 transition-colors line-clamp-1">
-          {topic.titleVi || topic.title}
-        </h3>
-        <p className="text-xs text-slate-400 italic mt-0.5">{topic.titleEn || topic.englishTitle}</p>
-
-        {/* Formula Callout */}
-        <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-          <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-            Công thức trọng tâm
-          </span>
-          <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-relaxed">
-            {(topic.formula || "")
-              .replace(/###\s+\d+\.\s*/g, "")
-              .replace(/###\s+/g, "")
-              .replace(/\*\*/g, "")
-              .replace(/`([^`]+)`/g, "$1")
-              .replace(/\n+/g, " • ")
-              .trim()}
-          </p>
+        <div>
+          <h4 className="text-base font-bold text-slate-900 leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors">
+            {topic.titleVi || topic.title}
+          </h4>
+          <p className="text-xs text-slate-400 italic mt-0.5">{topic.titleEn || topic.englishTitle}</p>
         </div>
 
         {/* Badges / Metrics */}
-        <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
+        <div className="flex items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1">
             <Layers className="w-3.5 h-3.5 text-blue-600" />
             {totalQ} câu bài tập
@@ -82,13 +68,13 @@ function StudentGrammarCardItem({
           </span>
         </div>
 
-        {/* Khung thống kê và các nút điều khiển học tập */}
+        {/* Khung thống kê và các nút điều khiển đúng chuẩn 100% như Đọc và Nghe */}
         <div className="pt-2">
           <StudentCardProgressAction
             progressKey={`grammar-${topic.id}`}
-            totalQuestions={totalQ || 30}
+            totalQuestions={totalQ || 10}
             savedCount={trapsCount || 1}
-            actionLabel="Học ngay"
+            actionLabel="Luyện tập"
             onStart={(nextIdx) => onStartQuiz(topic, nextIdx, false)}
             onRedoWrong={() => onStartQuiz(topic, 0, true)}
             onOpenTheory={() => onOpenTheory(topic)}
@@ -150,43 +136,42 @@ export const StudentGrammarGrid: React.FC<StudentGrammarGridProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Tìm theo chủ đề, mã, công thức..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-slate-50/50"
+            placeholder="Tìm theo tên chuyên đề, công thức, mã..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
           />
         </div>
 
-        {/* Lọc theo Phần thi */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar">
-          {[
-            { id: "ALL", label: "Tất cả phần", count: partCounts.ALL },
-            { id: "Part 5", label: "Part 5", count: partCounts["Part 5"] },
-            { id: "Part 6", label: "Part 6", count: partCounts["Part 6"] },
-            { id: "Part 7", label: "Part 7", count: partCounts["Part 7"] },
-          ].map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setFilterPart(p.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                filterPart === p.id
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <span>{p.label}</span>
-              <span
-                className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                  filterPart === p.id
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-slate-200 text-slate-500"
+        {/* Bộ lọc theo Part */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          {(["ALL", "Part 5", "Part 6", "Part 7"] as const).map((part) => {
+            const count = partCounts[part] || 0;
+            const isActive = filterPart === part;
+            return (
+              <button
+                key={part}
+                type="button"
+                onClick={() => setFilterPart(part)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
                 }`}
               >
-                {p.count}
-              </span>
-            </button>
-          ))}
+                <span>{part === "ALL" ? "Tất cả" : part}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    isActive
+                      ? "bg-blue-500/50 text-white"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

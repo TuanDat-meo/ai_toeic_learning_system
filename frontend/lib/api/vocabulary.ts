@@ -1,6 +1,7 @@
 import { apiRequest, writeAuthRequest } from './client';
 import type { VocabularyTestSet, WordItem } from '@/app/admin/content/vocabulary/types';
 import type { ContentStatus } from '@/lib/types/domain';
+import { INITIAL_TESTS, VOCAB_AUDIO_MAP } from '@/app/admin/content/vocabulary/mockData';
 
 interface RawWordItem {
   id: string;
@@ -16,6 +17,8 @@ interface RawWordItem {
   starred?: boolean;
   status?: string;
   setId?: string;
+  audio?: string;
+  audioUrl?: string;
 }
 
 interface RawVocabularyTestSet {
@@ -29,6 +32,8 @@ interface RawVocabularyTestSet {
 }
 
 function mapWord(w: RawWordItem): WordItem {
+  const cleanWord = (w.word || '').trim().toLowerCase();
+  const audio = w.audio || w.audioUrl || (cleanWord ? VOCAB_AUDIO_MAP[cleanWord] : '') || '';
   return {
     id: w.id,
     word: w.word,
@@ -44,21 +49,28 @@ function mapWord(w: RawWordItem): WordItem {
     bookmarked: w.starred ?? false,
     status: (w.status as ContentStatus) || 'PUBLISHED',
     testId: w.setId,
+    audio,
+    audioUrl: audio,
   };
 }
 
 function mapSet(s: RawVocabularyTestSet): VocabularyTestSet {
-  const words = Array.isArray(s.words) ? s.words.map(mapWord) : [];
+  const local = INITIAL_TESTS.find((it) => it.id === s.id || it.code === s.id);
+  const words = (Array.isArray(s.words) && s.words.length > 0)
+    ? s.words.map(mapWord)
+    : (local?.words || []);
+  const count = words.length > 0 ? words.length : (typeof s.wordCount === 'number' && s.wordCount > 0 ? s.wordCount : (local?.wordCount || 200));
+
   return {
     id: s.id,
     code: s.id,
-    title: s.title || '',
-    nameVi: s.title || '',
-    nameEn: s.title || '',
-    name: s.title || '',
+    title: s.title || local?.title || '',
+    nameVi: s.title || local?.nameVi || '',
+    nameEn: local?.nameEn || s.title || '',
+    name: s.title || local?.name || '',
     year: s.year ? String(s.year) : '2024',
-    category: s.category || '2024',
-    wordCount: Array.isArray(s.words) ? words.length : (s.wordCount ?? 0),
+    category: s.category || local?.category || '2024',
+    wordCount: count,
     status: s.status || 'PUBLISHED',
     words,
   };

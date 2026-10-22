@@ -32,6 +32,7 @@ import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 import { saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
+import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 
 interface ListeningQuizModalProps {
   quizModalCard: LevelCategoryCardData;
@@ -808,32 +809,53 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                                 <p className="font-bold text-slate-800">{v.meaning}</p>
 
-                                {isExpanded && (
-                                  <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-                                    {v.example && (
+                                {isExpanded && (() => {
+                                  const detail = getEnrichedVocabDetail(v, currentGroupQuestions[0]?.fullTranscript || currentGroupQuestions[0]?.question || "");
+                                  return (
+                                    <div className="pt-3 border-t border-amber-200/70 space-y-3 animate-in fade-in duration-150">
+                                      {/* 1. Lời giải thích chi tiết & ngữ cảnh */}
                                       <div className="space-y-1">
-                                        <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
-                                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
-                                          <p className="font-semibold text-slate-900">&quot;{v.example.en}&quot;</p>
-                                          <p className="text-slate-600 italic">{v.example.vi}</p>
+                                        <div className="font-bold text-amber-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                          <span>💡 Giải thích chi tiết &amp; Ngữ cảnh bài thi:</span>
+                                        </div>
+                                        <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-slate-800 leading-relaxed text-xs">
+                                          {detail.explanation}
                                         </div>
                                       </div>
-                                    )}
 
-                                    {v.collocations && v.collocations.length > 0 && (
-                                      <div className="space-y-1">
-                                        <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                          {v.collocations.map((col, cIdx) => (
-                                            <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
-                                              <strong>{col.en}</strong>: {col.vi}
-                                            </span>
-                                          ))}
+                                      {/* 2. Ví dụ câu thực tế */}
+                                      {detail.example && (
+                                        <div className="space-y-1">
+                                          <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>📝 Ví dụ câu trong đề thi:</span>
+                                          </div>
+                                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1 text-xs">
+                                            <p className="font-semibold text-slate-900">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                            {typeof detail.example === "object" && detail.example.vi && (
+                                              <p className="text-slate-600 italic">👉 {detail.example.vi}</p>
+                                            )}
+                                          </div>
                                         </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
+                                      )}
+
+                                      {/* 3. Cụm từ hay gặp */}
+                                      {detail.collocations && detail.collocations.length > 0 && (
+                                        <div className="space-y-1">
+                                          <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>🔗 Cụm từ hay gặp (Collocations):</span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {detail.collocations.map((col: any, cIdx: number) => (
+                                              <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                                <strong>{col.en}</strong>: {col.vi}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })}
@@ -1086,34 +1108,53 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                                       <p className="font-bold text-slate-800">{v.meaning}</p>
 
-                                      {isExpanded && (
-                                        <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-                                          {v.example && (
+                                      {isExpanded && (() => {
+                                        const detail = getEnrichedVocabDetail(v, q.fullTranscript || q.question || "");
+                                        return (
+                                          <div className="pt-3 border-t border-amber-200/70 space-y-3 animate-in fade-in duration-150">
+                                            {/* 1. Lời giải thích chi tiết & ngữ cảnh */}
                                             <div className="space-y-1">
-                                              <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
-                                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
-                                                <p className="font-semibold text-slate-900">&quot;{typeof v.example === "string" ? v.example : v.example.en}&quot;</p>
-                                                {typeof v.example === "object" && v.example.vi && (
-                                                  <p className="text-slate-600 italic">{v.example.vi}</p>
-                                                )}
+                                              <div className="font-bold text-amber-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                                <span>💡 Giải thích chi tiết &amp; Ngữ cảnh bài thi:</span>
+                                              </div>
+                                              <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-slate-800 leading-relaxed text-xs">
+                                                {detail.explanation}
                                               </div>
                                             </div>
-                                          )}
 
-                                          {v.collocations && v.collocations.length > 0 && (
-                                            <div className="space-y-1">
-                                              <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
-                                              <div className="flex flex-wrap gap-1.5">
-                                                {v.collocations.map((col, cIdx) => (
-                                                  <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
-                                                    <strong>{col.en}</strong>: {col.vi}
-                                                  </span>
-                                                ))}
+                                            {/* 2. Ví dụ câu thực tế */}
+                                            {detail.example && (
+                                              <div className="space-y-1">
+                                                <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                                  <span>📝 Ví dụ câu trong đề thi:</span>
+                                                </div>
+                                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1 text-xs">
+                                                  <p className="font-semibold text-slate-900">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                                  {typeof detail.example === "object" && detail.example.vi && (
+                                                    <p className="text-slate-600 italic">👉 {detail.example.vi}</p>
+                                                  )}
+                                                </div>
                                               </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
+                                            )}
+
+                                            {/* 3. Cụm từ hay gặp */}
+                                            {detail.collocations && detail.collocations.length > 0 && (
+                                              <div className="space-y-1">
+                                                <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                                  <span>🔗 Cụm từ hay gặp (Collocations):</span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                  {detail.collocations.map((col: any, cIdx: number) => (
+                                                    <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                                      <strong>{col.en}</strong>: {col.vi}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   );
                                 })}

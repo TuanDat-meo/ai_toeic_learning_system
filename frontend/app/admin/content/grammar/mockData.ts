@@ -214,11 +214,26 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
       "- **Bẫy động từ kết thúc bằng nguyên âm ngắn:** `listen`, `happen`, `open`, `enter` mặc dù là động từ nhưng trọng âm rơi vào âm 1 vì âm 2 là âm yếu /ə/ hoặc /n/.\n- **Bẫy từ vừa là Danh vừa là Động:** `record` (N: /ˈrekɔːd/ - đĩa hát, V: /rɪˈkɔːd/ - ghi âm), `present` (N: /ˈpreznt/ - món quà, V: /prɪˈzent/ - thuyết trình)."
     ],
     "examples": [
-      {
-        "sentence": "1. **Thần chú từ 2 âm tiết:** *Danh - Tính nhấn 1, Động nhấn 2*.\n2. **Quy tắc nguyên âm yếu /ə/:** Trọng âm KHÔNG BAO GIỜ rơi vào âm /ə/. Nếu âm 1 là /ə/ (như about, alone, asleep) -> trọng âm chắc chắn rơi vào âm 2!\n3. **Mẹo hậu tố đếm lùi:**\n   - Đuôi `-ic, -tion, -sion, -ity`: Trọng âm rơi vào âm sát nách nó.\n   - Đuôi `-ate, -ize, -y`: Trọng âm cách đuôi 1 âm (âm thứ 3 từ phải sang).",
-        "translation": "",
-        "analysis": ""
-      }
+          {
+                "sentence": "The HR committee decided to pre'sent an award to each em'ployee who contributed to the proj'ect.",
+                "translation": "Hội đồng nhân sự đã quyết định trao tặng (pre'sent - động từ nhấn âm 2) một phần thưởng cho mỗi nhân viên (em'ployee - hậu tố -ee nhấn chính nó) đã đóng góp cho dự án (proj'ect - danh từ nhấn âm 1).",
+                "analysis": "• **de'cided** /dɪˈsaɪdɪd/: Động từ 2 âm tiết nhấn âm 2.\n• **pre'sent** /prɪˈzent/: Động từ nhấn âm 2 (khác với danh từ **'present** /ˈpreznt/ là món quà/hiện tại nhấn âm 1).\n• **em'ployee** /ɪmˈplɔɪiː/: Hậu tố `-ee` luôn nhận chính trọng âm.\n• **'project** /ˈprɒdʒekt/: Danh từ 2 âm tiết nhấn âm 1."
+          },
+          {
+                "sentence": "The com'mittee requested further infor'mation regarding recent eco'nomic growth and fac'tory pro'duction.",
+                "translation": "Ủy ban đã yêu cầu thêm thông tin liên quan đến sự tăng trưởng kinh tế gần đây và sản lượng của nhà máy.",
+                "analysis": "• **infor'mation** /ˌɪnfəˈmeɪʃn/ & **pro'duction** /prəˈdʌkʃn/: Hậu tố `-tion` làm trọng âm rơi vào âm tiết đứng ngay trước nó.\n• **eco'nomic** /ˌiːkəˈnɒmɪk/: Hậu tố `-ic` làm trọng âm rơi vào âm tiết đứng ngay trước nó.\n• **'factory** /ˈfæktri/: Danh từ 2/3 âm tiết nhấn âm 1."
+          },
+          {
+                "sentence": "Although the new 'software was ex'pensive, the board decided to 'purchase it to in'crease over'all effi'ciency.",
+                "translation": "Mặc dù phần mềm mới khá đắt đỏ, ban giám đốc vẫn quyết định mua nó để gia tăng hiệu suất tổng thể.",
+                "analysis": "• **'software** /ˈsɒftweə/: Danh từ ghép luôn nhấn âm tiết thứ nhất.\n• **ex'pensive** /ɪkˈspensɪv/: Hậu tố `-ive` làm trọng âm rơi vào âm trước nó (âm 2).\n• **'purchase** /ˈpɜːtʃəs/: Ngoại lệ động từ 2 âm tiết nhấn âm 1 vì âm thứ hai là nguyên âm ngắn /əs/.\n• **effi'ciency** /ɪˈfɪʃnsi/: Hậu tố `-cy` trong từ 4 âm tiết làm trọng âm dịch chuyển về âm thứ 3 từ cuối lên."
+          },
+          {
+                "sentence": "1. **Thần chú từ 2 âm tiết:** *Danh - Tính nhấn 1, Động nhấn 2*.\n2. **Quy tắc nguyên âm yếu /ə/:** Trọng âm KHÔNG BAO GIỜ rơi vào âm /ə/. Nếu âm 1 là /ə/ (a'bout, a'lone, a'sleep, ma'chine) -> trọng âm chắc chắn rơi vào âm 2!\n3. **Mẹo hậu tố đếm lùi:**\n   - Đuôi `-ic, -tion, -sion, -ity`: Trọng âm rơi vào âm sát nách nó.\n   - Đuôi `-ate, -ize, -y`: Trọng âm cách đuôi 1 âm (âm thứ 3 từ phải sang).",
+                "translation": "Bộ 3 quy tắc vàng ghi nhớ trọng âm phản xạ nhanh trong đề thi TOEIC và THPT Quốc Gia.",
+                "analysis": "Áp dụng chiến thuật loại trừ: Trong 4 phương án, nhận diện đuôi hậu tố trước (-tion, -ic, -ee), nếu từ không có hậu tố thì xét từ loại (Danh/Tính nhấn 1, Động nhấn 2)."
+          }
     ],
     "questions": [
       {
@@ -400,11 +415,26 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
       "- **Bẫy thì trong mệnh đề thời gian tương lai:** Sau các liên từ When, As soon as, Until, While, By the time, KHÔNG BAO GIỜ dùng 'will'. Phải dùng thì hiện tại đơn để diễn tả tương lai!\n  *Sai:* When he will arrive, I will call you.\n  *Đúng:* When he **arrives**, I will call you.\n- **Bẫy động từ trạng thái:** 'I am knowing him' là sai, phải dùng 'I know him'."
     ],
     "examples": [
-      {
-        "sentence": "1. **Mẹo trục thời gian:**\n   - Hành động xảy ra trước Quá khứ -> Dùng Quá khứ hoàn thành (`had + V3`).\n   - Cắt ngang trong quá khứ: Đang xảy ra dài (`was/were V-ing`), cắt ngang ngắn (`V2/ed`).\n2. **Quy tắc vàng với SINCE:**\n   `S + have/has + V3/ed + SINCE + S + V2/ed (hoặc mốc thời gian QK)`\n3. **Mẹo BY THE TIME:**\n   - `By the time + V(hiện tại) -> will have + V3`\n   - `By the time + V(quá khứ) -> had + V3`",
-        "translation": "",
-        "analysis": ""
-      }
+          {
+                "sentence": "Ms. Carter has worked for the international marketing division since she graduated from Oxford University in 2021.",
+                "translation": "Bà Carter đã làm việc cho bộ phận tiếp thị quốc tế kể từ khi tốt nghiệp Đại học Oxford vào năm 2021.",
+                "analysis": "Cấu trúc kinh điển với SINCE: Mệnh đề trước dùng Hiện tại hoàn thành (`has worked`) diễn tả hành động bắt đầu trong quá khứ kéo dài đến hiện tại; mệnh đề sau SINCE dùng Quá khứ đơn (`graduated`) chỉ mốc thời gian."
+          },
+          {
+                "sentence": "By the time the keynote speaker arrived at the auditorium, all conference participants had already completed their registration.",
+                "translation": "Vào thời điểm diễn giả chính đến khán phòng, tất cả người tham gia hội nghị đã hoàn thành thủ tục đăng ký từ trước.",
+                "analysis": "Cấu trúc BY THE TIME trong quá khứ: `By the time + S + V2/ed (arrived), S + had + V3/ed (had already completed)`. Hành động đăng ký hoàn thành trước khi diễn giả đến nên chia Quá khứ hoàn thành."
+          },
+          {
+                "sentence": "The regional sales manager normally inspects the provincial branches on Mondays, but this week he is attending a trade summit in Tokyo.",
+                "translation": "Giám đốc bán hàng khu vực thường kiểm tra các chi nhánh tỉnh vào thứ Hai, nhưng tuần này ông ấy đang tham dự một hội nghị thượng đỉnh thương mại tại Tokyo.",
+                "analysis": "Vế 1 dùng Hiện tại đơn (`normally inspects`) diễn tả thói quen/lịch trình lặp lại. Vế 2 dùng Hiện tại tiếp diễn (`is attending`) với dấu hiệu `this week` diễn tả sự việc tạm thời, khác thường lệ."
+          },
+          {
+                "sentence": "1. **Mẹo trục thời gian:**\n   - Hành động xảy ra trước Quá khứ -> Dùng Quá khứ hoàn thành (`had + V3`).\n   - Cắt ngang trong quá khứ: Đang xảy ra dài (`was/were V-ing`), cắt ngang ngắn (`V2/ed`).\n2. **Quy tắc vàng với SINCE:**\n   `S + have/has + V3/ed + SINCE + S + V2/ed (hoặc mốc thời gian QK)`\n3. **Mẹo BY THE TIME:**\n   - `By the time + V(hiện tại) -> will have + V3`\n   - `By the time + V(quá khứ) -> had + V3`",
+                "translation": "Quy tắc phối hợp thì và các cặp liên từ thời gian xuất hiện nhiều nhất trong TOEIC Part 5 & 6.",
+                "analysis": "Luôn tìm từ nhận biết thời gian (yesterday, since, by the time, next month) trước khi chọn đáp án động từ."
+          }
     ],
     "questions": [
       {
@@ -586,11 +616,26 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
       "- **Bẫy dùng thì Tương lai sau liên từ chỉ thời gian:** Tuyệt đối không chọn 'will V' ngay sau when, as soon as, by the time, until, before, after.\n- **Bẫy đảo vị trí của By the time và Since:** Lưu ý mệnh đề đi liền ngay sau By the time luôn là mốc (QKĐ hoặc HTĐ), mệnh đề hoàn thành nằm ở vế còn lại."
     ],
     "examples": [
-      {
-        "sentence": "1. **Mẹo loại trừ siêu nhanh:**\n   - Đề bài cho 1 vế là Quá khứ -> Gạch ngay lập tức các đáp án có `will`, `is/are`, `have/has`.\n   - Đề bài có `Since` -> Trước Since là `have/has V3`, sau Since là `V2/ed`.\n   - Đề bài có `By the time + QKĐ` -> Vế còn lại chắc chắn là `had + V3`.\n   - Đề bài có `By the time + HTĐ` -> Vế còn lại chắc chắn là `will have + V3`.\n2. **Quy tắc cắt ngang vs Song song:**\n   - Cắt ngang: Hành động ngắn chia QKĐ, hành động dài chia QKTD.\n   - Song song (While): Cả 2 hành động cùng chia QKTD.",
-        "translation": "",
-        "analysis": ""
-      }
+          {
+                "sentence": "While the maintenance crew was repairing the primary server, all employees were instructed to save their local files.",
+                "translation": "Trong khi đội ngũ bảo trì đang sửa chữa máy chủ chính, tất cả nhân viên được hướng dẫn lưu các tệp tin cục bộ của họ.",
+                "analysis": "Sự phối hợp thì quá khứ với WHILE: Cả hai hành động đều diễn ra trong cùng bối cảnh quá khứ (`was repairing` - Quá khứ tiếp diễn; `were instructed` - Quá khứ đơn thể bị động)."
+          },
+          {
+                "sentence": "As soon as the financial audit is completed tomorrow afternoon, Mr. Evans will send the final summary report to the board.",
+                "translation": "Ngay sau khi cuộc kiểm toán tài chính hoàn tất vào chiều mai, ông Evans sẽ gửi báo cáo tóm tắt cuối cùng cho ban giám đốc.",
+                "analysis": "Bẫy mệnh đề thời gian tương lai: Mặc dù có 'tomorrow afternoon', mệnh đề sau liên từ `As soon as` BẮT BUỘC chia ở Hiện tại đơn (`is completed`), tuyệt đối không dùng 'will be completed'. Mệnh đề chính chia Tương lai đơn (`will send`)."
+          },
+          {
+                "sentence": "When Mr. Harrison arrived at the airport terminal, the flight had already departed fifteen minutes earlier.",
+                "translation": "Khi ông Harrison đến nhà ga sân bay, chuyến bay đã cất cánh từ mười lăm phút trước đó.",
+                "analysis": "Phối hợp thì với WHEN: Hành động chuyến bay cất cánh (`had departed`) xảy ra và hoàn tất TRƯỚC khi ông Harrison đến (`arrived`), do đó vế trước chia Quá khứ hoàn thành, vế sau chia Quá khứ đơn."
+          },
+          {
+                "sentence": "1. **Mẹo loại trừ siêu nhanh:**\n   - Đề bài cho 1 vế là Quá khứ -> Gạch ngay lập tức các đáp án có `will`, `is/are`, `have/has`.\n   - Đề bài có `Since` -> Trước Since là `have/has V3`, sau Since là `V2/ed`.\n   - Đề bài có `By the time + QKĐ` -> Vế còn lại chắc chắn là `had + V3`.\n   - Đề bài có `By the time + HTĐ` -> Vế còn lại chắc chắn là `will have + V3`.\n2. **Quy tắc cắt ngang vs Song song:**\n   - Cắt ngang: Hành động ngắn chia QKĐ, hành động dài chia QKTD.\n   - Song song (While): Cả 2 hành động cùng chia QKTD.",
+                "translation": "Bí quyết nhận diện và chọn chuẩn thì trong 5 giây cho các câu ghép có liên từ thời gian.",
+                "analysis": "Luôn xác định liên từ nối (When, While, Since, By the time) và kiểm tra thì của mệnh đề có sẵn để loại ngay các phương án lệch thì."
+          }
     ],
     "questions": [
       {
@@ -772,11 +817,26 @@ export const INITIAL_GRAMMAR_TOPICS: GrammarTopicItem[] = [
       "- **Bẫy danh từ gần động từ:** Nhìn nhầm danh từ trong cụm giới từ chen giữa (vd: 'of these apples' có 'apples' số nhiều nhưng chủ ngữ thực sự là 'The quality' số ít).\n- **Bẫy The + Tính từ:** 'The rich' (người giàu nói chung), 'The poor' (người nghèo nói chung) luôn chia **ĐỘNG TỪ SỐ NHIỀU**."
     ],
     "examples": [
-      {
-        "sentence": "1. **Thần chú A number / The number:**\n   - *A number* -> **Ăn nhiều** (chia số nhiều).\n   - *The number* -> **Thèm ít** (chia số ít).\n2. **Thần chú cặp tương quan (Either...or, Neither...nor):** *Gần ai chia theo người nấy* (chia theo S2 ngay sát động từ).\n3. **Mẹo gạch bỏ râu ria:** Bỏ cụm giới từ chen giữa chủ ngữ và động từ:\n   *Ví dụ:* \"The quality [of these apples] **is** good.\" (Chủ ngữ là The quality chứ không phải apples!).",
-        "translation": "",
-        "analysis": ""
-      }
+          {
+                "sentence": "The chief executive officer, along with several senior vice presidents, is attending the annual investor summit in Singapore.",
+                "translation": "Tổng giám đốc điều hành, cùng với một số phó chủ tịch cấp cao, đang tham dự hội nghị thượng đỉnh các nhà đầu tư thường niên tại Singapore.",
+                "analysis": "Quy tắc hòa hợp với `along with / as well as`: Động từ chia theo CHỦ NGỮ THỨ NHẤT (S1: 'The chief executive officer' - số ít) -> chia `is attending`, không phụ thuộc vào S2 số nhiều 'senior vice presidents'."
+          },
+          {
+                "sentence": "Neither the project supervisor nor the technicians were aware of the recent system configuration update.",
+                "translation": "Cả người giám sát dự án lẫn các kỹ thuật viên đều không biết về bản cập nhật cấu hình hệ thống gần đây.",
+                "analysis": "Quy tắc tương quan `Neither... nor / Either... or`: Động từ chia theo CHỦ NGỮ GẦN NÓ NHẤT (S2). Ở đây 'the technicians' là danh từ số nhiều nên động từ chia số nhiều `were aware`."
+          },
+          {
+                "sentence": "A number of qualified candidates have applied for the opening, but the number of available positions is strictly limited to two.",
+                "translation": "Rất nhiều ứng viên đủ tiêu chuẩn đã nộp đơn cho vị trí tuyển dụng, nhưng số lượng vị trí tuyển dụng sẵn có chỉ giới hạn nghiêm ngặt ở mức hai người.",
+                "analysis": "Phân biệt `A number of` vs `The number of`:\n• `A number of candidates` = nhiều ứng viên -> Động từ chia SỐ NHIỀU (`have applied`).\n• `The number of positions` = số lượng vị trí -> Động từ chia SỐ ÍT (`is strictly limited`)."
+          },
+          {
+                "sentence": "1. **Thần chú A number / The number:**\n   - *A number* -> **Ăn nhiều** (chia số nhiều).\n   - *The number* -> **Thèm ít** (chia số ít).\n2. **Thần chú cặp tương quan (Either...or, Neither...nor):** *Gần ai chia theo người nấy* (chia theo S2 ngay sát động từ).\n3. **Mẹo gạch bỏ râu ria:** Bỏ cụm giới từ chen giữa chủ ngữ và động từ:\n   *Ví dụ:* \"The quality [of these apples] **is** good.\" (Chủ ngữ là The quality chứ không phải apples!).",
+                "translation": "Bí quyết giải quyết bẫy hòa hợp Chủ ngữ - Động từ TOEIC trong vòng 3 giây.",
+                "analysis": "Tuyệt đối không nhìn danh từ đứng ngay trước chỗ trống mà phải tìm danh từ gốc đóng vai trò chủ ngữ thực sự của câu."
+          }
     ],
     "questions": [
       {

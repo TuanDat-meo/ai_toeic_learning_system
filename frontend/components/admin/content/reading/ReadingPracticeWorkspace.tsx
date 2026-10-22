@@ -32,6 +32,7 @@ import {
   FolderPlus,
 } from "lucide-react";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
+import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 
@@ -773,7 +774,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       {/* MAIN DUAL PANE */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
         {/* LEFT PANE - PASSAGE DISPLAY */}
-        <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
+        <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
@@ -900,7 +901,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         </div>
 
         {/* RIGHT PANE - ALL QUESTIONS IN PASSAGE DISPLAYED TOGETHER */}
-        <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+        <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
           <div className="space-y-6">
             {/* RENDER EVERY QUESTION IN CURRENT GROUP */}
             {currentGroup.questions.map((item, qIdxInGroup) => {
@@ -1177,31 +1178,53 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
                                   <p className="font-bold text-slate-800 text-xs sm:text-sm">{v.meaning}</p>
 
-                                  {isExpanded && (
-                                    <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in">
-                                      {v.example && (
+                                  {isExpanded && (() => {
+                                    const detail = getEnrichedVocabDetail(v, q.question || currentGroup.passageText || card.passageText || "");
+                                    return (
+                                      <div className="pt-3 border-t border-amber-200/70 space-y-3 animate-in fade-in">
+                                        {/* 1. Lời giải thích chi tiết & ngữ cảnh */}
                                         <div className="space-y-1">
-                                          <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
-                                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
-                                            <p className="font-semibold text-slate-900">&quot;{v.example.en}&quot;</p>
-                                            <p className="text-slate-600 italic">{v.example.vi}</p>
+                                          <div className="font-bold text-amber-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>💡 Giải thích chi tiết &amp; Ngữ cảnh bài thi:</span>
+                                          </div>
+                                          <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-slate-800 leading-relaxed text-xs">
+                                            {detail.explanation}
                                           </div>
                                         </div>
-                                      )}
-                                      {v.collocations && v.collocations.length > 0 && (
-                                        <div className="space-y-1">
-                                          <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {v.collocations.map((col, cIdx) => (
-                                              <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
-                                                <strong>{col.en}</strong>: {col.vi}
-                                              </span>
-                                            ))}
+
+                                        {/* 2. Ví dụ câu thực tế */}
+                                        {detail.example && (
+                                          <div className="space-y-1">
+                                            <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                              <span>📝 Ví dụ câu trong đề thi:</span>
+                                            </div>
+                                            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1 text-xs">
+                                              <p className="font-semibold text-slate-900">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                              {typeof detail.example === "object" && detail.example.vi && (
+                                                <p className="text-slate-600 italic">👉 {detail.example.vi}</p>
+                                              )}
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
+                                        )}
+
+                                        {/* 3. Cụm từ hay gặp */}
+                                        {detail.collocations && detail.collocations.length > 0 && (
+                                          <div className="space-y-1">
+                                            <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                              <span>🔗 Cụm từ hay gặp (Collocations):</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {detail.collocations.map((col: any, cIdx: number) => (
+                                                <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                                  <strong>{col.en}</strong>: {col.vi}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
@@ -1277,31 +1300,53 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
                         <p className="font-bold text-slate-800 text-sm leading-relaxed">{v.meaning}</p>
 
-                        {isExpanded && (
-                          <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in">
-                            {v.example && (
+                        {isExpanded && (() => {
+                          const detail = getEnrichedVocabDetail(v, currentGroup.passageText || card.passageText || "");
+                          return (
+                            <div className="pt-3 border-t border-amber-200/70 space-y-3 animate-in fade-in">
+                              {/* 1. Lời giải thích chi tiết & ngữ cảnh */}
                               <div className="space-y-1">
-                                <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
-                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
-                                  <p className="font-semibold text-slate-900">&quot;{v.example.en}&quot;</p>
-                                  <p className="text-slate-600 italic">{v.example.vi}</p>
+                                <div className="font-bold text-amber-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                  <span>💡 Giải thích chi tiết &amp; Ngữ cảnh bài thi:</span>
+                                </div>
+                                <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-slate-800 leading-relaxed text-xs">
+                                  {detail.explanation}
                                 </div>
                               </div>
-                            )}
-                            {v.collocations && v.collocations.length > 0 && (
-                              <div className="space-y-1">
-                                <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {v.collocations.map((col, cIdx) => (
-                                    <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
-                                      <strong>{col.en}</strong>: {col.vi}
-                                    </span>
-                                  ))}
+
+                              {/* 2. Ví dụ câu thực tế */}
+                              {detail.example && (
+                                <div className="space-y-1">
+                                  <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>📝 Ví dụ câu trong đề thi:</span>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1 text-xs">
+                                    <p className="font-semibold text-slate-900">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                    {typeof detail.example === "object" && detail.example.vi && (
+                                      <p className="text-slate-600 italic">👉 {detail.example.vi}</p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                              )}
+
+                              {/* 3. Cụm từ hay gặp */}
+                              {detail.collocations && detail.collocations.length > 0 && (
+                                <div className="space-y-1">
+                                  <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>🔗 Cụm từ hay gặp (Collocations):</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {detail.collocations.map((col: any, cIdx: number) => (
+                                      <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                        <strong>{col.en}</strong>: {col.vi}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}
@@ -1440,7 +1485,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
               {passageGroups.map((group, grpIdx) => (
                 <div key={grpIdx} className="space-y-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-700">
@@ -1592,7 +1637,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 <p className="text-[11px] text-slate-400">Hãy nhấn &quot;+ Lưu từ&quot; ở các câu hỏi để ôn tập lại sau.</p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-2 p-1">
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 p-1">
                 {savedWords.map((w, idx) => (
                   <div
                     key={idx}
@@ -1776,7 +1821,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+            <div className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-4 pr-1">
               {activeNoteTab === "current" && (
                 <div className="space-y-4">
                   {/* Selector for multi questions */}
@@ -2065,7 +2110,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       {/* RICH DICTIONARY MODAL (Image 5) */}
       {showRichLookupModal && richWordData && (
         <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 font-sans no-lookup-select animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200/90 flex flex-col space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200/90 flex flex-col space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
             {/* Header */}
             <div className="flex items-start justify-between">
               <div>

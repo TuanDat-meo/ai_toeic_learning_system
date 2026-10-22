@@ -75,7 +75,7 @@ function getRawStorageMap(): Record<string, ItemProgress> {
         percent: pct,
         status: pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "not_started",
         lastScore: v.score,
-        correctAnswers: v.correct !== undefined ? v.correct : v.completed,
+        correctAnswers: v.correct !== undefined ? v.correct : 0,
         wrongAnswers: v.wrong !== undefined ? v.wrong : 0,
         wrongQuestionIds: v.wrongQuestionIds || [],
         savedCount: v.savedCount || 0,
@@ -96,7 +96,7 @@ function getRawStorageMap(): Record<string, ItemProgress> {
           percent: pct,
           status: pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "not_started",
           lastScore: v.score,
-          correctAnswers: v.correct !== undefined ? v.correct : v.completed,
+          correctAnswers: v.correct !== undefined ? v.correct : 0,
           wrongAnswers: v.wrong !== undefined ? v.wrong : 0,
           wrongQuestionIds: v.wrongQuestionIds || [],
           savedCount: v.savedCount || 0,
@@ -116,27 +116,37 @@ export function getItemProgress(key: string, fallbackTotal: number = 0): ItemPro
   const map = getRawStorageMap();
   if (map[key]) {
     const item = map[key];
+
+    // Tự động dọn dẹp dữ liệu rác từ lỗi click câu hỏi thi thử chưa nộp trước đây
+    if (
+      key.startsWith("mock-test-") &&
+      item.lastScore === undefined &&
+      (!item.answeredQuestionIds || item.answeredQuestionIds.length === 0) &&
+      item.completedQuestions > 0 &&
+      item.correctAnswers === item.completedQuestions &&
+      (item.wrongAnswers === 0 || item.wrongAnswers === undefined)
+    ) {
+      item.completedQuestions = 0;
+      item.correctAnswers = 0;
+      item.wrongAnswers = 0;
+      item.percent = 0;
+      item.status = "not_started";
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+      } catch {}
+    }
+
     const total = item.totalQuestions > 0 ? item.totalQuestions : fallbackTotal;
     const wrong = item.wrongAnswers !== undefined ? item.wrongAnswers : (item.wrongQuestionIds?.length || 0);
-    let correct = item.correctAnswers !== undefined ? item.correctAnswers : 0;
-    let completed = item.completedQuestions || 0;
-
-    // Đảm bảo tính nhất quán toán học tuyệt đối: completed LUÔN BẰNG correct + wrong
-    if (completed > 0 && correct === 0 && wrong === 0) {
-      correct = completed;
-    } else if (completed > correct + wrong) {
-      // Nếu số câu đã làm lớn hơn đúng + sai, các câu còn lại chính là câu đúng!
-      correct = completed - wrong;
-    } else {
-      completed = correct + wrong;
-    }
+    const correct = item.correctAnswers !== undefined ? item.correctAnswers : 0;
+    const completed = Math.max(item.completedQuestions || 0, correct + wrong);
 
     const clampedCompleted = total > 0 ? Math.min(total, completed) : completed;
     const percent = total > 0 ? Math.min(100, Math.round((clampedCompleted / total) * 100)) : 0;
 
     return {
       ...item,
-      completedQuestions: completed,
+      completedQuestions: clampedCompleted,
       totalQuestions: total,
       percent,
       correctAnswers: correct,
@@ -180,7 +190,7 @@ export function saveItemProgress(
       percent: pct,
       status: pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "not_started",
       lastScore: score,
-      correctAnswers: correctAnswers !== undefined ? correctAnswers : completedQuestions,
+      correctAnswers: correctAnswers !== undefined ? correctAnswers : 0,
       wrongAnswers: wrongAnswers !== undefined ? wrongAnswers : 0,
       wrongQuestionIds: wrongQuestionIds || [],
       answeredQuestionIds: answeredQuestionIds || [],
@@ -193,17 +203,8 @@ export function saveItemProgress(
   const total = totalQuestions > 0 ? totalQuestions : (prev?.totalQuestions || 10);
   
   const wrong = wrongAnswers !== undefined ? wrongAnswers : (prev?.wrongAnswers ?? 0);
-  let correct = correctAnswers !== undefined ? correctAnswers : (prev?.correctAnswers ?? 0);
-  let completed = completedQuestions;
-
-  // Đảm bảo tính nhất quán toán học tuyệt đối: completed = correct + wrong
-  if (completed > 0 && correct === 0 && wrong === 0) {
-    correct = completed;
-  } else if (completed > correct + wrong) {
-    correct = completed - wrong;
-  } else {
-    completed = correct + wrong;
-  }
+  const correct = correctAnswers !== undefined ? correctAnswers : (prev?.correctAnswers ?? 0);
+  const completed = Math.max(completedQuestions, correct + wrong);
 
   const clampedCompleted = total > 0 ? Math.min(total, completed) : completed;
   const percent = total > 0 ? Math.min(100, Math.round((clampedCompleted / total) * 100)) : 0;
@@ -396,13 +397,8 @@ export function getRedoWrongQuestions<T extends { id?: number | string | null; q
       return String(idx + 1);
     });
     const currentWrong = prog.wrongAnswers !== undefined ? prog.wrongAnswers : selected.length;
-    let currentCorrect = prog.correctAnswers !== undefined ? prog.correctAnswers : 0;
-    let currentCompleted = prog.completedQuestions || 0;
-    if (currentCompleted > currentCorrect + currentWrong) {
-      currentCorrect = currentCompleted - currentWrong;
-    } else {
-      currentCompleted = currentCorrect + currentWrong;
-    }
+    const currentCorrect = prog.correctAnswers !== undefined ? prog.correctAnswers : 0;
+    const currentCompleted = Math.max(prog.completedQuestions || 0, currentCorrect + currentWrong);
 
     saveItemProgress(
       progressKey,

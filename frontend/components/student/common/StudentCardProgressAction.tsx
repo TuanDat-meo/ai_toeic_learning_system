@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Check, X, ShoppingBag, FileText, RotateCcw, Trash2 } from "lucide-react";
+import { Check, X, ShoppingBag, FileText, RotateCcw, Trash2, BookOpen, Play } from "lucide-react";
 import { useItemProgress, resetItemProgress, ItemProgress } from "@/lib/practiceProgress";
 
 export interface StudentCardProgressActionProps {
@@ -29,7 +29,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   onRedoWrong,
   onOpenTheory,
   onOpenSaved,
-  actionLabel = "Học ngay",
+  actionLabel = "Luyện tập",
   className = "",
   savedCount: initialSavedCount,
   secondaryAction,
@@ -37,18 +37,10 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   const progress: ItemProgress = useItemProgress(progressKey, totalQuestions);
 
   const total = totalQuestions || progress.totalQuestions || 10;
-  const wrong = progress.wrongAnswers || 0;
-  let correct = progress.correctAnswers !== undefined ? progress.correctAnswers : 0;
+  const wrong = progress.wrongAnswers !== undefined ? progress.wrongAnswers : (progress.wrongQuestionIds?.length || 0);
+  const correct = progress.correctAnswers !== undefined ? progress.correctAnswers : 0;
   let completed = progress.completedQuestions || 0;
-
-  if (completed > 0 && correct === 0 && wrong === 0) {
-    correct = completed;
-  } else if (completed > correct + wrong) {
-    correct = completed - wrong;
-  } else {
-    completed = correct + wrong;
-  }
-  completed = Math.min(total, completed);
+  completed = Math.min(total, Math.max(completed, correct + wrong));
   const savedCount = initialSavedCount !== undefined ? initialSavedCount : progress.savedCount || 0;
 
   const handleStart = (e: React.MouseEvent) => {
@@ -68,7 +60,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   const handleRedo = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (wrong === 0) {
-      alert("Bạn hiện chưa có câu sai nào trong bài này! Bạn có thể bấm 'Học ngay' để tiếp tục làm bài.");
+      alert("Bạn hiện chưa có câu sai nào trong bài này! Bạn có thể bấm nút Luyện tập để tiếp tục làm bài.");
       return;
     }
     if (onRedoWrong) {
@@ -91,7 +83,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
 
   return (
     <div className={`space-y-2.5 pt-2 ${className}`}>
-      {/* Hàng 1: Thống kê số câu đã làm / tổng, số câu đúng, số câu sai (Cỡ chữ ĐỒNG ĐỀU NHAU hoàn toàn theo Ảnh 2) */}
+      {/* Hàng 1: Thống kê số câu đã làm / tổng, số câu đúng (xanh lá), số câu sai (đỏ) */}
       <div className="flex items-center gap-3 select-none text-sm font-extrabold leading-none">
         <span className="text-emerald-700">
           {completed}/{total}
@@ -109,7 +101,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
       {/* Khung điều khiển & nút hành động */}
       {secondaryAction ? (
         <div className="space-y-2">
-          {/* Khung viên thuốc tròn (Ảnh người dùng) */}
+          {/* Khung viên thuốc tròn */}
           <div className="flex items-center justify-start">
             <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-white/90 shadow-2xs">
               {/* 1. Giỏ hàng / Đã lưu có badge tròn màu cam */}
@@ -127,17 +119,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 )}
               </button>
 
-              {/* 2. Tài liệu / Lý thuyết */}
-              <button
-                type="button"
-                onClick={handleTheory}
-                className="text-slate-300 hover:text-slate-600 transition cursor-pointer p-0.5 active:scale-90"
-                title="Lý thuyết / Tài liệu"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-
-              {/* 3. Redo câu sai (Mũi tên quay ngược màu đỏ có badge đỏ) */}
+              {/* 2. Redo câu sai (Mũi tên quay ngược màu đỏ có badge đỏ) */}
               <button
                 type="button"
                 onClick={handleRedo}
@@ -154,7 +136,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 )}
               </button>
 
-              {/* 4. Thùng rác xóa / đặt lại tiến độ */}
+              {/* 3. Thùng rác xóa / đặt lại tiến độ */}
               <button
                 type="button"
                 onClick={handleReset}
@@ -166,14 +148,15 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
             </div>
           </div>
 
-          {/* Hai nút Luyện tập và Thi thử nằm ở DƯỚI khung viên thuốc */}
-          <div className="grid grid-cols-2 gap-2 pt-0.5">
+          {/* Hai nút hành động ở dưới căn đều 2 bên */}
+          <div className="grid grid-cols-2 gap-2.5 pt-0.5">
             <button
               type="button"
               onClick={handleStart}
               className="w-full py-2 px-3 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1.5"
             >
-              {actionLabel}
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>{actionLabel}</span>
             </button>
 
             <button
@@ -189,8 +172,80 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
             </button>
           </div>
         </div>
+      ) : onOpenTheory ? (
+        <div className="space-y-2">
+          {/* Khung viên thuốc tròn */}
+          <div className="flex items-center justify-start">
+            <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-white/90 shadow-2xs">
+              {/* 1. Giỏ hàng / Đã lưu có badge tròn màu cam */}
+              <button
+                type="button"
+                onClick={handleSaved}
+                className="relative text-blue-600 hover:text-blue-700 transition cursor-pointer p-0.5 active:scale-90"
+                title="Mục đã lưu / Giỏ từ vựng"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                {savedCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow-xs">
+                    {savedCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 2. Redo câu sai (Mũi tên quay ngược màu đỏ có badge đỏ) */}
+              <button
+                type="button"
+                onClick={handleRedo}
+                className={`relative transition cursor-pointer p-0.5 active:scale-90 ${
+                  wrong > 0 ? "text-red-500 hover:text-red-600" : "text-slate-300 hover:text-slate-400"
+                }`}
+                title={wrong > 0 ? `Làm lại ${wrong} câu đã sai (Làm đúng sẽ giảm dần)` : "Chưa có câu sai"}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {wrong > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center animate-pulse shadow-xs">
+                    {wrong}
+                  </span>
+                )}
+              </button>
+
+              {/* 3. Thùng rác xóa / đặt lại tiến độ */}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="text-red-500 hover:text-red-600 transition cursor-pointer p-0.5 active:scale-90"
+                title="Đặt lại tiến độ bài này về 0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Cụm 2 nút: Lý thuyết (trái) & Luyện tập/Luyện nghe (phải) căn đều ra hai bên */}
+          <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+            <button
+              type="button"
+              onClick={handleTheory}
+              className="w-full py-2 px-3 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-xs transition shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              title="Xem lý thuyết chuyên đề"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+              <span>Lý thuyết</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleStart}
+              className="w-full py-2 px-3 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+              title="Bắt đầu luyện tập"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>{actionLabel}</span>
+            </button>
+          </div>
+        </div>
       ) : (
-        /* Khi chỉ có 1 nút duy nhất: cùng hàng với khung viên thuốc */
+        /* Chỉ có 1 nút: Khung viên thuốc tròn bên trái + Nút hành động bên phải */
         <div className="flex items-center justify-between gap-2">
           {/* Khung viên thuốc tròn (Pill Container) */}
           <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-white/90 shadow-2xs">
@@ -209,17 +264,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               )}
             </button>
 
-            {/* 2. Tài liệu / Lý thuyết */}
-            <button
-              type="button"
-              onClick={handleTheory}
-              className="text-slate-300 hover:text-slate-600 transition cursor-pointer p-0.5 active:scale-90"
-              title="Lý thuyết / Tài liệu"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-
-            {/* 3. Redo câu sai (Mũi tên quay ngược màu đỏ có badge đỏ) */}
+            {/* 2. Redo câu sai (Mũi tên quay ngược màu đỏ có badge đỏ) */}
             <button
               type="button"
               onClick={handleRedo}
@@ -236,7 +281,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               )}
             </button>
 
-            {/* 4. Thùng rác xóa / đặt lại tiến độ */}
+            {/* 3. Thùng rác xóa / đặt lại tiến độ */}
             <button
               type="button"
               onClick={handleReset}
@@ -247,16 +292,15 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
             </button>
           </div>
 
-          {/* Nút hành động đơn */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={handleStart}
-              className="px-6 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-sm transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center shrink-0"
-            >
-              {actionLabel}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleStart}
+            className="px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+            title="Bắt đầu luyện tập"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>{actionLabel}</span>
+          </button>
         </div>
       )}
     </div>

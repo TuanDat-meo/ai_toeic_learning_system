@@ -466,7 +466,7 @@ export function AdminTransactionsView() {
             if (e.target === e.currentTarget) setActiveReceipt(null);
           }}
         >
-          <div role="dialog" aria-modal="true" aria-labelledby="transaction-receipt-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl animate-in zoom-in duration-200 sm:p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="transaction-receipt-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto custom-scrollbar rounded-2xl bg-white p-5 shadow-2xl animate-in zoom-in duration-200 sm:p-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-xs">

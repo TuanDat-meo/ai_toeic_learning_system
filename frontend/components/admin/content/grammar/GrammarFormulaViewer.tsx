@@ -1016,13 +1016,33 @@ export const GrammarTrapsViewer: React.FC<{ traps: string[] }> = ({ traps }) => 
 // ==========================================
 // 8. EXAMPLES VIEWER (VÍ DỤ MINH HỌA)
 // ==========================================
+export interface SampleQuestionItem {
+  id?: string | number;
+  part?: string;
+  questionText: string;
+  options?: {
+    A?: string;
+    B?: string;
+    C?: string;
+    D?: string;
+    [key: string]: string | undefined;
+  };
+  correctAnswer: string;
+  explanation: string;
+  trapNote?: string;
+  translation?: string;
+  difficulty?: string;
+}
+
 export const GrammarExamplesViewer: React.FC<{
   examples: Array<{ sentence: string; translation?: string; analysis?: string }>;
   topicCode?: string;
-}> = ({ examples, topicCode }) => {
+  sampleQuestions?: Array<SampleQuestionItem>;
+}> = ({ examples, topicCode, sampleQuestions }) => {
   const validExamples = (examples || []).filter((ex) => ex && ex.sentence && ex.sentence.trim().length > 0);
+  const sampleList = (sampleQuestions || []).slice(0, 2);
 
-  if (validExamples.length === 0) {
+  if (validExamples.length === 0 && sampleList.length === 0) {
     return (
       <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-1">
         <p className="font-bold text-slate-700">Đang cập nhật ví dụ minh họa cho chủ điểm này.</p>
@@ -1032,68 +1052,214 @@ export const GrammarExamplesViewer: React.FC<{
   }
 
   return (
-    <div className="space-y-3 font-sans">
-      <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-100 text-blue-950 text-xs flex items-center gap-2">
-        <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-        <span className="font-bold">
-          Ví dụ chuẩn định dạng đề thi ETS & Mẹo phân tích đáp án:
-        </span>
-      </div>
-
-      <div className="space-y-3">
-        {validExamples.map((ex, idx) => {
-          const isMultiLineTips = ex.sentence.includes("\n");
-
-          return (
-            <div
-              key={idx}
-              className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2 hover:border-blue-300 transition-all"
-            >
-              {isMultiLineTips ? (
-                <div className="space-y-2 text-xs">
-                  {ex.sentence.split("\n").map((line, lIdx) => {
-                    const s = line.trim();
-                    if (!s) return null;
-                    const isNum = s.match(/^\d+[\.\)]/);
-                    return (
-                      <div
-                        key={lIdx}
-                        className={
-                          isNum
-                            ? "font-bold text-slate-900 pt-1"
-                            : "pl-4 text-slate-700 font-medium"
-                        }
-                      >
-                        <FormattedText text={s} />
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="font-bold text-slate-900 text-xs sm:text-sm">
-                  <FormattedText text={ex.sentence} />
-                </p>
-              )}
-
-              {ex.translation && (
-                <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  <strong className="font-semibold text-slate-700 not-italic">Dịch: </strong>
-                  {ex.translation}
-                </p>
-              )}
-
-              {ex.analysis && (
-                <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-100 text-xs text-blue-950 font-medium leading-relaxed flex items-start gap-2">
-                  <span className="font-black text-blue-700 shrink-0">💡 Phân tích ETS:</span>
-                  <div>
-                    <FormattedText text={ex.analysis} />
-                  </div>
-                </div>
-              )}
+    <div className="space-y-4 font-sans">
+      {/* 1. Phần Ví dụ câu minh họa & Mẹo phân tích */}
+      {validExamples.length > 0 && (
+        <div className="space-y-3">
+          <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-100 text-blue-950 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+              <span className="font-bold">
+                Câu ví dụ minh họa chuẩn định dạng ETS & Phân tích cấu trúc:
+              </span>
             </div>
-          );
-        })}
-      </div>
+            <span className="text-[11px] font-semibold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">
+              {validExamples.length} ví dụ
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {validExamples.map((ex, idx) => {
+              const isMultiLineTips = ex.sentence.includes("\n") || ex.sentence.includes("Thần chú") || ex.sentence.includes("Mẹo");
+
+              return (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-2xl bg-white border shadow-2xs space-y-2.5 transition-all ${
+                    isMultiLineTips
+                      ? "border-amber-200/80 bg-linear-to-b from-amber-50/20 to-white hover:border-amber-300"
+                      : "border-slate-200 hover:border-blue-300"
+                  }`}
+                >
+                  {isMultiLineTips ? (
+                    <div>
+                      <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs pb-2 mb-2 border-b border-amber-100">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Mẹo ghi nhớ & Thần chú phản xạ nhanh:</span>
+                      </div>
+                      <div className="space-y-2 text-xs">
+                        {ex.sentence.split("\n").map((line, lIdx) => {
+                          const s = line.trim();
+                          if (!s) return null;
+                          const isNum = s.match(/^\d+[\.\)]/);
+                          return (
+                            <div
+                              key={lIdx}
+                              className={
+                                isNum
+                                  ? "font-bold text-slate-900 pt-1"
+                                  : "pl-4 text-slate-700 font-medium"
+                              }
+                            >
+                              <FormattedText text={s} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center gap-1.5 text-blue-700 font-bold text-xs pb-1.5 mb-1.5 border-b border-slate-100">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-black flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span>Mẫu câu thực hành #{idx + 1}:</span>
+                      </div>
+                      <p className="font-bold text-slate-900 text-xs sm:text-sm leading-relaxed">
+                        <FormattedText text={ex.sentence} />
+                      </p>
+                    </div>
+                  )}
+
+                  {ex.translation && (
+                    <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      <strong className="font-semibold text-slate-700 not-italic">Dịch nghĩa: </strong>
+                      {ex.translation}
+                    </p>
+                  )}
+
+                  {ex.analysis && (
+                    <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-100 text-xs text-blue-950 font-medium leading-relaxed flex items-start gap-2">
+                      <span className="font-black text-blue-700 shrink-0">💡 Phân tích ETS:</span>
+                      <div>
+                        <FormattedText text={ex.analysis} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Phần Câu hỏi mẫu trích xuất từ đề thi ETS */}
+      {sampleList.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-100 text-emerald-950 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ListChecks className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="font-bold">
+                Câu hỏi thi mẫu minh họa (Kèm đáp án & phân tích chi tiết):
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+              {sampleList.length} câu mẫu
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {sampleList.map((q, qIdx) => {
+              // Lấy câu hỏi sạch nếu questionText gộp cả options
+              const rawText = q.questionText || "";
+              const cleanQuestion = rawText
+                .split("\nA.")[0]
+                .split("\n(A)")[0]
+                .trim();
+
+              return (
+                <div
+                  key={q.id || qIdx}
+                  className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 hover:border-emerald-300 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-black">
+                        ĐỀ THI MẪU #{qIdx + 1}
+                      </span>
+                      {q.difficulty && (
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          Độ khó: {q.difficulty}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+                      Đáp án đúng: {q.correctAnswer}
+                    </span>
+                  </div>
+
+                  <p className="font-bold text-slate-900 text-xs sm:text-sm leading-relaxed">
+                    <FormattedText text={cleanQuestion || rawText} />
+                  </p>
+
+                  {/* 4 phương án lựa chọn */}
+                  {q.options && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {Object.entries(q.options).map(([optKey, optVal]) => {
+                        const isCorrect =
+                          optKey.toUpperCase() === (q.correctAnswer || "").trim().toUpperCase();
+                        return (
+                          <div
+                            key={optKey}
+                            className={`px-3 py-2 rounded-xl text-xs flex items-center gap-2 border transition-all ${
+                              isCorrect
+                                ? "bg-emerald-50 text-emerald-950 border-emerald-300 font-bold shadow-2xs"
+                                : "bg-slate-50/70 text-slate-700 border-slate-200/80 font-medium"
+                            }`}
+                          >
+                            <span
+                              className={`w-5 h-5 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0 ${
+                                isCorrect
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {optKey}
+                            </span>
+                            <span className="truncate">{optVal}</span>
+                            {isCorrect && (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 ml-auto shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Dịch câu hỏi */}
+                  {q.translation && (
+                    <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      <strong className="font-semibold text-slate-700 not-italic">Dịch đề: </strong>
+                      {q.translation}
+                    </p>
+                  )}
+
+                  {/* Giải thích chi tiết */}
+                  {q.explanation && (
+                    <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-100 text-xs text-blue-950 font-medium leading-relaxed flex items-start gap-2">
+                      <span className="font-black text-blue-700 shrink-0">💡 Phân tích giải thích:</span>
+                      <div>
+                        <FormattedText text={q.explanation} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cảnh báo bẫy thi */}
+                  {q.trapNote && (
+                    <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 font-medium leading-relaxed flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold text-amber-800">Bẫy ETS cần chú ý: </strong>
+                        <FormattedText text={q.trapNote} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

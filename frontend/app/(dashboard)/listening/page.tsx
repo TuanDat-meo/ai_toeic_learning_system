@@ -18,6 +18,7 @@ import { StudentListeningDictationTab } from "@/components/student/listening/Stu
 import { StudentListeningPartTab } from "@/components/student/listening/StudentListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
+import { playUnifiedAnswerSound } from "@/lib/sound";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
@@ -133,32 +134,8 @@ export default function StudentListeningPage() {
     }
   };
 
-  const playSfx = (type?: "correct" | "wrong" | "click") => {
-    if (!type) return;
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      if (type === "correct") {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
-      } else if (type === "wrong") {
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.setValueAtTime(220, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
-      }
-    } catch {}
+  const playSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
   const handleToggleFlagReview = (qId: number) => {

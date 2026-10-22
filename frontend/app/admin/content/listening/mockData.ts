@@ -23,6 +23,9 @@ import {
   ETS_2024_PART4_DICTATION_CARDS,
 } from "./ets2024Part4Data";
 
+import { ETS_2023_DICTATION_CARDS } from "./ets2023ListeningData";
+import { ETS_2022_DICTATION_CARDS } from "./ets2022ListeningData";
+
 export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
   {
     "id": 1,
@@ -384,77 +387,6 @@ export const SAMPLE_DICTATION_QUESTIONS: DictationQuestion[] = [
     ]
   }
 ];
-
-// --- ETS 2023 DICTATION CARDS (9 TESTS x 4 PARTS = 36 CARDS) ---
-export const ETS_2023_DICTATION_CARDS: DictationCardData[] = [];
-for (let t = 1; t <= 9; t++) {
-  const tPad = String(t).padStart(2, "0");
-  const parts = [
-    { part: "Part 1" as const, total: 6, qIdxs: [0, 1], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q1.mp3` },
-    { part: "Part 2" as const, total: 25, qIdxs: [2, 3], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q7.mp3` },
-    { part: "Part 3" as const, total: 39, qIdxs: [4, 5, 6], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q32_34.mp3` },
-    { part: "Part 4" as const, total: 30, qIdxs: [7, 8, 9], audio: `/api/media/ETS 2023/Audio_Cat_Tung_Cau/Test_${tPad}/q71_73.mp3` },
-  ];
-  for (const p of parts) {
-    ETS_2023_DICTATION_CARDS.push({
-      id: `ets2023-t${t}-p${p.part.replace("Part ", "")}`,
-      testNumber: t,
-      part: p.part,
-      year: "2023",
-      totalQuestions: p.total,
-      completedQuestions: 0,
-      status: "Chưa bắt đầu",
-      notesCount: 0,
-      vocabItems: [
-        { word: "agenda", ipa: "/əˈdʒendə/", meaning: "Chương trình nghị sự buổi họp", example: "Review the agenda beforehand." },
-        { word: "delegate", ipa: "/ˈdelɪɡət/", meaning: "Đại biểu tham dự", example: "Welcoming 500 delegates." },
-      ],
-      questions: p.qIdxs.map((idx) => {
-        const base = SAMPLE_DICTATION_QUESTIONS[idx] || SAMPLE_DICTATION_QUESTIONS[0];
-        return {
-          ...base,
-          audioUrl: p.audio,
-        };
-      }),
-    });
-  }
-}
-
-// --- ETS 2022 DICTATION CARDS (10 TESTS x 4 PARTS = 40 CARDS) ---
-export const ETS_2022_DICTATION_CARDS: DictationCardData[] = [];
-for (let t = 1; t <= 10; t++) {
-  const tPad = String(t).padStart(2, "0");
-  const parts = [
-    { part: "Part 1" as const, total: 6, qIdxs: [0, 1], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q1.mp3`, image: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q1.jpg` },
-    { part: "Part 2" as const, total: 25, qIdxs: [2, 3], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q7.mp3` },
-    { part: "Part 3" as const, total: 39, qIdxs: [4, 5, 6], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q32_34.mp3` },
-    { part: "Part 4" as const, total: 30, qIdxs: [7, 8, 9], audio: `/api/media/ETS 2022/Audio_Cat_Tung_Cau/Test_${tPad}/q71_73.mp3` },
-  ];
-  for (const p of parts) {
-    ETS_2022_DICTATION_CARDS.push({
-      id: `ets2022-t${t}-p${p.part.replace("Part ", "")}`,
-      testNumber: t,
-      part: p.part,
-      year: "2022",
-      totalQuestions: p.total,
-      completedQuestions: 0,
-      status: "Chưa bắt đầu",
-      notesCount: 0,
-      vocabItems: [
-        { word: "reimbursement", ipa: "/ˌriːɪmˈbɜːrsmənt/", meaning: "Khoản hoàn tiền công tác phí", example: "Submit receipts for reimbursement." },
-        { word: "itinerary", ipa: "/aɪˈtɪnəreri/", meaning: "Lịch trình công tác chi tiết", example: "Check your flight itinerary." },
-      ],
-      questions: p.qIdxs.map((idx) => {
-        const base = SAMPLE_DICTATION_QUESTIONS[idx] || SAMPLE_DICTATION_QUESTIONS[0];
-        return {
-          ...base,
-          audioUrl: p.audio,
-          imageUrl: p.image || base.imageUrl,
-        };
-      }),
-    });
-  }
-}
 
 export const INITIAL_DICTATION_CARDS: DictationCardData[] = [
   ...ETS_2024_DICTATION_CARDS,

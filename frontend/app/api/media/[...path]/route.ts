@@ -21,6 +21,87 @@ const MIME_MAP: Record<string, string> = {
   ".pdf": "application/pdf",
 };
 
+function resolveMediaFile(relativePath: string): string | null {
+  const directPath = path.resolve(DATA_ROOT, relativePath);
+  if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+    return directPath;
+  }
+
+  // Determine target year
+  let year = "ETS 2024";
+  if (relativePath.includes("2022")) {
+    year = "ETS 2022";
+  } else if (relativePath.includes("2023")) {
+    year = "ETS 2023";
+  } else if (relativePath.includes("2024")) {
+    year = "ETS 2024";
+  }
+
+  // Extract test number (e.g. test_1, test_01, Test 1, Test_1)
+  const testMatch = relativePath.match(/test[_\s-]*0?(\d+)/i);
+  let testFolder = "Test_01";
+  if (testMatch) {
+    const num = parseInt(testMatch[1], 10);
+    testFolder = `Test_${String(num).padStart(2, "0")}`;
+  }
+
+  const filename = path.basename(relativePath);
+
+  // Candidate years to check (preferred year first)
+  const candidateYears = [year, "ETS 2024", "ETS 2023", "ETS 2022"];
+  for (const yr of candidateYears) {
+    const p1 = path.resolve(DATA_ROOT, yr, "Audio_Cat_Tung_Cau", testFolder, filename);
+    if (fs.existsSync(p1) && fs.statSync(p1).isFile()) return p1;
+
+    // Check direct audio folder under year (e.g. E:/Data/ETS 2024/audio/part1_test1.mp3)
+    const pAudio = path.resolve(DATA_ROOT, yr, "audio", filename);
+    if (fs.existsSync(pAudio) && fs.statSync(pAudio).isFile()) return pAudio;
+
+    // Check talkX -> p4_tX
+    const talkMatch = filename.match(/^talk(\d+)\.mp3$/i);
+    if (talkMatch) {
+      const tNum = parseInt(talkMatch[1], 10);
+      const pTalk = path.resolve(DATA_ROOT, yr, "Audio_Cat_Tung_Cau", testFolder, `p4_t${tNum}.mp3`);
+      if (fs.existsSync(pTalk) && fs.statSync(pTalk).isFile()) return pTalk;
+
+      const qStart = 71 + (tNum - 1) * 3;
+      const pQ = path.resolve(DATA_ROOT, yr, "Audio_Cat_Tung_Cau", testFolder, `q${qStart}_${qStart + 2}.mp3`);
+      if (fs.existsSync(pQ) && fs.statSync(pQ).isFile()) return pQ;
+    }
+
+    // Check cX -> q32_34 etc.
+    const cMatch = filename.match(/^c(\d+)\.mp3$/i);
+    if (cMatch) {
+      const cNum = parseInt(cMatch[1], 10);
+      const qStart = 32 + (cNum - 1) * 3;
+      const pQ = path.resolve(DATA_ROOT, yr, "Audio_Cat_Tung_Cau", testFolder, `q${qStart}_${qStart + 2}.mp3`);
+      if (fs.existsSync(pQ) && fs.statSync(pQ).isFile()) return pQ;
+    }
+
+    // Check part1_test1.mp3 -> q1.mp3
+    if (filename.toLowerCase().includes("part1_test")) {
+      const pQ1 = path.resolve(DATA_ROOT, yr, "Audio_Cat_Tung_Cau", testFolder, "q1.mp3");
+      if (fs.existsSync(pQ1) && fs.statSync(pQ1).isFile()) return pQ1;
+    }
+
+    // Case-insensitive file search in test directory
+    const testDir = path.resolve(DATA_ROOT, yr, "Audio_Cat_Tung_Cau", testFolder);
+    if (fs.existsSync(testDir) && fs.statSync(testDir).isDirectory()) {
+      try {
+        const files = fs.readdirSync(testDir);
+        const lowerName = filename.toLowerCase();
+        const found = files.find((f) => f.toLowerCase() === lowerName);
+        if (found) {
+          const finalPath = path.resolve(testDir, found);
+          if (fs.existsSync(finalPath) && fs.statSync(finalPath).isFile()) return finalPath;
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> | { path: string[] } }
@@ -35,39 +116,10 @@ export async function GET(
     const decodedSegments = rawSegments.map((s) => decodeURIComponent(s));
     const relativePath = decodedSegments.join("/");
 
-    // Fallback normalizations
-    // If request is e.g. "Audio_Cat_Tung_Cau/Test_01/q1.mp3", search in ETS 2024, ETS 2023, ETS 2022
-    let fullPath = path.resolve(DATA_ROOT, relativePath);
-
-    if (!fs.existsSync(fullPath)) {
-      if (relativePath.startsWith("Audio_Cat_Tung_Cau/")) {
-        const candidateYears = ["ETS 2024", "ETS 2023", "ETS 2022"];
-        for (const yr of candidateYears) {
-          const tryPath = path.resolve(DATA_ROOT, yr, relativePath);
-          if (fs.existsSync(tryPath)) {
-            fullPath = tryPath;
-            break;
-          }
-        }
-      } else if (relativePath.toLowerCase().startsWith("ets2024/")) {
-        const sub = relativePath.slice("ets2024/".length);
-        const tryPath = path.resolve(DATA_ROOT, "ETS 2024/Audio_Cat_Tung_Cau", sub);
-        if (fs.existsSync(tryPath)) fullPath = tryPath;
-      } else if (relativePath.toLowerCase().startsWith("ets2023/")) {
-        const sub = relativePath.slice("ets2023/".length);
-        const tryPath = path.resolve(DATA_ROOT, "ETS 2023/Audio_Cat_Tung_Cau", sub);
-        if (fs.existsSync(tryPath)) fullPath = tryPath;
-      } else if (relativePath.toLowerCase().startsWith("ets2022/")) {
-        const sub = relativePath.slice("ets2022/".length);
-        const tryPath = path.resolve(DATA_ROOT, "ETS 2022/Audio_Cat_Tung_Cau", sub);
-        if (fs.existsSync(tryPath)) fullPath = tryPath;
-      }
-
-      // Strict isolation: Each year serves its own verified media only
-    }
+    const fullPath = resolveMediaFile(relativePath);
 
     // Security check: must reside inside DATA_ROOT
-    if (!fullPath.startsWith(DATA_ROOT) || !fs.existsSync(fullPath)) {
+    if (!fullPath || !fullPath.toLowerCase().startsWith(DATA_ROOT.toLowerCase()) || !fs.existsSync(fullPath)) {
       return new NextResponse("File Not Found", { status: 404 });
     }
 

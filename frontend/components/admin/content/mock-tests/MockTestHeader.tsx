@@ -11,6 +11,7 @@ import {
   Download,
   List,
   LayoutGrid,
+  RefreshCw,
 } from "lucide-react";
 
 export type MockTestAdminTab = "tests" | "submissions" | "score_conversion" | "collections";
@@ -22,8 +23,8 @@ interface MockTestHeaderProps {
   setSelectedVol: (vol: "all" | "vol1" | "vol2" | "vol3") => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  filterDifficulty: string;
-  setFilterDifficulty: (d: string) => void;
+  filterDifficulty?: string;
+  setFilterDifficulty?: (d: string) => void;
   viewMode: "table" | "grid";
   setViewMode: (v: "table" | "grid") => void;
   vol1Count: number;
@@ -31,6 +32,7 @@ interface MockTestHeaderProps {
   vol3Count?: number;
   onOpenCreateTest: () => void;
   onExportCsv: () => void;
+  onSyncData?: () => void;
 }
 
 export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
@@ -49,6 +51,7 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
   vol3Count = 0,
   onOpenCreateTest,
   onExportCsv,
+  onSyncData,
 }) => {
   return (
     <div className="space-y-6">
@@ -68,6 +71,17 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {onSyncData && (
+            <button
+              type="button"
+              onClick={onSyncData}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-xs transition"
+              title="Đồng bộ danh sách 29 đề thi từ E:\Data và làm mới bộ nhớ cache"
+            >
+              <RefreshCw size={16} className="text-emerald-700" aria-hidden="true" />
+              <span>Đồng bộ từ Data</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onExportCsv}
@@ -207,18 +221,6 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
                   ETS 2022 ({vol3Count || 0})
                 </button>
               </div>
-
-              {/* Difficulty filter */}
-              <select
-                value={filterDifficulty}
-                onChange={(e) => setFilterDifficulty(e.target.value)}
-                className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
-              >
-                <option value="ALL">Tất cả độ khó</option>
-                <option value="Vừa sức">Vừa sức</option>
-                <option value="Trung bình">Trung bình</option>
-                <option value="Khó">Khó</option>
-              </select>
 
               {/* View Switcher */}
               <div className="shrink-0 flex items-center p-1 bg-slate-100 rounded-2xl border border-slate-200">

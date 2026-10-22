@@ -165,7 +165,7 @@ export function UserFormModal({
           id={formId}
           noValidate
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5"
+          className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 sm:px-6 sm:py-5"
         >
           <div className="space-y-5">
             {/* 1. THÔNG TIN CƠ BẢN */}

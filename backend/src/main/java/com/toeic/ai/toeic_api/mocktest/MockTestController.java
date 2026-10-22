@@ -44,6 +44,11 @@ public class MockTestController {
         return mockTestService.submitAttempt(userId, request);
     }
 
+    @GetMapping("/api/admin/mock-tests/submissions")
+    public List<MockTestSubmissionDto> listSubmissions(@RequestParam(required = false) Integer testId) {
+        return mockTestService.listAllSubmissions(testId);
+    }
+
     private UUID extractUserId(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return null;

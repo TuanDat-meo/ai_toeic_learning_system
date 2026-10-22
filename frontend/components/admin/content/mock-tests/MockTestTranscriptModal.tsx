@@ -66,7 +66,7 @@ export const MockTestTranscriptModal: React.FC<MockTestTranscriptModalProps> = (
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
           {filteredQuestions.map((q) => (
             <div key={q.id} className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200 space-y-2.5">
               <div className="flex items-center justify-between">

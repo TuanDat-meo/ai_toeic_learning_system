@@ -3980,204 +3980,2431 @@ export const SAMPLE_EXAM_QUESTIONS: PracticeQuestion[] = [
 
 export const INITIAL_TESTS_VOL1: TestItem[] = [
   {
-    id: 1,
-    volId: "vol1",
-    title: "ETS 2024 - Test 1",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "reimbursement", ipa: "/ˌriːɪmˈbɜːrsmənt/", pos: "n", meaning: "Khoản hoàn tiền công tác, bồi hoàn chi phí", example: "Submit receipts to claim meal reimbursement." },
-      { word: "complimentary", ipa: "/ˌkɑːmplɪˈmentri/", pos: "adj", meaning: "Miễn phí, tặng kèm", example: "Guests receive complimentary shuttle transportation." },
-      { word: "delegate", ipa: "/ˈdelɪɡət/", pos: "n/v", meaning: "Đại biểu, người đại diện / Ủy quyền giao việc", example: "The conference welcomed over 300 international delegates." },
-      { word: "itinerary", ipa: "/aɪˈtɪnəreri/", pos: "n", meaning: "Lịch trình chi tiết chuyến đi", example: "Check your flight itinerary prior to departure." },
-      { word: "substantial", ipa: "/səbˈstænʃl/", pos: "adj", meaning: "Đáng kể, to lớn", example: "The firm saw a substantial increase in quarterly profit." },
-    ],
+    "id": 1,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 1",
+    "difficulty": "Vừa sức",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "picnic area",
+        "ipa": "/ˈpɪknɪk ˈeəriə/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "khu dã ngoại",
+        "example": ""
+      },
+      {
+        "word": "wipe off",
+        "ipa": "/waɪp ɔːf/",
+        "pos": "Verb (Động từ)",
+        "meaning": "lau chùi sạch",
+        "example": ""
+      },
+      {
+        "word": "bench",
+        "ipa": "/bentʃ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "băng ghế dài",
+        "example": ""
+      },
+      {
+        "word": "brush off",
+        "ipa": "/brʌʃ ɔːf/",
+        "pos": "Verb (Động từ)",
+        "meaning": "phủi đi, quét sạch",
+        "example": ""
+      },
+      {
+        "word": "shovel",
+        "ipa": "/ˈʃʌvl/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xúc tuyết",
+        "example": ""
+      },
+      {
+        "word": "driveway",
+        "ipa": "/ˈdraɪvweɪ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "lối đi cho xe",
+        "example": ""
+      },
+      {
+        "word": "conversation",
+        "ipa": "/ˌkɑːnvərˈseɪʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "cuộc đối thoại",
+        "example": ""
+      },
+      {
+        "word": "gallery",
+        "ipa": "/ˈɡæləri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "phòng triển lãm",
+        "example": ""
+      },
+      {
+        "word": "purchase",
+        "ipa": "/ˈpɜːrtʃəs/",
+        "pos": "Verb (Động từ)",
+        "meaning": "mua hàng",
+        "example": ""
+      },
+      {
+        "word": "display",
+        "ipa": "/dɪˈspleɪ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "trưng bày",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 2,
-    volId: "vol1",
-    title: "ETS 2024 - Test 2",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "feasibility", ipa: "/ˌfiːzəˈbɪləti/", pos: "n", meaning: "Tính khả thi của dự án", example: "Engineers conducted a feasibility study on solar power." },
-      { word: "mandatory", ipa: "/ˈmændətɔːri/", pos: "adj", meaning: "Bắt buộc, theo quy định", example: "Attendance at the safety orientation is mandatory." },
-      { word: "preliminary", ipa: "/prɪˈlɪmɪneri/", pos: "adj", meaning: "Sơ bộ, ban đầu", example: "Preliminary findings show strong market demand." },
-      { word: "fluctuate", ipa: "/ˈflʌktʃueɪt/", pos: "v", meaning: "Dao động, biến động thất thường", example: "Currency exchange rates fluctuate constantly." },
-    ],
+    "id": 2,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 2",
+    "difficulty": "Vừa sức",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "plug in",
+        "ipa": "/plʌɡ ɪn/",
+        "pos": "Verb (Động từ)",
+        "meaning": "cắm điện",
+        "example": ""
+      },
+      {
+        "word": "power cord",
+        "ipa": "/ˈpaʊər kɔːrd/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "dây nguồn điện",
+        "example": ""
+      },
+      {
+        "word": "outlet",
+        "ipa": "/ˈaʊtlet/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "ổ cắm điện",
+        "example": ""
+      },
+      {
+        "word": "cushion",
+        "ipa": "/ˈkʊʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "gối đệm, đệm lót",
+        "example": ""
+      },
+      {
+        "word": "porch",
+        "ipa": "/pɔːrtʃ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hiên nhà",
+        "example": ""
+      },
+      {
+        "word": "rocking chair",
+        "ipa": "/ˈrɑːkɪŋ tʃer/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "ghế bập bênh",
+        "example": ""
+      },
+      {
+        "word": "stool",
+        "ipa": "/stuːl/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "ghế đẩu, ghế tròn không tựa tay",
+        "example": ""
+      },
+      {
+        "word": "position",
+        "ipa": "/pəˈzɪʃn/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đặt vào vị trí",
+        "example": ""
+      },
+      {
+        "word": "cabinet",
+        "ipa": "/ˈkæbɪnət/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "tủ nhiều ngăn kéo",
+        "example": ""
+      },
+      {
+        "word": "building materials",
+        "ipa": "/ˈbɪldɪŋ məˈtɪriəlz/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "vật liệu xây dựng",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 3,
-    volId: "vol1",
-    title: "ETS 2024 - Test 3",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "consensus", ipa: "/kənˈsensəs/", pos: "n", meaning: "Sự đồng thuận chung của tập thể", example: "The committee reached a consensus on the budget." },
-      { word: "prospective", ipa: "/prəˈspektɪv/", pos: "adj", meaning: "Tiềm năng, có triển vọng tương lai", example: "We sent catalogs to prospective corporate buyers." },
-      { word: "expedite", ipa: "/ˈekspədaɪt/", pos: "v", meaning: "Xúc tiến nhanh, đẩy nhanh tiến độ", example: "Please pay an express fee to expedite shipping." },
-    ],
+    "id": 3,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 3",
+    "difficulty": "Vừa sức",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "kitchen towel",
+        "ipa": "/ˈkɪtʃɪn ˈtaʊəl/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "khăn lau bếp",
+        "example": ""
+      },
+      {
+        "word": "oven",
+        "ipa": "/ˈʌvn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "lò nướng",
+        "example": ""
+      },
+      {
+        "word": "sink",
+        "ipa": "/sɪŋk/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bồn rửa chén",
+        "example": ""
+      },
+      {
+        "word": "shelving",
+        "ipa": "/ˈʃelvɪŋ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hệ thống kệ sách/kệ tủ",
+        "example": ""
+      },
+      {
+        "word": "built-in",
+        "ipa": "/ˌbɪlt ˈɪn/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "được lắp âm/gắn cố định vào tường",
+        "example": ""
+      },
+      {
+        "word": "light fixture",
+        "ipa": "/laɪt ˈfɪkstʃər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bộ đèn chiếu sáng",
+        "example": ""
+      },
+      {
+        "word": "instrument",
+        "ipa": "/ˈɪnstrəmənt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "nhạc cụ",
+        "example": ""
+      },
+      {
+        "word": "perform",
+        "ipa": "/pərˈfɔːrm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "biểu diễn, trình diễn",
+        "example": ""
+      },
+      {
+        "word": "terrace",
+        "ipa": "/ˈterəs/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sân hiên nhà hàng",
+        "example": ""
+      },
+      {
+        "word": "arrange",
+        "ipa": "/əˈreɪndʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "sắp xếp, bày biện",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 4,
-    volId: "vol1",
-    title: "ETS 2024 - Test 4",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "accommodate", ipa: "/əˈkɑːmədeɪt/", pos: "v", meaning: "Đáp ứng nhu cầu, chứa đủ người", example: "The banquet hall accommodates up to 500 guests." },
-      { word: "stipulation", ipa: "/ˌstɪpjuˈleɪʃn/", pos: "n", meaning: "Điều khoản bắt buộc trong hợp đồng", example: "The contract contains a strict warranty stipulation." },
-    ],
+    "id": 4,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 4",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "inspect",
+        "ipa": "/inspect/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'inspect'",
+        "example": ""
+      },
+      {
+        "word": "aisle",
+        "ipa": "/aisle/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'aisle'",
+        "example": ""
+      },
+      {
+        "word": "type",
+        "ipa": "/type/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'type'",
+        "example": ""
+      },
+      {
+        "word": "keyboard",
+        "ipa": "/keyboard/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'keyboard'",
+        "example": ""
+      },
+      {
+        "word": "examine",
+        "ipa": "/examine/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'examine'",
+        "example": ""
+      },
+      {
+        "word": "blueprint",
+        "ipa": "/blueprint/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'blueprint'",
+        "example": ""
+      },
+      {
+        "word": "carton",
+        "ipa": "/carton/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'carton'",
+        "example": ""
+      },
+      {
+        "word": "loading dock",
+        "ipa": "/loading dock/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'loading dock'",
+        "example": ""
+      },
+      {
+        "word": "align",
+        "ipa": "/align/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'align'",
+        "example": ""
+      },
+      {
+        "word": "partition",
+        "ipa": "/partition/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'partition'",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 5,
-    volId: "vol1",
-    title: "ETS 2024 - Test 5",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "adjacent", ipa: "/əˈdʒeɪsnt/", pos: "adj", meaning: "Kế bên, liền kề sát cạnh", example: "The parking lot is adjacent to Terminal 2." },
-      { word: "lucrative", ipa: "/ˈluːkrətɪv/", pos: "adj", meaning: "Sinh lời lớn, béo bở", example: "Securing the government contract proved lucrative." },
-    ],
+    "id": 5,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 5",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "adjust",
+        "ipa": "/adjust/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'adjust'",
+        "example": ""
+      },
+      {
+        "word": "eyeglasses",
+        "ipa": "/eyeglasses/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'eyeglasses'",
+        "example": ""
+      },
+      {
+        "word": "wipe down",
+        "ipa": "/wipe down/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'wipe down'",
+        "example": ""
+      },
+      {
+        "word": "counter",
+        "ipa": "/counter/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'counter'",
+        "example": ""
+      },
+      {
+        "word": "queue up",
+        "ipa": "/queue up/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'queue up'",
+        "example": ""
+      },
+      {
+        "word": "entrance",
+        "ipa": "/entrance/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'entrance'",
+        "example": ""
+      },
+      {
+        "word": "lock to",
+        "ipa": "/lock to/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'lock to'",
+        "example": ""
+      },
+      {
+        "word": "railing",
+        "ipa": "/railing/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'railing'",
+        "example": ""
+      },
+      {
+        "word": "tiered",
+        "ipa": "/tiered/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'tiered'",
+        "example": ""
+      },
+      {
+        "word": "shelving",
+        "ipa": "/shelving/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'shelving'",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 6,
-    volId: "vol1",
-    title: "ETS 2024 - Test 6",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "discrepancy", ipa: "/dɪˈskrepənsi/", pos: "n", meaning: "Sự sai lệch, không khớp số liệu", example: "Auditors noted a discrepancy in travel invoices." },
-      { word: "facilitate", ipa: "/fəˈsɪlɪteɪt/", pos: "v", meaning: "Tạo điều kiện thuận lợi, hỗ trợ", example: "Modern tools facilitate seamless communication." },
-    ],
+    "id": 6,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 6",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "ingredient",
+        "ipa": "/ingredient/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'ingredient'",
+        "example": ""
+      },
+      {
+        "word": "kitchen",
+        "ipa": "/kitchen/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'kitchen'",
+        "example": ""
+      },
+      {
+        "word": "commuter",
+        "ipa": "/commuter/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'commuter'",
+        "example": ""
+      },
+      {
+        "word": "transit schedule",
+        "ipa": "/transit schedule/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'transit schedule'",
+        "example": ""
+      },
+      {
+        "word": "clap",
+        "ipa": "/clap/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'clap'",
+        "example": ""
+      },
+      {
+        "word": "presentation",
+        "ipa": "/presentation/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'presentation'",
+        "example": ""
+      },
+      {
+        "word": "shrub",
+        "ipa": "/shrub/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'shrub'",
+        "example": ""
+      },
+      {
+        "word": "walkway",
+        "ipa": "/walkway/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'walkway'",
+        "example": ""
+      },
+      {
+        "word": "file",
+        "ipa": "/file/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'file'",
+        "example": ""
+      },
+      {
+        "word": "drawer",
+        "ipa": "/drawer/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'drawer'",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 7,
-    volId: "vol1",
-    title: "ETS 2024 - Test 7",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "contingency", ipa: "/kənˈtɪndʒənsi/", pos: "n", meaning: "Phương án dự phòng rủi ro", example: "Establish a contingency plan in case of shipment delays." },
-      { word: "rigorous", ipa: "/ˈrɪɡərəs/", pos: "adj", meaning: "Nghiêm ngặt, khắt khe", example: "The candidate passed rigorous technical evaluations." },
-    ],
+    "id": 7,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 7",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "pour",
+        "ipa": "/pour/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'pour'",
+        "example": ""
+      },
+      {
+        "word": "glass",
+        "ipa": "/glass/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'glass'",
+        "example": ""
+      },
+      {
+        "word": "pack",
+        "ipa": "/pack/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'pack'",
+        "example": ""
+      },
+      {
+        "word": "briefcase",
+        "ipa": "/briefcase/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'briefcase'",
+        "example": ""
+      },
+      {
+        "word": "converse",
+        "ipa": "/converse/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'converse'",
+        "example": ""
+      },
+      {
+        "word": "coffee machine",
+        "ipa": "/coffee machine/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'coffee machine'",
+        "example": ""
+      },
+      {
+        "word": "transfer",
+        "ipa": "/transfer/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'transfer'",
+        "example": ""
+      },
+      {
+        "word": "cart",
+        "ipa": "/cart/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'cart'",
+        "example": ""
+      },
+      {
+        "word": "reflect off",
+        "ipa": "/reflect off/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'reflect off'",
+        "example": ""
+      },
+      {
+        "word": "marble floor",
+        "ipa": "/marble floor/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'marble floor'",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 8,
-    volId: "vol1",
-    title: "ETS 2024 - Test 8",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "tenative", ipa: "/ˈtentətɪv/", pos: "adj", meaning: "Dự kiến, tạm thời chưa chốt", example: "We set a tentative project launch date for May 15." },
-      { word: "unprecedented", ipa: "/ʌnˈpresɪdentɪd/", pos: "adj", meaning: "Chưa từng có tiền lệ", example: "The product release enjoyed unprecedented demand." },
-    ],
+    "id": 8,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 8",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "water",
+        "ipa": "/water/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'water'",
+        "example": ""
+      },
+      {
+        "word": "houseplant",
+        "ipa": "/houseplant/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'houseplant'",
+        "example": ""
+      },
+      {
+        "word": "solder",
+        "ipa": "/solder/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'solder'",
+        "example": ""
+      },
+      {
+        "word": "circuit board",
+        "ipa": "/circuit board/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'circuit board'",
+        "example": ""
+      },
+      {
+        "word": "assemble",
+        "ipa": "/assemble/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'assemble'",
+        "example": ""
+      },
+      {
+        "word": "display booth",
+        "ipa": "/display booth/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'display booth'",
+        "example": ""
+      },
+      {
+        "word": "amphitheater",
+        "ipa": "/amphitheater/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'amphitheater'",
+        "example": ""
+      },
+      {
+        "word": "bench",
+        "ipa": "/bench/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'bench'",
+        "example": ""
+      },
+      {
+        "word": "cutlery",
+        "ipa": "/cutlery/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'cutlery'",
+        "example": ""
+      },
+      {
+        "word": "set",
+        "ipa": "/set/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'set'",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 9,
-    volId: "vol1",
-    title: "ETS 2024 - Test 9",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "apparel", ipa: "/əˈpærəl/", pos: "n", meaning: "Trang phục, quần áo thương mại", example: "The boutique imports designer apparel from Milan." },
-      { word: "endorse", ipa: "/ɪnˈdɔːrs/", pos: "v", meaning: "Tán thành, ủng hộ, quảng bá", example: "Celebrity athletes officially endorse the sportswear line." },
-    ],
+    "id": 9,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 9",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "measure",
+        "ipa": "/measure/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'measure'",
+        "example": ""
+      },
+      {
+        "word": "tape",
+        "ipa": "/tape/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'tape'",
+        "example": ""
+      },
+      {
+        "word": "roll",
+        "ipa": "/roll/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'roll'",
+        "example": ""
+      },
+      {
+        "word": "terminal",
+        "ipa": "/terminal/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'terminal'",
+        "example": ""
+      },
+      {
+        "word": "browse",
+        "ipa": "/browse/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'browse'",
+        "example": ""
+      },
+      {
+        "word": "sidewalk",
+        "ipa": "/sidewalk/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'sidewalk'",
+        "example": ""
+      },
+      {
+        "word": "stack",
+        "ipa": "/stack/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'stack'",
+        "example": ""
+      },
+      {
+        "word": "lamp",
+        "ipa": "/lamp/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'lamp'",
+        "example": ""
+      },
+      {
+        "word": "diagonally",
+        "ipa": "/diagonally/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'diagonally'",
+        "example": ""
+      },
+      {
+        "word": "stall",
+        "ipa": "/stall/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'stall'",
+        "example": ""
+      }
+    ]
   },
   {
-    id: 10,
-    volId: "vol1",
-    title: "ETS 2024 - Test 10",
-    difficulty: "Khó",
-    score: null,
-    listeningScore: null,
-    readingScore: null,
-    status: "Chưa luyện tập",
-    completedAt: null,
-    historyAttempts: [],
-    keyVocab: [
-      { word: "lucrative", ipa: "/ˈluːkrətɪv/", pos: "adj", meaning: "Sinh lợi cao, mang lại nhiều tiền", example: "A lucrative sponsorship contract was signed." },
-      { word: "reputable", ipa: "/ˈrepjətəbl/", pos: "adj", meaning: "Có uy tín lớn, đáng tin cậy", example: "Always source spare parts from reputable suppliers." },
-    ],
-  },
+    "id": 10,
+    "volId": "vol1",
+    "title": "ETS 2024 - Test 10",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "hang",
+        "ipa": "/hang/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'hang'",
+        "example": ""
+      },
+      {
+        "word": "coat rack",
+        "ipa": "/coat rack/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'coat rack'",
+        "example": ""
+      },
+      {
+        "word": "review",
+        "ipa": "/review/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'review'",
+        "example": ""
+      },
+      {
+        "word": "blueprint",
+        "ipa": "/blueprint/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'blueprint'",
+        "example": ""
+      },
+      {
+        "word": "seated",
+        "ipa": "/seated/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'seated'",
+        "example": ""
+      },
+      {
+        "word": "conference table",
+        "ipa": "/conference table/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'conference table'",
+        "example": ""
+      },
+      {
+        "word": "machinery",
+        "ipa": "/machinery/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'machinery'",
+        "example": ""
+      },
+      {
+        "word": "gravel",
+        "ipa": "/gravel/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'gravel'",
+        "example": ""
+      },
+      {
+        "word": "table settings",
+        "ipa": "/table settings/",
+        "pos": "Verb (Động từ)",
+        "meaning": "từ khóa hành động 'table settings'",
+        "example": ""
+      },
+      {
+        "word": "prepare",
+        "ipa": "/prepare/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "danh từ trọng tâm 'prepare'",
+        "example": ""
+      }
+    ]
+  }
 ];
 
-export const INITIAL_TESTS_VOL2: TestItem[] = Array.from({ length: 9 }, (_, i) => ({
-  id: 202301 + i,
-  volId: "vol2",
-  title: `ETS 2023 - Test ${i + 1}`,
-  difficulty: "Khó",
-  score: null,
-  listeningScore: null,
-  readingScore: null,
-  status: "Chưa luyện tập",
-  completedAt: null,
-  historyAttempts: [],
-  keyVocab: [
-    { word: "solicit", ipa: "/səˈlɪsɪt/", pos: "v", meaning: "Kêu gọi, khẩn khoản xin ý kiến đóng góp", example: "We solicit feedback from all attendees." },
-    { word: "subsidiary", ipa: "/səbˈsɪdieri/", pos: "n", meaning: "Công ty con trực thuộc tập đoàn", example: "The Tokyo branch is our newest subsidiary." },
-  ],
-}));
+export const INITIAL_TESTS_VOL2: TestItem[] = [
+  {
+    "id": 202301,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 1",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "holding",
+        "ipa": "/ˈhoʊldɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang cầm, nắm",
+        "example": "She is holding a notebook."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "remind",
+        "ipa": "/rɪˈmaɪnd/",
+        "pos": "Verb (Động từ)",
+        "meaning": "nhắc nhở",
+        "example": "Please remind him about the upcoming deadline."
+      },
+      {
+        "word": "apologize",
+        "ipa": "/əˈpɑːlədʒaɪz/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xin lỗi",
+        "example": "We apologize for the inconvenience caused."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      },
+      {
+        "word": "wildlife",
+        "ipa": "/ˈwaɪldlaɪf/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "động vật hoang dã",
+        "example": "The park provides protection for local wildlife."
+      }
+    ]
+  },
+  {
+    "id": 202303,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 3",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "holding",
+        "ipa": "/ˈhoʊldɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang cầm, nắm",
+        "example": "She is holding a notebook."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "reservation",
+        "ipa": "/ˌrezərˈveɪʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sự đặt chỗ trước",
+        "example": "I would like to make a table reservation."
+      },
+      {
+        "word": "consider",
+        "ipa": "/kənˈsɪdər/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xem xét, cân nhắc",
+        "example": "The board will consider all proposals tomorrow."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "musician",
+        "ipa": "/mjuˈzɪʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "nhạc sĩ, nhạc công",
+        "example": "The musicians performed outdoors."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      }
+    ]
+  },
+  {
+    "id": 202304,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 4",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "reaching",
+        "ipa": "/ˈriːtʃɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang với lấy",
+        "example": "He is reaching for a document on the shelf."
+      },
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      },
+      {
+        "word": "confirm",
+        "ipa": "/kənˈfɜːrm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xác nhận",
+        "example": "Please confirm your flight reservation."
+      },
+      {
+        "word": "partnership",
+        "ipa": "/ˈpɑːrtnərʃɪp/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "quan hệ đối tác, sự hợp tác",
+        "example": "The two firms formed a successful partnership."
+      },
+      {
+        "word": "reimburse",
+        "ipa": "/ˌriːɪmˈbɜːrs/",
+        "pos": "Verb (Động từ)",
+        "meaning": "hoàn tiền, bồi hoàn",
+        "example": "The company will reimburse travel expenses."
+      }
+    ]
+  },
+  {
+    "id": 202305,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 5",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "holding",
+        "ipa": "/ˈhoʊldɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang cầm, nắm",
+        "example": "She is holding a notebook."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "remind",
+        "ipa": "/rɪˈmaɪnd/",
+        "pos": "Verb (Động từ)",
+        "meaning": "nhắc nhở",
+        "example": "Please remind him about the upcoming deadline."
+      },
+      {
+        "word": "upgrade",
+        "ipa": "/ˌʌpˈɡreɪd/",
+        "pos": "v/n",
+        "meaning": "nâng cấp",
+        "example": "Passengers can upgrade to business class."
+      },
+      {
+        "word": "display",
+        "ipa": "/dɪˈspleɪ/",
+        "pos": "v/n",
+        "meaning": "trưng bày / sự trưng bày",
+        "example": "New models are on display in the showroom."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "reservation",
+        "ipa": "/ˌrezərˈveɪʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sự đặt chỗ trước",
+        "example": "I would like to make a table reservation."
+      }
+    ]
+  },
+  {
+    "id": 202306,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 6",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "carrying",
+        "ipa": "/ˈkæriɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang mang, vác",
+        "example": "The worker is carrying a box."
+      },
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "walking",
+        "ipa": "/ˈwɔːkɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đi bộ",
+        "example": "People are walking down the street."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "display",
+        "ipa": "/dɪˈspleɪ/",
+        "pos": "v/n",
+        "meaning": "trưng bày / sự trưng bày",
+        "example": "New models are on display in the showroom."
+      },
+      {
+        "word": "remind",
+        "ipa": "/rɪˈmaɪnd/",
+        "pos": "Verb (Động từ)",
+        "meaning": "nhắc nhở",
+        "example": "Please remind him about the upcoming deadline."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "holding",
+        "ipa": "/ˈhoʊldɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang cầm, nắm",
+        "example": "She is holding a notebook."
+      }
+    ]
+  },
+  {
+    "id": 202307,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 7",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "carpet",
+        "ipa": "/ˈkɑːrpɪt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "thảm trải sàn",
+        "example": "A new carpet was installed in the office."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      },
+      {
+        "word": "partnership",
+        "ipa": "/ˈpɑːrtnərʃɪp/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "quan hệ đối tác, sự hợp tác",
+        "example": "The two firms formed a successful partnership."
+      },
+      {
+        "word": "reimburse",
+        "ipa": "/ˌriːɪmˈbɜːrs/",
+        "pos": "Verb (Động từ)",
+        "meaning": "hoàn tiền, bồi hoàn",
+        "example": "The company will reimburse travel expenses."
+      },
+      {
+        "word": "inform",
+        "ipa": "/ɪnˈfɔːrm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "thông báo cho ai",
+        "example": "Staff were informed about the proposed policy."
+      }
+    ]
+  },
+  {
+    "id": 202308,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 8",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "upgrade",
+        "ipa": "/ˌʌpˈɡreɪd/",
+        "pos": "v/n",
+        "meaning": "nâng cấp",
+        "example": "Passengers can upgrade to business class."
+      },
+      {
+        "word": "confirm",
+        "ipa": "/kənˈfɜːrm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xác nhận",
+        "example": "Please confirm your flight reservation."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      },
+      {
+        "word": "apologize",
+        "ipa": "/əˈpɑːlədʒaɪz/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xin lỗi",
+        "example": "We apologize for the inconvenience caused."
+      },
+      {
+        "word": "remind",
+        "ipa": "/rɪˈmaɪnd/",
+        "pos": "Verb (Động từ)",
+        "meaning": "nhắc nhở",
+        "example": "Please remind him about the upcoming deadline."
+      }
+    ]
+  },
+  {
+    "id": 202309,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 9",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "display",
+        "ipa": "/dɪˈspleɪ/",
+        "pos": "v/n",
+        "meaning": "trưng bày / sự trưng bày",
+        "example": "New models are on display in the showroom."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "remind",
+        "ipa": "/rɪˈmaɪnd/",
+        "pos": "Verb (Động từ)",
+        "meaning": "nhắc nhở",
+        "example": "Please remind him about the upcoming deadline."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      },
+      {
+        "word": "partnership",
+        "ipa": "/ˈpɑːrtnərʃɪp/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "quan hệ đối tác, sự hợp tác",
+        "example": "The two firms formed a successful partnership."
+      },
+      {
+        "word": "reimburse",
+        "ipa": "/ˌriːɪmˈbɜːrs/",
+        "pos": "Verb (Động từ)",
+        "meaning": "hoàn tiền, bồi hoàn",
+        "example": "The company will reimburse travel expenses."
+      }
+    ]
+  },
+  {
+    "id": 202310,
+    "volId": "vol2",
+    "title": "ETS 2023 - Test 10",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "holding",
+        "ipa": "/ˈhoʊldɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang cầm, nắm",
+        "example": "She is holding a notebook."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "v/n",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "carpet",
+        "ipa": "/ˈkɑːrpɪt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "thảm trải sàn",
+        "example": "A new carpet was installed in the office."
+      },
+      {
+        "word": "remind",
+        "ipa": "/rɪˈmaɪnd/",
+        "pos": "Verb (Động từ)",
+        "meaning": "nhắc nhở",
+        "example": "Please remind him about the upcoming deadline."
+      },
+      {
+        "word": "inform",
+        "ipa": "/ɪnˈfɔːrm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "thông báo cho ai",
+        "example": "Staff were informed about the proposed policy."
+      },
+      {
+        "word": "voucher",
+        "ipa": "/ˈvaʊtʃər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "phiếu mua hàng, phiếu ưu đãi",
+        "example": "The package includes complimentary meal vouchers."
+      },
+      {
+        "word": "inquiry",
+        "ipa": "/ɪnˈkwaɪəri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "câu hỏi, sự thắc mắc",
+        "example": "Thank you for your inquiry about our products."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      }
+    ]
+  }
+];
 
-export const INITIAL_TESTS_VOL3: TestItem[] = Array.from({ length: 10 }, (_, i) => ({
-  id: 202201 + i,
-  volId: "vol3",
-  title: `ETS 2022 - Test ${i + 1}`,
-  difficulty: "Khó",
-  score: null,
-  listeningScore: null,
-  readingScore: null,
-  status: "Chưa luyện tập",
-  completedAt: null,
-  historyAttempts: [],
-  keyVocab: [
-    { word: "reimbursement", ipa: "/ˌriːɪmˈbɜːrsmənt/", pos: "n", meaning: "Khoản hoàn tiền công tác, bồi hoàn chi phí", example: "Submit receipts to claim meal reimbursement." },
-    { word: "complimentary", ipa: "/ˌkɑːmplɪˈmentri/", pos: "adj", meaning: "Miễn phí, tặng kèm", example: "Guests receive complimentary shuttle transportation." },
-  ],
-}));
-
+export const INITIAL_TESTS_VOL3: TestItem[] = [
+  {
+    "id": 202201,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 1",
+    "difficulty": "Vừa sức",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "furniture",
+        "ipa": "/ˈfɜːrnɪtʃər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "đồ nội thất, bàn ghế",
+        "example": "He is lifting some furniture into the van."
+      },
+      {
+        "word": "standing",
+        "ipa": "/ˈstændɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang đứng",
+        "example": "She is standing near the counter."
+      },
+      {
+        "word": "schedule",
+        "ipa": "/ˈʃedʒuːl/",
+        "pos": "Noun/Verb (Danh từ/Động từ)",
+        "meaning": "lên lịch / lịch trình",
+        "example": "The meeting is scheduled for 3 P.M."
+      },
+      {
+        "word": "recommend",
+        "ipa": "/ˌrekəˈmend/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyên, gợi ý, đề xuất",
+        "example": "I highly recommend watching the training video first."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, hội thảo",
+        "example": "The annual technology conference takes place in July."
+      },
+      {
+        "word": "encourage",
+        "ipa": "/ɪnˈkɜːrɪdʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "khuyến khích, động viên",
+        "example": "The manager encouraged staff to share ideas."
+      },
+      {
+        "word": "confirm",
+        "ipa": "/kənˈfɜːrm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xác nhận",
+        "example": "Please confirm your flight reservation."
+      },
+      {
+        "word": "regional",
+        "ipa": "/ˈriːdʒənl/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "thuộc khu vực, vùng miền",
+        "example": "The store sells regional specialties."
+      }
+    ]
+  },
+  {
+    "id": 202202,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 2",
+    "difficulty": "Vừa sức",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "typing",
+        "ipa": "/ˈtaɪpɪŋ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đang gõ phím",
+        "example": "She is typing an email to the client."
+      },
+      {
+        "word": "laptop",
+        "ipa": "/ˈlæptɑːp/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "máy tính xách tay",
+        "example": "He closed his laptop before leaving."
+      },
+      {
+        "word": "merchandise",
+        "ipa": "/ˈmɜːrtʃəndaɪs/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hàng hóa",
+        "example": "New merchandise arrives every Tuesday."
+      },
+      {
+        "word": "display",
+        "ipa": "/dɪˈspleɪ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "trưng bày",
+        "example": "Products are displayed attractively on the shelves."
+      },
+      {
+        "word": "examine",
+        "ipa": "/ɪɡˈzæmɪn/",
+        "pos": "Verb (Động từ)",
+        "meaning": "kiểm tra, xem xét kỹ",
+        "example": "The inspectors examined the construction site."
+      },
+      {
+        "word": "blueprint",
+        "ipa": "/ˈbluːprɪnt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bản thiết kế kiến trúc",
+        "example": "The architect revised the building blueprints."
+      },
+      {
+        "word": "arrange",
+        "ipa": "/əˈreɪndʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "sắp xếp",
+        "example": "The chairs were neatly arranged in rows."
+      },
+      {
+        "word": "conference",
+        "ipa": "/ˈkɑːnfərəns/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hội nghị, cuộc họp",
+        "example": "The conference will take place in Room 4."
+      },
+      {
+        "word": "push",
+        "ipa": "/pʊʃ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đẩy",
+        "example": "He pushed the heavy cart down the aisle."
+      },
+      {
+        "word": "warehouse",
+        "ipa": "/ˈwerhaʊs/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "nhà kho, kho hàng",
+        "example": "Inventory is stored in the main warehouse."
+      }
+    ]
+  },
+  {
+    "id": 202203,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 3",
+    "difficulty": "Vừa sức",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "reach",
+        "ipa": "/riːtʃ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "với tay, chạm tới",
+        "example": "She reached for the top drawer."
+      },
+      {
+        "word": "folder",
+        "ipa": "/ˈfoʊldər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bìa đựng tài liệu",
+        "example": "The contract is inside the blue folder."
+      },
+      {
+        "word": "pedestrian",
+        "ipa": "/pəˈdestriən/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "người đi bộ",
+        "example": "Pedestrians should use the crosswalk."
+      },
+      {
+        "word": "intersection",
+        "ipa": "/ˌɪntərˈsekʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "ngã tư, giao lộ",
+        "example": "Turn left at the next intersection."
+      },
+      {
+        "word": "pour",
+        "ipa": "/pɔːr/",
+        "pos": "Verb (Động từ)",
+        "meaning": "rót, đổ",
+        "example": "He poured coffee into the mug."
+      },
+      {
+        "word": "server",
+        "ipa": "/ˈsɜːrvər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "người phục vụ bàn",
+        "example": "The server brought our appetizers promptly."
+      },
+      {
+        "word": "potted",
+        "ipa": "/ˈpɑːtɪd/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "trồng trong chậu",
+        "example": "Potted plants brighten up the reception area."
+      },
+      {
+        "word": "windowsill",
+        "ipa": "/ˈwɪndoʊsɪl/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bậu cửa sổ",
+        "example": "She placed a book on the windowsill."
+      },
+      {
+        "word": "scaffolding",
+        "ipa": "/ˈskæfəldɪŋ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "giàn giáo xây dựng",
+        "example": "The building was surrounded by steel scaffolding."
+      },
+      {
+        "word": "put up",
+        "ipa": "/pʊt ʌp/",
+        "pos": "Phrasal Verb (Cụm động từ)",
+        "meaning": "dựng lên, lắp ráp",
+        "example": "They put up a temporary fence."
+      }
+    ]
+  },
+  {
+    "id": 202204,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 4",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "wipe",
+        "ipa": "/waɪp/",
+        "pos": "Verb (Động từ)",
+        "meaning": "lau, chùi",
+        "example": "Please wipe the spill off the table."
+      },
+      {
+        "word": "counter",
+        "ipa": "/ˈkaʊntər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "quầy, mặt bàn bếp",
+        "example": "The kitchen counter is made of granite."
+      },
+      {
+        "word": "pallet",
+        "ipa": "/ˈpælət/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "tấm nâng hàng, pallet",
+        "example": "The goods were secured on a wooden pallet."
+      },
+      {
+        "word": "stack",
+        "ipa": "/stæk/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xếp chồng lên nhau",
+        "example": "Boxes were stacked against the warehouse wall."
+      },
+      {
+        "word": "browse",
+        "ipa": "/braʊz/",
+        "pos": "Verb (Động từ)",
+        "meaning": "xem lướt, dạo xem hàng",
+        "example": "Customers love to browse the new arrivals."
+      },
+      {
+        "word": "garment",
+        "ipa": "/ˈɡɑːrmənt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "quần áo, trang phục",
+        "example": "Delicate garments should be hand washed."
+      },
+      {
+        "word": "presenter",
+        "ipa": "/prɪˈzentər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "người thuyết trình",
+        "example": "The presenter answered several questions from the audience."
+      },
+      {
+        "word": "chart",
+        "ipa": "/tʃɑːrt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "biểu đồ",
+        "example": "The sales chart showed substantial growth."
+      },
+      {
+        "word": "fountain",
+        "ipa": "/ˈfaʊntn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "đài phun nước",
+        "example": "The hotel courtyard features a marble fountain."
+      },
+      {
+        "word": "plaza",
+        "ipa": "/ˈplɑːzə/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "quảng trường",
+        "example": "People gathered in the city plaza for the festival."
+      }
+    ]
+  },
+  {
+    "id": 202205,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 5",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "stroll",
+        "ipa": "/stroʊl/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đi dạo, tản bộ",
+        "example": "They strolled along the riverbank at sunset."
+      },
+      {
+        "word": "promenade",
+        "ipa": "/ˌprɑːməˈneɪd/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "đường dạo mát, phố đi bộ ven sông/biển",
+        "example": "The seaside promenade was crowded with tourists."
+      },
+      {
+        "word": "barista",
+        "ipa": "/bəˈriːstə/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "nhân viên pha chế cà phê",
+        "example": "The skilled barista crafted latte art."
+      },
+      {
+        "word": "steam",
+        "ipa": "/stiːm/",
+        "pos": "Verb (Động từ)",
+        "meaning": "đánh hơi nóng, làm nóng bằng hơi nước",
+        "example": "She steamed the milk for the cappuccino."
+      },
+      {
+        "word": "evenly",
+        "ipa": "/ˈiːvnli/",
+        "pos": "Adverb (Trạng từ)",
+        "meaning": "đều đặn, ngang bằng nhau",
+        "example": "Space the picture frames evenly on the wall."
+      },
+      {
+        "word": "gallery",
+        "ipa": "/ˈɡæləri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "phòng trưng bày, phòng tranh",
+        "example": "The modern art gallery attracts many visitors."
+      },
+      {
+        "word": "wiring",
+        "ipa": "/ˈwaɪərɪŋ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hệ thống dây điện",
+        "example": "Old building wiring should be inspected annually."
+      },
+      {
+        "word": "inspect",
+        "ipa": "/ɪnˈspekt/",
+        "pos": "Verb (Động từ)",
+        "meaning": "kiểm tra, thanh tra",
+        "example": "The engineer inspected the circuit board carefully."
+      },
+      {
+        "word": "shaded",
+        "ipa": "/ˈʃeɪdɪd/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "được che bóng mát",
+        "example": "We found a shaded bench under an oak tree."
+      },
+      {
+        "word": "canvas",
+        "ipa": "/ˈkænvəs/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "vải bạt, vải thô",
+        "example": "The restaurant installed heavy canvas awnings."
+      }
+    ]
+  },
+  {
+    "id": 202206,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 6",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "podium",
+        "ipa": "/ˈpoʊdiəm/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bục giảng, bục phát biểu",
+        "example": "The speaker approached the podium confidently."
+      },
+      {
+        "word": "adjust",
+        "ipa": "/əˈdʒʌst/",
+        "pos": "Verb (Động từ)",
+        "meaning": "điều chỉnh",
+        "example": "He adjusted the microphone before speaking."
+      },
+      {
+        "word": "cyclist",
+        "ipa": "/ˈsaɪklɪst/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "người đi xe đạp",
+        "example": "Cyclists must wear helmets for safety."
+      },
+      {
+        "word": "designated",
+        "ipa": "/ˈdezɪɡneɪtɪd/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "được chỉ định, dành riêng",
+        "example": "Please park only in designated visitor spaces."
+      },
+      {
+        "word": "garnish",
+        "ipa": "/ˈɡɑːrnɪʃ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "trang trí món ăn",
+        "example": "The chef garnished the soup with fresh parsley."
+      },
+      {
+        "word": "herbs",
+        "ipa": "/ɜːrbz/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "rau thơm, thảo mộc",
+        "example": "Fresh herbs add great aroma to dishes."
+      },
+      {
+        "word": "filing cabinet",
+        "ipa": "/ˈfaɪlɪŋ kæbɪnət/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "tủ đựng hồ sơ",
+        "example": "Keep the client files locked in the filing cabinet."
+      },
+      {
+        "word": "metal",
+        "ipa": "/ˈmetl/",
+        "pos": "Noun/Adjective (Danh từ/Tính từ)",
+        "meaning": "kim loại",
+        "example": "The shelves are made of sturdy metal."
+      },
+      {
+        "word": "foundation",
+        "ipa": "/faʊnˈdeɪʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "móng nhà, nền móng",
+        "example": "The concrete foundation must cure for several days."
+      },
+      {
+        "word": "secure",
+        "ipa": "/səˈkjʊr/",
+        "pos": "Verb (Động từ)",
+        "meaning": "cố định, buộc chặt",
+        "example": "Workers secured the wooden panels firmly."
+      }
+    ]
+  },
+  {
+    "id": 202207,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 7",
+    "difficulty": "Trung bình",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "ceramic",
+        "ipa": "/səˈræmɪk/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "bằng gốm, sứ",
+        "example": "The food was served on ceramic plates."
+      },
+      {
+        "word": "silverware",
+        "ipa": "/ˈsɪlvərwer/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "bộ đồ ăn kim loại (dao, nĩa, thìa)",
+        "example": "Polish the silverware before the dinner party."
+      },
+      {
+        "word": "arched",
+        "ipa": "/ɑːrtʃt/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "hình vòm, uốn cong",
+        "example": "The path passed under an arched gateway."
+      },
+      {
+        "word": "pedestrian",
+        "ipa": "/pəˈdestriən/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "người đi bộ",
+        "example": "Pedestrians enjoy walking through the scenic park."
+      },
+      {
+        "word": "receipt",
+        "ipa": "/rɪˈsiːt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "biên lai, hóa đơn",
+        "example": "Always keep your receipt for returns."
+      },
+      {
+        "word": "cashier",
+        "ipa": "/kæˈʃɪr/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "nhân viên thu ngân",
+        "example": "The cashier processed the payment quickly."
+      },
+      {
+        "word": "easel",
+        "ipa": "/ˈiːzl/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "giá vẽ tranh",
+        "example": "The painter positioned her easel near the lake."
+      },
+      {
+        "word": "canvas",
+        "ipa": "/ˈkænvəs/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "toan vẽ tranh, vải bố",
+        "example": "He applied oil paints directly onto the canvas."
+      },
+      {
+        "word": "folded",
+        "ipa": "/ˈfoʊldɪd/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "được gấp gọn",
+        "example": "Neatly folded linen was stored in the cupboard."
+      },
+      {
+        "word": "laundry",
+        "ipa": "/ˈlɔːndri/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "việc giặt giũ, quần áo giặt",
+        "example": "The hotel provides full laundry service."
+      }
+    ]
+  },
+  {
+    "id": 202208,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 8",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "pedestrian",
+        "ipa": "/pəˈdestriən/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "người đi bộ",
+        "example": "Pedestrians waited patiently for the green light."
+      },
+      {
+        "word": "corner",
+        "ipa": "/ˈkɔːrnər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "góc phố, góc đường",
+        "example": "There is a cafe on the street corner."
+      },
+      {
+        "word": "neatly",
+        "ipa": "/ˈniːtli/",
+        "pos": "Adverb (Trạng từ)",
+        "meaning": "ngăn nắp, gọn gàng",
+        "example": "Towels were stacked neatly in the closet."
+      },
+      {
+        "word": "boutique",
+        "ipa": "/buːˈtiːk/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "cửa hàng thời trang nhỏ cao cấp",
+        "example": "She bought the dress at an exclusive boutique."
+      },
+      {
+        "word": "microscope",
+        "ipa": "/ˈmaɪkrəskoʊp/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "kính hiển vi",
+        "example": "The biologist examined the cells under a microscope."
+      },
+      {
+        "word": "researcher",
+        "ipa": "/ˈriːsɜːrtʃər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "nhà nghiên cứu",
+        "example": "Researchers published their breakthrough study."
+      },
+      {
+        "word": "auditorium",
+        "ipa": "/ˌɔːdɪˈtɔːriəm/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "khán phòng, giảng đường lớn",
+        "example": "The graduation ceremony took place in the main auditorium."
+      },
+      {
+        "word": "lined up",
+        "ipa": "/laɪnd ʌp/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "xếp thành hàng",
+        "example": "Desks were lined up facing the front board."
+      },
+      {
+        "word": "carpenter",
+        "ipa": "/ˈkɑːrpəntər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "thợ mộc",
+        "example": "The skilled carpenter built custom cabinets."
+      },
+      {
+        "word": "lumber",
+        "ipa": "/ˈlʌmbər/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "gỗ xẻ, thanh gỗ",
+        "example": "Lumber was delivered to the building site."
+      }
+    ]
+  },
+  {
+    "id": 202209,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 9",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "organize",
+        "ipa": "/ˈɔːrɡənaɪz/",
+        "pos": "Verb (Động từ)",
+        "meaning": "sắp xếp, tổ chức",
+        "example": "She organized the client records alphabetically."
+      },
+      {
+        "word": "drawer",
+        "ipa": "/drɔːr/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "ngăn kéo",
+        "example": "The keys are inside the top drawer."
+      },
+      {
+        "word": "brick-paved",
+        "ipa": "/brɪk peɪvd/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "được lát bằng gạch",
+        "example": "They strolled down the brick-paved alley."
+      },
+      {
+        "word": "sidewalk",
+        "ipa": "/ˈsaɪdwɔːk/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "vỉa hè, lối đi bộ",
+        "example": "Trees were planted along the sidewalk."
+      },
+      {
+        "word": "seated",
+        "ipa": "/ˈsiːtɪd/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "đang ngồi",
+        "example": "All seated guests were served promptly."
+      },
+      {
+        "word": "serve",
+        "ipa": "/sɜːrv/",
+        "pos": "Verb (Động từ)",
+        "meaning": "phục vụ",
+        "example": "Breakfast is served from 7:00 A.M."
+      },
+      {
+        "word": "crate",
+        "ipa": "/kreɪt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "thùng gỗ thưa, kiện hàng gỗ",
+        "example": "Heavy machine parts were packed in wooden crates."
+      },
+      {
+        "word": "cart",
+        "ipa": "/kɑːrt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "xe đẩy hàng",
+        "example": "Load the packages onto the cart."
+      },
+      {
+        "word": "patio",
+        "ipa": "/ˈpætioʊ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sân hiên, khoảng sân ngoài trời lát gạch",
+        "example": "We enjoyed lunch on the outdoor patio."
+      },
+      {
+        "word": "awning",
+        "ipa": "/ˈɔːnɪŋ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "mái hiên che nắng",
+        "example": "The store rolled out a green canvas awning."
+      }
+    ]
+  },
+  {
+    "id": 202210,
+    "volId": "vol3",
+    "title": "ETS 2022 - Test 10",
+    "difficulty": "Khó",
+    "score": null,
+    "listeningScore": null,
+    "readingScore": null,
+    "status": "Chưa luyện tập",
+    "completedAt": null,
+    "historyAttempts": [],
+    "keyVocab": [
+      {
+        "word": "arrange",
+        "ipa": "/əˈreɪndʒ/",
+        "pos": "Verb (Động từ)",
+        "meaning": "sắp xếp",
+        "example": "She arranged the volumes by author."
+      },
+      {
+        "word": "display",
+        "ipa": "/dɪˈspleɪ/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sự trưng bày, giá trưng bày",
+        "example": "The new titles are on display near the front."
+      },
+      {
+        "word": "concourse",
+        "ipa": "/ˈkɑːnkɔːrs/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sảnh lớn (nhà ga, sân bay)",
+        "example": "Crowds gathered in the central station concourse."
+      },
+      {
+        "word": "traveler",
+        "ipa": "/ˈtrævələr/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "hành khách, người đi du lịch",
+        "example": "Weary travelers rested on benches."
+      },
+      {
+        "word": "examination",
+        "ipa": "/ɪɡˌzæmɪˈneɪʃn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "sự thăm khám, kiểm tra",
+        "example": "The dentist conducted a thorough examination."
+      },
+      {
+        "word": "instrument",
+        "ipa": "/ˈɪnstrəmənt/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "dụng cụ, y cụ",
+        "example": "Surgical instruments must be sterilized."
+      },
+      {
+        "word": "shrink-wrapped",
+        "ipa": "/ˈʃrɪŋk ræpt/",
+        "pos": "Adjective (Tính từ)",
+        "meaning": "được bọc bằng màng co nhiệt",
+        "example": "The goods were shrink-wrapped to protect against moisture."
+      },
+      {
+        "word": "carton",
+        "ipa": "/ˈkɑːrtn/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "thùng các-tông, hộp bìa cứng",
+        "example": "Unpack the cartons carefully."
+      },
+      {
+        "word": "curb",
+        "ipa": "/kɜːrb/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "lề đường, mép vỉa hè",
+        "example": "Step onto the curb before crossing."
+      },
+      {
+        "word": "motorcycle",
+        "ipa": "/ˈmoʊtərsaɪkl/",
+        "pos": "Noun (Danh từ)",
+        "meaning": "xe máy, mô tô",
+        "example": "Motorcycles are a popular mode of city transport."
+      }
+    ]
+  }
+];

@@ -41,7 +41,7 @@ export const MockTestVocabModal: React.FC<MockTestVocabModalProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3.5 custom-scrollbar">
           {test.keyVocab?.map((item: any, idx: number) => {
             const isSaved = savedVocabBag.includes(item.word);
 

@@ -52,11 +52,15 @@ export interface WordItem {
   exampleMeaning?: string; // legacy alias
   translation?: string;
   audio?: string;
+  audioUrl?: string;
+  audioFile?: string;
   testId?: string;
   mastered?: boolean;
   bookmarked?: boolean;
   starred?: boolean;      // legacy alias for bookmarked
   topic?: string;
+  miniGame1?: any;
+  miniGame2?: any;
   [key: string]: any;
 }
 

@@ -44,7 +44,7 @@ export const VocabBagModal: React.FC<VocabBagModalProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-3">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
           {vocabBagModalData.items.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-6">Chưa có từ vựng nào trong danh mục này.</p>
           ) : (
@@ -131,7 +131,7 @@ export const TheoryModal: React.FC<TheoryModalProps> = ({ theoryModalData, setTh
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-3.5 text-xs">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3.5 text-xs pr-2">
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-blue-900 leading-relaxed">
             <p className="font-bold mb-1">Tóm tắt kỹ năng:</p>
             <p>{theoryModalData.summary}</p>
@@ -254,7 +254,7 @@ export const ReviewQuestionsModal: React.FC<ReviewQuestionsModalProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-3">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
           {flaggedReviewIds.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-6">
               Hiện không có câu nào được đánh dấu cần luyện lại.
@@ -364,7 +364,7 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Listening Studio • Dictation</span>
@@ -611,7 +611,7 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">{levelFormPart}</span>

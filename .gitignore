@@ -3,6 +3,9 @@ data/
 database/
 scripts/
 scratch/
+export_*.sql
+export_*.json
+*.sql.gz
 
 # Large learning media is stored outside Git and mounted into the frontend container.
 /frontend/public/audio/

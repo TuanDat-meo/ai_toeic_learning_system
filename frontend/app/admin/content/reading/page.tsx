@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Sparkles,
 } from "lucide-react";
@@ -23,6 +23,31 @@ import { ReadingCreateCardModal } from "@/components/admin/content/reading/Readi
 import { ReadingDeleteCardModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
 import { exportToExcel } from "@/lib/exportExcel";
+import { playUnifiedAnswerSound } from "@/lib/sound";
+
+export const LOCAL_READING_CARDS_KEY = "toeic_reading_cards";
+
+function getLocalReadingCards(): ExerciseCardData[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(LOCAL_READING_CARDS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalReadingCards(cards: ExerciseCardData[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(cards));
+    window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated", { detail: cards }));
+  } catch (err) {
+    console.warn("Could not save reading cards to localStorage:", err);
+  }
+}
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
@@ -32,6 +57,24 @@ export default function ReadingLearningPage() {
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+
+  // Helper cập nhật cards và lưu localStorage
+  const updateCardsState = (updater: (prev: ExerciseCardData[]) => ExerciseCardData[]) => {
+    setCards((prev) => {
+      const next = updater(prev);
+      saveLocalReadingCards(next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const local = getLocalReadingCards();
+    if (local && local.length > 0) {
+      setCards(local);
+    } else {
+      saveLocalReadingCards(INITIAL_CARDS);
+    }
+  }, []);
 
   // State Workspace
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
@@ -47,27 +90,8 @@ export default function ReadingLearningPage() {
   };
 
   // Web Audio Sound Effects Synthesizer
-  const playSfx = () => {
-    try {
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const ctx = new AudioContextClass();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.frequency.setValueAtTime(520, ctx.currentTime);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.1);
-    } catch {
-      // Fallback
-    }
+  const playSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
   // Modals state
@@ -141,7 +165,7 @@ export default function ReadingLearningPage() {
       .filter((r) => r.length > 0);
 
     if (editingCard) {
-      setCards((prev) =>
+      updateCardsState((prev) =>
         prev.map((c) =>
           c.id === editingCard.id
             ? {
@@ -197,7 +221,7 @@ export default function ReadingLearningPage() {
           },
         ],
       };
-      setCards((prev) => [newCard, ...prev]);
+      updateCardsState((prev) => [newCard, ...prev]);
       showToast(`Đã thêm chuyên đề "${newCard.title}" thành công! 🎉`);
     }
     setShowCreateCardModal(false);
@@ -205,7 +229,7 @@ export default function ReadingLearningPage() {
 
   const handleConfirmDelete = () => {
     if (!deleteCardConfirm) return;
-    setCards((prev) => prev.filter((c) => c.id !== deleteCardConfirm.id));
+    updateCardsState((prev) => prev.filter((c) => c.id !== deleteCardConfirm.id));
     showToast(`Đã xóa chuyên đề "${deleteCardConfirm.title}"`);
     setDeleteCardConfirm(null);
   };

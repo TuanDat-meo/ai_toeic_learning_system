@@ -473,7 +473,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                 </div>
               </form>
             ) : (
-              <div className="max-h-[60vh] overflow-y-auto p-5">
+              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-5">
                 {activityLoading ? (
                   <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải lịch sử thao tác...</p>
                 ) : activityError ? (
