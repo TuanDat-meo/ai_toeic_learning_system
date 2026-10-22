@@ -12,6 +12,7 @@ import {
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 import { saveItemProgress } from "@/lib/practiceProgress";
+import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 import {
   ArrowLeft,
   Languages,
@@ -282,7 +283,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
             </button>
           </div>
 
-          <div className="p-5 sm:p-6 space-y-5 overflow-y-auto bg-slate-50/50 flex-1">
+          <div className="p-5 sm:p-6 space-y-5 overflow-y-auto custom-scrollbar bg-slate-50/50 flex-1">
 
 
             {/* CONTENT FOR PRACTICE TAB */}
@@ -913,7 +914,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                 </span>
               </div>
 
-              <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+              <div className="flex-1 overflow-y-auto custom-scrollbar grid grid-cols-5 sm:grid-cols-8 gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
                 {internalQuestions.map((q, idx) => {
                   const isCurrent = idx === practiceCurrentQIndex;
                   const hasAnswered = !!practiceAnswers[q.id];
@@ -1015,7 +1016,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
             
             {/* LEFT PANE */}
-            <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
+            <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
@@ -1120,7 +1121,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
             </div>
 
             {/* RIGHT PANE */}
-            <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+            <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
               <div className="space-y-5">
                 <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
                   {currentQ && (qPart === "Part 6" || qPart === "Part 7") && (
@@ -1253,14 +1254,42 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                           key={optKey}
                           onClick={() => {
                             if (isChecked) return;
+                            const isCurrentCorrect = optKey === currentQ.correctAnswer;
                             if (isSfxEnabled) {
-                              if (optKey === currentQ.correctAnswer) playSfx("correct");
+                              if (isCurrentCorrect) playSfx("correct");
                               else playSfx("wrong");
                             }
                             const nextAnswers = { ...practiceAnswers, [currentQ.id]: optKey };
                             setPracticeAnswers(nextAnswers);
                             setPracticeChecked({ ...practiceChecked, [currentQ.id]: true });
-                            saveItemProgress(`mock-test-${test.id}`, Object.keys(nextAnswers).length, totalQuestions || 200);
+
+                            const questionMap = new Map((filteredPracticeQuestions || []).map((q) => [String(q.id), q]));
+                            let correctCount = 0;
+                            const wrongIds: (string | number)[] = [];
+                            const answeredIds = Object.keys(nextAnswers);
+                            answeredIds.forEach((qId) => {
+                              const q = questionMap.get(String(qId));
+                              if (q) {
+                                const userAns = (nextAnswers as Record<string, string>)[qId];
+                                if (userAns === q.correctAnswer) {
+                                  correctCount++;
+                                } else {
+                                  wrongIds.push(qId);
+                                }
+                              }
+                            });
+
+                            saveItemProgress(
+                              `mock-test-${test.id}`,
+                              answeredIds.length,
+                              totalQuestions || 200,
+                              undefined,
+                              correctCount,
+                              wrongIds.length,
+                              wrongIds,
+                              undefined,
+                              answeredIds
+                            );
                           }}
                           className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer ${cardStyle}`}
                         >
@@ -1401,36 +1430,53 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
 
                                   <p className="font-bold text-slate-800">{v.meaning}</p>
 
-                                  {isExpanded && (
-                                    <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-                                      {v.example && (
+                                  {isExpanded && (() => {
+                                    const detail = getEnrichedVocabDetail(v, currentQ?.questionText || currentQ?.passage || "");
+                                    return (
+                                      <div className="pt-3 border-t border-amber-200/70 space-y-3 animate-in fade-in duration-150">
+                                        {/* 1. Lời giải thích chi tiết & ngữ cảnh */}
                                         <div className="space-y-1">
-                                          <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Ví dụ câu:</div>
-                                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-0.5">
-                                            <p className="font-semibold text-slate-900">
-                                              &quot;{typeof v.example === "string" ? v.example : v.example.en}&quot;
-                                            </p>
-                                            {typeof v.example === "object" && v.example.vi && (
-                                              <p className="text-slate-600 italic">{v.example.vi}</p>
-                                            )}
+                                          <div className="font-bold text-amber-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>💡 Giải thích chi tiết &amp; Ngữ cảnh bài thi:</span>
+                                          </div>
+                                          <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-slate-800 leading-relaxed text-xs">
+                                            {detail.explanation}
                                           </div>
                                         </div>
-                                      )}
 
-                                      {v.collocations && v.collocations.length > 0 && (
-                                        <div className="space-y-1">
-                                          <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Cụm từ hay gặp:</div>
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {v.collocations.map((col: any, cIdx: number) => (
-                                              <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
-                                                <strong>{col.en}</strong>: {col.vi}
-                                              </span>
-                                            ))}
+                                        {/* 2. Ví dụ câu thực tế */}
+                                        {detail.example && (
+                                          <div className="space-y-1">
+                                            <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                              <span>📝 Ví dụ câu trong đề thi:</span>
+                                            </div>
+                                            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1 text-xs">
+                                              <p className="font-semibold text-slate-900">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                              {typeof detail.example === "object" && detail.example.vi && (
+                                                <p className="text-slate-600 italic">👉 {detail.example.vi}</p>
+                                              )}
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
+                                        )}
+
+                                        {/* 3. Cụm từ hay gặp */}
+                                        {detail.collocations && detail.collocations.length > 0 && (
+                                          <div className="space-y-1">
+                                            <div className="font-bold text-blue-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                              <span>🔗 Cụm từ hay gặp (Collocations):</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {detail.collocations.map((col: any, cIdx: number) => (
+                                                <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                                                  <strong>{col.en}</strong>: {col.vi}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
@@ -1580,7 +1626,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
               )}
 
               {/* Lưới danh sách câu hỏi để xem hoặc chọn câu chưa làm */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 overflow-y-auto max-h-[45vh]">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 overflow-y-auto max-h-[45vh] custom-scrollbar">
                 <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
                   {internalQuestions.map((q, idx) => {
                     const hasAnswered = !!practiceAnswers[q.id];

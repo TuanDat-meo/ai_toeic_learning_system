@@ -26,7 +26,28 @@ export interface MockTest {
   keyVocab?: any[];
   questions?: PracticeQuestion[];
   examCount?: number;
+  avgScore?: number | null;
+  attemptCount?: number | null;
   [key: string]: any;
+}
+
+/** Kết quả nộp bài của học viên phục vụ Admin theo dõi */
+export interface StudentSubmission {
+  id: string;
+  testId: number;
+  testTitle: string;
+  volId?: string;
+  userId?: string;
+  studentName: string;
+  studentEmail: string;
+  score: number;
+  listeningScore: number;
+  readingScore: number;
+  correctCount: number;
+  totalCount: number;
+  durationSeconds: number;
+  completedAt: string;
+  status: string;
 }
 
 /** Legacy alias cho UI components */

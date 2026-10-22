@@ -11,9 +11,8 @@ import {
   Headphones,
   CheckCircle2,
   Layers,
+  Clock,
 } from "lucide-react";
-import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
-import { useItemProgress } from "@/lib/practiceProgress";
 
 interface MockTestCardGridProps {
   tests: TestItem[];
@@ -23,6 +22,7 @@ interface MockTestCardGridProps {
   onOpenTranscript: (test: TestItem) => void;
   onOpenVocab: (test: TestItem) => void;
   onSelectMode: (test: TestItem, mode: "exam" | "practice") => void;
+  onToggleStatus?: (test: TestItem, e?: React.MouseEvent) => void;
 }
 
 function MockTestTableRow({
@@ -32,6 +32,7 @@ function MockTestTableRow({
   onOpenTranscript,
   onOpenVocab,
   onSelectMode,
+  onToggleStatus,
 }: {
   test: TestItem;
   onEditTest: (test: TestItem, e?: React.MouseEvent) => void;
@@ -39,10 +40,10 @@ function MockTestTableRow({
   onOpenTranscript: (test: TestItem) => void;
   onOpenVocab: (test: TestItem) => void;
   onSelectMode: (test: TestItem, mode: "exam" | "practice") => void;
+  onToggleStatus?: (test: TestItem, e?: React.MouseEvent) => void;
 }) {
-  const attemptsCount = test.historyAttempts ? test.historyAttempts.length : 0;
-  const estimatedScore = test.score || 650;
-  const progress = useItemProgress(`mock-test-${test.id}`, 200);
+  const attemptsCount = test.attemptCount || (test.historyAttempts ? test.historyAttempts.length : 0);
+  const avgScore = test.avgScore ? Math.round(test.avgScore) : (test.score || 0);
 
   return (
     <tr className="hover:bg-slate-50/70 transition">
@@ -64,24 +65,10 @@ function MockTestTableRow({
         </span>
       </td>
 
-      <td className="py-3.5 px-4 min-w-[220px]">
-        <div className="min-w-[190px] space-y-1">
-          <PracticeProgressBar
-            completed={progress.completedQuestions}
-            total={progress.totalQuestions || 200}
-            compact
-            unit="câu"
-          />
-          {progress.completedQuestions > 0 && (
-            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 whitespace-nowrap px-0.5">
-              <span className="text-emerald-600 font-bold inline-flex items-center gap-0.5">
-                ✓ {progress.correctAnswers ?? progress.completedQuestions} đúng
-              </span>
-              <span className="text-rose-500 font-bold inline-flex items-center gap-0.5">
-                ✕ {progress.wrongAnswers ?? 0} sai
-              </span>
-            </div>
-          )}
+      <td className="py-3.5 px-4 whitespace-nowrap">
+        <div className="space-y-0.5 text-xs">
+          <span className="font-bold text-slate-900 font-mono block">200 câu • 120 phút</span>
+          <span className="text-[11px] text-slate-500">Listening &amp; Reading (7 Parts)</span>
         </div>
       </td>
 
@@ -102,19 +89,41 @@ function MockTestTableRow({
       <td className="py-3.5 px-4 min-w-[160px] whitespace-nowrap">
         <div className="space-y-0.5">
           <span className="text-xs font-bold text-slate-800 block">
-            Điểm TB: {estimatedScore} / 990
+            Điểm TB: {avgScore > 0 ? `${avgScore} / 1000 điểm` : "Chưa có lượt thi"}
           </span>
           <span className="text-[10px] text-slate-500">
-            {attemptsCount > 0 ? `${attemptsCount} lượt hoàn thành` : "Lượt thi mẫu"}
+            {attemptsCount > 0 ? `${attemptsCount} học viên đã làm` : "Chưa có bài nộp"}
           </span>
         </div>
       </td>
 
       <td className="py-3.5 px-4 whitespace-nowrap">
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-          <span>Đã phát hành</span>
-        </span>
+        <button
+          type="button"
+          onClick={(e) => onToggleStatus?.(test, e)}
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer whitespace-nowrap ${
+            test.status === "DRAFT" || test.status === "Bản nháp"
+              ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+              : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+          }`}
+          title={
+            test.status === "DRAFT" || test.status === "Bản nháp"
+              ? "Bản nháp (học viên chưa thấy) - Nhấp để xuất bản"
+              : "Đã phát hành (học viên đang thấy) - Nhấp để chuyển về bản nháp"
+          }
+        >
+          {test.status === "DRAFT" || test.status === "Bản nháp" ? (
+            <>
+              <Clock className="w-3 h-3 text-amber-600" />
+              <span>Bản nháp</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Đã phát hành</span>
+            </>
+          )}
+        </button>
       </td>
 
       <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -172,6 +181,7 @@ function MockTestGridItem({
   onOpenTranscript,
   onOpenVocab,
   onSelectMode,
+  onToggleStatus,
 }: {
   test: TestItem;
   onEditTest: (test: TestItem, e?: React.MouseEvent) => void;
@@ -179,9 +189,10 @@ function MockTestGridItem({
   onOpenTranscript: (test: TestItem) => void;
   onOpenVocab: (test: TestItem) => void;
   onSelectMode: (test: TestItem, mode: "exam" | "practice") => void;
+  onToggleStatus?: (test: TestItem, e?: React.MouseEvent) => void;
 }) {
-  const progress = useItemProgress(`mock-test-${test.id}`, 200);
-
+  const attemptsCount = test.attemptCount || (test.historyAttempts ? test.historyAttempts.length : 0);
+  const avgScore = test.avgScore ? Math.round(test.avgScore) : (test.score || 0);
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
       <div className="space-y-3">
@@ -231,13 +242,44 @@ function MockTestGridItem({
         <div className="p-3 bg-slate-50/70 rounded-2xl border border-slate-200/70 space-y-1 text-xs">
           <div className="flex justify-between text-slate-600">
             <span>Điểm TB học viên:</span>
-            <strong className="text-slate-900 font-mono">
-              {test.score ? `${test.score} / 990` : "645 / 990"}
+            <strong className="text-blue-700 font-mono font-bold">
+              {avgScore > 0 ? `${avgScore} / 1000 điểm` : "Chưa có lượt thi"}
             </strong>
           </div>
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-slate-500 text-[11px]">
+            <span>Số học viên đã làm:</span>
+            <span className="font-semibold text-slate-700">
+              {attemptsCount > 0 ? `${attemptsCount} học viên` : "Chưa có bài nộp"}
+            </span>
+          </div>
+          <div className="flex justify-between items-center text-slate-600">
             <span>Trạng thái:</span>
-            <span className="text-emerald-600 font-bold">Đã xuất bản</span>
+            <button
+              type="button"
+              onClick={(e) => onToggleStatus?.(test, e)}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition cursor-pointer ${
+                test.status === "DRAFT" || test.status === "Bản nháp"
+                  ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+              }`}
+              title={
+                test.status === "DRAFT" || test.status === "Bản nháp"
+                  ? "Bản nháp (học viên chưa thấy) - Nhấp để xuất bản"
+                  : "Đã xuất bản (học viên đang thấy) - Nhấp để chuyển về bản nháp"
+              }
+            >
+              {test.status === "DRAFT" || test.status === "Bản nháp" ? (
+                <>
+                  <Clock className="w-3 h-3 text-amber-600" />
+                  <span>Bản nháp</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Đã xuất bản</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -302,6 +344,7 @@ export const MockTestCardGrid: React.FC<MockTestCardGridProps> = ({
   onOpenTranscript,
   onOpenVocab,
   onSelectMode,
+  onToggleStatus,
 }) => {
   if (tests.length === 0) {
     return (
@@ -322,7 +365,7 @@ export const MockTestCardGrid: React.FC<MockTestCardGridProps> = ({
                 <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
                   <th className="py-3.5 px-4 min-w-[200px]">Tên đề thi &amp; Mã</th>
                   <th className="py-3.5 px-4 min-w-[120px]">Tập đề</th>
-                  <th className="py-3.5 px-4 min-w-[220px]">Tiến độ bài thi</th>
+                  <th className="py-3.5 px-4 min-w-[170px]">Cấu trúc bài thi</th>
                   <th className="py-3.5 px-4 min-w-[110px]">Độ khó</th>
                   <th className="py-3.5 px-4 min-w-[150px]">Lượt thi &amp; Thang điểm</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>
@@ -339,6 +382,7 @@ export const MockTestCardGrid: React.FC<MockTestCardGridProps> = ({
                     onOpenTranscript={onOpenTranscript}
                     onOpenVocab={onOpenVocab}
                     onSelectMode={onSelectMode}
+                    onToggleStatus={onToggleStatus}
                   />
                 ))}
               </tbody>
@@ -359,6 +403,7 @@ export const MockTestCardGrid: React.FC<MockTestCardGridProps> = ({
               onOpenTranscript={onOpenTranscript}
               onOpenVocab={onOpenVocab}
               onSelectMode={onSelectMode}
+              onToggleStatus={onToggleStatus}
             />
           ))}
         </div>

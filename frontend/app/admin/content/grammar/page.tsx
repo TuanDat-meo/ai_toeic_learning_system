@@ -31,6 +31,30 @@ import {
   GrammarAddQuestionModal,
 } from "@/components/admin/content/grammar/GrammarModals";
 
+export const LOCAL_GRAMMAR_TOPICS_KEY = "toeic_grammar_topics";
+
+function getLocalGrammarTopics(): GrammarTopicItem[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(LOCAL_GRAMMAR_TOPICS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalGrammarTopics(data: GrammarTopicItem[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_GRAMMAR_TOPICS_KEY, JSON.stringify(data));
+    window.dispatchEvent(new CustomEvent("toeic-grammar-topics-updated", { detail: data }));
+  } catch (err) {
+    console.warn("Could not save grammar topics to localStorage:", err);
+  }
+}
+
 export default function AdminGrammarPage() {
   const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
   const [loading, setLoading] = useState<boolean>(true);
@@ -40,6 +64,15 @@ export default function AdminGrammarPage() {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+
+  // Helper cập nhật state và đồng bộ localStorage
+  const updateTopicsState = (updater: (prev: GrammarTopicItem[]) => GrammarTopicItem[]) => {
+    setTopics((prev) => {
+      const next = updater(prev);
+      saveLocalGrammarTopics(next);
+      return next;
+    });
+  };
 
   // Modals state
   const [theoryTopic, setTheoryTopic] = useState<GrammarTopicItem | null>(null);
@@ -56,15 +89,29 @@ export default function AdminGrammarPage() {
   const loadTopics = useCallback(async () => {
     try {
       setLoading(true);
+      const local = getLocalGrammarTopics();
+      if (local && local.length > 0) {
+        setTopics(local);
+        setLoading(false);
+        return;
+      }
       const data = await getAdminGrammarTopics();
       if (data && data.length > 0) {
         setTopics(data);
+        saveLocalGrammarTopics(data);
       } else {
         setTopics(INITIAL_GRAMMAR_TOPICS);
+        saveLocalGrammarTopics(INITIAL_GRAMMAR_TOPICS);
       }
     } catch (err) {
-      // Fallback data gracefully
-      setTopics(INITIAL_GRAMMAR_TOPICS);
+      console.warn("Could not load grammar topics from API:", err);
+      const local = getLocalGrammarTopics();
+      if (local && local.length > 0) {
+        setTopics(local);
+      } else {
+        setTopics(INITIAL_GRAMMAR_TOPICS);
+        saveLocalGrammarTopics(INITIAL_GRAMMAR_TOPICS);
+      }
     } finally {
       setLoading(false);
     }
@@ -120,12 +167,12 @@ export default function AdminGrammarPage() {
     if (editTopicItem) {
       try {
         const updated = await updateGrammarTopic(editTopicItem.id, topicData);
-        setTopics((prev) =>
+        updateTopicsState((prev) =>
           prev.map((t) => (t.id === editTopicItem.id ? updated : t))
         );
       } catch (err) {
         console.error("Lỗi khi cập nhật chuyên đề:", err);
-        setTopics((prev) =>
+        updateTopicsState((prev) =>
           prev.map((t) => (t.id === editTopicItem.id ? { ...t, ...topicData } : t))
         );
       }
@@ -133,7 +180,7 @@ export default function AdminGrammarPage() {
     } else {
       try {
         const created = await createGrammarTopic(topicData);
-        setTopics((prev) => [created, ...prev]);
+        updateTopicsState((prev) => [created, ...prev]);
       } catch (err) {
         console.error("Lỗi khi tạo chuyên đề:", err);
         const newTopic: GrammarTopicItem = {
@@ -154,7 +201,7 @@ export default function AdminGrammarPage() {
           questions: [],
           orderIndex: topicData.orderIndex || 0,
         };
-        setTopics((prev) => [newTopic, ...prev]);
+        updateTopicsState((prev) => [newTopic, ...prev]);
       }
       setShowCreateModal(false);
     }
@@ -163,12 +210,12 @@ export default function AdminGrammarPage() {
   const handleAddQuestion = async (topicId: string, question: GrammarQuestionItem) => {
     try {
       const updated = await addGrammarQuestion(topicId, question);
-      setTopics((prev) =>
+      updateTopicsState((prev) =>
         prev.map((t) => (t.id === topicId ? updated : t))
       );
     } catch (err) {
       console.error("Lỗi khi thêm câu hỏi:", err);
-      setTopics((prev) =>
+      updateTopicsState((prev) =>
         prev.map((t) => (t.id === topicId ? { ...t, questions: [...t.questions, question] } : t))
       );
     }
@@ -181,7 +228,7 @@ export default function AdminGrammarPage() {
     } catch (err) {
       console.error("Lỗi khi xóa chuyên đề:", err);
     }
-    setTopics((prev) => prev.filter((t) => t.id !== deleteConfirmTopic.id));
+    updateTopicsState((prev) => prev.filter((t) => t.id !== deleteConfirmTopic.id));
     setSelectedTopicIds((prev) => prev.filter((id) => id !== deleteConfirmTopic.id));
     setDeleteConfirmTopic(null);
   };
@@ -193,7 +240,7 @@ export default function AdminGrammarPage() {
     } catch (err) {
       console.error("Lỗi khi bulk publish:", err);
     }
-    setTopics((prev) =>
+    updateTopicsState((prev) =>
       prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "PUBLISHED" } : t))
     );
     setSelectedTopicIds([]);
@@ -205,7 +252,7 @@ export default function AdminGrammarPage() {
     } catch (err) {
       console.error("Lỗi khi bulk draft:", err);
     }
-    setTopics((prev) =>
+    updateTopicsState((prev) =>
       prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "DRAFT" } : t))
     );
     setSelectedTopicIds([]);
@@ -217,7 +264,7 @@ export default function AdminGrammarPage() {
     } catch (err) {
       console.error("Lỗi khi bulk delete:", err);
     }
-    setTopics((prev) => prev.filter((t) => !selectedTopicIds.includes(t.id)));
+    updateTopicsState((prev) => prev.filter((t) => !selectedTopicIds.includes(t.id)));
     setSelectedTopicIds([]);
   };
 

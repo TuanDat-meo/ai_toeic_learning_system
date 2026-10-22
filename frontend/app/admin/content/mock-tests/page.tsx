@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { playUnifiedAnswerSound } from "@/lib/sound";
 import { TestItem, PracticeQuestion } from "./types";
 import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3 } from "./mockData";
 import { fetchMockTests, fetchMockTestQuestions } from "@/lib/api/mockTests";
@@ -23,6 +24,39 @@ import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTe
 import { MockTestDeleteModal } from "@/components/admin/content/mock-tests/MockTestDeleteModal";
 import { MockTestCreateModal } from "@/components/admin/content/mock-tests/MockTestCreateModal";
 
+export const LOCAL_MOCK_TESTS_V1 = "toeic_mock_tests_v1";
+export const LOCAL_MOCK_TESTS_V2 = "toeic_mock_tests_v2";
+export const LOCAL_MOCK_TESTS_V3 = "toeic_mock_tests_v3";
+export const LOCAL_MOCK_TESTS_VERSION_KEY = "toeic_mock_tests_sync_ver";
+export const CURRENT_TESTS_VERSION = "2026_10_22_real_data_v3";
+
+function getLocalMockTests(key: string): TestItem[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const ver = localStorage.getItem(LOCAL_MOCK_TESTS_VERSION_KEY);
+    if (ver !== CURRENT_TESTS_VERSION) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLocalMockTests(v1: TestItem[], v2: TestItem[], v3: TestItem[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_MOCK_TESTS_VERSION_KEY, CURRENT_TESTS_VERSION);
+    localStorage.setItem(LOCAL_MOCK_TESTS_V1, JSON.stringify(v1));
+    localStorage.setItem(LOCAL_MOCK_TESTS_V2, JSON.stringify(v2));
+    localStorage.setItem(LOCAL_MOCK_TESTS_V3, JSON.stringify(v3));
+    window.dispatchEvent(new CustomEvent("toeic-mock-tests-updated"));
+  } catch (err) {
+    console.warn("Could not save mock tests to localStorage:", err);
+  }
+}
+
 export default function AdminMockTestsPage() {
   // State quản lý tab & danh sách đề thi
   const [activeMainTab, setActiveMainTab] = useState<MockTestAdminTab>("tests");
@@ -36,23 +70,68 @@ export default function AdminMockTestsPage() {
   const [testsVol3, setTestsVol3] = useState<TestItem[]>(INITIAL_TESTS_VOL3);
   const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
   const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
+  const [activeTranscriptQuestions, setActiveTranscriptQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  // Auto-fetch tests from PostgreSQL
+
+  // Sync tests directly from latest mockData (E:\Data)
+  const handleSyncData = () => {
+    setTestsVol1(INITIAL_TESTS_VOL1);
+    setTestsVol2(INITIAL_TESTS_VOL2);
+    setTestsVol3(INITIAL_TESTS_VOL3);
+    saveLocalMockTests(INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3);
+    triggerToast("Đã đồng bộ thành công toàn bộ 29 đề thi từ E:\\Data! 🔄");
+  };
+
+  // Asynchronously fetch 200 questions for any chosen test
+  const loadQuestionsForTest = async (testId: number): Promise<PracticeQuestion[]> => {
+    setIsLoadingQuestions(true);
+    try {
+      const qs = await fetchMockTestQuestions(testId);
+      if (qs && qs.length > 0) {
+        return qs;
+      }
+    } catch (err) {
+      console.warn("Could not load questions for test:", testId, err);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+    return SAMPLE_EXAM_QUESTIONS;
+  };
+
+  // Auto-fetch tests from localStorage or API
   useEffect(() => {
     let active = true;
     async function loadTests() {
+      const l1 = getLocalMockTests(LOCAL_MOCK_TESTS_V1);
+      const l2 = getLocalMockTests(LOCAL_MOCK_TESTS_V2);
+      const l3 = getLocalMockTests(LOCAL_MOCK_TESTS_V3);
+      if (l1 || l2 || l3) {
+        if (l1) setTestsVol1(l1);
+        if (l2) setTestsVol2(l2);
+        if (l3) setTestsVol3(l3);
+        return;
+      }
+
       try {
         const data = await fetchMockTests();
         if (data && data.length > 0 && active) {
           const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
           const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
           const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
-          if (v1.length > 0) setTestsVol1(v1);
-          if (v2.length > 0) setTestsVol2(v2);
-          if (v3.length > 0) setTestsVol3(v3);
+          const nextV1 = v1.length > 0 ? v1 : INITIAL_TESTS_VOL1;
+          const nextV2 = v2.length > 0 ? v2 : INITIAL_TESTS_VOL2;
+          const nextV3 = v3.length > 0 ? v3 : INITIAL_TESTS_VOL3;
+          setTestsVol1(nextV1);
+          setTestsVol2(nextV2);
+          setTestsVol3(nextV3);
+          saveLocalMockTests(nextV1, nextV2, nextV3);
+        } else {
+          saveLocalMockTests(INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3);
         }
       } catch (err) {
         console.warn("Could not load mock tests for admin from API:", err);
+        saveLocalMockTests(INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3);
       }
     }
     loadTests();
@@ -67,41 +146,8 @@ export default function AdminMockTestsPage() {
   };
 
   // Audio helper SFX
-  const playSfx = (type: "correct" | "wrong" | "incorrect" | "click") => {
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      if (type === "correct") {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.2);
-      } else if (type === "wrong") {
-        osc.frequency.setValueAtTime(220, ctx.currentTime);
-        osc.frequency.setValueAtTime(160, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(400, ctx.currentTime);
-        gain.gain.setValueAtTime(0.05, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.05);
-      }
-    } catch {
-      // AudioContext fallback
-    }
+  const playSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
   // State Thi thử (Exam Mode)
@@ -150,12 +196,13 @@ export default function AdminMockTestsPage() {
   const [showCreateTestModal, setShowCreateTestModal] = useState(false);
   const [editingTest, setEditingTest] = useState<TestItem | null>(null);
   const [testFormTitle, setTestFormTitle] = useState("");
-  const [testFormVolId, setTestFormVolId] = useState<"vol1" | "vol2">("vol1");
+  const [testFormVolId, setTestFormVolId] = useState<"vol1" | "vol2" | "vol3">("vol1");
   const [testFormDifficulty, setTestFormDifficulty] = useState<"Khó" | "Trung bình" | "Vừa sức">("Trung bình");
   const [testFormDescription, setTestFormDescription] = useState("");
   const [testFormYear, setTestFormYear] = useState<number>(2024);
   const [testFormDuration, setTestFormDuration] = useState<number>(120);
   const [testFormTotalQuestions, setTestFormTotalQuestions] = useState<number>(200);
+  const [testFormStatus, setTestFormStatus] = useState<string>("PUBLISHED");
   const [deleteConfirmTest, setDeleteConfirmTest] = useState<TestItem | null>(null);
 
   // Filtered Tests (hỗ trợ "all" hiển thị toàn bộ cả 3 bộ đề 2024, 2023, 2022)
@@ -199,12 +246,13 @@ export default function AdminMockTestsPage() {
   const handleOpenCreateTest = () => {
     setEditingTest(null);
     setTestFormTitle("");
-    setTestFormVolId(selectedVol === "vol3" ? "vol1" : (selectedVol as "vol1" | "vol2"));
+    setTestFormVolId(selectedVol === "all" ? "vol1" : selectedVol);
     setTestFormDifficulty("Trung bình");
     setTestFormDescription("");
-    setTestFormYear(2024);
+    setTestFormYear(selectedVol === "vol3" ? 2022 : selectedVol === "vol2" ? 2023 : 2024);
     setTestFormDuration(120);
     setTestFormTotalQuestions(200);
+    setTestFormStatus("PUBLISHED");
     setShowCreateTestModal(true);
   };
 
@@ -212,13 +260,40 @@ export default function AdminMockTestsPage() {
     if (e) e.stopPropagation();
     setEditingTest(test);
     setTestFormTitle(test.title);
-    setTestFormVolId(test.volId as "vol1" | "vol2");
+    setTestFormVolId((test.volId as "vol1" | "vol2" | "vol3") || "vol1");
     setTestFormDifficulty((test.difficulty as "Khó" | "Trung bình" | "Vừa sức") || "Trung bình");
     setTestFormDescription(test.description || "Đề thi thử TOEIC chuẩn ETS quốc tế đầy đủ 200 câu hỏi.");
     setTestFormYear(test.year || 2024);
     setTestFormDuration(test.durationMinutes || 120);
     setTestFormTotalQuestions(test.totalQuestions || 200);
+    setTestFormStatus(test.status === "DRAFT" || test.status === "Bản nháp" ? "DRAFT" : "PUBLISHED");
     setShowCreateTestModal(true);
+  };
+
+  const handleToggleTestStatus = (test: TestItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const isCurrentlyDraft = test.status === "DRAFT" || test.status === "Bản nháp";
+    const newStatus = isCurrentlyDraft ? "Đã phát hành" : "DRAFT";
+    const updateFn = (list: TestItem[]) =>
+      list.map((t) => (t.id === test.id ? { ...t, status: newStatus } : t));
+
+    let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
+    if (test.volId === "vol1" || test.volId === "ets2024") {
+      nextV1 = updateFn(testsVol1);
+      setTestsVol1(nextV1);
+    } else if (test.volId === "vol2" || test.volId === "ets2023") {
+      nextV2 = updateFn(testsVol2);
+      setTestsVol2(nextV2);
+    } else {
+      nextV3 = updateFn(testsVol3);
+      setTestsVol3(nextV3);
+    }
+    saveLocalMockTests(nextV1, nextV2, nextV3);
+    triggerToast(
+      newStatus === "Đã phát hành"
+        ? `Đã xuất bản đề "${test.title}" cho học viên! 🚀`
+        : `Đã chuyển đề "${test.title}" về bản nháp. Học viên sẽ không thấy đề này. 📝`
+    );
   };
 
   const handleSaveTest = (e: React.FormEvent) => {
@@ -231,6 +306,8 @@ export default function AdminMockTestsPage() {
       triggerToast("Vui lòng nhập mô tả / hướng dẫn cho đề thi! ⚠️");
       return;
     }
+
+    const finalStatus = testFormStatus === "DRAFT" ? "DRAFT" : "Đã phát hành";
 
     if (editingTest) {
       const updateFn = (list: TestItem[]) =>
@@ -245,14 +322,27 @@ export default function AdminMockTestsPage() {
               year: testFormYear,
               durationMinutes: testFormDuration,
               totalQuestions: testFormTotalQuestions,
+              status: finalStatus,
             }
             : t
         );
-      if (editingTest.volId === "vol1") setTestsVol1(updateFn);
-      else setTestsVol2(updateFn);
-      triggerToast(`Đã cập nhật thông tin đề thi "${testFormTitle}"! 💾`);
+      let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
+      if (editingTest.volId === "vol1" || editingTest.volId === "ets2024") {
+        nextV1 = updateFn(testsVol1);
+        setTestsVol1(nextV1);
+      } else if (editingTest.volId === "vol2" || editingTest.volId === "ets2023") {
+        nextV2 = updateFn(testsVol2);
+        setTestsVol2(nextV2);
+      } else {
+        nextV3 = updateFn(testsVol3);
+        setTestsVol3(nextV3);
+      }
+      saveLocalMockTests(nextV1, nextV2, nextV3);
+      triggerToast(`Đã cập nhật thông tin đề thi "${testFormTitle}" (${finalStatus === "DRAFT" ? "Bản nháp" : "Đã xuất bản"})! 💾`);
     } else {
-      const targetList = testFormVolId === "vol1" ? testsVol1 : testsVol2;
+      let targetList = testsVol1;
+      if (testFormVolId === "vol2") targetList = testsVol2;
+      else if (testFormVolId === "vol3") targetList = testsVol3;
       const nextId = targetList.reduce((max, t) => Math.max(max, t.id), 0) + 1;
       const newTest: TestItem = {
         id: nextId,
@@ -266,14 +356,24 @@ export default function AdminMockTestsPage() {
         score: null,
         listeningScore: null,
         readingScore: null,
-        status: "Mới tạo - Chưa thi",
+        status: finalStatus,
         completedAt: null,
         historyAttempts: [],
         keyVocab: [],
       };
-      if (testFormVolId === "vol1") setTestsVol1((prev) => [...prev, newTest]);
-      else setTestsVol2((prev) => [...prev, newTest]);
-      triggerToast(`Đã thêm mới đề "${testFormTitle}" thành công! ✨`);
+      let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
+      if (testFormVolId === "vol1") {
+        nextV1 = [...testsVol1, newTest];
+        setTestsVol1(nextV1);
+      } else if (testFormVolId === "vol2") {
+        nextV2 = [...testsVol2, newTest];
+        setTestsVol2(nextV2);
+      } else {
+        nextV3 = [...testsVol3, newTest];
+        setTestsVol3(nextV3);
+      }
+      saveLocalMockTests(nextV1, nextV2, nextV3);
+      triggerToast(`Đã thêm mới đề "${testFormTitle}" (${finalStatus === "DRAFT" ? "Bản nháp" : "Đã xuất bản"})! ✨`);
     }
     setShowCreateTestModal(false);
   };
@@ -281,14 +381,27 @@ export default function AdminMockTestsPage() {
   const handleConfirmDeleteTest = () => {
     if (!deleteConfirmTest) return;
     const deleteFn = (list: TestItem[]) => list.filter((t) => t.id !== deleteConfirmTest.id);
-    if (deleteConfirmTest.volId === "vol1") setTestsVol1(deleteFn);
-    else setTestsVol2(deleteFn);
+    let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
+    if (deleteConfirmTest.volId === "vol1" || deleteConfirmTest.volId === "ets2024") {
+      nextV1 = deleteFn(testsVol1);
+      setTestsVol1(nextV1);
+    } else if (deleteConfirmTest.volId === "vol2" || deleteConfirmTest.volId === "ets2023") {
+      nextV2 = deleteFn(testsVol2);
+      setTestsVol2(nextV2);
+    } else {
+      nextV3 = deleteFn(testsVol3);
+      setTestsVol3(nextV3);
+    }
+    saveLocalMockTests(nextV1, nextV2, nextV3);
     triggerToast(`Đã xóa đề thi "${deleteConfirmTest.title}"`);
     setDeleteConfirmTest(null);
   };
 
-  const handleSelectMode = (test: TestItem, mode: "exam" | "practice") => {
+  const handleSelectMode = async (test: TestItem, mode: "exam" | "practice") => {
+    triggerToast(`Đang tải dữ liệu 200 câu hỏi đề ${test.title}... ⏳`);
+    const qs = await loadQuestionsForTest(test.id);
     if (mode === "exam") {
+      setActiveExamQuestions(qs);
       setExamModalTest(test);
       setExamStarted(false);
       setExamSubmitted(false);
@@ -297,6 +410,7 @@ export default function AdminMockTestsPage() {
       setExamResultScore(null);
       setExamTimeRemaining(120 * 60);
     } else {
+      setActivePracticeQuestions(qs);
       setPracticeModalTest(test);
       setPracticeCurrentQIndex(0);
       setPracticeAnswers({});
@@ -304,6 +418,13 @@ export default function AdminMockTestsPage() {
       setPracticeTimerSeconds(0);
       setIsTimerPaused(false);
     }
+  };
+
+  const handleOpenTranscript = async (test: TestItem) => {
+    triggerToast(`Đang tải lời giải chi tiết đề ${test.title}... ⏳`);
+    const qs = await loadQuestionsForTest(test.id);
+    setActiveTranscriptQuestions(qs);
+    setTranscriptModalTest(test);
   };
 
   const handleStartExamNow = (_customParts?: string[], customMinutes?: number) => {
@@ -338,10 +459,10 @@ export default function AdminMockTestsPage() {
       }
     });
 
-    const isFullScale = questionsToGrade.length >= 200;
-    const scaledListening = isFullScale ? Math.min(495, correctLC * 5) : correctLC * 5;
-    const scaledReading = isFullScale ? Math.min(495, correctRC * 5) : correctRC * 5;
-    const totalScore = isFullScale ? Math.min(990, scaledListening + scaledReading) : correct * 5;
+    // Mỗi câu làm đúng là 5 điểm
+    const scaledListening = correctLC * 5;
+    const scaledReading = correctRC * 5;
+    const totalScore = correct * 5;
 
     const result = {
       total: totalScore,
@@ -353,7 +474,7 @@ export default function AdminMockTestsPage() {
     playSfx("correct");
 
     if (examModalTest) {
-      const maxTotal = isFullScale ? 990 : questionsToGrade.length * 5;
+      const maxTotal = questionsToGrade.length * 5;
       const updateFn = (list: TestItem[]) =>
         list.map((t) =>
           t.id === examModalTest.id
@@ -386,7 +507,7 @@ export default function AdminMockTestsPage() {
       `"${t.title.replace(/"/g, '""')}"`,
       `"${t.volId}"`,
       `"${t.difficulty}"`,
-      t.score || 650,
+      t.avgScore ? Math.round(t.avgScore) : (t.score || 0),
       `"PUBLISHED"`,
     ]);
     const csvContent =
@@ -418,8 +539,10 @@ export default function AdminMockTestsPage() {
         setViewMode={setViewMode}
         vol1Count={testsVol1.length}
         vol2Count={testsVol2.length}
+        vol3Count={testsVol3.length}
         onOpenCreateTest={handleOpenCreateTest}
         onExportCsv={handleExportCsv}
+        onSyncData={handleSyncData}
       />
 
       {/* Main Tab Content Switching */}
@@ -429,9 +552,10 @@ export default function AdminMockTestsPage() {
           viewMode={viewMode}
           onEditTest={handleOpenEditTest}
           onConfirmDeleteTest={setDeleteConfirmTest}
-          onOpenTranscript={setTranscriptModalTest}
+          onOpenTranscript={handleOpenTranscript}
           onOpenVocab={setVocabModalTest}
           onSelectMode={handleSelectMode}
+          onToggleStatus={handleToggleTestStatus}
         />
       )}
 
@@ -459,7 +583,7 @@ export default function AdminMockTestsPage() {
       {examModalTest && (
         <MockTestExamModal
           test={examModalTest}
-          activeExamQuestions={SAMPLE_EXAM_QUESTIONS}
+          activeExamQuestions={activeExamQuestions}
           activeExamParts={[]}
           examDurationType={examDurationType}
           setExamDurationType={setExamDurationType}
@@ -488,7 +612,7 @@ export default function AdminMockTestsPage() {
       {practiceModalTest && (
         <MockTestPracticeModal
           test={practiceModalTest}
-          filteredPracticeQuestions={SAMPLE_EXAM_QUESTIONS}
+          filteredPracticeQuestions={activePracticeQuestions}
           practiceCurrentQIndex={practiceCurrentQIndex}
           setPracticeCurrentQIndex={setPracticeCurrentQIndex}
           practiceAnswers={practiceAnswers}
@@ -564,7 +688,7 @@ export default function AdminMockTestsPage() {
       {transcriptModalTest && (
         <MockTestTranscriptModal
           test={transcriptModalTest}
-          questions={SAMPLE_EXAM_QUESTIONS}
+          questions={activeTranscriptQuestions}
           onClose={() => setTranscriptModalTest(null)}
         />
       )}
@@ -611,6 +735,8 @@ export default function AdminMockTestsPage() {
           setTestFormDuration={setTestFormDuration}
           testFormTotalQuestions={testFormTotalQuestions}
           setTestFormTotalQuestions={setTestFormTotalQuestions}
+          testFormStatus={testFormStatus}
+          setTestFormStatus={setTestFormStatus}
           onSaveTest={handleSaveTest}
           onClose={() => setShowCreateTestModal(false)}
         />

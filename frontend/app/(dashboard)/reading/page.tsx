@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { playUnifiedAnswerSound } from "@/lib/sound";
 import { Sparkles, Layers } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
@@ -16,6 +17,31 @@ export default function StudentReadingPage() {
   const [isReadingRedoWrong, setIsReadingRedoWrong] = useState<boolean>(false);
   const [theoryCard, setTheoryCard] = useState<ExerciseCardData | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const loadCards = () => {
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("toeic_reading_cards");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCards(parsed);
+              return;
+            }
+          }
+        } catch {}
+      }
+      setCards(INITIAL_CARDS);
+    };
+    loadCards();
+    window.addEventListener("toeic-reading-cards-updated", loadCards);
+    window.addEventListener("storage", loadCards);
+    return () => {
+      window.removeEventListener("toeic-reading-cards-updated", loadCards);
+      window.removeEventListener("storage", loadCards);
+    };
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -38,23 +64,8 @@ export default function StudentReadingPage() {
   }
 
   // Web Audio SFX Synthesizer
-  const playSfx = (type?: "correct" | "wrong" | "click") => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.frequency.setValueAtTime(520, ctx.currentTime);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.1);
-    } catch {}
+  const playSfx = (_type?: string) => {
+    playUnifiedAnswerSound();
   };
 
   const totalQuestionsCount = React.useMemo(() => {

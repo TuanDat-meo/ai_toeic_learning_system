@@ -87,7 +87,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/question-corrections/**").authenticated()
                         .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
                             "/api/admin/announcements", "/api/admin/announcements/**",
-                            "/api/admin/settings", "/api/admin/settings/**")
+                            "/api/admin/settings", "/api/admin/settings/**",
+                            "/api/admin/mock-tests/**")
                             .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()

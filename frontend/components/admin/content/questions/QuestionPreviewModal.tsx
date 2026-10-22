@@ -24,6 +24,7 @@ import { QuestionItem, VocabItem } from "@/app/admin/content/questions/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
+import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 
 interface QuestionPreviewModalProps {
   question: QuestionItem | null;
@@ -295,7 +296,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
         {/* Modal Body */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-slate-200">
           {/* CỘT TRÁI (LEFT PANE): ẢNH, ĐOẠN VĂN, AUDIO */}
-          <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-slate-50/50 space-y-6">
+          <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-slate-50/50 space-y-6">
             {/* Ảnh minh họa nếu là Part 1 */}
             {question.imageUrl && (
               <div className="space-y-2">
@@ -340,7 +341,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
           </div>
 
           {/* CỘT PHẢI (RIGHT PANE): CÂU HỎI, CÁC ĐÁP ÁN & GIẢI THÍCH */}
-          <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+          <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
             <div className="space-y-6">
               {/* Khung nội dung câu hỏi & Dịch câu hỏi */}
               <div className="space-y-3">
@@ -642,7 +643,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                           </div>
                         </div>
 
-                        <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                        <div className="space-y-3 max-h-72 overflow-y-auto custom-scrollbar pr-1">
                           {vocabList.map((v: VocabItem, idx: number) => {
                             const isSaved = addedVocabItems.includes(v.word);
 
@@ -720,23 +721,45 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
 
                                   <p className="text-sm font-bold text-slate-800 leading-snug">{v.meaning}</p>
 
-                                  {v.exampleEn && (
-                                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-150/80 text-xs space-y-1">
-                                      <p className="text-slate-800 font-medium">{v.exampleEn}</p>
-                                      <p className="text-slate-500">{v.exampleVi}</p>
-                                    </div>
-                                  )}
+                                  {(() => {
+                                    const detail = getEnrichedVocabDetail(v, question?.questionText || question?.explanation || "");
+                                    return (
+                                      <>
+                                        {/* 💡 Lời giải thích chi tiết & ngữ cảnh */}
+                                        <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-slate-800 leading-relaxed text-xs space-y-1">
+                                          <div className="font-bold text-amber-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                                            <span>💡 Giải thích &amp; Ngữ cảnh:</span>
+                                          </div>
+                                          <p>{detail.explanation}</p>
+                                        </div>
 
-                                  {v.collocations && v.collocations.length > 0 && (
-                                    <div className="space-y-1 text-xs pt-1">
-                                      <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider">Cụm từ</span>
-                                      <div className="space-y-0.5 text-slate-700">
-                                        {v.collocations.map((c: string, cIdx: number) => (
-                                          <p key={cIdx} className="leading-tight">• {c}</p>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
+                                        {/* 📝 Ví dụ câu thực tế */}
+                                        {detail.example && (
+                                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-150/80 text-xs space-y-1">
+                                            <div className="font-bold text-slate-700 text-[10px] uppercase tracking-wider">Ví dụ câu:</div>
+                                            <p className="text-slate-800 font-medium">&quot;{typeof detail.example === "string" ? detail.example : detail.example.en}&quot;</p>
+                                            {typeof detail.example === "object" && detail.example.vi && (
+                                              <p className="text-slate-500 italic">👉 {detail.example.vi}</p>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {/* 🔗 Cụm từ hay gặp */}
+                                        {detail.collocations && detail.collocations.length > 0 && (
+                                          <div className="space-y-1 text-xs pt-1">
+                                            <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider">Cụm từ hay gặp</span>
+                                            <div className="flex flex-wrap gap-1">
+                                              {detail.collocations.map((c: any, cIdx: number) => (
+                                                <span key={cIdx} className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-[11px]">
+                                                  {typeof c === "string" ? c : `${c.en}: ${c.vi}`}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
 
                                   {((v.synonyms && v.synonyms.length > 0) || (v.antonyms && v.antonyms.length > 0)) && (
                                     <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100">

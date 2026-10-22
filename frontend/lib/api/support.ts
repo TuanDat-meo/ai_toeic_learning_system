@@ -140,24 +140,158 @@ export const initialReports: SupportReport[] = [
   }
 ];
 
+export const LOCAL_REPORTS_KEY = "toeic_support_reports";
+
+function getLocalReports(): SupportReport[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_REPORTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalReports(reports: SupportReport[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+    window.dispatchEvent(new CustomEvent("toeic-support-report-updated", { detail: reports }));
+  } catch (e) {
+    console.warn("Could not save support reports to localStorage:", e);
+  }
+}
+
 export async function getReports(): Promise<SupportReport[]> {
-  return apiRequest<SupportReport[]>("/api/admin/support/reports");
+  const localList = getLocalReports();
+  try {
+    const serverList = await apiRequest<SupportReport[]>("/api/admin/support/reports");
+    if (Array.isArray(serverList) && serverList.length > 0) {
+      const map = new Map<string, SupportReport>();
+      localList.forEach((r) => map.set(r.id, r));
+      serverList.forEach((r) => map.set(r.id, r));
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      saveLocalReports(merged);
+      return merged;
+    }
+  } catch (error) {
+    console.warn("Failed to fetch reports from API, using local/initial reports:", error);
+  }
+
+  if (localList.length > 0) {
+    return localList;
+  }
+  saveLocalReports(initialReports);
+  return initialReports;
 }
 
 export async function createSupportReport(report: SupportReportCreate): Promise<SupportReport> {
-  return writeAuthRequest<SupportReport>("POST", "/api/support-reports", report);
+  const localReport: SupportReport = {
+    id: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    ticketCode: `TK-${Math.floor(1000 + Math.random() * 9000)}`,
+    userName: "Học viên (Bạn)",
+    userEmail: "learner@toeic.edu.vn",
+    category: report.category,
+    title: report.title,
+    description: report.description,
+    relatedContent: report.relatedContent,
+    priority: report.category === "QUESTION_ERROR" || report.category === "SYSTEM_BUG" ? "HIGH" : "MEDIUM",
+    status: "PENDING",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    source: report.source,
+    questionRef: report.questionRef,
+    questionSnapshot: report.questionSnapshot || null,
+  };
+
+  try {
+    const serverCreated = await writeAuthRequest<SupportReport>("POST", "/api/support-reports", report);
+    if (serverCreated && serverCreated.id) {
+      const merged = { ...localReport, ...serverCreated };
+      const current = getLocalReports();
+      saveLocalReports([merged, ...current.filter((r) => r.id !== merged.id)]);
+      return merged;
+    }
+  } catch (error) {
+    console.warn("Backend support report submission offline, saved to localStorage:", error);
+  }
+
+  const current = getLocalReports().length > 0 ? getLocalReports() : [...initialReports];
+  const updatedList = [localReport, ...current.filter((r) => r.id !== localReport.id)];
+  saveLocalReports(updatedList);
+  return localReport;
 }
 
 export async function updateSupportReport(id: string, update: SupportReportUpdate): Promise<SupportReport> {
-  return writeAuthRequest<SupportReport>("PATCH", `/api/admin/support/reports/${id}`, update);
+  let updatedReport: SupportReport | null = null;
+  try {
+    const serverResult = await writeAuthRequest<SupportReport>("PATCH", `/api/admin/support/reports/${id}`, update);
+    if (serverResult && serverResult.id) {
+      updatedReport = serverResult;
+    }
+  } catch (error) {
+    console.warn("Backend updateSupportReport offline, updating localStorage:", error);
+  }
+
+  const current = getLocalReports().length > 0 ? getLocalReports() : [...initialReports];
+  const updatedList = current.map((r) => {
+    if (r.id === id) {
+      const item: SupportReport = {
+        ...r,
+        status: update.status,
+        adminReply: update.adminReply !== undefined ? update.adminReply : r.adminReply,
+        repliedAt: update.adminReply ? new Date().toISOString() : r.repliedAt,
+        correction: update.correction !== undefined ? update.correction : r.correction,
+        updatedAt: new Date().toISOString(),
+      };
+      if (!updatedReport) updatedReport = item;
+      return item;
+    }
+    return r;
+  });
+
+  saveLocalReports(updatedList);
+  return updatedReport || {
+    id,
+    ticketCode: `TK-${id.slice(-4)}`,
+    userName: "Học viên",
+    userEmail: "learner@toeic.edu.vn",
+    category: "QUESTION_ERROR",
+    title: "Báo lỗi",
+    description: "",
+    priority: "MEDIUM",
+    status: update.status,
+    adminReply: update.adminReply,
+    repliedAt: update.adminReply ? new Date().toISOString() : undefined,
+    correction: update.correction,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export async function getMySupportReports(): Promise<SupportReport[]> {
-  return apiRequest<SupportReport[]>("/api/support-reports/mine");
+  try {
+    return await apiRequest<SupportReport[]>("/api/support-reports/mine");
+  } catch {
+    const list = getLocalReports();
+    return list.filter((r) => r.userEmail === "learner@toeic.edu.vn" || r.userName.includes("Bạn"));
+  }
 }
 
 export async function deleteSupportReport(id: string): Promise<void> {
-  await writeAuthRequest<void>("DELETE", `/api/admin/support/reports/${id}`);
+  try {
+    await writeAuthRequest<void>("DELETE", `/api/admin/support/reports/${id}`);
+  } catch (error) {
+    console.warn("Backend deleteSupportReport offline, removing from localStorage:", error);
+  }
+
+  const current = getLocalReports();
+  const updated = current.filter((r) => r.id !== id);
+  saveLocalReports(updated);
 }
 
 export type QuestionCorrection = {

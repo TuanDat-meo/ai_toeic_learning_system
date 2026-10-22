@@ -9,8 +9,6 @@ import {
   Eye,
   CheckCircle2,
 } from "lucide-react";
-import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
-import { useItemProgress } from "@/lib/practiceProgress";
 
 interface ReadingCardGridProps {
   cards: ExerciseCardData[];
@@ -35,8 +33,6 @@ function ReadingTableRow({
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
 }) {
   const fallbackTotal = card.totalQuestions || 10;
-  const progress = useItemProgress(`reading-${card.id}`, fallbackTotal);
-  const completed = Math.max(card.studiedQuestions || 0, progress.completedQuestions);
 
   return (
     <tr className="hover:bg-slate-50/70 transition">
@@ -56,22 +52,7 @@ function ReadingTableRow({
       </td>
 
       <td className="py-3.5 px-4 text-center font-bold text-slate-900 font-mono whitespace-nowrap">
-        {card.totalQuestions} câu
-      </td>
-
-      <td className="py-3.5 px-4 min-w-[210px]">
-        <div className="space-y-1">
-          <PracticeProgressBar
-            completed={completed}
-            total={fallbackTotal}
-            compact
-            unit="câu"
-          />
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
-            <span className="text-emerald-600 font-bold">✓ {card.correctAnswers} đúng</span>
-            <span className="text-rose-500 font-bold">✕ {card.wrongAnswers} sai</span>
-          </div>
-        </div>
+        {fallbackTotal} câu
       </td>
 
       <td className="py-3.5 px-4 whitespace-nowrap">
@@ -135,8 +116,6 @@ function ReadingGridItem({
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
 }) {
   const fallbackTotal = card.totalQuestions || 10;
-  const progress = useItemProgress(`reading-${card.id}`, fallbackTotal);
-  const completed = Math.max(card.studiedQuestions || 0, progress.completedQuestions);
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
@@ -164,10 +143,6 @@ function ReadingGridItem({
           <div className="flex justify-between items-center text-slate-600">
             <span className="font-medium">Tổng số câu hỏi:</span>
             <strong className="text-blue-700 font-mono font-bold">{fallbackTotal} câu</strong>
-          </div>
-          <div className="flex justify-between items-center text-slate-600">
-            <span className="font-medium">Thời gian chuẩn:</span>
-            <span className="font-mono text-slate-800 font-semibold">{(card as any).timeMinutes || 20} phút</span>
           </div>
           <div className="flex justify-between items-center text-slate-600">
             <span className="font-medium">Phần thi:</span>
@@ -277,7 +252,6 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
                   <th className="py-3.5 px-4 min-w-[260px]">Chuyên đề bài đọc</th>
                   <th className="py-3.5 px-4 min-w-[150px]">Phần thi / Dạng bài</th>
                   <th className="py-3.5 px-4 text-center min-w-[100px]">Số câu hỏi</th>
-                  <th className="py-3.5 px-4 min-w-[220px]">Tiến độ học (Đã học / Chưa học)</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>
                   <th className="py-3.5 px-4 text-center min-w-[160px]">Thao tác quản trị</th>
                 </tr>

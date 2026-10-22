@@ -288,17 +288,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                     <p className="text-xs text-slate-500 font-medium italic">{topic.titleEn || topic.englishTitle}</p>
                   </div>
 
-                  {/* Formula Box */}
-                  <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-[11px] font-medium text-slate-700 leading-relaxed line-clamp-2">
-                    <span className="font-bold text-slate-900 mr-1">Công thức:</span>
-                    {(topic.formula || "")
-                      .replace(/###\s+\d+\.\s*/g, "")
-                      .replace(/###\s+/g, "")
-                      .replace(/\*\*/g, "")
-                      .replace(/`([^`]+)`/g, "$1")
-                      .replace(/\n+/g, " • ")
-                      .trim()}
-                  </div>
 
                   {/* Summary Snippet */}
                   <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">

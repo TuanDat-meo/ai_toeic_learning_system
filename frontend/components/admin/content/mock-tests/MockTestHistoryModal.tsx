@@ -43,7 +43,7 @@ export const MockTestHistoryModal: React.FC<MockTestHistoryModalProps> = ({
             <p className="text-sm font-medium text-slate-500">Chưa có lượt thi nào cho đề này.</p>
           </div>
         ) : (
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1.5 custom-scrollbar">
             {test.historyAttempts?.map((attempt: any) => (
               <div
                 key={attempt.id}

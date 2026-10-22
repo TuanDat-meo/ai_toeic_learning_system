@@ -8,7 +8,6 @@ import {
   extractQuestionDetails,
   extractOptionTranslations,
 } from "@/app/admin/content/mock-tests/types";
-import { saveItemProgress } from "@/lib/practiceProgress";
 import {
   ArrowLeft,
   Clock,
@@ -213,7 +212,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
             </button>
           </div>
 
-          <div className="p-5 sm:p-6 space-y-5 overflow-y-auto bg-slate-50/50 flex-1">
+          <div className="p-5 sm:p-6 space-y-5 overflow-y-auto custom-scrollbar bg-slate-50/50 flex-1">
 
 
             {/* CONTENT FOR EXAM TAB */}
@@ -559,7 +558,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
               <div className="flex-1 flex flex-col justify-between overflow-hidden">
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
                   {/* LEFT PANE: Instruction & Content */}
-                  <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
+                  <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
                     <div className="space-y-4">
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
                         <Sparkles className="w-3.5 h-3.5 text-blue-600" />
@@ -619,7 +618,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                   </div>
 
                   {/* RIGHT PANE: QUESTION & OPTIONS */}
-                  <div className="w-full md:w-1/2 p-6 overflow-y-auto bg-white flex flex-col justify-between space-y-6">
+                  <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
                     <div className="space-y-5">
                       <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
                         {currentQ && (qPart === "Part 6" || qPart === "Part 7") && (
@@ -696,11 +695,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                                 type="button"
                                 onClick={() => {
                                   if (isSfxEnabled) playSfx("click");
-                                  setExamAnswers((prev) => {
-                                    const next = { ...prev, [currentQ.id]: optKey };
-                                    saveItemProgress(`mock-test-${test.id}`, Object.keys(next).length, examQuestions.length || 200);
-                                    return next;
-                                  });
+                                  setExamAnswers((prev) => ({ ...prev, [currentQ.id]: optKey }));
                                   // Tự động chuyển sang câu tiếp theo ngay sau khi chọn đáp án
                                   if (examCurrentQIndex < examQuestions.length - 1) {
                                     setTimeout(() => {
@@ -829,9 +824,9 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
             ).length;
 
             const isFullScale = examQuestions.length >= 200;
-            const maxLC = isFullScale ? 495 : lcQuestionsCount * 5;
-            const maxRC = isFullScale ? 495 : rcQuestionsCount * 5;
-            const maxTotal = isFullScale ? 990 : examQuestions.length * 5;
+            const maxLC = lcQuestionsCount * 5;
+            const maxRC = rcQuestionsCount * 5;
+            const maxTotal = examQuestions.length * 5;
 
             const totalQ = examQuestions.length;
             const correctQ = examResultScore.correctCount;
@@ -852,7 +847,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
               });
 
             return (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 font-sans">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50 font-sans">
                 <div className="max-w-4xl mx-auto space-y-6">
                   {/* BẢNG TỔNG KẾT ĐIỂM SỐ */}
                   <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800 text-white rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-xl">
@@ -861,20 +856,20 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                       Chúc mừng bạn đã hoàn thành bài thi!
                     </h2>
                     <p className="text-sm text-blue-100 font-medium">
-                      Đề thi: {test.title} • Điểm đã được lưu tự động vào hệ thống.
+                      Đề thi: {test.title} • Mỗi câu làm đúng là 5 điểm • Điểm số đã được ghi nhận và gửi qua Admin.
                     </p>
 
                     <div className="flex items-center justify-center gap-3 sm:gap-6 pt-2 flex-wrap">
                       {lcQuestionsCount > 0 && (
                         <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl border border-white/20">
-                          <p className="text-xs uppercase text-blue-200 font-bold">Listening</p>
+                          <p className="text-xs uppercase text-blue-200 font-bold">Listening (5đ/câu)</p>
                           <p className="text-2xl font-black">{examResultScore.listening} / {maxLC}</p>
                         </div>
                       )}
 
                       <div className="bg-white/25 backdrop-blur-xs px-6 py-4 rounded-2xl ring-2 ring-white/30 border border-white/30">
                         <p className="text-xs uppercase text-amber-200 font-bold">
-                          {isFullScale ? "Tổng điểm TOEIC" : "Tổng điểm"}
+                          Tổng điểm (5 điểm/câu)
                         </p>
                         <p className="text-3xl sm:text-4xl font-black text-amber-300">
                           {examResultScore.total} {maxTotal > 0 ? `/ ${maxTotal}` : ""}
@@ -886,7 +881,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
 
                       {rcQuestionsCount > 0 && (
                         <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl border border-white/20">
-                          <p className="text-xs uppercase text-blue-200 font-bold">Reading</p>
+                          <p className="text-xs uppercase text-blue-200 font-bold">Reading (5đ/câu)</p>
                           <p className="text-2xl font-black">{examResultScore.reading} / {maxRC}</p>
                         </div>
                       )}
@@ -1315,7 +1310,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
               )}
 
               {/* Lưới danh sách câu hỏi */}
-              <div className="p-3 sm:p-4 bg-slate-50/70 rounded-2xl border border-slate-200/90 overflow-y-auto max-h-[50vh]">
+              <div className="p-3 sm:p-4 bg-slate-50/70 rounded-2xl border border-slate-200/90 overflow-y-auto max-h-[50vh] custom-scrollbar">
                 <div className="grid grid-cols-5 sm:grid-cols-8 gap-2.5">
                   {examQuestions.map((q, idx) => {
                     const isCurrent = idx === examCurrentQIndex;

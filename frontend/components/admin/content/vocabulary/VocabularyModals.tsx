@@ -26,7 +26,7 @@ interface VocabularyModalsProps {
   showCreateTestModal: boolean;
   editingTest: TestItem | null;
   onCloseTestForm: () => void;
-  onSaveTestForm: (title: string, year: string, category: string) => void;
+  onSaveTestForm: (title: string, year: string, category: string, status?: string) => void;
   existingCategories?: string[];
 
   // Delete Test modal
@@ -99,6 +99,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   const [testTitle, setTestTitle] = useState("");
   const [testYear, setTestYear] = useState("2024");
   const [testCategory, setTestCategory] = useState<string>("2024");
+  const [testStatus, setTestStatus] = useState<string>("PUBLISHED");
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState("");
 
@@ -115,6 +116,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTestTitle(editingTest.title || editingTest.nameVi || "");
       setTestYear(String(editingTest.year || "2024"));
+      setTestStatus(editingTest.status || "PUBLISHED");
       const cat = String(editingTest.category || "2024");
       const standardList = ["2024", "2026", "600_essential", "2023", "HACKERS", "BUSINESS", "COLLOCATIONS"];
       if (standardList.includes(cat) || existingCategories.includes(cat)) {
@@ -130,6 +132,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       setTestTitle("");
       setTestYear("2024");
       setTestCategory("2024");
+      setTestStatus("PUBLISHED");
       setIsCustomCategory(false);
       setCustomCategoryInput("");
     }
@@ -159,16 +162,9 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       {/* MODAL 1: XEM TỪ (WORD LIST MODAL) */}
       {wordListModalTest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[88vh] overflow-y-auto animate-in zoom-in-95 duration-150">
-            <button
-              type="button"
-              onClick={onCloseWordList}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center justify-between gap-4 pr-10">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-100 relative overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* HEADER CỐ ĐỊNH */}
+            <div className="p-6 pb-4 border-b border-slate-100 shrink-0 flex items-center justify-between gap-4 bg-white z-10">
               <div>
                 <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
                   Danh sách từ vựng
@@ -177,78 +173,92 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   {wordListModalTest.title} ({wordListModalTest.words ? wordListModalTest.words.length : (wordListModalTest.wordCount ?? 0)} từ)
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={onOpenAddWord}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Thêm từ
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onOpenAddWord}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Thêm từ
+                </button>
+                <button
+                  type="button"
+                  onClick={onCloseWordList}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Đóng"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            {(!wordListModalTest.words || wordListModalTest.words.length === 0) ? (
-              <div className="py-12 text-center text-slate-400 text-sm">
-                <BookOpen className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                <p className="font-semibold text-slate-600">Bộ từ này hiện chưa có từ vựng nào.</p>
-                <p className="text-xs text-slate-400 mt-1">Nhấn &quot;Thêm từ&quot; ở trên để bắt đầu thêm từ vào bộ này.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {wordListModalTest.words.map((w: WordItem, index: number) => (
-                  <div key={w.id} className="py-3.5 flex items-start justify-between gap-3">
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900">
-                          {index + 1}. {w.word}
-                        </span>
-                        <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                          {w.ipa}
-                        </span>
-                        <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                          {w.partOfSpeech}
+            {/* PHẦN DANH SÁCH CUỘN VỚI THANH KÉO RÕ RÀNG */}
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar pr-4">
+              {(!wordListModalTest.words || wordListModalTest.words.length === 0) ? (
+                <div className="py-12 text-center text-slate-400 text-sm">
+                  <BookOpen className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <p className="font-semibold text-slate-600">Bộ từ này hiện chưa có từ vựng nào.</p>
+                  <p className="text-xs text-slate-400 mt-1">Nhấn &quot;Thêm từ&quot; ở trên để bắt đầu thêm từ vào bộ này.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {wordListModalTest.words.map((w: WordItem, index: number) => (
+                    <div key={w.id} className="py-3.5 flex items-start justify-between gap-3 hover:bg-slate-50/70 px-2 rounded-xl transition-colors">
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-slate-900">
+                            {index + 1}. {w.word}
+                          </span>
+                          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                            {w.ipa}
+                          </span>
+                          <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                            {w.partOfSpeech}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => playAudio(w.audio || w.audioUrl || w.word)}
+                            className="w-6 h-6 rounded-full bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-700 flex items-center justify-center transition-colors cursor-pointer"
+                          >
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-800">{w.meaning}</p>
+                        <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{w.example}&quot;</p>
+                        {w.exampleMeaning && (
+                          <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                          {w.level}
                         </span>
                         <button
                           type="button"
-                          onClick={() => playAudio(w.word)}
-                          className="w-6 h-6 rounded-full bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-700 flex items-center justify-center transition-colors cursor-pointer"
+                          onClick={() => onOpenEditWord(w)}
+                          className="p-1.5 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                          title="Chỉnh sửa từ"
                         >
-                          <Volume2 className="w-3.5 h-3.5" />
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteWordClick(w)}
+                          className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Xóa từ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <p className="text-xs font-semibold text-slate-800">{w.meaning}</p>
-                      <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{w.example}&quot;</p>
-                      {w.exampleMeaning && (
-                        <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
-                      )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
-                        {w.level}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onOpenEditWord(w)}
-                        className="p-1 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-                        title="Chỉnh sửa từ"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteWordClick(w)}
-                        className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                        title="Xóa từ"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+            {/* FOOTER CỐ ĐỊNH Ở ĐÁY */}
+            <div className="p-4 px-6 border-t border-slate-100 shrink-0 flex justify-end gap-2.5 bg-slate-50/70 z-10">
               <button
                 type="button"
                 onClick={() => onStartFlashcardsFromList(wordListModalTest)}
@@ -259,7 +269,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
               <button
                 type="button"
                 onClick={onCloseWordList}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
               >
                 Đóng
               </button>
@@ -271,22 +281,24 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       {/* MODAL 2: HỌC FLASHCARD */}
       {flashcardModalTest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-150">
-            <button
-              type="button"
-              onClick={onCloseFlashcards}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center justify-between pr-8">
-              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <span className="text-xs font-black text-blue-600 uppercase tracking-wider line-clamp-1">
                 Flashcard • {flashcardModalTest.title}
               </span>
-              <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full">
-                {flashcardIndex + 1} / {(flashcardModalTest.words || []).length}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs bg-slate-100 text-slate-700 font-bold px-3 py-1 rounded-full font-mono whitespace-nowrap shadow-2xs">
+                  {flashcardIndex + 1} / {(flashcardModalTest.words || []).length}
+                </span>
+                <button
+                  type="button"
+                  onClick={onCloseFlashcards}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  title="Đóng Flashcard"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {(() => {
@@ -315,7 +327,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          playAudio(currentWord.word);
+                          playAudio(currentWord.audio || currentWord.audioUrl || currentWord.word);
                         }}
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 shadow-sm transition-all"
                       >
@@ -410,23 +422,25 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       {/* MODAL 3: GAME TRẮC NGHIỆM */}
       {gameModalTest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-150">
-            <button
-              type="button"
-              onClick={onCloseGame}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center justify-between pr-8">
-              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1">
-                <Gamepad2 className="w-3.5 h-3.5" />
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <span className="text-xs font-black text-blue-600 uppercase tracking-wider flex items-center gap-1.5 line-clamp-1">
+                <Gamepad2 className="w-4 h-4 text-blue-600 shrink-0" />
                 Mini-game Ôn Từ Nhanh
               </span>
-              <span className="text-xs bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded-full border border-amber-200">
-                Điểm: {gameScore}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs bg-amber-50 text-amber-700 font-bold px-3 py-1 rounded-full border border-amber-200 whitespace-nowrap shadow-2xs">
+                  Điểm: {gameScore}
+                </span>
+                <button
+                  type="button"
+                  onClick={onCloseGame}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  title="Đóng Mini-game"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {(() => {
@@ -445,7 +459,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 setGameSelectedOption(idx);
                 setGameAnswerChecked(true);
                 if (options[idx] === currentWord.meaning) {
-                  setGameScore((prev) => prev + 10);
+                  setGameScore((prev) => prev + 5);
                 }
               };
 
@@ -550,7 +564,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 }
                 setTestFormError(null);
                 const finalCategory = isCustomCategory ? (customCategoryInput.trim() || "Khác") : testCategory;
-                onSaveTestForm(testTitle.trim(), testYear, finalCategory);
+                onSaveTestForm(testTitle.trim(), testYear, finalCategory, testStatus);
               }}
               className="space-y-4 text-xs"
             >
@@ -653,6 +667,39 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   </div>
                 )}
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Trạng thái phát hành</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTestStatus("PUBLISHED")}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      testStatus === "PUBLISHED"
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-800 ring-2 ring-emerald-100"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span>✓ Đã xuất bản</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTestStatus("DRAFT")}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      testStatus === "DRAFT"
+                        ? "bg-amber-50 border-amber-300 text-amber-800 ring-2 ring-amber-100"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span>⏱️ Bản nháp</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {testStatus === "PUBLISHED"
+                    ? "Học viên sẽ nhìn thấy và học được bộ từ này ngay sau khi lưu."
+                    : "Chỉ Admin nhìn thấy bộ từ này. Học viên sẽ không thấy cho đến khi được xuất bản."}
+                </p>
+              </div>
+
               <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -709,7 +756,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       {/* MODAL 6: THÊM / SỬA TỪ VỰNG */}
       {showAddWordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <button
               type="button"
               onClick={onCloseWordForm}
@@ -826,6 +873,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   <option value="C1">C1 (850-990 TOEIC)</option>
                 </select>
               </div>
+
               <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"

@@ -25,15 +25,35 @@ export default function StudentGrammarPage() {
   const loadTopics = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getGrammarTopics();
-      if (data && data.length > 0) {
-        setTopics(data);
-      } else {
-        setTopics(INITIAL_GRAMMAR_TOPICS);
+      let rawList: GrammarTopicItem[] = [];
+      const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_grammar_topics") : null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) rawList = parsed;
+        } catch {}
       }
+
+      if (rawList.length === 0) {
+        try {
+          const data = await getGrammarTopics();
+          if (data && data.length > 0) {
+            rawList = data;
+          }
+        } catch {}
+      }
+
+      if (rawList.length === 0) {
+        rawList = INITIAL_GRAMMAR_TOPICS;
+      }
+
+      // CHỈ HIỂN THỊ CÁC CHUYÊN ĐỀ ĐÃ XUẤT BẢN CHO HỌC VIÊN
+      const published = rawList.filter((t) => t.status === "PUBLISHED" || (!t.status && t.status !== "DRAFT"));
+      setTopics(published);
     } catch (err) {
       console.warn("Could not load topics from server, using fallback data:", err);
-      setTopics(INITIAL_GRAMMAR_TOPICS);
+      const published = INITIAL_GRAMMAR_TOPICS.filter((t) => t.status === "PUBLISHED" || (!t.status && t.status !== "DRAFT"));
+      setTopics(published);
     } finally {
       setLoading(false);
     }
@@ -41,6 +61,13 @@ export default function StudentGrammarPage() {
 
   useEffect(() => {
     loadTopics();
+    const handleSync = () => { loadTopics(); };
+    window.addEventListener("toeic-grammar-topics-updated", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("toeic-grammar-topics-updated", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
   }, [loadTopics]);
 
   const startTopicQuiz = async (topic: GrammarTopicItem, startIndex = 0, isRedoWrong = false) => {

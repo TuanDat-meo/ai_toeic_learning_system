@@ -8,6 +8,7 @@ import {
   BookOpen,
   Sliders,
   BarChart3,
+  RefreshCw,
 } from "lucide-react";
 
 interface VocabularyHeaderProps {
@@ -17,6 +18,7 @@ interface VocabularyHeaderProps {
   totalWords?: number;
   onOpenCreateTest?: () => void;
   onExportCsv?: () => void;
+  onSyncData?: () => void;
 }
 
 export const VocabularyHeader: React.FC<VocabularyHeaderProps> = ({
@@ -26,6 +28,7 @@ export const VocabularyHeader: React.FC<VocabularyHeaderProps> = ({
   totalWords = 3200,
   onOpenCreateTest,
   onExportCsv,
+  onSyncData,
 }) => {
   return (
     <div className="space-y-6">
@@ -45,6 +48,18 @@ export const VocabularyHeader: React.FC<VocabularyHeaderProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {onSyncData && (
+            <button
+              type="button"
+              onClick={onSyncData}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-xs transition"
+              title="Đồng bộ 20 bộ từ vựng (4.000 từ) từ E:\Data và làm mới bộ nhớ cache"
+            >
+              <RefreshCw size={16} className="text-emerald-700" aria-hidden="true" />
+              Đồng bộ từ Data
+            </button>
+          )}
+
           {onExportCsv && (
             <button
               type="button"

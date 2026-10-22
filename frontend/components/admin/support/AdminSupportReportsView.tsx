@@ -127,6 +127,15 @@ export function AdminSupportReportsView() {
 
   useEffect(() => {
     loadData();
+    const handleUpdate = () => {
+      loadData();
+    };
+    window.addEventListener("toeic-support-report-updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("toeic-support-report-updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
   }, []);
 
   async function loadData() {
@@ -518,9 +527,36 @@ export function AdminSupportReportsView() {
                 </div>
                 <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{activeReport.description}</p>
                 {activeReport.relatedContent && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500 flex items-center gap-2">
-                    <span className="font-semibold text-slate-700">Nội dung liên quan:</span>
-                    <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{activeReport.relatedContent}</span>
+                  <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-700">Nội dung liên quan:</span>
+                      <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{activeReport.relatedContent}</span>
+                    </div>
+                    {activeReport.source === "MOCK_TEST" && (
+                      <a href="/admin/content/mock-tests" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến trang Quản lý Đề thi ↗
+                      </a>
+                    )}
+                    {(activeReport.source === "QUESTION_BANK" || activeReport.source === "OTHER") && (activeReport.relatedContent.includes("Từ vựng") || activeReport.title.includes("Từ vựng")) && (
+                      <a href="/admin/content/vocabulary" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến trang Quản lý Từ vựng ↗
+                      </a>
+                    )}
+                    {(activeReport.source === "QUESTION_BANK" || activeReport.source === "OTHER") && (activeReport.relatedContent.includes("Ngữ pháp") || activeReport.title.includes("Ngữ pháp")) && (
+                      <a href="/admin/content/grammar" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến trang Quản lý Ngữ pháp ↗
+                      </a>
+                    )}
+                    {activeReport.source === "READING" && (
+                      <a href="/admin/content/reading" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến trang Quản lý Reading ↗
+                      </a>
+                    )}
+                    {activeReport.source === "LISTENING" && (
+                      <a href="/admin/content/listening" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến trang Quản lý Listening ↗
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

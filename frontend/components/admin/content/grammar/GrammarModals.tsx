@@ -16,7 +16,8 @@ import {
   Award,
   RotateCcw,
   ArrowRight,
-
+  ArrowLeft,
+  CheckCircle2,
 } from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/grammar/types";
 
@@ -26,8 +27,10 @@ import {
   GrammarSignalsViewer,
   GrammarTrapsViewer,
   GrammarExamplesViewer,
+  FormattedText,
 } from "./GrammarFormulaViewer";
 import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
+import { playUnifiedAnswerSound } from "@/lib/sound";
 import { getGrammarTopic } from "@/lib/api/grammar";
 
 // ==========================================
@@ -111,7 +114,7 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
-      <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-150">
         <div className="flex items-start justify-between pb-4 border-b border-slate-100">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -211,15 +214,30 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
 
           {activeTab === "examples" && (
             <div className="animate-in fade-in">
-              <GrammarExamplesViewer examples={topic.examples} topicCode={topic.code} />
+              <GrammarExamplesViewer examples={topic.examples} topicCode={topic.code} sampleQuestions={topic.questions} />
             </div>
           )}
         </div>
 
-        <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-          <span className="text-xs text-slate-500 font-bold">
-            Số câu hỏi trắc nghiệm: <strong className="text-slate-900">{topic.questions.length} câu</strong>
-          </span>
+        <div className="flex justify-between items-center pt-4 border-t border-slate-100 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500 font-bold">
+              Số câu hỏi: <strong className="text-slate-900">{topic.questions.length} câu</strong>
+            </span>
+            <QuestionErrorReportButton
+              source="QUESTION_BANK"
+              questionRef={`grammar-theory-${topic.id}`}
+              relatedContent={`Lý thuyết ngữ pháp: ${topic.titleVi || topic.title}`}
+              questionSnapshot={{
+                topicCode: topic.code,
+                topicTitle: topic.titleVi || topic.title,
+                part: topic.part,
+                formula: topic.formula,
+                summary: topic.summary,
+              }}
+              compact
+            />
+          </div>
 
           <div className="flex gap-2">
             <button
@@ -270,7 +288,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
@@ -485,7 +503,7 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <h3 className="font-bold text-base text-slate-900">Thêm câu hỏi trắc nghiệm mới</h3>
@@ -634,7 +652,84 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
 };
 
 // ==========================================
-// 5. MODAL LUYỆN TẬP QUIZ NGỮ PHÁP FULLSCREEN
+// 5. RENDERER TỪ VỰNG & DẤU HIỆU NHẬN BIẾT
+// ==========================================
+function GrammarSignalWordsRenderer({ signalWords }: { signalWords: string[] }) {
+  if (!signalWords || signalWords.length === 0) return null;
+
+  const parsedLines: string[] = [];
+  signalWords.forEach((raw) => {
+    if (!raw) return;
+    const normalized = raw
+      .replace(/\s+-\s+(?=[A-ZÀ-Ỹa-zà-ỹ\*])/g, "\n- ")
+      .replace(/\s+\*\s+/g, "\n  * ");
+
+    normalized.split("\n").forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed) parsedLines.push(trimmed);
+    });
+  });
+
+  if (parsedLines.length === 0) return null;
+
+  return (
+    <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-xs text-blue-950 space-y-2.5 shadow-2xs">
+      <div className="flex items-center gap-2 border-b border-blue-200/60 pb-2">
+        <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+        <strong className="text-blue-900 font-bold text-xs">
+          Từ vựng &amp; Dấu hiệu nhận biết nhanh trong bài thi:
+        </strong>
+      </div>
+
+      <div className="space-y-2 pt-0.5">
+        {parsedLines.map((line, idx) => {
+          const isMainBullet = line.startsWith("- ");
+          const isSubBullet = line.startsWith("* ") || line.startsWith("-> ");
+          const cleanText = line
+            .replace(/^-\s*/, "")
+            .replace(/^\*\s*/, "")
+            .replace(/^->\s*/, "");
+
+          if (isMainBullet) {
+            return (
+              <div
+                key={idx}
+                className="flex items-start gap-2 pt-1 font-bold text-slate-900 text-xs leading-relaxed"
+              >
+                <span className="w-4 h-4 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">
+                  •
+                </span>
+                <div className="flex-1">
+                  <FormattedText text={cleanText} />
+                </div>
+              </div>
+            );
+          }
+
+          if (isSubBullet) {
+            return (
+              <div
+                key={idx}
+                className="ml-5 pl-2.5 py-1 text-[11px] text-slate-700 border-l-2 border-blue-300 bg-white/75 rounded-r-lg font-medium leading-relaxed shadow-2xs"
+              >
+                <FormattedText text={cleanText.replace(/->/g, "➔")} />
+              </div>
+            );
+          }
+
+          return (
+            <div key={idx} className="pl-6 text-xs text-slate-700 leading-relaxed">
+              <FormattedText text={cleanText} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 6. MODAL LUYỆN TẬP QUIZ NGỮ PHÁP FULLSCREEN
 // ==========================================
 interface GrammarQuizModalProps {
   initialIndex?: number;
@@ -707,6 +802,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
 
   const handleSelectAnswer = (optKey: "A" | "B" | "C" | "D") => {
     if (isAnswerChecked) return;
+    playUnifiedAnswerSound();
     setSelectedAnswer(optKey);
     setIsAnswerChecked(true);
 
@@ -721,6 +817,14 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
       if (onRecordResult) {
         onRecordResult(activeTopic.id, isCorrect);
       }
+    }
+  };
+
+  const handlePrevQuizQuestion = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+      setSelectedAnswer(null);
+      setIsAnswerChecked(false);
     }
   };
 
@@ -743,7 +847,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
         {/* Header Quiz */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="space-y-0.5">
@@ -871,19 +975,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
                 )}
 
                 {activeTopic?.signalWords && activeTopic.signalWords.length > 0 && (
-                  <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950 flex items-start gap-2.5 shadow-2xs">
-                    <BookOpen className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <strong className="block text-blue-900">Từ vựng &amp; Dấu hiệu nhận biết (Từ cần học):</strong>
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {activeTopic.signalWords.map((word, wIdx) => (
-                          <span key={wIdx} className="px-2.5 py-0.5 rounded-lg bg-white border border-blue-200 text-blue-800 font-mono font-bold text-[11px] shadow-2xs">
-                            {word}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  <GrammarSignalWordsRenderer signalWords={activeTopic.signalWords} />
                 )}
               </div>
             )}
@@ -958,17 +1050,37 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5">
-              {isAnswerChecked && (
+              {currentIndex > 0 && (
                 <button
                   type="button"
-                  onClick={handleNextQuizQuestion}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  onClick={handlePrevQuizQuestion}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  <span>
-                    {currentIndex + 1 < questions.length ? "Câu tiếp theo" : "Xem kết quả"}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Câu trước</span>
                 </button>
+              )}
+
+              {isAnswerChecked && (
+                currentIndex + 1 < questions.length ? (
+                  <button
+                    type="button"
+                    onClick={handleNextQuizQuestion}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Câu tiếp theo</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleNextQuizQuestion}
+                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Hoàn thành bài tập</span>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </button>
+                )
               )}
             </div>
           </div>

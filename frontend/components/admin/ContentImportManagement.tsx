@@ -458,7 +458,7 @@ export function ContentImportManagement() {
           {loadingHistory ? (
             <p role="status" className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-slate-500"><LoaderCircle size={16} className="animate-spin" />Đang tải lịch sử…</p>
           ) : batches.length ? (
-            <ul className="max-h-[640px] divide-y divide-slate-100 overflow-y-auto">
+            <ul className="max-h-[640px] divide-y divide-slate-100 overflow-y-auto custom-scrollbar">
               {batches.map((batch) => (
                 <li key={batch.id}>
                   <button type="button" onClick={() => void openBatch(batch.id)}
