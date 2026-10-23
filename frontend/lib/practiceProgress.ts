@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logStudySession, recordLessonCompleted } from "@/lib/studyTracker";
 
 export interface ItemProgress {
   completedQuestions: number;
@@ -234,6 +235,19 @@ export function saveItemProgress(
       } catch {}
     }, 0);
   } catch {}
+
+  const wasCompleted = prev ? (prev.status === "completed" || prev.percent >= 100) : false;
+  const isNowCompleted = (status === "completed" || percent >= 100);
+
+  if (!wasCompleted && isNowCompleted) {
+    try {
+      logStudySession(0, 1);
+    } catch {}
+  } else if (wasCompleted && !isNowCompleted) {
+    try {
+      recordLessonCompleted(-1);
+    } catch {}
+  }
 
   return updated;
 }

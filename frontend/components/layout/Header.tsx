@@ -49,7 +49,11 @@ const DEFAULT_STUDY_STATS_SNAPSHOT = JSON.stringify([null, null]);
 
 function subscribeStudyStats(onStoreChange: () => void) {
   window.addEventListener('storage', onStoreChange);
-  return () => window.removeEventListener('storage', onStoreChange);
+  window.addEventListener('toeic-study-tracker-updated', onStoreChange);
+  return () => {
+    window.removeEventListener('storage', onStoreChange);
+    window.removeEventListener('toeic-study-tracker-updated', onStoreChange);
+  };
 }
 
 function getStudyStatsSnapshot() {
@@ -85,13 +89,16 @@ export function Header() {
       const [rawScore, rawTracker] = JSON.parse(studyStatsSnapshot) as [string | null, string | null];
       const scoreObj = rawScore ? JSON.parse(rawScore) : null;
       const trackerObj = rawTracker ? JSON.parse(rawTracker) : null;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayRec = trackerObj?.history?.[todayStr];
+      const todayMins = todayRec?.minutesSpent ?? trackerObj?.todayMinutes ?? 0;
       return {
-        streak: trackerObj?.currentStreak || 3,
-        minutes: trackerObj?.todayMinutes || 35,
+        streak: trackerObj?.currentStreak || 1,
+        minutes: todayMins,
         score: scoreObj?.total || 685,
       };
     } catch {
-      return { streak: 1, minutes: 25, score: 685 };
+      return { streak: 1, minutes: 0, score: 685 };
     }
   }, [studyStatsSnapshot]);
   const profileMenuRef = useRef<HTMLDetailsElement>(null);

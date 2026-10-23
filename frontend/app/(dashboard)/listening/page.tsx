@@ -20,6 +20,7 @@ import { ListeningDictationModal } from "@/components/admin/content/listening/Li
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
 
@@ -178,7 +179,9 @@ export default function StudentListeningPage() {
           </h1>
         </div>
 
-        
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <LearningQuotaBadge featureKey="LISTENING" />
+        </div>
       </header>
 
       {/* Thanh tab chuyển đổi 5 dạng bài luyện nghe */}

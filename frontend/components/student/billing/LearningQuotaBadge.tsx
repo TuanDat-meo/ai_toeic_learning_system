@@ -20,6 +20,7 @@ const PERIOD_LABELS: Record<FeatureQuotaUsage["period"], string> = {
 
 export function LearningQuotaBadge({ featureKey }: { featureKey: string }) {
   const [quota, setQuota] = useState<FeatureQuotaUsage | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -28,9 +29,13 @@ export function LearningQuotaBadge({ featureKey }: { featureKey: string }) {
         const features = await getStudentFeatureUsage();
         if (mounted) {
           setQuota(features.find((feature) => feature.featureKey === featureKey) ?? null);
+          setLoadError(null);
         }
-      } catch {
-        if (mounted) setQuota(null);
+      } catch (error) {
+        if (mounted) {
+          setQuota(null);
+          setLoadError(error instanceof Error ? error.message : "Chưa tải được hạn mức.");
+        }
       }
     };
 
@@ -43,7 +48,16 @@ export function LearningQuotaBadge({ featureKey }: { featureKey: string }) {
   }, [featureKey]);
 
   if (!quota) {
-    return null;
+    return (
+      <span
+        role="status"
+        title={loadError || "Chưa tải hạn mức hoặc chưa có gói học đang hiệu lực."}
+        className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
+      >
+        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Chưa tải hạn mức
+      </span>
+    );
   }
 
   const limitLabel = quota.limit === null ? "∞" : quota.limit.toLocaleString("vi-VN");

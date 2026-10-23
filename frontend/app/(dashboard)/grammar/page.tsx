@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { getGrammarTopics, saveGrammarProgress } from "@/lib/api/grammar";
 import { StudentGrammarGrid } from "@/components/student/grammar/StudentGrammarGrid";
 import {
@@ -111,7 +112,9 @@ export default function StudentGrammarPage() {
           </p>
         </div>
 
-        
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <LearningQuotaBadge featureKey="GRAMMAR" />
+        </div>
       </header>
 
       {/* Grid chuyên đề cho học viên */}

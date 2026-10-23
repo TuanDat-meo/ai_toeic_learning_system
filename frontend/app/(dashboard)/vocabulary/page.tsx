@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Layers } from "lucide-react";
+import { BookOpen, Layers } from "lucide-react";
 import { VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
 import { INITIAL_TESTS, VOCAB_AUDIO_MAP } from "@/app/admin/content/vocabulary/mockData";
 import { getVocabularySets } from "@/lib/api/vocabulary";
 import { StudentVocabularyGrid } from "@/components/student/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/student/vocabulary/StudentVocabularyModals";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { getItemProgress } from "@/lib/practiceProgress";
 
@@ -144,7 +145,9 @@ export default function StudentVocabularyPage() {
           </p>
         </div>
 
-        
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <LearningQuotaBadge featureKey="VOCABULARY" />
+        </div>
       </header>
 
       {/* Grid danh sách bộ từ cho học viên */}
