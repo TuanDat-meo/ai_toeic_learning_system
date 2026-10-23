@@ -8,6 +8,7 @@ import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentReadingPage() {
@@ -93,7 +94,9 @@ export default function StudentReadingPage() {
           </h1>
         </div>
 
-        
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <LearningQuotaBadge featureKey="READING_PRACTICE" />
+        </div>
       </header>
 
       {/* Grid danh sách bài đọc cho học viên */}

@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
-import { Check, X, ShoppingBag, FileText, RotateCcw, Trash2, BookOpen, Play } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Check, X, ShoppingBag, RotateCcw, Trash2, BookOpen, Play } from "lucide-react";
 import { useItemProgress, resetItemProgress, ItemProgress } from "@/lib/practiceProgress";
 
 export interface StudentCardProgressActionProps {
@@ -34,6 +35,13 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   savedCount: initialSavedCount,
   secondaryAction,
 }) => {
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const progress: ItemProgress = useItemProgress(progressKey, totalQuestions);
 
   const total = totalQuestions || progress.totalQuestions || 10;
@@ -52,9 +60,18 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
 
   const handleReset = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("Bạn có chắc chắn muốn đặt lại tiến độ của bài học này về 0?")) {
-      resetItemProgress(progressKey, total);
-    }
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    resetItemProgress(progressKey, total);
+    setShowConfirmModal(false);
+  };
+
+  const handleCancelReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowConfirmModal(false);
   };
 
   const handleRedo = (e: React.MouseEvent) => {
@@ -302,6 +319,63 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
             <span>{actionLabel}</span>
           </button>
         </div>
+      )}
+
+      {/* MODAL XÁC NHẬN ĐẶT LẠI TIẾN ĐỘ BÀI HỌC VỀ 0 */}
+      {mounted && showConfirmModal && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={handleCancelReset}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút X đóng ở góc phải */}
+            <button
+              type="button"
+              onClick={handleCancelReset}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              title="Đóng"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Icon thùng rác */}
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            {/* Tiêu đề & nội dung thông báo xác nhận */}
+            <div className="text-center space-y-1.5 px-2">
+              <h3 className="text-base font-bold text-slate-900">
+                Đặt lại tiến độ bài học?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Bạn có chắc chắn muốn đặt lại tiến độ của bài học này về 0?
+              </p>
+            </div>
+
+            {/* Hai nút hành động: Không (quay lại) và Có (xác nhận xóa) */}
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelReset}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                Không
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              >
+                Có
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

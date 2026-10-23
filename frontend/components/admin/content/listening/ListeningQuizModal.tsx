@@ -99,6 +99,14 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
   const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
   const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
+  const [quizTimerSeconds, setQuizTimerSeconds] = useState(0);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setQuizTimerSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [expandedVocabWords, setExpandedVocabWords] = useState<Record<string, boolean>>({});
   const [isAllVocabExpanded, setIsAllVocabExpanded] = useState(false);

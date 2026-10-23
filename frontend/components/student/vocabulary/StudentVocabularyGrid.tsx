@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   BookOpen,
@@ -10,9 +11,10 @@ import {
   Layers,
   Check,
   X,
+  Trash2,
 } from "lucide-react";
 import { TestItem, getTestCategoryKey, getCategoryLabel } from "@/app/admin/content/vocabulary/types";
-import { useItemProgress } from "@/lib/practiceProgress";
+import { useItemProgress, resetItemProgress } from "@/lib/practiceProgress";
 
 interface StudentVocabularyGridProps {
   tests: TestItem[];
@@ -34,6 +36,13 @@ function VocabCardItem({
   onOpenFlashcards: (test: TestItem, isRedo?: boolean, startIndex?: number) => void;
   onOpenGame: (test: TestItem, isRedo?: boolean) => void;
 }) {
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const wordCount = t.words?.length || t.wordCount || 200;
   const progressKey = `vocab-${t.id}`;
   const progress = useItemProgress(progressKey, wordCount || 25);
@@ -41,6 +50,22 @@ function VocabCardItem({
   const total = wordCount || progress.totalQuestions || 25;
   const wrong = progress.wrongAnswers || 0;
   const correct = progress.correctAnswers !== undefined ? progress.correctAnswers : Math.max(0, completed - wrong);
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    resetItemProgress(progressKey, total);
+    setShowConfirmModal(false);
+  };
+
+  const handleCancelReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowConfirmModal(false);
+  };
 
   return (
     <div className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
@@ -75,7 +100,7 @@ function VocabCardItem({
       {/* Thống kê tiến độ & Cụm nút hành động */}
       <div className="mt-4 pt-3.5 border-t border-slate-100 space-y-2.5">
         {/* Hàng tiến độ học tập */}
-        <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center justify-between text-xs gap-1.5">
           <div className="flex items-center gap-2.5 font-bold">
             <span className="text-slate-600">Tiến độ:</span>
             <span className="text-emerald-700 font-extrabold">{completed}/{total}</span>
@@ -88,17 +113,30 @@ function VocabCardItem({
               {wrong}
             </span>
           </div>
-          {wrong > 0 && (
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {wrong > 0 && (
+              <button
+                type="button"
+                onClick={() => onOpenGame(t, true)}
+                className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-lg inline-flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs"
+                title={`Làm lại ${wrong} câu sai trong Mini-game`}
+              >
+                <RotateCcw className="w-3 h-3 text-red-500 stroke-[2.5]" />
+                Làm lại {wrong} câu sai
+              </button>
+            )}
+
+            {/* Nút thùng rác xóa / đặt lại tiến độ về 0 */}
             <button
               type="button"
-              onClick={() => onOpenGame(t, true)}
-              className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-lg inline-flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs"
-              title={`Làm lại ${wrong} câu sai trong Mini-game`}
+              onClick={handleReset}
+              className="p-1 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition cursor-pointer active:scale-90"
+              title="Đặt lại tiến độ bài học này về 0"
             >
-              <RotateCcw className="w-3 h-3 text-red-500 stroke-[2.5]" />
-              Làm lại {wrong} câu sai
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
-          )}
+          </div>
         </div>
 
         {/* Nút Xem danh sách từ */}
@@ -143,6 +181,63 @@ function VocabCardItem({
           </button>
         </div>
       </div>
+
+      {/* MODAL XÁC NHẬN ĐẶT LẠI TIẾN ĐỘ BỘ TỪ VỰNG VỀ 0 */}
+      {mounted && showConfirmModal && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={handleCancelReset}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút X đóng ở góc phải */}
+            <button
+              type="button"
+              onClick={handleCancelReset}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              title="Đóng"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Icon thùng rác */}
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            {/* Tiêu đề & nội dung thông báo xác nhận */}
+            <div className="text-center space-y-1.5 px-2">
+              <h3 className="text-base font-bold text-slate-900">
+                Đặt lại tiến độ bài học?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Bạn có chắc chắn muốn đặt lại tiến độ của bài học này về 0?
+              </p>
+            </div>
+
+            {/* Hai nút hành động: Không (quay lại) và Có (xác nhận xóa) */}
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelReset}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                Không
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              >
+                Có
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

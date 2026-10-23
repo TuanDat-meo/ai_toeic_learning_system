@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { LearningOnboardingPrompt } from "@/components/learning/LearningOnboardingPrompt";
 import {
@@ -61,6 +61,21 @@ export default function Home() {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
   const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
+
+  // Lắng nghe cập nhật thời gian học thực tế theo thời gian thực
+  useEffect(() => {
+    const handleTrackerUpdate = () => {
+      setTrackerData(getStudyTrackerData());
+    };
+    window.addEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+    window.addEventListener("storage", handleTrackerUpdate);
+    window.addEventListener("focus", handleTrackerUpdate);
+    return () => {
+      window.removeEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+      window.removeEventListener("storage", handleTrackerUpdate);
+      window.removeEventListener("focus", handleTrackerUpdate);
+    };
+  }, []);
 
   // Latest Score & Target Goal State
   const [latestScore, setLatestScore] = useState<LatestScoreData>(() => {
@@ -179,8 +194,14 @@ export default function Home() {
   // Calculations for dynamic cards
   const scoreGap = targetGoal.targetBand - latestScore.total;
   const todayStr = getTodayDateString();
-  const todayRecord = trackerData.history[todayStr] || { minutesSpent: 0, completedLessons: 0 };
+  const todayRecord = trackerData.history[todayStr] || { minutesSpent: 0, completedLessons: 0, secondsSpent: 0 };
   const todayMinutes = todayRecord.minutesSpent;
+  const todaySeconds = (todayRecord as any).secondsSpent ?? (todayMinutes * 60);
+  const displayTodayTime = todayMinutes > 0
+    ? `${todayMinutes}p`
+    : todaySeconds >= 10
+    ? `< 1p`
+    : `0p`;
   const progressPercent = Math.min(
     100,
     Math.round((trackerData.totalCompletedLessons / trackerData.totalAvailableLessons) * 100)
@@ -305,7 +326,7 @@ export default function Home() {
                 </span>
                 <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
                   <Clock className="w-3 h-3 text-emerald-600" />
-                  {todayMinutes}p / {trackerData.dailyTargetMinutes}p hôm nay
+                  {displayTodayTime} / {trackerData.dailyTargetMinutes}p hôm nay
                 </span>
               </div>
               <div className="mt-3 w-full bg-slate-100 rounded-full h-2 overflow-hidden">
@@ -562,7 +583,9 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3 text-center">
                   <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Hôm nay</span>
-                  <div className="text-lg font-black text-slate-900 font-mono mt-1">{todayMinutes} phút</div>
+                  <div className="text-lg font-black text-slate-900 font-mono mt-1">
+                    {todayMinutes > 0 ? `${todayMinutes} phút` : todaySeconds >= 10 ? `${todaySeconds}s (< 1p)` : `0 phút`}
+                  </div>
                   <span className="text-[10px] text-slate-400">Mục tiêu: {trackerData.dailyTargetMinutes}p</span>
                 </div>
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-center">

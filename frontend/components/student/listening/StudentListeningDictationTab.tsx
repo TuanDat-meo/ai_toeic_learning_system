@@ -95,7 +95,7 @@ export const StudentListeningDictationTab: React.FC<StudentListeningDictationTab
   return (
     <div className="space-y-6">
       {/* Thanh lọc theo Năm */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-wrap items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 mr-1">Bộ đề năm:</span>
           {(["2024", "2023", "2022"] as const).map((year) => (
@@ -113,10 +113,6 @@ export const StudentListeningDictationTab: React.FC<StudentListeningDictationTab
             </button>
           ))}
         </div>
-
-        <span className="text-xs text-slate-400 font-medium">
-          Phương pháp Chép chính tả cải thiện phản xạ tai nghe vượt trội
-        </span>
       </div>
 
       {/* Danh sách các bài Chép chính tả gom theo Test */}

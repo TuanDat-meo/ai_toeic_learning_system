@@ -10,9 +10,11 @@ import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTes
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
 import { MockTestTranscriptModal } from "@/components/admin/content/mock-tests/MockTestTranscriptModal";
 import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTestVocabModal";
+import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { MockTestHistoryModal } from "@/components/admin/content/mock-tests/MockTestHistoryModal";
 import { getItemProgress, getRedoWrongQuestions, saveItemProgress } from "@/lib/practiceProgress";
+import { logStudySession } from "@/lib/studyTracker";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 
 export default function StudentMockTestsPage() {
@@ -260,6 +262,11 @@ export default function StudentMockTestsPage() {
         ? Math.max(1, 60 * 60 - examTimeRemaining)
         : Math.max(1, 30 * 60 - examTimeRemaining);
 
+      const durationMin = Math.max(1, Math.round(durationSec / 60));
+      try {
+        logStudySession(durationMin, 1);
+      } catch {}
+
       void submitMockTestAttempt({
         testId: examModalTest.id,
         testTitle: examModalTest.title,
@@ -300,7 +307,9 @@ export default function StudentMockTestsPage() {
           </p>
         </div>
 
-        
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <LearningQuotaBadge featureKey="MOCK_TEST" />
+        </div>
       </header>
 
       {/* Grid danh sách các đề thi thử */}

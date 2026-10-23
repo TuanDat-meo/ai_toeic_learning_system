@@ -90,6 +90,14 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   const [isLocalNotesModalOpen, setIsLocalNotesModalOpen] = useState(false);
   const [userNotes, setUserNotes] = useState<{ [qId: number]: string }>({});
   const [selfAssessment, setSelfAssessment] = useState<{ [qId: number]: "clear" | "partial" | "hard" }>({});
+  const [dictationTimerSeconds, setDictationTimerSeconds] = useState(0);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setDictationTimerSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const baseQuestion = dictationModalCard.questions[activeDictationQIndex];
   const questionRef = baseQuestion ? `DICTATION-${dictationModalCard.id}-${baseQuestion.id}` : "";
