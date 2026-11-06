@@ -90,6 +90,17 @@ public class SecurityConfig {
                             "/api/admin/settings", "/api/admin/settings/**",
                             "/api/admin/mock-tests/**")
                             .hasAnyRole("ADMIN", "TEACHER")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/data/import/preview")
+                            .hasAnyRole("ADMIN", "TEACHER")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/data/import/batches/*/items")
+                            .hasAnyRole("ADMIN", "TEACHER")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/data/import/batches",
+                            "/api/admin/data/import/batches/**")
+                            .hasAnyRole("ADMIN", "TEACHER")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/data/import/batches/*/items/*")
+                            .hasAnyRole("ADMIN", "TEACHER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/data/import/batches/*/items/*")
+                            .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/**").authenticated()
                         .anyRequest().permitAll());

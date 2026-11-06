@@ -1,0 +1,2 @@
+ALTER TABLE vocabulary_items
+    ADD COLUMN IF NOT EXISTS audio_region VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN';

@@ -27,21 +27,29 @@ export default function StudentGrammarPage() {
     try {
       setLoading(true);
       let rawList: GrammarTopicItem[] = [];
-      const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_grammar_topics") : null;
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) rawList = parsed;
-        } catch {}
+
+      // Luôn ưu tiên gọi API backend để lấy dữ liệu mới nhất từ database
+      try {
+        const data = await getGrammarTopics();
+        if (data && data.length > 0) {
+          rawList = data;
+          if (typeof window !== "undefined") {
+            localStorage.setItem("toeic_grammar_topics", JSON.stringify(data));
+          }
+        }
+      } catch (apiErr) {
+        console.warn("Could not load grammar topics from API:", apiErr);
       }
 
+      // Nếu API rỗng hoặc lỗi thì mới fallback về localStorage
       if (rawList.length === 0) {
-        try {
-          const data = await getGrammarTopics();
-          if (data && data.length > 0) {
-            rawList = data;
-          }
-        } catch {}
+        const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_grammar_topics") : null;
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) rawList = parsed;
+          } catch {}
+        }
       }
 
       if (rawList.length === 0) {

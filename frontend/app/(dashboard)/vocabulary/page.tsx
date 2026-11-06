@@ -36,42 +36,47 @@ export default function StudentVocabularyPage() {
     try {
       setLoading(true);
       let rawList: VocabularyTestSet[] = [];
-      const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_vocab_tests") : null;
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            // Merge words từ INITIAL_TESTS vào các set bị thiếu words
-            rawList = parsed.map((d: VocabularyTestSet) => {
-              const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
-              const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
-              return {
-                ...d,
-                words,
-                wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
-              };
-            });
-          }
-        } catch {}
+
+      // 1. Ưu tiên tải dữ liệu mới nhất từ Server (bao gồm các bộ đã import & publish)
+      try {
+        const serverData = await getVocabularySets();
+        if (serverData && serverData.length > 0) {
+          rawList = serverData.map((d) => {
+            const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code || it.code === d.id);
+            const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
+            return {
+              ...d,
+              words,
+              wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
+            };
+          });
+        }
+      } catch (serverErr) {
+        console.warn("Không thể tải từ API server, thử lấy từ localStorage:", serverErr);
       }
 
+      // 2. Nếu server chưa có, fallback vào localStorage
       if (rawList.length === 0) {
-        try {
-          const data = await getVocabularySets();
-          if (data && data.length > 0) {
-            rawList = data.map((d) => {
-              const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
-              const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
-              return {
-                ...d,
-                words,
-                wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
-              };
-            });
-          }
-        } catch {}
+        const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_vocab_tests") : null;
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              rawList = parsed.map((d: VocabularyTestSet) => {
+                const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
+                const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
+                return {
+                  ...d,
+                  words,
+                  wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
+                };
+              });
+            }
+          } catch {}
+        }
       }
 
+      // 3. Fallback cuối cùng vào INITIAL_TESTS
       if (rawList.length === 0) {
         rawList = INITIAL_TESTS;
       }
@@ -80,7 +85,7 @@ export default function StudentVocabularyPage() {
       const published = rawList.filter((t) => t.status !== "DRAFT" && t.status !== "Bản nháp");
       setTests(published);
     } catch (err) {
-      console.warn("Could not load vocabulary sets from server, using fallback:", err);
+      console.warn("Could not load vocabulary sets, using fallback:", err);
       const published = INITIAL_TESTS.filter((t) => t.status !== "DRAFT");
       setTests(published);
     } finally {

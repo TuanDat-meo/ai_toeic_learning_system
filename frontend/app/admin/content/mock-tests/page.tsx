@@ -74,15 +74,6 @@ export default function AdminMockTestsPage() {
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Sync tests directly from latest mockData (E:\Data)
-  const handleSyncData = () => {
-    setTestsVol1(INITIAL_TESTS_VOL1);
-    setTestsVol2(INITIAL_TESTS_VOL2);
-    setTestsVol3(INITIAL_TESTS_VOL3);
-    saveLocalMockTests(INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3);
-    triggerToast("Đã đồng bộ thành công toàn bộ 29 đề thi từ E:\\Data! 🔄");
-  };
-
   // Asynchronously fetch 200 questions for any chosen test
   const loadQuestionsForTest = async (testId: number): Promise<PracticeQuestion[]> => {
     setIsLoadingQuestions(true);
@@ -542,7 +533,6 @@ export default function AdminMockTestsPage() {
         vol3Count={testsVol3.length}
         onOpenCreateTest={handleOpenCreateTest}
         onExportCsv={handleExportCsv}
-        onSyncData={handleSyncData}
       />
 
       {/* Main Tab Content Switching */}

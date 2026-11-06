@@ -6,6 +6,16 @@ import { WordItem, TestItem } from "@/app/admin/content/vocabulary/types";
 import { recordQuestionAnswer } from "@/lib/practiceProgress";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 
+function getWordSenses(word: WordItem) {
+  return word.senses?.length
+    ? word.senses
+    : [{
+        partOfSpeech: word.partOfSpeech || word.pos || "",
+        meaning: word.meaning || word.meanings?.[0]?.meaning || "",
+        example: word.example || word.meanings?.[0]?.example || "",
+      }];
+}
+
 interface StudentVocabularyModalsProps {
   // Word list modal
   wordListModalTest: TestItem | null;
@@ -113,7 +123,9 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {wordListModalTest.words.map((w: WordItem, index: number) => (
+                {wordListModalTest.words.map((w: WordItem, index: number) => {
+                  const senses = getWordSenses(w);
+                  return (
                   <div key={w.id} className="py-3.5 flex items-start justify-between gap-3 hover:bg-slate-50/60 px-2 rounded-xl transition-colors">
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -123,9 +135,12 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                         <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                           {w.ipa}
                         </span>
-                        <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                          {w.partOfSpeech}
-                        </span>
+                        {senses.map((sense, senseIndex) => (
+                          <span key={sense.id ?? `${sense.partOfSpeech}-${senseIndex}`} className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                            {sense.partOfSpeech}
+                            {sense.subCategory ? ` · ${sense.subCategory}` : ""}
+                          </span>
+                        ))}
                         <button
                           type="button"
                           onClick={() => playAudio(w.audio || w.audioUrl || w.word)}
@@ -135,11 +150,17 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                           <Volume2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <p className="text-xs font-bold text-slate-800">{w.meaning}</p>
-                      <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{w.example}&quot;</p>
-                      {w.exampleMeaning && (
-                        <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
-                      )}
+                      {senses.map((sense, senseIndex) => (
+                        <div key={sense.id ?? `${sense.partOfSpeech}-${senseIndex}`} className="space-y-0.5">
+                          <p className="text-xs font-bold text-slate-800">{sense.meaning}</p>
+                          {sense.example ? (
+                            <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{sense.example}&quot;</p>
+                          ) : null}
+                          {senseIndex === 0 && w.exampleMeaning ? (
+                            <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
@@ -162,7 +183,8 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -255,6 +277,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
               }
               const currentWord = wordsList[flashcardIndex];
               if (!currentWord) return null;
+              const senses = getWordSenses(currentWord);
 
               return (
                 <div
@@ -267,9 +290,11 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                         <span className="text-3xl font-black text-slate-900 tracking-tight">
                           {currentWord.word}
                         </span>
-                        <span className="px-2.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 font-bold">
-                          {currentWord.partOfSpeech}
-                        </span>
+                        {senses.map((sense, senseIndex) => (
+                          <span key={sense.id ?? `${sense.partOfSpeech}-${senseIndex}`} className="px-2.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 font-bold">
+                            {sense.partOfSpeech}
+                          </span>
+                        ))}
                       </div>
                       <span className="font-mono text-sm text-slate-500 bg-white/80 px-3 py-1 rounded-full border border-slate-200">
                         {currentWord.ipa}
@@ -294,17 +319,26 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                       <span className="text-xs uppercase font-extrabold text-blue-600 tracking-wider">
                         Định nghĩa & Ngữ cảnh
                       </span>
-                      <h4 className="text-2xl font-bold text-slate-900">
-                        {currentWord.meaning}
-                      </h4>
-                      <p className="text-xs text-slate-600 italic bg-white/80 p-3 rounded-2xl border border-slate-100 max-w-xs leading-relaxed">
-                        &quot;{currentWord.example}&quot;
-                      </p>
-                      {currentWord.exampleMeaning && (
-                        <p className="text-xs text-blue-700 font-semibold max-w-xs">
-                          👉 {currentWord.exampleMeaning}
-                        </p>
-                      )}
+                      <div className="max-h-40 w-full max-w-sm space-y-3 overflow-y-auto">
+                        {senses.map((sense, senseIndex) => (
+                          <div key={sense.id ?? `${sense.partOfSpeech}-${senseIndex}`} className="space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-blue-600">
+                              {sense.partOfSpeech}{sense.subCategory ? ` · ${sense.subCategory}` : ""}
+                            </span>
+                            <h4 className="text-xl font-bold text-slate-900">{sense.meaning}</h4>
+                            {sense.example ? (
+                              <p className="text-xs text-slate-600 italic bg-white/80 p-3 rounded-2xl border border-slate-100 leading-relaxed">
+                                &quot;{sense.example}&quot;
+                              </p>
+                            ) : null}
+                            {senseIndex === 0 && currentWord.exampleMeaning ? (
+                              <p className="text-xs text-blue-700 font-semibold max-w-xs">
+                                👉 {currentWord.exampleMeaning}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
                       <p className="text-xs text-slate-400 pt-1">
                         Chạm để quay lại mặt trước
                       </p>
