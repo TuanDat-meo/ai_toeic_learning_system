@@ -11,7 +11,6 @@ import {
   Download,
   List,
   LayoutGrid,
-  RefreshCw,
 } from "lucide-react";
 
 export type MockTestAdminTab = "tests" | "submissions" | "score_conversion" | "collections";
@@ -32,7 +31,6 @@ interface MockTestHeaderProps {
   vol3Count?: number;
   onOpenCreateTest: () => void;
   onExportCsv: () => void;
-  onSyncData?: () => void;
 }
 
 export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
@@ -51,7 +49,6 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
   vol3Count = 0,
   onOpenCreateTest,
   onExportCsv,
-  onSyncData,
 }) => {
   return (
     <div className="space-y-6">
@@ -71,17 +68,6 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {onSyncData && (
-            <button
-              type="button"
-              onClick={onSyncData}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-xs transition"
-              title="Đồng bộ danh sách 29 đề thi từ E:\Data và làm mới bộ nhớ cache"
-            >
-              <RefreshCw size={16} className="text-emerald-700" aria-hidden="true" />
-              <span>Đồng bộ từ Data</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={onExportCsv}

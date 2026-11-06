@@ -89,22 +89,23 @@ export default function AdminGrammarPage() {
   const loadTopics = useCallback(async () => {
     try {
       setLoading(true);
-      const local = getLocalGrammarTopics();
-      if (local && local.length > 0) {
-        setTopics(local);
-        setLoading(false);
-        return;
-      }
+      // Luôn ưu tiên gọi API backend để lấy dữ liệu mới nhất từ database
       const data = await getAdminGrammarTopics();
       if (data && data.length > 0) {
         setTopics(data);
         saveLocalGrammarTopics(data);
+        return;
+      }
+      // Fallback về localStorage hoặc mock nếu API trả về rỗng
+      const local = getLocalGrammarTopics();
+      if (local && local.length > 0) {
+        setTopics(local);
       } else {
         setTopics(INITIAL_GRAMMAR_TOPICS);
         saveLocalGrammarTopics(INITIAL_GRAMMAR_TOPICS);
       }
     } catch (err) {
-      console.warn("Could not load grammar topics from API:", err);
+      console.warn("Could not load grammar topics from API, falling back:", err);
       const local = getLocalGrammarTopics();
       if (local && local.length > 0) {
         setTopics(local);
@@ -119,6 +120,13 @@ export default function AdminGrammarPage() {
 
   useEffect(() => {
     loadTopics();
+
+    // Lắng nghe sự kiện khi có dữ liệu mới được publish từ Content Import
+    const handleTopicsUpdated = () => {
+      loadTopics();
+    };
+    window.addEventListener("toeic-grammar-topics-updated", handleTopicsUpdated);
+    return () => window.removeEventListener("toeic-grammar-topics-updated", handleTopicsUpdated);
   }, [loadTopics]);
 
   // Filter Logic

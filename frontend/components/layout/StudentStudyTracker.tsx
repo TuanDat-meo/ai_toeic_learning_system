@@ -16,9 +16,8 @@ const STUDY_ROUTES = [
 export function StudentStudyTracker() {
   const pathname = usePathname();
   const pendingSecondsRef = useRef<number>(0);
-  const lastActivityTimeRef = useRef<number>(Date.now());
+  const lastActivityTimeRef = useRef<number>(0);
   const pathnameRef = useRef<string>(pathname);
-  pathnameRef.current = pathname;
 
   // Đẩy số giây học tích lũy vào studyTracker an toàn tuyệt đối
   const flushStudyTime = () => {
@@ -68,6 +67,8 @@ export function StudentStudyTracker() {
   };
 
   useEffect(() => {
+    lastActivityTimeRef.current = Date.now();
+
     // Đánh dấu người dùng đang có tương tác thực tế
     const markActive = () => {
       lastActivityTimeRef.current = Date.now();
@@ -142,6 +143,7 @@ export function StudentStudyTracker() {
 
   // Khi chuyển trang (ví dụ từ bài nghe / thi thử quay về dashboard) -> lưu ngay lập tức
   useEffect(() => {
+    pathnameRef.current = pathname;
     flushStudyTime();
   }, [pathname]);
 

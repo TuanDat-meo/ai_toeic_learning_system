@@ -15,6 +15,7 @@ export interface VocabularyTestSet {
   year?: number | string;
   category?: 'ETS_EXAM' | 'ESSENTIAL' | 'CUSTOM' | string;
   status?: ContentStatus | string;
+  releaseAt?: string | null;
   description?: string;
   wordCount?: number;      // computed từ vocabulary_set_words
   count?: number;
@@ -34,6 +35,23 @@ export interface WordMeaning {
   exampleVi?: string;     // tiếng Việt
 }
 
+export interface VocabularySense {
+  id?: string;
+  partOfSpeech: string;
+  subCategory?: string;
+  meaning: string;
+  example?: string;
+  synonyms?: string;
+  antonyms?: string;
+}
+
+export interface VocabularyRelatedForm {
+  id: string;
+  word?: string;
+  partOfSpeech?: string;
+  relationType: 'WORD_FAMILY' | 'INFLECTION';
+}
+
 /** Từ trong từ điển chuẩn. DB: vocabularies */
 export interface WordItem {
   id: string;
@@ -42,6 +60,9 @@ export interface WordItem {
   ipa?: string;
   partOfSpeech?: string;
   pos?: string;
+  senses?: VocabularySense[];
+  wordFamily?: string;
+  relatedForms?: VocabularyRelatedForm[];
   cefrLevel?: CefrLevel;  // A1–C2
   level?: string;         // legacy alias
   status?: ContentStatus;
@@ -53,6 +74,7 @@ export interface WordItem {
   translation?: string;
   audio?: string;
   audioUrl?: string;
+  audioRegion?: string;
   audioFile?: string;
   testId?: string;
   mastered?: boolean;
@@ -62,6 +84,14 @@ export interface WordItem {
   miniGame1?: any;
   miniGame2?: any;
   [key: string]: any;
+}
+
+export function normalizeVocabularyLevel(level?: string | null): string {
+  const normalized = level?.trim().toUpperCase() ?? '';
+  if (normalized === 'EASY') return 'A1';
+  if (normalized === 'MEDIUM') return 'B1';
+  if (normalized === 'HARD') return 'B2';
+  return normalized;
 }
 
 /** Từ trong một bộ cụ thể — bổ sung orderIndex và note riêng. DB: vocabulary_set_words */

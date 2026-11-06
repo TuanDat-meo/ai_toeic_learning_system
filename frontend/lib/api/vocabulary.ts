@@ -1,7 +1,8 @@
 import { apiRequest, writeAuthRequest } from './client';
-import type { VocabularyTestSet, WordItem } from '@/app/admin/content/vocabulary/types';
+import { normalizeVocabularyLevel, type VocabularyRelatedForm, type VocabularySense, type VocabularyTestSet, type WordItem } from '@/app/admin/content/vocabulary/types';
 import type { ContentStatus } from '@/lib/types/domain';
 import { INITIAL_TESTS, VOCAB_AUDIO_MAP } from '@/app/admin/content/vocabulary/mockData';
+import { normalizeVocabularyPartOfSpeech } from '@/lib/vocabulary-part-of-speech';
 
 interface RawWordItem {
   id: string;
@@ -19,6 +20,10 @@ interface RawWordItem {
   setId?: string;
   audio?: string;
   audioUrl?: string;
+  audioRegion?: string;
+  wordFamily?: string;
+  relatedForms?: VocabularyRelatedForm[];
+  senses?: VocabularySense[];
 }
 
 interface RawVocabularyTestSet {
@@ -28,29 +33,43 @@ interface RawVocabularyTestSet {
   category?: string;
   wordCount?: number;
   status?: string;
+  releaseAt?: string | null;
   words?: RawWordItem[];
 }
 
 function mapWord(w: RawWordItem): WordItem {
   const cleanWord = (w.word || '').trim().toLowerCase();
-  const audio = w.audio || w.audioUrl || (cleanWord ? VOCAB_AUDIO_MAP[cleanWord] : '') || '';
+  const audio = w.audioUrl || w.audio || (cleanWord ? VOCAB_AUDIO_MAP[cleanWord] : '') || '';
   return {
     id: w.id,
     word: w.word,
     ipa: w.ipa || '',
-    partOfSpeech: w.partOfSpeech || 'Noun',
-    pos: w.partOfSpeech || 'Noun',
+    partOfSpeech: normalizeVocabularyPartOfSpeech(w.partOfSpeech || w.pos || 'Noun'),
+    pos: normalizeVocabularyPartOfSpeech(w.partOfSpeech || w.pos || 'Noun'),
     meaning: w.meaning || '',
     example: w.example || '',
     exampleMeaning: w.exampleMeaning || '',
     exampleVi: w.exampleMeaning || '',
-    level: w.level || 'B1',
+    level: normalizeVocabularyLevel(w.level || 'B1'),
     starred: w.starred ?? false,
     bookmarked: w.starred ?? false,
     status: (w.status as ContentStatus) || 'PUBLISHED',
     testId: w.setId,
     audio,
     audioUrl: audio,
+    audioRegion: w.audioRegion || 'UNKNOWN',
+    wordFamily: w.wordFamily || '',
+    relatedForms: w.relatedForms || [],
+    senses: Array.isArray(w.senses) && w.senses.length > 0
+      ? w.senses.map((sense) => ({
+          ...sense,
+          partOfSpeech: normalizeVocabularyPartOfSpeech(sense.partOfSpeech),
+        }))
+      : [{
+          partOfSpeech: normalizeVocabularyPartOfSpeech(w.partOfSpeech || w.pos || 'Noun'),
+          meaning: w.meaning || '',
+          example: w.example || '',
+        }],
   };
 }
 
@@ -72,6 +91,7 @@ function mapSet(s: RawVocabularyTestSet): VocabularyTestSet {
     category: s.category || local?.category || '2024',
     wordCount: count,
     status: s.status || 'PUBLISHED',
+    releaseAt: s.releaseAt ?? null,
     words,
   };
 }
@@ -118,6 +138,7 @@ export async function createVocabularySet(data: {
   year?: string | number;
   category?: string;
   status?: string;
+  releaseAt?: string | null;
 }): Promise<VocabularyTestSet> {
   const res = await writeAuthRequest<RawVocabularyTestSet>('POST', '/api/admin/vocabulary/sets', {
     id: data.id,
@@ -125,6 +146,7 @@ export async function createVocabularySet(data: {
     year: data.year ? String(data.year) : '2024',
     category: data.category || '2024',
     status: data.status || 'PUBLISHED',
+    releaseAt: data.releaseAt || null,
   });
   return mapSet(res);
 }
@@ -136,6 +158,7 @@ export async function updateVocabularySet(
     year?: string | number;
     category?: string;
     status?: string;
+    releaseAt?: string | null;
   }
 ): Promise<VocabularyTestSet> {
   const res = await writeAuthRequest<RawVocabularyTestSet>('PUT', `/api/admin/vocabulary/sets/${id}`, {
@@ -143,6 +166,7 @@ export async function updateVocabularySet(
     year: data.year ? String(data.year) : '2024',
     category: data.category || '2024',
     status: data.status || 'PUBLISHED',
+    releaseAt: data.releaseAt || null,
   });
   return mapSet(res);
 }
@@ -162,6 +186,12 @@ export async function addVocabularyWord(
     example?: string;
     exampleMeaning?: string;
     level?: string;
+    audioUrl?: string;
+    audioRegion?: string;
+    subCategory?: string;
+    wordFamily?: string;
+    relatedForms?: VocabularyRelatedForm[];
+    senses?: VocabularySense[];
   }
 ): Promise<WordItem> {
   const res = await writeAuthRequest<RawWordItem>('POST', `/api/admin/vocabulary/sets/${setId}/words`, {
@@ -173,6 +203,12 @@ export async function addVocabularyWord(
     example: data.example || '',
     exampleMeaning: data.exampleMeaning || '',
     level: data.level || 'B1',
+    audioUrl: data.audioUrl || '',
+    audioRegion: data.audioRegion || 'UNKNOWN',
+    subCategory: data.senses?.[0]?.subCategory || '',
+    wordFamily: data.wordFamily || '',
+    relatedForms: (data.relatedForms || []).map(({ id, relationType }) => ({ id, relationType })),
+    senses: data.senses || [],
   });
   return mapWord(res);
 }
@@ -187,6 +223,12 @@ export async function updateVocabularyWord(
     example?: string;
     exampleMeaning?: string;
     level?: string;
+    audioUrl?: string;
+    audioRegion?: string;
+    subCategory?: string;
+    wordFamily?: string;
+    relatedForms?: VocabularyRelatedForm[];
+    senses?: VocabularySense[];
   }
 ): Promise<WordItem> {
   const res = await writeAuthRequest<RawWordItem>('PUT', `/api/admin/vocabulary/words/${wordId}`, {
@@ -197,6 +239,12 @@ export async function updateVocabularyWord(
     example: data.example || '',
     exampleMeaning: data.exampleMeaning || '',
     level: data.level || 'B1',
+    audioUrl: data.audioUrl || '',
+    audioRegion: data.audioRegion || 'UNKNOWN',
+    subCategory: data.senses?.[0]?.subCategory || '',
+    wordFamily: data.wordFamily || '',
+    relatedForms: (data.relatedForms || []).map(({ id, relationType }) => ({ id, relationType })),
+    senses: data.senses || [],
   });
   return mapWord(res);
 }

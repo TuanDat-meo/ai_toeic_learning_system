@@ -4,6 +4,7 @@ import java.util.stream.Collectors;
 
 import jakarta.validation.ConstraintViolationException;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,14 +40,31 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> conflict(DataIntegrityViolationException exception) {
+        String rawMessage = exception.getMessage() != null ? exception.getMessage().toLowerCase() : "";
+        String detail;
+        if (rawMessage.contains("email") || rawMessage.contains("users_email_key")) {
+            detail = "Email đã tồn tại hoặc tài khoản còn liên kết dữ liệu.";
+        } else if (rawMessage.contains("duplicate key") || rawMessage.contains("unique constraint")) {
+            detail = "Dữ liệu đã tồn tại trong hệ thống hoặc bị trùng khóa nhận diện duy nhất.";
+        } else if (rawMessage.contains("foreign key") || rawMessage.contains("violates foreign key")) {
+            detail = "Dữ liệu liên kết không tồn tại hoặc bị ràng buộc quan hệ trong cơ sở dữ liệu.";
+        } else {
+            detail = "Không thể lưu dữ liệu do vi phạm ràng buộc dữ liệu hợp lệ.";
+        }
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiError("Không thể hoàn tất thao tác.", "Email đã tồn tại hoặc tài khoản còn liên kết dữ liệu."));
+                .body(new ApiError("Không thể hoàn tất thao tác.", detail));
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    ResponseEntity<ApiError> databaseError(DataAccessException exception) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiError("Lỗi hệ thống lưu trữ.", "Không thể thực hiện lưu hoặc truy vấn dữ liệu vào hệ thống. Vui lòng kiểm tra lại cấu trúc dữ liệu."));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ApiError> uploadTooLarge(MaxUploadSizeExceededException exception) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(new ApiError("File quá lớn.", "Kích thước file tối đa là 10 MB."));
+                .body(new ApiError("File quá lớn.", "Kích thước file tối đa là 256 MB."));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

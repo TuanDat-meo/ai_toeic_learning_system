@@ -72,7 +72,7 @@ public class VocabularyController {
             @RequestParam(required = false) String category,
             Authentication authentication) {
         UUID userId = extractUserId(authentication);
-        return vocabularyService.listSets(category, userId);
+        return vocabularyService.listSets(category, userId, true);
     }
 
     @PostMapping("/api/admin/vocabulary/sets")
