@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -185,6 +186,85 @@ public class ReadingService {
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
             return Collections.emptyMap();
+        }
+    }
+
+    @Transactional
+    public void syncFromImportItem(JsonNode data) {
+        if (data == null) return;
+        String title = data.path("title").asText("").trim();
+        if (title.isBlank()) return;
+
+        String rawPart = data.path("part").asText("").trim();
+        String category = "part5";
+        if (rawPart.equalsIgnoreCase("PART_6") || rawPart.equalsIgnoreCase("part6")) {
+            category = "part6";
+        } else if (rawPart.equalsIgnoreCase("PART_7") || rawPart.equalsIgnoreCase("part7")) {
+            category = "part7";
+        } else if (rawPart.equalsIgnoreCase("PART_5") || rawPart.equalsIgnoreCase("part5")) {
+            category = "part5";
+        } else if (data.has("category")) {
+            category = data.path("category").asText("part5").trim().toLowerCase();
+        }
+
+        String subCategory = data.path("subCategory").asText(
+            category.equals("part5") ? "word_types" : category.equals("part6") ? "text_types" : "levels"
+        ).trim();
+
+        String tag = data.path("tag").asText(
+            category.equals("part5") ? "Part 5 - Câu đơn" : category.equals("part6") ? "Part 6 - Điền đoạn" : "Part 7 - Đọc hiểu"
+        ).trim();
+
+        String passageText = data.path("content").asText(data.path("passageText").asText("")).trim();
+        String passageTextVi = data.path("passageTextVi").asText("").trim();
+
+        JsonNode questionsNode = data.has("sampleQuestions") ? data.path("sampleQuestions") : data.path("questions");
+        int totalQuestions = data.path("totalQuestions").asInt(
+            questionsNode.isArray() && !questionsNode.isEmpty() ? questionsNode.size() : (category.equals("part5") ? 30 : category.equals("part6") ? 16 : 54)
+        );
+
+        String id = data.path("id").asText("").trim();
+        if (id.isBlank()) {
+            id = "reading-" + category + "-" + Math.abs(title.hashCode());
+        }
+
+        String passagesJson = data.has("passages") ? toJson(data.path("passages")) : "[]";
+        String theoryJson = data.has("theory") ? toJson(data.path("theory")) : "{}";
+        String sampleQuestionsJson = questionsNode.isArray() ? toJson(questionsNode) : "[]";
+
+        String upsert = """
+                INSERT INTO reading_exercise_cards (
+                    id, title, category, sub_category, subtitle, tag,
+                    total_questions, passage_text, passage_text_vi,
+                    passages, theory, sample_questions, order_index, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, 0, now())
+                ON CONFLICT (id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    category = EXCLUDED.category,
+                    sub_category = EXCLUDED.sub_category,
+                    subtitle = EXCLUDED.subtitle,
+                    tag = EXCLUDED.tag,
+                    total_questions = EXCLUDED.total_questions,
+                    passage_text = EXCLUDED.passage_text,
+                    passage_text_vi = EXCLUDED.passage_text_vi,
+                    passages = EXCLUDED.passages,
+                    theory = EXCLUDED.theory,
+                    sample_questions = EXCLUDED.sample_questions,
+                    updated_at = now()
+                """;
+
+        jdbc.update(upsert, id, title, category, subCategory,
+                data.path("subtitle").asText("Luyện tập chuyên đề " + title),
+                tag, totalQuestions, passageText, passageTextVi,
+                passagesJson, theoryJson, sampleQuestionsJson);
+    }
+
+    private String toJson(Object obj) {
+        if (obj == null) return "{}";
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            return "{}";
         }
     }
 }

@@ -69,6 +69,58 @@ export interface GrammarNormalizedData {
   [key: string]: unknown;
 }
 
+export interface ReadingSubPassageItem {
+  id?: string;
+  label?: string;
+  title?: string;
+  text?: string;
+  textVi?: string;
+}
+
+export interface ReadingQuestionItem {
+  id?: number | string;
+  questionNum?: string | number;
+  question?: string;
+  questionText?: string;
+  options?: GradedQuestionOption | string[] | { id: string; text: string }[];
+  correctAnswer?: string;
+  correctIndex?: number;
+  explanation?: string;
+  bilingual?: string;
+  translation?: string | GradedQuestionTranslation;
+  vocabList?: { word: string; meaning: string; phonetic?: string }[];
+  [key: string]: unknown;
+}
+
+export interface ReadingNormalizedData {
+  id?: number | string;
+  title?: string;
+  part?: string; // PART_5, PART_6, PART_7
+  category?: string;
+  subCategory?: string;
+  topic?: string;
+  difficulty?: string;
+  source?: string;
+  content?: string;
+  passageText?: string;
+  passageTextVi?: string;
+  passages?: ReadingSubPassageItem[];
+  theory?: {
+    summary?: string;
+    rules?: string[];
+    example?: string;
+    directionsEn?: string;
+    directionsVi?: string;
+  };
+  questions?: ReadingQuestionItem[];
+  sampleQuestions?: ReadingQuestionItem[];
+  totalQuestions?: number;
+  tag?: string;
+  audioUrl?: string;
+  imageUrl?: string;
+  [key: string]: unknown;
+}
+
 export const MAX_FILE_BYTES = 256 * 1024 * 1024;
 export const STRUCTURED_EXTENSIONS = ['csv', 'xlsx', 'json'];
 

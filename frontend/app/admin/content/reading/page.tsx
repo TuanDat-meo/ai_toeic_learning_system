@@ -33,7 +33,13 @@ function getLocalReadingCards(): ExerciseCardData[] | null {
     const raw = localStorage.getItem(LOCAL_READING_CARDS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const customCards = parsed.filter(
+        (c: ExerciseCardData) => !INITIAL_CARDS.some((init) => init.id === c.id)
+      );
+      return [...INITIAL_CARDS, ...customCards];
+    }
+    return null;
   } catch {
     return null;
   }
@@ -42,11 +48,14 @@ function getLocalReadingCards(): ExerciseCardData[] | null {
 function saveLocalReadingCards(cards: ExerciseCardData[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(cards));
+    try {
+      localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(cards));
+    } catch {
+      const customOnly = cards.filter((c) => !INITIAL_CARDS.some((init) => init.id === c.id));
+      localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(customOnly));
+    }
     window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated", { detail: cards }));
-  } catch (err) {
-    console.warn("Could not save reading cards to localStorage:", err);
-  }
+  } catch {}
 }
 
 export default function ReadingLearningPage() {

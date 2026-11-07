@@ -54,6 +54,7 @@ import {
 } from './import/utils';
 import { VocabularyPreviewList } from './import/VocabularyPreviewList';
 import { GrammarPreviewList } from './import/GrammarPreviewList';
+import { ReadingPreviewList } from './import/ReadingPreviewList';
 import { GenericPreviewTable } from './import/GenericPreviewTable';
 
 function downloadSample(type: ImportedContentType, format: 'json' | 'csv') {
@@ -794,6 +795,15 @@ export function ContentImportManagement() {
                 />
               ) : details.batch.contentType === 'GRAMMAR' ? (
                 <GrammarPreviewList
+                  items={filteredPreviewItems}
+                  fileName={details.batch.fileName}
+                  totalRecords={details.batch.totalRecords}
+                  batchId={details.batch.id}
+                  editable={['PREVIEW', 'NO_VALID_ROWS'].includes(details.batch.status)}
+                  onBatchUpdated={(updated) => void handlePreviewItemsUpdated(updated)}
+                />
+              ) : details.batch.contentType === 'READING' ? (
+                <ReadingPreviewList
                   items={filteredPreviewItems}
                   fileName={details.batch.fileName}
                   totalRecords={details.batch.totalRecords}
