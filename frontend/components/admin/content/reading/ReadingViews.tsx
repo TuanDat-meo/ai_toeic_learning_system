@@ -576,7 +576,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                               type="button"
                               onClick={() => onStartPractice(p.card)}
                               className="p-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer shadow-2xs"
-                              title="Vào luyện tập ngay (Trải nghiệm học viên)"
+                              title="Kiểm duyệt & xem chi tiết đề thi"
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
                             </button>

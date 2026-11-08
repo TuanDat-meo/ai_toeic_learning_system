@@ -8,6 +8,7 @@ import {
   BookOpen,
   Eye,
   CheckCircle2,
+  Play,
 } from "lucide-react";
 
 interface ReadingCardGridProps {
@@ -67,18 +68,18 @@ function ReadingTableRow({
           <button
             type="button"
             onClick={() => onOpenTheory(card)}
-            className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition cursor-pointer"
-            title="Xem lý thuyết chuyên đề"
+            className="p-1.5 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100 text-blue-700 transition cursor-pointer"
+            title="Xem chi tiết bài đọc & đáp án (Part 5, 6, 7)"
           >
-            <BookOpen className="w-3.5 h-3.5" />
+            <Eye className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={() => onStartPractice(card)}
-            className="p-1.5 rounded-xl border border-blue-200 hover:bg-blue-50 text-blue-600 transition cursor-pointer"
-            title="Xem trước bài tập"
+            className="p-1.5 rounded-xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer"
+            title="Vào làm thử / Luyện tập đề thi"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Play className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -156,20 +157,20 @@ function ReadingGridItem({
           <button
             type="button"
             onClick={() => onOpenTheory(card)}
-            className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-            title="Xem lý thuyết"
+            className="px-2.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            title="Xem chi tiết bài đọc & đáp án (Part 5, 6, 7)"
           >
-            <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-            <span>Lý thuyết</span>
+            <Eye className="w-3.5 h-3.5" />
+            <span>Chi tiết</span>
           </button>
           <button
             type="button"
             onClick={() => onStartPractice(card)}
             className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-            title="Xem trước bài tập"
+            title="Vào làm thử / Luyện tập đề thi"
           >
-            <Eye className="w-3.5 h-3.5" />
-            <span>Luyện tập</span>
+            <Play className="w-3.5 h-3.5" />
+            <span>Làm thử</span>
           </button>
         </div>
 

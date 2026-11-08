@@ -11,6 +11,7 @@ import {
   Download,
   List,
   LayoutGrid,
+  Upload,
 } from "lucide-react";
 
 export type ReadingAdminTab = "reading_units" | "passages" | "reading_analytics" | "curriculum";
@@ -26,6 +27,7 @@ interface ReadingHeaderProps {
   setViewMode: (v: "table" | "grid") => void;
   totalCardsCount: number;
   onOpenCreateCard: () => void;
+  onOpenImportModal: () => void;
   onExportCsv: () => void;
 }
 
@@ -40,6 +42,7 @@ export const ReadingHeader: React.FC<ReadingHeaderProps> = ({
   setViewMode,
   totalCardsCount,
   onOpenCreateCard,
+  onOpenImportModal,
   onExportCsv,
 }) => {
   return (
@@ -60,6 +63,15 @@ export const ReadingHeader: React.FC<ReadingHeaderProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onOpenImportModal}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 cursor-pointer transition"
+            title="Import hàng loạt bằng cách dán văn bản Word/PDF hoặc tải file Excel"
+          >
+            <Upload size={16} aria-hidden="true" />
+            <span>Import đề thi</span>
+          </button>
           <button
             type="button"
             onClick={onExportCsv}
