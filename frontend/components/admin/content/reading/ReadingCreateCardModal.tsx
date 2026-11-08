@@ -11,10 +11,8 @@ import {
   CheckCircle2,
   FileText,
   Layers,
-  ArrowRight,
   Plus,
   Trash2,
-  Languages,
   Check,
   ListOrdered,
   BookMarked,
@@ -746,7 +744,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         }
 
         // Clean line step by step to avoid leaving empty `()`
-        let noIpaNoPos = cleanLine
+        const noIpaNoPos = cleanLine
           .replace(/\(\s*\/[^\/]+\/\s*\)/g, "") // remove (/ipa/)
           .replace(/\/([^\/]+)\//g, "")         // remove /ipa/
           .replace(/\((?:n|v|adj|adv|prep|conj)[^\)]*\)/gi, "") // remove (n), (v)...

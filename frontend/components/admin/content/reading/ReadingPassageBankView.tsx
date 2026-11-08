@@ -1,16 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   FileText,
   Search,
-  CheckCircle2,
-  Clock,
   Eye,
   BookOpen,
-  Filter,
   Layers,
-  Sparkles,
   Check,
   RotateCcw,
   Play,
@@ -21,8 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  X,
-  ExternalLink,
 } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 
@@ -609,10 +603,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
     return filtered.slice(start, start + pageSize);
   }, [filtered, validCurrentPage, pageSize]);
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, filterType, bilingualFilter, pageSize]);
+
 
   const handleCopyText = (textToCopy: string) => {
     if (!textToCopy) return;
