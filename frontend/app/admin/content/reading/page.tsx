@@ -22,6 +22,8 @@ import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTh
 import { ReadingCreateCardModal } from "@/components/admin/content/reading/ReadingCreateCardModal";
 import { ReadingDeleteCardModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
+import { ReadingContentAuditWorkspace } from "@/components/admin/content/reading/ReadingContentAuditWorkspace";
+import { ReadingBulkImportModal } from "@/components/admin/content/reading/ReadingBulkImportModal";
 import { exportToExcel } from "@/lib/exportExcel";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import {
@@ -61,6 +63,8 @@ export default function ReadingLearningPage() {
 
   // State Workspace
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
+  const [auditCard, setAuditCard] = useState<ExerciseCardData | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // State Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -200,6 +204,24 @@ export default function ReadingLearningPage() {
       return;
     }
 
+    // KIỂM TRA ĐỊNH DẠNG THEO CHUẨN TOEIC (PART NÀO ĐI VỚI NỘI DUNG ĐÓ)
+    const hasAnyPassage = !!cardFormPassageText.trim() || validQuestions.some((q) => !!q.passageText);
+
+    // 1. Nếu là Part 6 hoặc Part 7: BẮT BUỘC phải có Đoạn văn/Bài đọc (Passage)
+    if (cardFormCategory === "part6" || cardFormCategory === "part7") {
+      if (!hasAnyPassage) {
+        const partLabel = cardFormCategory === "part6" ? "Part 6 (Điền đoạn văn)" : "Part 7 (Đọc hiểu văn bản)";
+        showToast(`❌ Không thể lưu: Đề thi ${partLabel} bắt buộc phải có Đoạn văn/Bài đọc (Passage). Bạn không thể đưa câu đơn của Part 5 vào ${partLabel}!`);
+        return;
+      }
+    }
+
+    // 2. Nếu là Part 5: Bắt buộc là câu đơn, KHÔNG được có đoạn văn dài
+    if (cardFormCategory === "part5" && cardFormPassageText.trim().length > 0) {
+      showToast("❌ Không thể lưu: Part 5 là phần thi câu đơn độc lập (Incomplete Sentences), không chứa đoạn văn. Vui lòng chuyển sang Part 6 hoặc Part 7 nếu bạn có bài đọc!");
+      return;
+    }
+
     const finalQuestions = validQuestions.map((q, idx) => ({
       ...q,
       questionNum: q.questionNum?.trim() || String(idx + 1),
@@ -302,13 +324,31 @@ export default function ReadingLearningPage() {
     showToast("Đã xuất chương trình Reading ra file Excel (.xls) có cấu trúc cột rõ ràng! 📊");
   };
 
-  // Render Full Screen Workspace if Practice Started (Preview Mode)
+  // Render Full Screen Workspace if Student View Mode Started
   if (activePracticeCard) {
     return (
       <ReadingPracticeWorkspace
         card={activePracticeCard}
         onClose={() => setActivePracticeCard(null)}
         playSfx={playSfx}
+        showToast={showToast}
+      />
+    );
+  }
+
+  // Render Full Screen Workspace if Admin Content Audit Mode Active
+  if (auditCard) {
+    return (
+      <ReadingContentAuditWorkspace
+        card={auditCard}
+        onClose={() => setAuditCard(null)}
+        onOpenEditCard={(card) => {
+          setAuditCard(null);
+          handleOpenEditCard(card);
+        }}
+        onSwitchToStudentView={(card) => {
+          setActivePracticeCard(card);
+        }}
         showToast={showToast}
       />
     );
@@ -336,6 +376,7 @@ export default function ReadingLearningPage() {
         setViewMode={setViewMode}
         totalCardsCount={cards.length}
         onOpenCreateCard={handleOpenCreateCard}
+        onOpenImportModal={() => setShowImportModal(true)}
         onExportCsv={handleExportCsv}
       />
 
@@ -344,7 +385,7 @@ export default function ReadingLearningPage() {
         <ReadingCardGrid
           cards={filteredCards}
           viewMode={viewMode}
-          onStartPractice={(card) => setActivePracticeCard(card)}
+          onStartPractice={(card) => setAuditCard(card)}
           onOpenTheory={(card) => setTheoryCard(card)}
           onOpenEditCard={handleOpenEditCard}
           onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
@@ -354,7 +395,7 @@ export default function ReadingLearningPage() {
       {activeMainTab === "passages" && (
         <ReadingPassageBankView
           cards={cards}
-          onStartPractice={(card) => setActivePracticeCard(card)}
+          onStartPractice={(card) => setAuditCard(card)}
           onOpenEditCard={handleOpenEditCard}
           onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
           onOpenCreatePassage={() => {
@@ -378,6 +419,10 @@ export default function ReadingLearningPage() {
           card={theoryCard}
           onClose={() => setTheoryCard(null)}
           onStartPractice={(card) => setActivePracticeCard(card)}
+          onEditCard={(card) => {
+            setTheoryCard(null);
+            handleOpenEditCard(card);
+          }}
         />
       )}
 
@@ -388,6 +433,15 @@ export default function ReadingLearningPage() {
           onConfirmDelete={handleConfirmDelete}
         />
       )}
+
+      <ReadingBulkImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportSuccess={(newCard) => {
+          updateCardsState((prev) => [newCard, ...prev]);
+          showToast(`Đã import thành công "${newCard.title}" với ${newCard.totalQuestions} câu hỏi! 🎉`);
+        }}
+      />
 
       {showCreateCardModal && (
         <ReadingCreateCardModal

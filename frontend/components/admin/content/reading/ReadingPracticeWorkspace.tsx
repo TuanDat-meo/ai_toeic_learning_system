@@ -445,6 +445,135 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     });
     return count;
   }, [passageGroups, checkedGroups, userAnswers]);
+  // Thống kê trạng thái câu hỏi cho Modal danh sách
+  const questionGridStats = useMemo(() => {
+    let correct = 0;
+    let wrong = 0;
+    let bookmarked = 0;
+    let answered = 0;
+    let unanswered = 0;
+
+    activeQuestions.forEach((q, gIdx) => {
+      const isBookmarked = !!bookmarkedQuestions[`${card.id}-${gIdx}`];
+      if (isBookmarked) bookmarked++;
+
+      const grpIdx = passageGroups.findIndex((g) =>
+        g.questions.some((item) => item.globalIndex === gIdx)
+      );
+      const isGrpChecked = grpIdx !== -1 ? !!checkedGroups[grpIdx] : false;
+      const ans = userAnswers[gIdx];
+
+      if (ans !== undefined) {
+        answered++;
+        if (isGrpChecked) {
+          if (ans === q.correctIndex) {
+            correct++;
+          } else {
+            wrong++;
+          }
+        }
+      } else {
+        unanswered++;
+      }
+    });
+
+    return { correct, wrong, bookmarked, answered, unanswered, total: activeQuestions.length };
+  }, [activeQuestions, bookmarkedQuestions, card.id, passageGroups, checkedGroups, userAnswers]);
+
+  // Nhóm câu hỏi theo từng Part (Part 5, Part 6, Part 7) để hiển thị lưới tròn gọn gàng
+  const groupedPartSections = useMemo(() => {
+    interface PartSectionItem {
+      partKey: string;
+      partTitle: string;
+      items: {
+        question: SampleQuestion;
+        globalIndex: number;
+        passageGroupIndex: number;
+        questionNumDisplay: string;
+        isBookmarked: boolean;
+        isGrpChecked: boolean;
+        isAnswered: boolean;
+        isCorrect: boolean;
+        isCurrent: boolean;
+      }[];
+    }
+
+    const sectionsMap = new Map<string, PartSectionItem>();
+
+    activeQuestions.forEach((q, gIdx) => {
+      const grpIdx = passageGroups.findIndex((g) =>
+        g.questions.some((item) => item.globalIndex === gIdx)
+      );
+
+      let partKey = "part5";
+      let partTitle = "Part 5: Hoàn thành câu (Incomplete Sentences)";
+
+      const rawNum = q.questionNum ? parseInt(q.questionNum.replace(/\D/g, ""), 10) : null;
+      if (rawNum !== null && !isNaN(rawNum)) {
+        if (rawNum >= 1 && rawNum <= 6) {
+          partKey = "part1";
+          partTitle = "Part 1: Mô tả tranh (Photographs)";
+        } else if (rawNum >= 7 && rawNum <= 31) {
+          partKey = "part2";
+          partTitle = "Part 2: Hỏi & Đáp (Question - Response)";
+        } else if (rawNum >= 32 && rawNum <= 70) {
+          partKey = "part3";
+          partTitle = "Part 3: Đoạn hội thoại (Conversations)";
+        } else if (rawNum >= 71 && rawNum <= 100) {
+          partKey = "part4";
+          partTitle = "Part 4: Bài nói ngắn (Short Talks)";
+        } else if (rawNum >= 101 && rawNum <= 130) {
+          partKey = "part5";
+          partTitle = "Part 5: Hoàn thành câu (Incomplete Sentences)";
+        } else if (rawNum >= 131 && rawNum <= 146) {
+          partKey = "part6";
+          partTitle = "Part 6: Điền đoạn văn (Text Completion)";
+        } else if (rawNum >= 147 && rawNum <= 200) {
+          partKey = "part7";
+          partTitle = "Part 7: Đọc hiểu văn bản (Reading Comprehension)";
+        }
+      } else if (card.category === "part6") {
+        partKey = "part6";
+        partTitle = "Part 6: Điền đoạn văn (Text Completion)";
+      } else if (card.category === "part7") {
+        partKey = "part7";
+        partTitle = "Part 7: Đọc hiểu văn bản (Reading Comprehension)";
+      } else if (card.category === "grammar") {
+        partKey = "part5-grammar";
+        partTitle = "Ngữ pháp trọng điểm TOEIC (Part 5)";
+      }
+
+      if (!sectionsMap.has(partKey)) {
+        sectionsMap.set(partKey, {
+          partKey,
+          partTitle,
+          items: [],
+        });
+      }
+
+      const isBookmarked = !!bookmarkedQuestions[`${card.id}-${gIdx}`];
+      const isGrpChecked = grpIdx !== -1 ? !!checkedGroups[grpIdx] : false;
+      const isAnswered = userAnswers[gIdx] !== undefined;
+      const isCorrect = isAnswered && userAnswers[gIdx] === q.correctIndex;
+      const isCurrent = currentGroup?.questions.some((item) => item.globalIndex === gIdx) || false;
+      const questionNumDisplay = q.questionNum || String(gIdx + 1);
+
+      sectionsMap.get(partKey)!.items.push({
+        question: q,
+        globalIndex: gIdx,
+        passageGroupIndex: grpIdx,
+        questionNumDisplay,
+        isBookmarked,
+        isGrpChecked,
+        isAnswered,
+        isCorrect,
+        isCurrent,
+      });
+    });
+
+    return Array.from(sectionsMap.values());
+  }, [activeQuestions, passageGroups, card, bookmarkedQuestions, checkedGroups, userAnswers, currentGroup]);
+
   const currentGroupFirstQuestion: SampleQuestion = currentGroup?.questions?.[0]?.question || card.sampleQuestions[0];
   const questionRef = `READING-${card.id}-${currentGroupFirstQuestion?.questionNum || currentGroupIndex + 1}`;
 
@@ -732,6 +861,15 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       setCurrentGroupIndex(groupIdx);
     }
     setIsQuestionGridOpen(false);
+    const qNum = activeQuestions[targetGlobalIndex]?.questionNum;
+    if (qNum) {
+      setTimeout(() => {
+        const el = document.getElementById(`question-card-${qNum}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 120);
+    }
   };
 
   const handleNextGroup = () => {
@@ -1264,15 +1402,16 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                         onClick={() => {
                           const key = `${card.id}-${gIdx}`;
                           setBookmarkedQuestions((prev) => ({ ...prev, [key]: !prev[key] }));
-                          showToast(isQuestionBookmarked ? "Đã bỏ bookmark câu này" : "Đã bookmark câu này ⭐");
+                          showToast(isQuestionBookmarked ? "Đã bỏ đánh dấu câu này" : "Đã đánh dấu cần check lại (màu vàng) ⭐");
                         }}
+                        title={isQuestionBookmarked ? "Bỏ đánh dấu cần check lại" : "Đánh dấu cần check lại (hiển thị màu vàng ở bảng câu hỏi) ⭐"}
                         className={`w-8 h-8 rounded-full border flex items-center justify-center transition cursor-pointer ${
                           isQuestionBookmarked
-                            ? "border-amber-300 bg-amber-50 text-amber-500"
+                            ? "border-amber-400 bg-amber-100 text-amber-700 ring-2 ring-amber-300 shadow-xs"
                             : "border-slate-200 text-slate-400 hover:text-amber-500 hover:bg-amber-50"
                         }`}
                       >
-                        <Star className={`w-4 h-4 ${isQuestionBookmarked ? "fill-amber-400" : ""}`} />
+                        <Star className={`w-4 h-4 ${isQuestionBookmarked ? "fill-amber-400 text-amber-500" : ""}`} />
                       </button>
                     </div>
                   </div>
@@ -1733,74 +1872,125 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         </div>
       </footer>
 
-      {/* QUESTION GRID MODAL */}
+      {/* QUESTION GRID MODAL (Thiết kế tinh gọn theo Part và hình tròn: Đỏ sai, Xanh đúng, Vàng cần check lại) */}
       {isQuestionGridOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-2xl sm:max-w-3xl w-full max-h-[88vh] flex flex-col p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in duration-150">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-xs">
                   <Grid className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-900">Bảng danh sách câu hỏi</h3>
+                  <h3 className="font-bold text-base sm:text-lg text-slate-900">Bảng danh sách câu hỏi</h3>
                   <p className="text-xs text-slate-500">
-                    Tổng số {totalQuestionsCount} câu ({passageGroups.length} đoạn)
+                    Tổng số <strong className="text-slate-800 font-bold">{questionGridStats.total} câu</strong> • Đã làm <strong className="text-blue-600 font-bold">{questionGridStats.answered}/{questionGridStats.total}</strong> câu
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsQuestionGridOpen(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+                className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                title="Đóng bảng câu hỏi"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
-              {passageGroups.map((group, grpIdx) => (
-                <div key={grpIdx} className="space-y-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                    <span>
-                      Đoạn {grpIdx + 1}: Câu {group.questions[0].question.questionNum} - {group.questions[group.questions.length - 1].question.questionNum}
-                    </span>
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-full ${
-                        checkedGroups[grpIdx]
-                          ? "bg-emerald-100 text-emerald-800 font-bold"
-                          : "bg-slate-200 text-slate-600 font-medium"
-                      }`}
-                    >
-                      {checkedGroups[grpIdx] ? "Đã kiểm tra ✓" : "Chưa kiểm tra"}
-                    </span>
+            {/* Legend Bar (Chuẩn màu: Đỏ là sai, Xanh là đúng, Vàng là cần check lại) */}
+            <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200 text-xs font-semibold">
+              <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 sm:gap-x-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-emerald-600 inline-block shadow-2xs" />
+                  <span className="text-slate-800">Xanh: Đúng <strong className="text-emerald-700 font-extrabold">({questionGridStats.correct})</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full bg-rose-500 border border-rose-600 inline-block shadow-2xs" />
+                  <span className="text-slate-800">Đỏ: Sai <strong className="text-rose-700 font-extrabold">({questionGridStats.wrong})</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-500 inline-block shadow-2xs" />
+                  <span className="text-slate-800">Vàng: Cần check lại <strong className="text-amber-800 font-extrabold">({questionGridStats.bookmarked})</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full bg-blue-100 border-2 border-blue-400 inline-block shadow-2xs" />
+                  <span className="text-slate-700">Đã chọn ({questionGridStats.answered})</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full bg-slate-200 border border-slate-300 inline-block shadow-2xs" />
+                  <span className="text-slate-500">Chưa làm ({questionGridStats.unanswered})</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Circular Question Grid Grouped by Part */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 max-h-[55vh]">
+              {groupedPartSections.map((section) => (
+                <div key={section.partKey} className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 border border-slate-200/90 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                      <h4 className="text-sm font-bold text-slate-900">{section.partTitle}</h4>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                        {section.items.length} câu
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold text-slate-500">
+                      Câu {section.items[0].questionNumDisplay} - {section.items[section.items.length - 1].questionNumDisplay}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                    {group.questions.map((item) => {
-                      const gIdx = item.globalIndex;
-                      const qn = item.question.questionNum || String(gIdx + 1);
-                      const isAns = userAnswers[gIdx] !== undefined;
-                      const isGrpChecked = checkedGroups[grpIdx];
-                      const isCorrect = userAnswers[gIdx] === item.question.correctIndex;
+                  {/* Circular number buttons grid */}
+                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2.5 sm:gap-3 py-1 justify-items-center">
+                    {section.items.map((item) => {
+                      let btnStyle = "bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200";
+                      let statusText = "Chưa làm";
 
-                      let btnStyle = "border-slate-300 bg-white text-slate-700 hover:border-blue-500 hover:bg-blue-50";
-                      if (isGrpChecked) {
-                        btnStyle = isCorrect
-                          ? "border-emerald-500 bg-emerald-500 text-white font-extrabold"
-                          : "border-rose-500 bg-rose-500 text-white font-extrabold";
-                      } else if (isAns) {
-                        btnStyle = "border-blue-500 bg-blue-100 text-blue-900 font-bold";
+                      if (item.isBookmarked) {
+                        btnStyle = "bg-amber-400 text-amber-950 border-2 border-amber-500 font-black shadow-xs hover:bg-amber-300";
+                        statusText = "Cần check lại";
+                      } else if (item.isGrpChecked) {
+                        if (item.isCorrect) {
+                          btnStyle = "bg-emerald-500 text-white border-2 border-emerald-600 font-extrabold shadow-xs hover:bg-emerald-600";
+                          statusText = "Đúng";
+                        } else {
+                          btnStyle = "bg-rose-500 text-white border-2 border-rose-600 font-extrabold shadow-xs hover:bg-rose-600";
+                          statusText = "Sai";
+                        }
+                      } else if (item.isAnswered) {
+                        btnStyle = "bg-blue-100 text-blue-900 border-2 border-blue-400 font-bold hover:bg-blue-200";
+                        statusText = "Đã chọn";
                       }
 
                       return (
                         <button
-                          key={gIdx}
+                          key={item.globalIndex}
                           type="button"
-                          onClick={() => jumpToQuestion(gIdx)}
-                          className={`h-11 rounded-xl border text-xs font-mono font-bold flex items-center justify-center transition cursor-pointer shadow-2xs ${btnStyle}`}
+                          title={`Câu ${item.questionNumDisplay}: ${statusText}${item.isBookmarked ? " (Đã đánh dấu cần check lại)" : ""}`}
+                          onClick={() => jumpToQuestion(item.globalIndex)}
+                          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center font-mono text-xs sm:text-sm font-bold transition-all duration-150 cursor-pointer relative active:scale-95 ${
+                            item.isCurrent ? "ring-3 ring-blue-600 ring-offset-2 scale-110 z-10 font-black" : ""
+                          } ${btnStyle}`}
                         >
-                          {qn}
+                          <span>{item.questionNumDisplay}</span>
+
+                          {/* Corner indicator when bookmarked & graded */}
+                          {item.isBookmarked && item.isGrpChecked && (
+                            <span
+                              className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white shadow-xs ${
+                                item.isCorrect ? "bg-emerald-500" : "bg-rose-500"
+                              }`}
+                              title={item.isCorrect ? "Đã kiểm tra: Đúng" : "Đã kiểm tra: Sai"}
+                            />
+                          )}
+                          {/* Star icon when bookmarked and not graded */}
+                          {item.isBookmarked && !item.isGrpChecked && (
+                            <span className="absolute -top-1 -right-1 text-amber-800 text-[10px] leading-none select-none">
+                              ⭐
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -1809,22 +1999,43 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               ))}
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
-                <span className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500" /> Đúng
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-rose-500" /> Sai
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-blue-100 border border-blue-500" /> Đã chọn
-                </span>
+            {/* Modal Footer with Quick Jump Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+              <div className="flex flex-wrap items-center gap-2">
+                {questionGridStats.bookmarked > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const idx = activeQuestions.findIndex((_, i) => !!bookmarkedQuestions[`${card.id}-${i}`]);
+                      if (idx !== -1) jumpToQuestion(idx);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <span>⭐</span>
+                    <span>Đến câu cần check ({questionGridStats.bookmarked})</span>
+                  </button>
+                )}
+                {questionGridStats.wrong > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const idx = activeQuestions.findIndex((q, i) => {
+                        const grpIdx = passageGroups.findIndex((g) => g.questions.some((item) => item.globalIndex === i));
+                        return checkedGroups[grpIdx] && userAnswers[i] !== q.correctIndex;
+                      });
+                      if (idx !== -1) jumpToQuestion(idx);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <span>🔴</span>
+                    <span>Đến câu sai ({questionGridStats.wrong})</span>
+                  </button>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => setIsQuestionGridOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer ml-auto"
               >
                 Đóng danh sách
               </button>
