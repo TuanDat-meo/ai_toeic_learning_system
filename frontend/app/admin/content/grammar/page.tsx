@@ -21,6 +21,8 @@ import {
 import { GrammarTopicList } from "@/components/admin/content/grammar/GrammarTopicList";
 import {
   GrammarQuestionBankView,
+  GrammarTrapsMatrixView,
+  GrammarCurriculumConfigView,
 } from "@/components/admin/content/grammar/GrammarViews";
 import { GrammarContentReviewView } from "@/components/admin/content/grammar/GrammarContentReviewView";
 import {
@@ -394,6 +396,14 @@ export default function AdminGrammarPage() {
           }}
           onChangeStatus={handleReviewStatusChange}
         />
+      )}
+
+      {activeMainTab === "traps_matrix" && (
+        <GrammarTrapsMatrixView topics={topics} />
+      )}
+
+      {activeMainTab === "curriculum" && (
+        <GrammarCurriculumConfigView topicsCount={totalTopicsCount} topics={topics} />
       )}
 
       {/* Modals */}

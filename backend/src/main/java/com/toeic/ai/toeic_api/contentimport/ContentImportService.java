@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.toeic.ai.toeic_api.grammar.GrammarService;
+import com.toeic.ai.toeic_api.reading.ReadingService;
 import com.toeic.ai.toeic_api.vocabulary.VocabularyService;
 
 @Service
@@ -39,6 +40,7 @@ public class ContentImportService {
     private final ContentPayloadValidator validator;
     private final GrammarService grammarService;
     private final VocabularyService vocabularyService;
+    private final ReadingService readingService;
     private final ContentImportUploadService uploadService;
     private final DocumentContentRecognizer recognizer;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -46,13 +48,14 @@ public class ContentImportService {
     public ContentImportService(JdbcTemplate jdbcTemplate, ImportFileParser fileParser,
             ContentPayloadValidator validator, GrammarService grammarService,
             VocabularyService vocabularyService) {
-        this(jdbcTemplate, fileParser, validator, grammarService, vocabularyService, null, null);
+        this(jdbcTemplate, fileParser, validator, grammarService, vocabularyService, null, null, null);
     }
 
     @Autowired
     public ContentImportService(JdbcTemplate jdbcTemplate, ImportFileParser fileParser,
             ContentPayloadValidator validator, GrammarService grammarService,
             VocabularyService vocabularyService,
+            @Autowired(required = false) ReadingService readingService,
             @Autowired(required = false) ContentImportUploadService uploadService,
             @Autowired(required = false) DocumentContentRecognizer recognizer) {
         this.jdbcTemplate = jdbcTemplate;
@@ -61,6 +64,7 @@ public class ContentImportService {
         this.validator = validator;
         this.grammarService = grammarService;
         this.vocabularyService = vocabularyService;
+        this.readingService = readingService;
         this.uploadService = uploadService;
         this.recognizer = recognizer;
     }
@@ -594,6 +598,8 @@ public class ContentImportService {
                     grammarService.syncFromImportItem(item.normalizedData());
                 } else if (batch.contentType() == ContentType.VOCABULARY) {
                     vocabularyService.syncFromImportItem(item.normalizedData());
+                } else if (batch.contentType() == ContentType.READING && readingService != null) {
+                    readingService.syncFromImportItem(item.normalizedData());
                 }
                 jdbcTemplate.update("UPDATE import_items SET status = 'PUBLISHED' WHERE id = ?", item.id());
                 publishedCount++;
@@ -602,6 +608,8 @@ public class ContentImportService {
                     grammarService.syncFromImportItem(item.normalizedData());
                 } else if (batch.contentType() == ContentType.VOCABULARY) {
                     vocabularyService.syncFromImportItem(item.normalizedData());
+                } else if (batch.contentType() == ContentType.READING && readingService != null) {
+                    readingService.syncFromImportItem(item.normalizedData());
                 }
                 UUID duplicateId = findContentId(batch.contentType(), item.dedupeKey());
                 jdbcTemplate.update(

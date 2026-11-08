@@ -6,6 +6,8 @@ import {
   Plus,
   BookOpen,
   HelpCircle,
+  AlertTriangle,
+  Sliders,
   ClipboardCheck,
   Download,
   LayoutGrid,
@@ -13,7 +15,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-export type GrammarAdminTab = "topics" | "questions" | "review";
+export type GrammarAdminTab = "topics" | "questions" | "review" | "traps_matrix" | "curriculum";
 
 interface GrammarFilterBarProps {
   activeMainTab: GrammarAdminTab;
@@ -116,6 +118,32 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
         >
           <HelpCircle className="w-4 h-4" />
           <span>Ngân hàng câu hỏi ({totalQuestionsCount})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("traps_matrix")}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
+            activeMainTab === "traps_matrix"
+              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-500" />
+          <span>Phân tích bẫy đề &amp; Độ khó</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("curriculum")}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
+            activeMainTab === "curriculum"
+              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Cấu hình lộ trình &amp; Xuất bản</span>
         </button>
 
         <button

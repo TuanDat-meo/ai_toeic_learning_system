@@ -5,6 +5,7 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 import { Sparkles, Layers } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
+import { getLocalReadingCards } from "@/app/admin/content/reading/readingStorage";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
@@ -21,19 +22,7 @@ export default function StudentReadingPage() {
 
   React.useEffect(() => {
     const loadCards = () => {
-      if (typeof window !== "undefined") {
-        try {
-          const raw = localStorage.getItem("toeic_reading_cards");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setCards(parsed);
-              return;
-            }
-          }
-        } catch {}
-      }
-      setCards(INITIAL_CARDS);
+      setCards(getLocalReadingCards());
     };
     loadCards();
     window.addEventListener("toeic-reading-cards-updated", loadCards);
