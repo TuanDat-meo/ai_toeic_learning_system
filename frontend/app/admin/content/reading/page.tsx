@@ -5,7 +5,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { ExerciseCardData } from "./types";
+import { ExerciseCardData, SampleQuestion } from "./types";
 import { INITIAL_CARDS } from "./mockData";
 
 import {
@@ -24,30 +24,13 @@ import { ReadingDeleteCardModal } from "@/components/admin/content/reading/Readi
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
 import { exportToExcel } from "@/lib/exportExcel";
 import { playUnifiedAnswerSound } from "@/lib/sound";
+import {
+  getLocalReadingCards,
+  saveLocalReadingCards,
+  LOCAL_READING_CARDS_KEY,
+} from "./readingStorage";
 
-export const LOCAL_READING_CARDS_KEY = "toeic_reading_cards";
-
-function getLocalReadingCards(): ExerciseCardData[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(LOCAL_READING_CARDS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalReadingCards(cards: ExerciseCardData[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(cards));
-    window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated", { detail: cards }));
-  } catch (err) {
-    console.warn("Could not save reading cards to localStorage:", err);
-  }
-}
+export { LOCAL_READING_CARDS_KEY };
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
@@ -107,10 +90,13 @@ export default function ReadingLearningPage() {
     "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types"
   >("word_types");
   const [cardFormTag, setCardFormTag] = useState("");
-  const [cardFormTotalQuestions, setCardFormTotalQuestions] = useState(50);
+  const [cardFormTotalQuestions, setCardFormTotalQuestions] = useState(30);
   const [cardFormTheorySummary, setCardFormTheorySummary] = useState("");
   const [cardFormTheoryRules, setCardFormTheoryRules] = useState("");
   const [cardFormTheoryExample, setCardFormTheoryExample] = useState("");
+  const [cardFormPassageText, setCardFormPassageText] = useState("");
+  const [cardFormPassageTextVi, setCardFormPassageTextVi] = useState("");
+  const [cardFormSampleQuestions, setCardFormSampleQuestions] = useState<SampleQuestion[]>([]);
 
   // Filtered Cards
   const filteredCards = useMemo(() => {
@@ -131,10 +117,28 @@ export default function ReadingLearningPage() {
     setCardFormCategory("grammar");
     setCardFormSubCategory("word_types");
     setCardFormTag("");
-    setCardFormTotalQuestions(50);
+    setCardFormTotalQuestions(30);
     setCardFormTheorySummary("");
     setCardFormTheoryRules("");
     setCardFormTheoryExample("");
+    setCardFormPassageText("");
+    setCardFormPassageTextVi("");
+    setCardFormSampleQuestions([
+      {
+        questionNum: "101",
+        question: "",
+        bilingual: "",
+        options: ["", "", "", ""],
+        optionMeanings: ["", "", "", ""],
+        correctIndex: 0,
+        explanation: "",
+        steps: [
+          { title: "Bước 1: Phân tích ngữ cảnh", desc: "Xác định từ loại hoặc ý nghĩa cần điền." },
+          { title: "Bước 2: Đối chiếu & chọn đáp án", desc: "So sánh các phương án để chọn đáp án chuẩn xác nhất." },
+        ],
+        vocabList: [],
+      },
+    ]);
     setShowCreateCardModal(true);
   };
 
@@ -149,6 +153,28 @@ export default function ReadingLearningPage() {
     setCardFormTheorySummary(card.theory?.summary || "");
     setCardFormTheoryRules(card.theory?.rules?.join("\n") || "");
     setCardFormTheoryExample(card.theory?.example || "");
+    setCardFormPassageText(card.passageText || card.sampleQuestions?.[0]?.passageText || "");
+    setCardFormPassageTextVi(card.passageTextVi || card.sampleQuestions?.[0]?.passageTextVi || "");
+    setCardFormSampleQuestions(
+      card.sampleQuestions && card.sampleQuestions.length > 0
+        ? JSON.parse(JSON.stringify(card.sampleQuestions))
+        : [
+            {
+              questionNum: "101",
+              question: "",
+              bilingual: "",
+              options: ["", "", "", ""],
+              optionMeanings: ["", "", "", ""],
+              correctIndex: 0,
+              explanation: "",
+              steps: [
+                { title: "Bước 1: Phân tích ngữ cảnh", desc: "Xác định từ loại hoặc ý nghĩa cần điền." },
+                { title: "Bước 2: Đối chiếu & chọn đáp án", desc: "So sánh các phương án để chọn đáp án chuẩn xác nhất." },
+              ],
+              vocabList: [],
+            },
+          ]
+    );
     setShowCreateCardModal(true);
   };
 
@@ -164,6 +190,25 @@ export default function ReadingLearningPage() {
       .map((r) => r.trim())
       .filter((r) => r.length > 0);
 
+    // Filter valid questions
+    const validQuestions = cardFormSampleQuestions.filter(
+      (q) => q.question.trim().length > 0 || q.options.some((opt) => opt.trim().length > 0)
+    );
+
+    if (validQuestions.length === 0) {
+      showToast("Vui lòng nhập ít nhất 1 câu hỏi có nội dung và đáp án! ⚠️");
+      return;
+    }
+
+    const finalQuestions = validQuestions.map((q, idx) => ({
+      ...q,
+      questionNum: q.questionNum?.trim() || String(idx + 1),
+      passageText: q.passageText || cardFormPassageText.trim() || undefined,
+      passageTextVi: q.passageTextVi || cardFormPassageTextVi.trim() || undefined,
+    }));
+
+    const totalCount = Math.max(cardFormTotalQuestions, finalQuestions.length);
+
     if (editingCard) {
       updateCardsState((prev) =>
         prev.map((c) =>
@@ -174,17 +219,20 @@ export default function ReadingLearningPage() {
                 category: cardFormCategory,
                 subCategory: cardFormSubCategory,
                 tag: cardFormTag.trim() || undefined,
-                totalQuestions: cardFormTotalQuestions,
+                totalQuestions: totalCount,
+                passageText: cardFormPassageText.trim() || undefined,
+                passageTextVi: cardFormPassageTextVi.trim() || undefined,
                 theory: {
                   summary: cardFormTheorySummary.trim() || c.theory?.summary || "",
                   rules: rulesArr.length > 0 ? rulesArr : c.theory?.rules || [],
                   example: cardFormTheoryExample.trim() || c.theory?.example || "",
                 },
+                sampleQuestions: finalQuestions,
               }
             : c
         )
       );
-      showToast(`Đã cập nhật chuyên đề "${cardFormTitle}"! 💾`);
+      showToast(`Đã cập nhật chuyên đề "${cardFormTitle}" (${finalQuestions.length} câu hỏi)! 💾`);
     } else {
       const newId = `reading-${cards.length + 1}-${Date.now().toString().slice(-4)}`;
       const newCard: ExerciseCardData = {
@@ -193,36 +241,21 @@ export default function ReadingLearningPage() {
         category: cardFormCategory,
         subCategory: cardFormSubCategory,
         tag: cardFormTag.trim() || undefined,
-        totalQuestions: cardFormTotalQuestions,
+        totalQuestions: totalCount,
         studiedQuestions: 0,
         correctAnswers: 0,
         wrongAnswers: 0,
+        passageText: cardFormPassageText.trim() || undefined,
+        passageTextVi: cardFormPassageTextVi.trim() || undefined,
         theory: {
           summary: cardFormTheorySummary.trim() || "Tóm tắt ngữ pháp và mẹo thi TOEIC Reading.",
           rules: rulesArr.length > 0 ? rulesArr : ["Nắm chắc dấu hiệu nhận biết."],
           example: cardFormTheoryExample.trim() || "Example sentence for TOEIC reading practice.",
         },
-        sampleQuestions: [
-          {
-            questionNum: "101",
-            question: "The director approved the proposal after a ______ review of the budget.",
-            bilingual: "Giám đốc đã phê duyệt đề xuất sau khi xem xét kỹ lưỡng ngân sách.",
-            options: ["thorough", "thoroughly", "thoroughness", "more thorough"],
-            optionMeanings: ["(adj): kỹ lưỡng", "(adv): một cách kỹ lưỡng", "(n): sự kỹ lưỡng", "(adj-er): kỹ lưỡng hơn"],
-            correctIndex: 0,
-            explanation: "Trước danh từ 'review' cần một tính từ ('thorough').",
-            steps: [
-              { title: "Bước 1: Phân tích cú pháp", desc: "Mạo từ 'a' + [Tính từ] + Danh từ 'review'." },
-              { title: "Bước 2: Chọn từ loại", desc: "Thorough là tính từ chỉ sự kỹ lưỡng, thấu đáo." },
-            ],
-            vocabList: [
-              { word: "thorough", pos: "adj", level: "B2", ipa: "/ˈθɜːrəʊ/", meaning: "kỹ lưỡng, thấu đáo" },
-            ],
-          },
-        ],
+        sampleQuestions: finalQuestions,
       };
       updateCardsState((prev) => [newCard, ...prev]);
-      showToast(`Đã thêm chuyên đề "${newCard.title}" thành công! 🎉`);
+      showToast(`Đã thêm chuyên đề "${newCard.title}" với ${finalQuestions.length} câu hỏi! 🎉`);
     }
     setShowCreateCardModal(false);
   };
@@ -319,7 +352,16 @@ export default function ReadingLearningPage() {
       )}
 
       {activeMainTab === "passages" && (
-        <ReadingPassageBankView />
+        <ReadingPassageBankView
+          cards={cards}
+          onStartPractice={(card) => setActivePracticeCard(card)}
+          onOpenEditCard={handleOpenEditCard}
+          onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
+          onOpenCreatePassage={() => {
+            setCardFormCategory("part7");
+            handleOpenCreateCard();
+          }}
+        />
       )}
 
       {activeMainTab === "reading_analytics" && (
@@ -366,6 +408,12 @@ export default function ReadingLearningPage() {
           setCardFormTheoryRules={setCardFormTheoryRules}
           cardFormTheoryExample={cardFormTheoryExample}
           setCardFormTheoryExample={setCardFormTheoryExample}
+          cardFormPassageText={cardFormPassageText}
+          setCardFormPassageText={setCardFormPassageText}
+          cardFormPassageTextVi={cardFormPassageTextVi}
+          setCardFormPassageTextVi={setCardFormPassageTextVi}
+          cardFormSampleQuestions={cardFormSampleQuestions}
+          setCardFormSampleQuestions={setCardFormSampleQuestions}
           onSaveCard={handleSaveCard}
           onClose={() => setShowCreateCardModal(false)}
         />

@@ -370,7 +370,7 @@ export default function AdminGrammarPage() {
       )}
 
       {activeMainTab === "curriculum" && (
-        <GrammarCurriculumConfigView topicsCount={totalTopicsCount} />
+        <GrammarCurriculumConfigView topicsCount={totalTopicsCount} topics={topics} />
       )}
 
       {/* Modals */}

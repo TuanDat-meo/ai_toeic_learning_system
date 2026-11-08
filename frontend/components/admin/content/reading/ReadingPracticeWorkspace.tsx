@@ -28,8 +28,10 @@ import {
   RotateCcw,
   Bookmark,
   BookOpen,
+  Target,
   Volume2,
   FolderPlus,
+  Info,
 } from "lucide-react";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
@@ -221,6 +223,96 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   // Mode toggles
   const [isBilingual, setIsBilingual] = useState(false);
+  const [readingConfig, setReadingConfig] = useState<{
+    part5Minutes: number;
+    part6Minutes: number;
+    part7SingleMinutes: number;
+    part7MultiMinutes: number;
+    targetWpm: number;
+    enableBilingualByDefault: boolean;
+    enablePacingTimer: boolean;
+    enableTimeoutAlert: boolean;
+    speedDrillMode: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleConfigSync = (e?: any) => {
+      try {
+        const raw = localStorage.getItem("toeic_reading_time_config");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setReadingConfig(parsed);
+          if (parsed.enableBilingualByDefault) {
+            setIsBilingual(true);
+          }
+        }
+      } catch {}
+    };
+
+    handleConfigSync();
+
+    window.addEventListener("toeic-reading-config-updated", handleConfigSync);
+    window.addEventListener("storage", handleConfigSync);
+
+    return () => {
+      window.removeEventListener("toeic-reading-config-updated", handleConfigSync);
+      window.removeEventListener("storage", handleConfigSync);
+    };
+  }, []);
+
+  const targetPerQSeconds = useMemo(() => {
+    const p5Min = readingConfig?.part5Minutes || 12;
+    const p6Min = readingConfig?.part6Minutes || 10;
+    const p7SingleMin = readingConfig?.part7SingleMinutes || 27;
+    const p7MultiMin = readingConfig?.part7MultiMinutes || 26;
+
+    const title = (card.title || "").toLowerCase();
+    const cat = (card.category || "").toLowerCase();
+    let base = 24;
+    if (title.includes("part 5") || cat.includes("part 5") || (card.totalQuestions === 30 && !card.passageText)) {
+      base = Math.round((p5Min * 60) / 30);
+    } else if (title.includes("part 6") || cat.includes("part 6")) {
+      base = Math.round((p6Min * 60) / 16);
+    } else if (title.includes("đoạn đôi") || title.includes("đoạn ba") || title.includes("multiple")) {
+      base = Math.round((p7MultiMin * 60) / 25);
+    } else {
+      base = Math.round((p7SingleMin * 60) / 29);
+    }
+
+    // Nếu đang bật chế độ Speed Drill, giảm 20% thời gian mục tiêu để kích thích nhịp độ phản xạ
+    if (readingConfig?.speedDrillMode) {
+      return Math.max(15, Math.round(base * 0.8));
+    }
+    return base;
+  }, [card, readingConfig]);
+
+  const [timeOnCurrentGroup, setTimeOnCurrentGroup] = useState(0);
+  const [showPacingAlert, setShowPacingAlert] = useState(false);
+
+  useEffect(() => {
+    setTimeOnCurrentGroup(0);
+    setShowPacingAlert(false);
+  }, [currentGroupIndex]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTimeOnCurrentGroup((prev) => {
+        const next = prev + 1;
+        const multiplier = readingConfig?.speedDrillMode ? 1.2 : 1.5;
+        const minLimit = readingConfig?.speedDrillMode ? 20 : 30;
+        const limit = targetPerQSeconds ? Math.max(minLimit, Math.round(targetPerQSeconds * multiplier)) : 45;
+        if (
+          readingConfig?.enableTimeoutAlert &&
+          next >= limit &&
+          !isCurrentGroupChecked
+        ) {
+          setShowPacingAlert(true);
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [readingConfig, targetPerQSeconds, isCurrentGroupChecked]);
   const [showPassageTranslation, setShowPassageTranslation] = useState(true);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
 
@@ -258,6 +350,74 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   const [isAddingCustomMeaning, setIsAddingCustomMeaning] = useState(false);
   const [customUserMeanings, setCustomUserMeanings] = useState<Record<string, string>>({});
   const [customMeaningInput, setCustomMeaningInput] = useState("");
+
+  // Standard TOEIC Part Detection & Directions
+  const [showDirectionsModal, setShowDirectionsModal] = useState(false);
+
+  const workspacePart: "PART 5" | "PART 6" | "PART 7" = useMemo(() => {
+    if (card.category === "part5") return "PART 5";
+    if (card.category === "part6") return "PART 6";
+    if (card.category === "part7") return "PART 7";
+    const titleUpper = (card.title || "").toUpperCase();
+    if (titleUpper.includes("PART 5") || titleUpper.includes("PART-5") || titleUpper.includes("P5")) return "PART 5";
+    if (titleUpper.includes("PART 6") || titleUpper.includes("PART-6") || titleUpper.includes("P6")) return "PART 6";
+    if (titleUpper.includes("PART 7") || titleUpper.includes("PART-7") || titleUpper.includes("P7")) return "PART 7";
+    return "PART 5";
+  }, [card]);
+
+  const partDirections = useMemo(() => {
+    const configs = {
+      "PART 5": {
+        title: "PART 5: INCOMPLETE SENTENCES",
+        partNum: "PART 5",
+        subtitle: "Hoàn thành câu đơn",
+        scope: "Questions 101 – 130 (30 questions)",
+        directionsEn:
+          "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
+        directionsVi:
+          "Hướng dẫn: Mỗi câu dưới đây bị khuyết một từ hoặc cụm từ. Bốn phương án trả lời được cung cấp bên dưới mỗi câu. Chọn đáp án thích hợp nhất để hoàn thành câu và đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
+        timing: "Thời gian đề xuất: 10 – 12 phút (tối đa 30s/câu)",
+        tips: [
+          "Xác định từ loại xung quanh chỗ trống (danh từ, động từ, tính từ, trạng từ).",
+          "Phân biệt câu hỏi ngữ pháp (nhìn dấu hiệu) và từ vựng (cần dịch nghĩa).",
+          "Nếu là ngữ pháp thuần túy, chọn nhanh không cần dịch cả câu để tiết kiệm thời gian cho Part 7.",
+        ],
+      },
+      "PART 6": {
+        title: "PART 6: TEXT COMPLETION",
+        partNum: "PART 6",
+        subtitle: "Điền từ vào đoạn văn",
+        scope: "Questions 131 – 146 (16 questions / 4 passages)",
+        directionsEn:
+          "Directions: Read the texts that follow. A word, phrase, or sentence is missing in parts of each text. Four answer choices for each question are given below the text. Select the best answer to complete the text. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
+        directionsVi:
+          "Hướng dẫn: Đọc các đoạn văn sau. Một từ, cụm từ hoặc câu bị khuyết ở các phần của mỗi đoạn văn. Bốn lựa chọn trả lời cho mỗi câu hỏi được đưa ra bên dưới đoạn văn. Chọn câu trả lời tốt nhất để hoàn thành đoạn văn. Sau đó đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
+        timing: "Thời gian đề xuất: 8 – 10 phút (khoảng 2 phút/đoạn văn)",
+        tips: [
+          "Mỗi đoạn gồm 4 câu khuyết, trong đó có 3 câu điền từ/ngữ pháp và 1 câu điền nguyên câu văn.",
+          "Với câu điền cả câu (sentence insertion), luôn đọc kỹ câu phía trước và câu phía sau để đảm bảo mạch liên kết ngữ nghĩa.",
+          "Chú ý các từ nối và liên từ chuyển ý (However, Therefore, In addition, Consequently).",
+        ],
+      },
+      "PART 7": {
+        title: "PART 7: READING COMPREHENSION",
+        partNum: "PART 7",
+        subtitle: "Đọc hiểu văn bản",
+        scope: "Questions 147 – 200 (54 questions)",
+        directionsEn:
+          "Directions: In this part you will read a selection of texts, such as magazine and newspaper articles, letters, and advertisements. Each text is followed by several questions. Select the best answer for each question and mark the letter (A), (B), (C), or (D) on your answer sheet.",
+        directionsVi:
+          "Hướng dẫn: Trong phần này bạn sẽ đọc tuyển tập các văn bản, chẳng hạn như bài báo, thư từ, quảng cáo, email, tin nhắn trực tuyến và hoá đơn. Mỗi bài đọc có một số câu hỏi đi kèm. Chọn phương án trả lời chính xác nhất cho mỗi câu hỏi và đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
+        timing: "Thời gian đề xuất: 50 – 55 phút (~1 phút/câu)",
+        tips: [
+          "Bao gồm đoạn đơn (147-175), đoạn kép (176-185) và đoạn ba (186-200).",
+          "Đọc lướt tiêu đề, đối tượng người gửi/nhận trước khi đọc câu hỏi.",
+          "Ở đoạn kép và đoạn ba, câu 4 & 5 thường là câu hỏi liên kết thông tin đa văn bản (cross-text reference).",
+        ],
+      },
+    };
+    return configs[workspacePart] || configs["PART 5"];
+  }, [workspacePart]);
 
   // Timer effect
   React.useEffect(() => {
@@ -692,6 +852,19 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           <button
             type="button"
             onClick={() => {
+              setShowDirectionsModal(true);
+              if (isSfxEnabled) playSfx("click");
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all shadow-xs cursor-pointer border border-white/20"
+            title="Xem hướng dẫn làm bài chuẩn ETS TOEIC (Directions)"
+          >
+            <Info className="w-3.5 h-3.5 text-blue-200" />
+            <span>{partDirections.partNum} Directions</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               if (currentGroup && currentGroup.questions.length > 0) {
                 const firstQ = currentGroup.questions[0].question;
                 setSelectedNoteQKey(firstQ.questionNum || String(currentGroup.questions[0].globalIndex + 1));
@@ -723,6 +896,20 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               <Clock className="w-3.5 h-3.5" />
               {formatTimer(timerSeconds)}
             </span>
+            {readingConfig?.enablePacingTimer && (
+              <span
+                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-medium"
+                title="Mục tiêu nhịp độ từ Cấu hình lộ trình"
+              >
+                <Target className="w-3.5 h-3.5 text-blue-300" />
+                <span>Mục tiêu: ≤{targetPerQSeconds}s/câu</span>
+              </span>
+            )}
+            {readingConfig?.speedDrillMode && (
+              <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500 text-white text-[10px] font-bold">
+                ⚡ Speed Drill
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/90 text-white text-xs font-extrabold shadow-2xs">
               <Zap className="w-3.5 h-3.5 fill-white" />
               {energyScore}
@@ -733,6 +920,35 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           </div>
         </div>
       </header>
+
+      {/* CẢNH BÁO NHỊP ĐỘ DỪNG QUÁ LÂU THEO CẤU HÌNH */}
+      {showPacingAlert && !isCurrentGroupChecked && (
+        <div
+          className={`px-6 py-2.5 text-xs font-semibold flex items-center justify-between shadow-xs select-none animate-in slide-in-from-top-1 ${
+            readingConfig?.speedDrillMode
+              ? "bg-rose-500 text-white"
+              : "bg-amber-400 text-slate-950"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Clock className={`w-4 h-4 shrink-0 ${readingConfig?.speedDrillMode ? "text-white" : "text-slate-900"}`} />
+            <span>
+              <strong>{readingConfig?.speedDrillMode ? "⚡ Cảnh báo Speed Drill:" : "Cảnh báo nhịp độ:"}</strong> Bạn đã dừng ở câu hỏi này hơn {timeOnCurrentGroup} giây (vượt mức mục tiêu {targetPerQSeconds}s/câu theo chiến lược {readingConfig?.part5Minutes || 12}p - {readingConfig?.part6Minutes || 10}p - {(readingConfig?.part7SingleMinutes || 27) + (readingConfig?.part7MultiMinutes || 26)}p). Hãy chọn phương án khả dĩ nhất và chuyển tiếp để tránh thiếu giờ ở Part 7!
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPacingAlert(false)}
+            className={`px-3 py-1 rounded-md font-bold text-[11px] transition cursor-pointer shrink-0 ml-3 ${
+              readingConfig?.speedDrillMode
+                ? "bg-white text-rose-700 hover:bg-rose-50"
+                : "bg-slate-950/10 hover:bg-slate-950/20 text-slate-950"
+            }`}
+          >
+            Đã hiểu
+          </button>
+        </div>
+      )}
 
       {/* ANNOTATOR BAR */}
       {isAnnotatorActive && (
@@ -788,11 +1004,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               )}
             </div>
 
-            <h2 className="text-sm font-bold text-slate-800 leading-relaxed">
-              Read the passage and answer questions{" "}
-              {currentGroup.questions.map((q) => q.question.questionNum).join(", ")}.
-            </h2>
-
             {(() => {
               const subPassages: ReadingSubPassage[] =
                 currentGroup.passages && currentGroup.passages.length > 0
@@ -807,12 +1018,74 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                     ]
                   : [];
 
-              if (subPassages.length === 0) return null;
+              if (subPassages.length === 0 || workspacePart === "PART 5") {
+                return (
+                  <div className="space-y-5">
+                    {/* KHUNG ETS PART 5 DIRECTIONS CHUẨN ĐỀ THI */}
+                    <div className="bg-white rounded-3xl border-2 border-slate-200/90 p-6 sm:p-7 shadow-xs border-l-4 border-l-emerald-600 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black tracking-wider uppercase">
+                            {partDirections.partNum}
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {partDirections.subtitle}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                          {partDirections.scope}
+                        </span>
+                      </div>
+
+                      {/* DIRECTIONS FORMULATION */}
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 font-sans">
+                        <p className="text-[13px] text-slate-900 leading-relaxed">
+                          <strong className="font-extrabold text-slate-950 uppercase tracking-wide">Directions: </strong>
+                          A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence. Then mark the letter (A), (B), (C), or (D) on your answer sheet.
+                        </p>
+
+                        {(isBilingual || showPassageTranslation) && (
+                          <div className="p-3 bg-white rounded-xl border border-emerald-200 text-xs text-slate-700 leading-relaxed">
+                            <strong className="text-emerald-800 block mb-0.5">Hướng dẫn tiếng Việt:</strong>
+                            {partDirections.directionsVi}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2 text-xs">
+                        <div className="flex items-center justify-between font-bold text-emerald-950">
+                          <span>⏱️ {partDirections.timing}</span>
+                        </div>
+                        <ul className="list-disc list-inside space-y-1 text-slate-700">
+                          {partDirections.tips.map((tip, idx) => (
+                            <li key={idx} className="leading-relaxed">{tip}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
 
               const isMultiPassage = subPassages.length > 1;
 
               return (
                 <div className="space-y-6">
+                  {/* THANH DIRECTIONS BÀI THI CHUẨN ETS CHO PART 6 & PART 7 */}
+                  <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1.5 font-sans">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900 tracking-wide uppercase">
+                        {partDirections.partNum} • DIRECTIONS
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                        {partDirections.timing}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      {isBilingual ? partDirections.directionsVi : partDirections.directionsEn}
+                    </p>
+                  </div>
+
                   {currentGroup.passageTitle && (
                     <div className="p-3.5 rounded-xl bg-slate-100/90 text-sm font-bold text-slate-800 border border-slate-200 shadow-2xs">
                       {currentGroup.passageTitle}
@@ -2447,6 +2720,69 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 />
                 <span className="text-[11px]">Tắt tra khi bấm đúp</span>
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ETS TOEIC DIRECTIONS MODAL */}
+      {showDirectionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-black tracking-wider">
+                  {partDirections.partNum}
+                </span>
+                <h3 className="text-base font-bold text-slate-900">
+                  {partDirections.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDirectionsModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="text-[13px] text-slate-900 leading-relaxed font-sans">
+                  <strong className="font-extrabold text-slate-950 uppercase tracking-wide">Directions: </strong>
+                  {partDirections.directionsEn.replace(/^Directions:\s*/i, "")}
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-blue-100 text-xs text-slate-700 leading-relaxed">
+                  <strong className="text-blue-800 block mb-0.5">Bản dịch hướng dẫn tiếng Việt:</strong>
+                  {partDirections.directionsVi.replace(/^Hướng dẫn:\s*/i, "")}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-2">
+                <div className="flex items-center justify-between font-bold text-blue-950">
+                  <span>Chiến thuật &amp; Thời gian làm bài:</span>
+                  <span className="text-[11px] bg-white px-2.5 py-0.5 rounded-full border border-blue-200">
+                    ⏱️ {partDirections.timing}
+                  </span>
+                </div>
+                <ul className="list-disc list-inside space-y-1 text-slate-700 pl-1">
+                  {partDirections.tips.map((tip, idx) => (
+                    <li key={idx} className="leading-relaxed">{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowDirectionsModal(false)}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer transition shadow-xs"
+              >
+                Đã hiểu hướng dẫn • Bắt đầu làm bài
+              </button>
             </div>
           </div>
         </div>

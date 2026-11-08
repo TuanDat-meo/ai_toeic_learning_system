@@ -36,7 +36,8 @@ public class ContentPayloadValidator {
     private static final Set<String> LISTENING_FIELDS = Set.of(
             "title", "part", "transcript", "audioUrl", "imageUrl", "durationSeconds", "source", "difficulty");
     private static final Set<String> READING_FIELDS = Set.of(
-            "title", "part", "content", "topic", "difficulty", "source", "audioUrl", "imageUrl");
+            "title", "part", "content", "topic", "difficulty", "source", "audioUrl", "imageUrl",
+            "questions", "sampleQuestions", "passages", "passageTextVi", "theory", "subCategory", "tag", "totalQuestions");
     private static final Set<String> QUESTION_FIELDS = Set.of(
             "part", "questionText", "passage", "options", "correctAnswer", "explanation",
             "skill", "difficulty", "imageUrl", "audioUrl", "code");
@@ -331,22 +332,45 @@ public class ContentPayloadValidator {
 
     private void normalizeReading(JsonNode raw, ObjectNode out, List<String> errors) {
         copyText(raw, out, "title", errors, true);
-        copyText(raw, out, "content", errors, true);
         copyText(raw, out, "part", errors, false);
+        if (out.has("part")) {
+            normalizePart(out, "part", errors);
+            if (!Set.of("PART_5", "PART_6", "PART_7").contains(out.path("part").asText())) {
+                errors.add("Bài Reading chỉ hỗ trợ Part 5, Part 6 hoặc Part 7.");
+            }
+        }
+        boolean isPart5 = "PART_5".equalsIgnoreCase(out.path("part").asText(""));
+        // Với Part 5, đoạn văn là không bắt buộc (tự gán hướng dẫn chuẩn TOEIC Part 5 nếu để trống)
+        if (isPart5 && (!raw.has("content") || raw.path("content").asText("").isBlank())) {
+            out.put("content", "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence.");
+        } else {
+            copyText(raw, out, "content", errors, !isPart5);
+        }
         copyText(raw, out, "topic", errors, false);
         copyText(raw, out, "difficulty", errors, false);
         copyText(raw, out, "source", errors, false);
         copyText(raw, out, "audioUrl", errors, false);
         copyText(raw, out, "imageUrl", errors, false);
-        if (out.has("part")) {
-            normalizePart(out, "part", errors);
-            if (!Set.of("PART_6", "PART_7").contains(out.path("part").asText())) {
-                errors.add("Bài Reading chỉ hỗ trợ Part 6 hoặc Part 7.");
-            }
+        copyText(raw, out, "subCategory", errors, false);
+        copyText(raw, out, "tag", errors, false);
+        copyText(raw, out, "passageTextVi", errors, false);
+        if (raw.has("totalQuestions") && raw.path("totalQuestions").isInt()) {
+            out.put("totalQuestions", raw.path("totalQuestions").asInt());
         }
         if (out.has("difficulty")) normalizeDifficulty(out, "difficulty", errors);
         validateUrl(out, "audioUrl", errors);
         validateUrl(out, "imageUrl", errors);
+
+        if (raw.has("questions")) {
+            normalizeJsonArrayField(raw, out, "questions", errors);
+        } else if (raw.has("sampleQuestions")) {
+            JsonNode q = raw.deepCopy();
+            ((ObjectNode) q).set("questions", raw.path("sampleQuestions"));
+            normalizeJsonArrayField(q, out, "questions", errors);
+        }
+        if (raw.has("passages")) {
+            normalizeJsonArrayField(raw, out, "passages", errors);
+        }
     }
 
     private void normalizeQuestion(JsonNode raw, ObjectNode out, List<String> errors) {
