@@ -204,6 +204,24 @@ export default function ReadingLearningPage() {
       return;
     }
 
+    // KIỂM TRA ĐỊNH DẠNG THEO CHUẨN TOEIC (PART NÀO ĐI VỚI NỘI DUNG ĐÓ)
+    const hasAnyPassage = !!cardFormPassageText.trim() || validQuestions.some((q) => !!q.passageText);
+
+    // 1. Nếu là Part 6 hoặc Part 7: BẮT BUỘC phải có Đoạn văn/Bài đọc (Passage)
+    if (cardFormCategory === "part6" || cardFormCategory === "part7") {
+      if (!hasAnyPassage) {
+        const partLabel = cardFormCategory === "part6" ? "Part 6 (Điền đoạn văn)" : "Part 7 (Đọc hiểu văn bản)";
+        showToast(`❌ Không thể lưu: Đề thi ${partLabel} bắt buộc phải có Đoạn văn/Bài đọc (Passage). Bạn không thể đưa câu đơn của Part 5 vào ${partLabel}!`);
+        return;
+      }
+    }
+
+    // 2. Nếu là Part 5: Bắt buộc là câu đơn, KHÔNG được có đoạn văn dài
+    if (cardFormCategory === "part5" && cardFormPassageText.trim().length > 0) {
+      showToast("❌ Không thể lưu: Part 5 là phần thi câu đơn độc lập (Incomplete Sentences), không chứa đoạn văn. Vui lòng chuyển sang Part 6 hoặc Part 7 nếu bạn có bài đọc!");
+      return;
+    }
+
     const finalQuestions = validQuestions.map((q, idx) => ({
       ...q,
       questionNum: q.questionNum?.trim() || String(idx + 1),

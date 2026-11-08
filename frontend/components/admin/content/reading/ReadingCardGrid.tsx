@@ -9,6 +9,7 @@ import {
   Eye,
   CheckCircle2,
   Play,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface ReadingCardGridProps {
@@ -77,9 +78,9 @@ function ReadingTableRow({
             type="button"
             onClick={() => onStartPractice(card)}
             className="p-1.5 rounded-xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer"
-            title="Vào làm thử / Luyện tập đề thi"
+            title="Kiểm duyệt & đối soát đề thi"
           >
-            <Play className="w-3.5 h-3.5" />
+            <ClipboardCheck className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -167,10 +168,10 @@ function ReadingGridItem({
             type="button"
             onClick={() => onStartPractice(card)}
             className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-            title="Vào làm thử / Luyện tập đề thi"
+            title="Kiểm duyệt & đối soát đề thi"
           >
-            <Play className="w-3.5 h-3.5" />
-            <span>Làm thử</span>
+            <ClipboardCheck className="w-3.5 h-3.5" />
+            <span>Kiểm duyệt</span>
           </button>
         </div>
 

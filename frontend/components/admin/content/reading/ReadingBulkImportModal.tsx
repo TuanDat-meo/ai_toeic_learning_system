@@ -402,7 +402,13 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
 
     setParsedQuestions(questions);
     setParsedVocabCount(totalVocabCount);
-    setSuccessMsg(`Bóc tách thành công ${questions.length} câu hỏi và ${totalVocabCount} từ vựng! ✨`);
+
+    const hasExtPassage = !!extPassage || !!passageText.trim();
+    if ((category === "part6" || category === "part7") && !hasExtPassage) {
+      setErrorMsg(`⚠️ Cảnh báo sai định dạng: Bạn đang chọn chuyên đề ${category.toUpperCase()}, nhưng nội dung dán vào không có Đoạn văn/Bài đọc (Passage). Đề thi ${category.toUpperCase()} bắt buộc phải có đoạn văn/bài đọc đi kèm!`);
+    } else {
+      setSuccessMsg(`Bóc tách thành công ${questions.length} câu hỏi và ${totalVocabCount} từ vựng! ✨`);
+    }
   };
 
   // Import từ file (JSON hoặc CSV hoặc TXT)
@@ -463,6 +469,23 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
   const handleSaveToBank = () => {
     if (parsedQuestions.length === 0) {
       setErrorMsg("Chưa có câu hỏi nào được bóc tách! Vui lòng bấm 'Phân tích văn bản đề thi' trước.");
+      return;
+    }
+
+    const hasAnyPassage = !!passageText.trim() || parsedQuestions.some((q) => !!q.passageText);
+
+    // Kiểm tra định dạng: Không cho nhập câu đơn Part 5 vào Part 6 hoặc Part 7
+    if (category === "part6" || category === "part7") {
+      if (!hasAnyPassage) {
+        const partLabel = category === "part6" ? "Part 6 (Điền đoạn văn)" : "Part 7 (Đọc hiểu văn bản)";
+        setErrorMsg(`❌ Sai định dạng: Đề thi ${partLabel} bắt buộc phải có Đoạn văn/Bài đọc (Passage). Bạn không thể nhập các câu đơn của Part 5 vào ${partLabel}!`);
+        return;
+      }
+    }
+
+    // Kiểm tra định dạng: Không cho đưa bài đọc vào Part 5
+    if (category === "part5" && passageText.trim().length > 0) {
+      setErrorMsg("❌ Sai định dạng: Part 5 là phần thi câu đơn độc lập (Incomplete Sentences), không chứa đoạn văn bài đọc. Vui lòng chuyển Phần thi sang Part 6 hoặc Part 7!");
       return;
     }
 

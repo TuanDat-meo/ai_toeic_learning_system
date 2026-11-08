@@ -1020,8 +1020,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             >
               <FileText className="w-3.5 h-3.5" />
               <span>2. Đoạn văn đọc (Passage)</span>
-              {cardFormPassageText.trim() && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span className="text-rose-500 font-extrabold text-xs">*</span>
+              {cardFormPassageText.trim() ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Đã có bài đọc"></span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold">Bắt buộc</span>
               )}
             </button>
           )}
