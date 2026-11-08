@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,8 +26,9 @@ class VietQrPaymentServiceTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         PaymentTransaction transaction = pendingTransaction(75_000);
         String reference = "TOEIC1234567890123456789";
-        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class)))
-                .thenReturn(List.of(transaction.createdAt()), List.of(reference));
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenAnswer(invocation -> List.of(transaction.createdAt()))
+                .thenAnswer(invocation -> List.of(reference));
         VietQrPaymentService service = new VietQrPaymentService(
                 jdbc, "970415", "123456789", "NGUYEN VAN A", "test-sepay-token");
 

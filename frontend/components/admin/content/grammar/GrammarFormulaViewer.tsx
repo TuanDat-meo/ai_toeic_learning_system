@@ -1038,7 +1038,8 @@ export const GrammarExamplesViewer: React.FC<{
   examples: Array<{ sentence: string; translation?: string; analysis?: string }>;
   topicCode?: string;
   sampleQuestions?: Array<SampleQuestionItem>;
-}> = ({ examples, topicCode, sampleQuestions }) => {
+  emptyMessage?: string;
+}> = ({ examples, topicCode, sampleQuestions, emptyMessage }) => {
   const validExamples = (examples || []).filter((ex) => ex && ex.sentence && ex.sentence.trim().length > 0);
   const sampleList = (sampleQuestions || []).slice(0, 2);
 
@@ -1046,7 +1047,9 @@ export const GrammarExamplesViewer: React.FC<{
     return (
       <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-1">
         <p className="font-bold text-slate-700">Đang cập nhật ví dụ minh họa cho chủ điểm này.</p>
-        <p className="text-slate-400">Bạn có thể bấm &quot;Luyện tập ngay&quot; ở góc dưới để làm 10 câu bài tập trắc nghiệm kèm giải thích chi tiết từng câu.</p>
+        <p className="text-slate-400">
+          {emptyMessage || "Bạn có thể bấm \"Luyện tập ngay\" để làm bài tập trắc nghiệm kèm giải thích chi tiết."}
+        </p>
       </div>
     );
   }

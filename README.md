@@ -115,6 +115,8 @@ docker compose logs -f backend
 
 Compose khai báo các dịch vụ PostgreSQL, backend và frontend. Database khởi tạo schema qua Flyway. Mặc định các cổng được ánh xạ là frontend `3000`, backend `8080`, PostgreSQL từ host `5433`. Các thư mục media lớn được bind mount read-only vào frontend; khi chạy local, mặc định chúng được đọc từ `frontend/public`.
 
+Compose cũng chạy Ollama cho chức năng gợi ý ngữ pháp và tự tải model `qwen2.5:3b` trong lần khởi chạy đầu; cần kết nối Internet và dung lượng đĩa cho image/model. Model được giữ trong volume `ollama-data` khi dừng dịch vụ. Model chạy cục bộ nên không dùng quota Gemini, nhưng tốc độ/chất lượng phụ thuộc tài nguyên máy. Có thể đổi model qua `GRAMMAR_OLLAMA_MODEL`; Gemini chỉ dùng cho gợi ý ngữ pháp nếu đặt `GRAMMAR_AI_PROVIDER=gemini`.
+
 Dừng dịch vụ mà không xóa volume database:
 
 ```bash
@@ -186,7 +188,9 @@ Trên Windows PowerShell dùng `.\mvnw.cmd spring-boot:run`. Frontend đọc `NE
 | `FRONTEND_URL` | Backend | URL frontend nhận kết quả OAuth; mặc định trong source là localhost. |
 | `SESSION_COOKIE_SAME_SITE`, `SESSION_COOKIE_SECURE` | Backend | Cấu hình cookie phiên. Khi frontend và API ở hai site khác nhau, dùng `none` và `true` trên HTTPS; nếu cùng site có thể giữ `lax`. |
 | `NEXT_PUBLIC_API_URL` | Frontend build | Base URL backend được đóng vào bundle frontend. |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Backend | API key Gemini và model; mặc định là `gemini-3.8-flash`. |
+| `GRAMMAR_AI_PROVIDER` | Backend | Provider gợi ý ngữ pháp: `ollama` (mặc định, chạy local) hoặc `gemini`. |
+| `GRAMMAR_OLLAMA_MODEL`, `GRAMMAR_OLLAMA_URL` | Backend/Compose | Model Ollama (mặc định `qwen2.5:3b`) và URL Ollama nội bộ; Compose tự tải model ở lần chạy đầu. |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Backend | API key và model Gemini; dùng cho chat gia sư, hoặc gợi ý ngữ pháp nếu chọn provider `gemini`. |
 
 ### Thanh toán VietQR và SePay
 

@@ -6,10 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ testId: string }> | { testId: string } }
+  context: { params: Promise<{ testId: string }> }
 ) {
   try {
-    const resolvedParams = await Promise.resolve(context.params);
+    const resolvedParams = await context.params;
     const rawIdStr = resolvedParams.testId?.trim() || "";
     const testIdRaw = parseInt(rawIdStr, 10);
 

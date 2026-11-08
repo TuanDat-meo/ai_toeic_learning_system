@@ -21,10 +21,15 @@ import com.toeic.ai.toeic_api.user.UserAccountService;
 public class GrammarController {
 
     private final GrammarService grammarService;
+    private final GrammarSuggestionService grammarSuggestionService;
     private final UserAccountService userAccountService;
 
-    public GrammarController(GrammarService grammarService, UserAccountService userAccountService) {
+    public GrammarController(
+            GrammarService grammarService,
+            GrammarSuggestionService grammarSuggestionService,
+            UserAccountService userAccountService) {
         this.grammarService = grammarService;
+        this.grammarSuggestionService = grammarSuggestionService;
         this.userAccountService = userAccountService;
     }
 
@@ -38,6 +43,31 @@ public class GrammarController {
     public GrammarService.GrammarTopic getTopic(@PathVariable String topicId, Authentication authentication) {
         UUID userId = extractUserId(authentication);
         return grammarService.getTopic(topicId, userId);
+    }
+
+    @GetMapping("/api/admin/grammar/categories")
+    public List<GrammarService.GrammarCategory> listCategories() {
+        return grammarService.listCategories();
+    }
+
+    @PostMapping("/api/admin/grammar/categories")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarService.GrammarCategory createCategory(
+            @RequestBody GrammarService.GrammarCategoryRequest request) {
+        return grammarService.createCategory(request);
+    }
+
+    @PutMapping("/api/admin/grammar/categories/{code}")
+    public GrammarService.GrammarCategory updateCategory(
+            @PathVariable String code,
+            @RequestBody GrammarService.GrammarCategoryRequest request) {
+        return grammarService.updateCategory(code, request);
+    }
+
+    @DeleteMapping("/api/admin/grammar/categories/{code}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCategory(@PathVariable String code) {
+        grammarService.deleteCategory(code);
     }
 
     @PostMapping("/api/grammar/progress")
@@ -62,6 +92,12 @@ public class GrammarController {
         return grammarService.createTopic(request);
     }
 
+    @PostMapping("/api/admin/grammar/suggestions")
+    public GrammarSuggestionService.GrammarSuggestion suggestGrammarContent(
+            @RequestBody GrammarSuggestionService.GrammarSuggestionRequest request) {
+        return grammarSuggestionService.suggest(request);
+    }
+
     @PutMapping("/api/admin/grammar/topics/{id}")
     public GrammarService.GrammarTopic updateTopic(@PathVariable String id, @RequestBody GrammarService.UpdateGrammarTopicRequest request) {
         return grammarService.updateTopic(id, request);
@@ -76,6 +112,21 @@ public class GrammarController {
     @PostMapping("/api/admin/grammar/topics/{id}/questions")
     public GrammarService.GrammarTopic addQuestion(@PathVariable String id, @RequestBody Map<String, Object> question) {
         return grammarService.addQuestion(id, question);
+    }
+
+    @PutMapping("/api/admin/grammar/topics/{id}/questions/{questionId}")
+    public GrammarService.GrammarTopic updateQuestion(
+            @PathVariable String id,
+            @PathVariable String questionId,
+            @RequestBody Map<String, Object> question) {
+        return grammarService.updateQuestion(id, questionId, question);
+    }
+
+    @DeleteMapping("/api/admin/grammar/topics/{id}/questions/{questionId}")
+    public GrammarService.GrammarTopic deleteQuestion(
+            @PathVariable String id,
+            @PathVariable String questionId) {
+        return grammarService.deleteQuestion(id, questionId);
     }
 
     @PostMapping("/api/admin/grammar/topics/bulk-status")

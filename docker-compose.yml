@@ -21,7 +21,10 @@ services:
     container_name: toeic-backend
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_started
+      ollama-model-init:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
@@ -29,6 +32,9 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}"
+      GRAMMAR_AI_PROVIDER: ${GRAMMAR_AI_PROVIDER:-ollama}
+      GRAMMAR_OLLAMA_URL: ${GRAMMAR_OLLAMA_URL:-http://ollama:11434}
+      GRAMMAR_OLLAMA_MODEL: ${GRAMMAR_OLLAMA_MODEL:-qwen2.5:3b}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       CONTENT_IMPORT_S3_BUCKET: ${CONTENT_IMPORT_S3_BUCKET:-}
@@ -36,6 +42,33 @@ services:
       PADDLE_OCR_URL: ${PADDLE_OCR_URL:-http://ocr:8000}
     ports:
       - "${BACKEND_PORT_BIND:-8080:8080}"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: toeic-ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  ollama-model-init:
+    image: ollama/ollama:latest
+    container_name: toeic-ollama-model-init
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama"]
+    command: ["pull", "${GRAMMAR_OLLAMA_MODEL:-qwen2.5:3b}"]
 
   ocr:
     profiles: ["ocr"]
@@ -107,3 +140,4 @@ volumes:
   pgdata:
     external: true
     name: toeic_ai_learning_pgdata
+  ollama-data:

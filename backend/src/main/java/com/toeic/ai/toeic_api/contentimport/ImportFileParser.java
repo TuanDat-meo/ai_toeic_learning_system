@@ -298,7 +298,7 @@ public class ImportFileParser {
             return;
         }
         ArrayNode options = objectMapper.createArrayNode();
-        source.fields().forEachRemaining(entry -> {
+        source.properties().forEach(entry -> {
             ObjectNode option = objectMapper.createObjectNode();
             option.put("id", entry.getKey());
             option.put("text", entry.getValue().asText(""));

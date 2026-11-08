@@ -34,12 +34,32 @@ export interface GrammarTopicItem {
   status: ContentStatus | string;
   summary: string;
   formula: string;
+  sourceUrl?: string;
+  sourceNotes?: string;
+  grammarGroup?: string;
+  parentTopicId?: string;
+  toeicParts?: string[];
+  difficulty?: QuestionDifficulty | string;
+  theory?: Record<string, string>;
+  metadata?: {
+    groupValues?: Record<string, Record<string, string>>;
+    traps?: {
+      commonMistakes?: string[];
+      confusingStructures?: string[];
+      answerTips?: string[];
+      partStrategies?: string[];
+    };
+    [key: string]: unknown;
+  };
+  wordFamilyWords?: GrammarWordFamilyLink[];
   signalWords: string[];
   traps: string[];
   examples: {
     sentence: string;
     translation: string;
     analysis?: string;
+    focusWord?: string;
+    difficulty?: string;
   }[];
   questions: GrammarQuestionItem[];
   orderIndex?: number;
@@ -61,6 +81,26 @@ export interface GrammarTopicItem {
    * Lấy từ user_grammar_progress + tính động từ question_attempts.
    */
   userProgress?: GrammarTopicProgress;
+}
+
+export interface GrammarCategoryField {
+  key: string;
+  label: string;
+  options?: string[];
+}
+
+export interface GrammarCategory {
+  code: string;
+  name: string;
+  fieldDefinitions: GrammarCategoryField[];
+  system: boolean;
+}
+
+export interface GrammarWordFamilyLink {
+  vocabularyItemId: string;
+  word: string;
+  partOfSpeech: string;
+  meaning: string;
 }
 
 /** Tiến độ học viên theo chuyên đề. DB: grammar_topic_progress */

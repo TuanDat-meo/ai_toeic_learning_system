@@ -104,10 +104,10 @@ function resolveMediaFile(relativePath: string): string | null {
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    const resolvedParams = await Promise.resolve(context.params);
+    const resolvedParams = await context.params;
     const rawSegments = resolvedParams.path || [];
     if (rawSegments.length === 0) {
       return new NextResponse("Not Found", { status: 404 });

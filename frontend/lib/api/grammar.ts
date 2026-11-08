@@ -1,5 +1,5 @@
 import { apiRequest, writeAuthRequest } from './client';
-import type { GrammarTopicItem, GrammarQuestionItem } from '@/app/admin/content/grammar/types';
+import type { GrammarTopicItem, GrammarQuestionItem, GrammarCategory } from '@/app/admin/content/grammar/types';
 import { INITIAL_GRAMMAR_TOPICS } from '@/app/admin/content/grammar/mockData';
 
 interface RawGrammarTopic {
@@ -14,9 +14,18 @@ interface RawGrammarTopic {
   status?: string;
   summary?: string;
   formula?: string;
+  sourceUrl?: string;
+  sourceNotes?: string;
+  grammarGroup?: string;
+  parentTopicId?: string;
+  toeicParts?: string[];
+  difficulty?: string;
+  theory?: Record<string, string>;
+  metadata?: GrammarTopicItem['metadata'];
+  wordFamilyWords?: GrammarTopicItem['wordFamilyWords'];
   signalWords?: string[];
   traps?: string[];
-  examples?: Array<{ sentence?: string; translation?: string; analysis?: string; en?: string; vi?: string; theory?: string; explanation?: string }>;
+  examples?: Array<{ sentence?: string; translation?: string; analysis?: string; focusWord?: string; difficulty?: string; en?: string; vi?: string; theory?: string; explanation?: string }>;
   questions?: any[];
   orderIndex?: number;
   totalQuestions?: number;
@@ -36,20 +45,22 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
       (m.title && titleVi && m.title.toLowerCase().includes(titleVi.toLowerCase()))
   );
 
-  const rawExamples = Array.isArray(t.examples) && t.examples.length > 0 ? t.examples : (mockFallback?.examples || []);
+  const rawExamples = Array.isArray(t.examples) ? t.examples : (mockFallback?.examples || []);
   let mappedExamples: GrammarTopicItem['examples'] = rawExamples
     .map((ex: any) => ({
       sentence: String(ex.sentence || ex.en || ex.theory || ''),
       translation: String(ex.translation || ex.vi || ''),
       analysis: ex.analysis || ex.explanation ? String(ex.analysis || ex.explanation) : undefined,
+      focusWord: ex.focusWord ? String(ex.focusWord) : undefined,
+      difficulty: ex.difficulty ? String(ex.difficulty) : undefined,
     }))
     .filter((ex) => ex.sentence && ex.sentence.trim().length > 0);
 
-  if (mappedExamples.length === 0 && mockFallback?.examples) {
+  if (!Array.isArray(t.examples) && mappedExamples.length === 0 && mockFallback?.examples) {
     mappedExamples = mockFallback.examples;
   }
 
-  const rawQuestions = Array.isArray(t.questions) && t.questions.length > 0 ? t.questions : (mockFallback?.questions || []);
+  const rawQuestions = Array.isArray(t.questions) ? t.questions : (mockFallback?.questions || []);
   let mappedQuestions: GrammarQuestionItem[] = rawQuestions.map((q: any) => ({
     id: String(q.id || Math.random()),
     part: q.part || t.part || mockFallback?.part || 'PART_5',
@@ -62,13 +73,13 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     difficulty: q.difficulty || q.levelShort || 'MEDIUM',
   }));
 
-  if (mappedQuestions.length === 0 && mockFallback?.questions) {
+  if (!Array.isArray(t.questions) && mappedQuestions.length === 0 && mockFallback?.questions) {
     mappedQuestions = mockFallback.questions;
   }
 
-  const formula = t.formula && t.formula.trim().length > 0 ? t.formula : (mockFallback?.formula || '');
-  const signalWords = Array.isArray(t.signalWords) && t.signalWords.length > 0 ? t.signalWords : (mockFallback?.signalWords || []);
-  const traps = Array.isArray(t.traps) && t.traps.length > 0 ? t.traps : (mockFallback?.traps || []);
+  const formula = t.formula ?? mockFallback?.formula ?? '';
+  const signalWords = Array.isArray(t.signalWords) ? t.signalWords : (mockFallback?.signalWords || []);
+  const traps = Array.isArray(t.traps) ? t.traps : (mockFallback?.traps || []);
 
   return {
     id: t.id,
@@ -78,16 +89,25 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     title: titleVi,
     englishTitle: titleEn,
     part: t.part || mockFallback?.part || 'Part 5',
-    targetScore: t.targetScore || mockFallback?.targetScore || '350-500',
+    targetScore: t.targetScore || mockFallback?.targetScore || '350_500',
     status: t.status || 'PUBLISHED',
-    summary: t.summary || mockFallback?.summary || '',
+    summary: t.summary ?? mockFallback?.summary ?? '',
     formula,
+    sourceUrl: t.sourceUrl,
+    sourceNotes: t.sourceNotes || '',
+    grammarGroup: t.grammarGroup || 'other',
+    parentTopicId: t.parentTopicId,
+    toeicParts: Array.isArray(t.toeicParts) ? t.toeicParts : [],
+    difficulty: t.difficulty || 'MEDIUM',
+    theory: t.theory || {},
+    metadata: t.metadata || {},
+    wordFamilyWords: Array.isArray(t.wordFamilyWords) ? t.wordFamilyWords : [],
     signalWords,
     traps,
     examples: mappedExamples,
     questions: mappedQuestions,
     orderIndex: t.orderIndex ?? (mockFallback as any)?.orderIndex ?? 0,
-    totalQuestions: mappedQuestions.length || t.totalQuestions || 10,
+    totalQuestions: t.totalQuestions ?? mappedQuestions.length,
     completedQuestions: t.completedQuestions ?? 0,
     userStatus: t.userStatus ?? 'Chưa học',
   };
@@ -139,6 +159,15 @@ export async function createGrammarTopic(topicData: Partial<GrammarTopicItem>): 
     status: topicData.status || 'DRAFT',
     summary: topicData.summary,
     formula: topicData.formula,
+    sourceUrl: topicData.sourceUrl,
+    sourceNotes: topicData.sourceNotes,
+    grammarGroup: topicData.grammarGroup,
+    parentTopicId: topicData.parentTopicId,
+    toeicParts: topicData.toeicParts,
+    difficulty: topicData.difficulty,
+    theory: topicData.theory,
+    metadata: topicData.metadata,
+    wordFamilyWords: topicData.wordFamilyWords,
     signalWords: topicData.signalWords,
     traps: topicData.traps,
     examples: topicData.examples,
@@ -161,6 +190,15 @@ export async function updateGrammarTopic(id: string, topicData: Partial<GrammarT
     status: topicData.status,
     summary: topicData.summary,
     formula: topicData.formula,
+    sourceUrl: topicData.sourceUrl,
+    sourceNotes: topicData.sourceNotes,
+    grammarGroup: topicData.grammarGroup,
+    parentTopicId: topicData.parentTopicId,
+    toeicParts: topicData.toeicParts,
+    difficulty: topicData.difficulty,
+    theory: topicData.theory,
+    metadata: topicData.metadata,
+    wordFamilyWords: topicData.wordFamilyWords,
     signalWords: topicData.signalWords,
     traps: topicData.traps,
     examples: topicData.examples,
@@ -177,6 +215,109 @@ export async function deleteGrammarTopic(id: string): Promise<void> {
 
 export async function addGrammarQuestion(topicId: string, question: GrammarQuestionItem): Promise<GrammarTopicItem> {
   const res = await writeAuthRequest<RawGrammarTopic>('POST', `/api/admin/grammar/topics/${topicId}/questions`, question);
+  return mapGrammarTopic(res);
+}
+
+export interface GrammarContentSuggestion {
+  formula: string;
+  summary: string;
+  signalWords: string[];
+  traps: string[];
+  examples: GrammarTopicItem["examples"];
+  sourceUrl: string;
+  theory?: Record<string, string>;
+  groupValues?: Record<string, string>;
+}
+
+export async function generateGrammarContentSuggestion(input: {
+  titleVi: string;
+  titleEn: string;
+  part: string;
+  targetScore: string;
+  sourceUrl: string;
+  sourceNotes: string;
+  grammarGroup: string;
+  difficulty: string;
+  fieldDefinitions: GrammarCategory['fieldDefinitions'];
+  metadata: GrammarTopicItem['metadata'];
+}): Promise<GrammarContentSuggestion> {
+  return writeAuthRequest<GrammarContentSuggestion>('POST', '/api/admin/grammar/suggestions', input);
+}
+
+export async function getGrammarCategories(): Promise<GrammarCategory[]> {
+  const categories = await apiRequest<Array<{
+    code: string;
+    name: string;
+    fieldDefinitions?: GrammarCategory['fieldDefinitions'];
+    system?: boolean;
+  }>>('/api/admin/grammar/categories');
+  return categories.map((category) => ({
+    code: category.code,
+    name: category.name,
+    fieldDefinitions: category.fieldDefinitions || [],
+    system: category.system ?? false,
+  }));
+}
+
+export async function saveGrammarCategory(category: {
+  code: string;
+  name: string;
+  fieldDefinitions: GrammarCategory['fieldDefinitions'];
+}): Promise<GrammarCategory> {
+  const result = await writeAuthRequest<{
+    code: string;
+    name: string;
+    fieldDefinitions?: GrammarCategory['fieldDefinitions'];
+    system?: boolean;
+  }>('POST', '/api/admin/grammar/categories', category);
+  return {
+    code: result.code,
+    name: result.name,
+    fieldDefinitions: result.fieldDefinitions || [],
+    system: result.system ?? false,
+  };
+}
+
+export async function updateGrammarCategory(
+  code: string,
+  category: { name: string; fieldDefinitions: GrammarCategory['fieldDefinitions'] },
+): Promise<GrammarCategory> {
+  const result = await writeAuthRequest<{
+    code: string;
+    name: string;
+    fieldDefinitions?: GrammarCategory['fieldDefinitions'];
+    system?: boolean;
+  }>('PUT', `/api/admin/grammar/categories/${encodeURIComponent(code)}`, category);
+  return {
+    code: result.code,
+    name: result.name,
+    fieldDefinitions: result.fieldDefinitions || [],
+    system: result.system ?? false,
+  };
+}
+
+export async function deleteGrammarCategory(code: string): Promise<void> {
+  await writeAuthRequest<void>('DELETE', `/api/admin/grammar/categories/${encodeURIComponent(code)}`);
+}
+
+export async function updateGrammarQuestion(
+  topicId: string,
+  questionId: string,
+  question: GrammarQuestionItem
+): Promise<GrammarTopicItem> {
+  const res = await writeAuthRequest<RawGrammarTopic>(
+    'PUT',
+    `/api/admin/grammar/topics/${topicId}/questions/${encodeURIComponent(questionId)}`,
+    question
+  );
+  return mapGrammarTopic(res);
+}
+
+export async function deleteGrammarQuestion(topicId: string, questionId: string): Promise<GrammarTopicItem> {
+  const res = await writeAuthRequest<RawGrammarTopic>(
+    'DELETE',
+    `/api/admin/grammar/topics/${topicId}/questions/${encodeURIComponent(questionId)}`
+  );
   return mapGrammarTopic(res);
 }
 

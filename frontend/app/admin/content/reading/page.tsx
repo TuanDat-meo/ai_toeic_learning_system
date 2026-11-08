@@ -25,7 +25,7 @@ import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/Rea
 import { exportToExcel } from "@/lib/exportExcel";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 
-export const LOCAL_READING_CARDS_KEY = "toeic_reading_cards";
+const LOCAL_READING_CARDS_KEY = "toeic_reading_cards";
 
 function getLocalReadingCards(): ExerciseCardData[] | null {
   if (typeof window === "undefined") return null;

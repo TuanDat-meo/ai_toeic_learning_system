@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { X, Plus, Pencil, Trash2, Volume2, BookOpen, LoaderCircle, ExternalLink } from "lucide-react";
 import { WordItem, TestItem, type VocabularyRelatedForm, type VocabularySense } from "@/app/admin/content/vocabulary/types";
 import { uploadContentImportAsset } from "@/lib/api/content-import";
+import { translateExampleToVietnamese } from "@/lib/api/example-translation";
 import {
   lookupEnglishDictionary,
   type EnglishDictionarySuggestion,
@@ -24,6 +25,7 @@ function getVocabularyWordSenses(word: WordItem) {
         partOfSpeech: word.partOfSpeech || word.pos || "",
         meaning: word.meaning || word.meanings?.[0]?.meaning || "",
         example: word.example || word.meanings?.[0]?.example || "",
+        exampleMeaning: word.exampleMeaning || word.exampleVi || "",
       }];
   return deduplicateVocabularySenses(senses.map((sense) => ({
     ...sense,
@@ -33,6 +35,48 @@ function getVocabularyWordSenses(word: WordItem) {
 
 function getSenseIdentity(sense: Pick<VocabularySenseDraft, "partOfSpeech" | "meaning">): string {
   return `${normalizeVocabularyPartOfSpeech(sense.partOfSpeech).toLocaleLowerCase()}|${sense.meaning.trim().replace(/\s+/g, " ").toLocaleLowerCase()}`;
+}
+
+function getWordEditSnapshot(value: {
+  word: string;
+  ipa: string;
+  partOfSpeech: string;
+  subCategory: string;
+  meaning: string;
+  example: string;
+  exampleMeaning: string;
+  synonyms: string;
+  antonyms: string;
+  additionalSenses: VocabularySenseDraft[];
+  wordFamily: string;
+  level: string;
+  audioUrl: string;
+  audioRegion: string;
+}): string {
+  return JSON.stringify({
+    word: value.word.trim().replace(/\s+/g, " "),
+    ipa: value.ipa.trim(),
+    partOfSpeech: normalizeVocabularyPartOfSpeech(value.partOfSpeech),
+    subCategory: value.subCategory.trim(),
+    meaning: value.meaning.trim(),
+    example: value.example.trim(),
+    exampleMeaning: value.exampleMeaning.trim(),
+    synonyms: value.synonyms.trim(),
+    antonyms: value.antonyms.trim(),
+    additionalSenses: getUniqueSenseDrafts(value.additionalSenses).map((sense) => ({
+      partOfSpeech: normalizeVocabularyPartOfSpeech(sense.partOfSpeech),
+      subCategory: sense.subCategory.trim(),
+      meaning: sense.meaning.trim(),
+      example: sense.example.trim(),
+      exampleMeaning: sense.exampleMeaning.trim(),
+      synonyms: sense.synonyms.trim(),
+      antonyms: sense.antonyms.trim(),
+    })),
+    wordFamily: value.wordFamily.trim(),
+    level: value.level.trim(),
+    audioUrl: value.audioUrl.trim(),
+    audioRegion: value.audioRegion.trim(),
+  });
 }
 
 function getUniqueSenseDrafts(senses: VocabularySenseDraft[]): VocabularySenseDraft[] {
@@ -76,6 +120,7 @@ interface VocabularySenseDraft {
   subCategory: string;
   meaning: string;
   example: string;
+  exampleMeaning: string;
   synonyms: string;
   antonyms: string;
 }
@@ -163,6 +208,8 @@ interface VocabularyModalsProps {
     wordFamily: string;
     senses: VocabularySense[];
     relatedForms: VocabularyRelatedForm[];
+    targetSetId?: string;
+    exampleMeaning: string;
     existingWordId?: string;
     duplicateAction?: "add-current-sense" | "update-missing-audio" | "add-separately" | "merge-other-senses";
     duplicateSenses?: VocabularySense[];
@@ -226,6 +273,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   const [wordSubCategory, setWordSubCategory] = useState("");
   const [wordMeaning, setWordMeaning] = useState("");
   const [wordExample, setWordExample] = useState("");
+  const [wordExampleMeaning, setWordExampleMeaning] = useState("");
+  const [exampleTranslationError, setExampleTranslationError] = useState<string | null>(null);
+  const [exampleTranslationLoading, setExampleTranslationLoading] = useState(false);
+  const autoTranslatedPrimaryExample = React.useRef("");
   const [wordSynonyms, setWordSynonyms] = useState("");
   const [wordAntonyms, setWordAntonyms] = useState("");
   const [additionalWordSenses, setAdditionalWordSenses] = useState<VocabularySenseDraft[]>([]);
@@ -238,7 +289,11 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   const activePronunciation = React.useRef<SpeechSynthesisUtterance | null>(null);
   const [audioUploading, setAudioUploading] = useState(false);
   const [dictionarySuggestion, setDictionarySuggestion] = useState<EnglishDictionarySuggestion | null>(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [selectedDictionaryMeaningId, setSelectedDictionaryMeaningId] = useState("");
+  const [targetSetId, setTargetSetId] = useState("");
+  const selectedTargetSetId = wordListModalTest?.id || targetSetId || vocabularySets[0]?.id || "";
+  const [initialWordEditSnapshot, setInitialWordEditSnapshot] = useState<string | null>(null);
   const [dictionaryMeaningFilter, setDictionaryMeaningFilter] = useState("all");
   const [dictionaryLoading, setDictionaryLoading] = useState(false);
   const [dictionaryError, setDictionaryError] = useState<string | null>(null);
@@ -285,20 +340,40 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
             partOfSpeech: editingWord.partOfSpeech || editingWord.pos || "Verb",
             meaning: editingWord.meaning || editingWord.meanings?.[0]?.meaning || "",
             example: editingWord.example || editingWord.meanings?.[0]?.example || "",
+            exampleMeaning: editingWord.exampleMeaning || editingWord.exampleVi || "",
           }];
       const uniqueSenses = getUniqueSenseDrafts(senses.map((sense) => ({
         partOfSpeech: sense.partOfSpeech,
         subCategory: sense.subCategory || "",
         meaning: sense.meaning,
         example: sense.example || "",
+        exampleMeaning: sense.exampleMeaning || "",
         synonyms: sense.synonyms || "",
         antonyms: sense.antonyms || "",
       })));
       const primarySense = uniqueSenses[0];
+      setInitialWordEditSnapshot(getWordEditSnapshot({
+        word: editingWord.word || "",
+        ipa: editingWord.ipa || "",
+        partOfSpeech: normalizeVocabularyPartOfSpeech(primarySense.partOfSpeech || "Verb"),
+        subCategory: primarySense.subCategory || "",
+        meaning: primarySense.meaning || "",
+        example: primarySense.example || "",
+        exampleMeaning: primarySense.exampleMeaning || editingWord.exampleMeaning || editingWord.exampleVi || "",
+        synonyms: primarySense.synonyms || "",
+        antonyms: primarySense.antonyms || "",
+        additionalSenses: uniqueSenses.slice(1),
+        wordFamily: editingWord.wordFamily || "",
+        level: editingWord.level || (editingWord.cefrLevel as string) || "B2",
+        audioUrl: editingWord.audioUrl || editingWord.audio || "",
+        audioRegion: editingWord.audioRegion || "UNKNOWN",
+      }));
       setWordPos(normalizeVocabularyPartOfSpeech(primarySense.partOfSpeech || "Verb"));
       setWordSubCategory(primarySense.subCategory || "");
       setWordMeaning(primarySense.meaning || "");
       setWordExample(primarySense.example || "");
+      setWordExampleMeaning(primarySense.exampleMeaning || editingWord.exampleMeaning || editingWord.exampleVi || "");
+      autoTranslatedPrimaryExample.current = "";
       setWordSynonyms(primarySense.synonyms || "");
       setWordAntonyms(primarySense.antonyms || "");
       setAdditionalWordSenses(uniqueSenses.slice(1));
@@ -307,6 +382,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       setWordAudioUrl(editingWord.audioUrl || editingWord.audio || "");
       setWordAudioRegion(editingWord.audioRegion || "UNKNOWN");
       setDictionarySuggestion(null);
+      setSuggestionsOpen(false);
       setSelectedDictionaryMeaningId("");
       setDictionaryMeaningFilter("all");
       setDictionaryError(null);
@@ -315,6 +391,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       setPlayingPronunciationRegion(null);
       window.speechSynthesis?.cancel();
     } else {
+      setInitialWordEditSnapshot(null);
       setWordText("");
       setDictionaryLoading(false);
       setWordIpa("");
@@ -322,6 +399,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       setWordSubCategory("");
       setWordMeaning("");
       setWordExample("");
+      setWordExampleMeaning("");
+      setExampleTranslationError(null);
+      setExampleTranslationLoading(false);
+      autoTranslatedPrimaryExample.current = "";
       setWordSynonyms("");
       setWordAntonyms("");
       setAdditionalWordSenses([]);
@@ -330,6 +411,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
       setWordAudioUrl("");
       setWordAudioRegion("UNKNOWN");
       setDictionarySuggestion(null);
+      setSuggestionsOpen(false);
       setSelectedDictionaryMeaningId("");
       setDictionaryMeaningFilter("all");
       setDictionaryError(null);
@@ -357,6 +439,49 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
     } finally {
       setAudioUploading(false);
     }
+  }
+
+  async function translatePrimaryExample(exampleText = wordExample.trim()): Promise<string> {
+    if (!exampleText) return "";
+    if (wordExampleMeaning.trim()) {
+      return wordExampleMeaning.trim();
+    }
+
+    setExampleTranslationLoading(true);
+    setExampleTranslationError(null);
+    try {
+      const translation = await translateExampleToVietnamese(exampleText);
+      if (wordExample.trim() === exampleText) {
+        setWordExampleMeaning(translation);
+        autoTranslatedPrimaryExample.current = exampleText;
+      }
+      return translation;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể dịch câu ví dụ.";
+      setExampleTranslationError(message);
+      throw error;
+    } finally {
+      setExampleTranslationLoading(false);
+    }
+  }
+
+  async function translateAdditionalExample(
+    senseIdentity: string,
+    exampleText: string,
+  ): Promise<string> {
+    const example = exampleText.trim();
+    if (!example) return "";
+    const currentSense = additionalWordSenses.find((sense) => getSenseIdentity(sense) === senseIdentity);
+    if (!currentSense) return "";
+    if (currentSense.exampleMeaning.trim()) return currentSense.exampleMeaning.trim();
+
+    const translation = await translateExampleToVietnamese(example);
+    setAdditionalWordSenses((current) => current.map((sense) =>
+      getSenseIdentity(sense) === senseIdentity && sense.example.trim() === example
+        ? { ...sense, exampleMeaning: translation }
+        : sense,
+    ));
+    return translation;
   }
 
   React.useEffect(() => {
@@ -420,7 +545,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
     : undefined;
   const otherSetWordMatches = !editingWord && wordText.trim()
     ? vocabularySets
-        .filter((set) => set.id !== wordListModalTest?.id)
+        .filter((set) => set.id !== selectedTargetSetId)
         .flatMap((set) => (set.words || [])
           .filter((word) => normalizeWordForMatch(word.word) === normalizeWordForMatch(wordText))
           .map((word) => ({ setTitle: set.title || set.nameVi || "Bộ từ vựng", word })))
@@ -431,6 +556,24 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   });
   const visibleAdditionalWordSenses = getUniqueSenseDrafts(additionalWordSenses)
     .filter((sense) => getSenseIdentity(sense) !== primarySenseIdentity);
+  const hasWordEditChanges = editingWord !== null
+    && initialWordEditSnapshot !== null
+    && getWordEditSnapshot({
+      word: wordText,
+      ipa: wordIpa,
+      partOfSpeech: wordPos,
+      subCategory: wordSubCategory,
+      meaning: wordMeaning,
+      example: wordExample,
+      exampleMeaning: wordExampleMeaning,
+      synonyms: wordSynonyms,
+      antonyms: wordAntonyms,
+      additionalSenses: visibleAdditionalWordSenses,
+      wordFamily,
+      level: wordLevel,
+      audioUrl: wordAudioUrl,
+      audioRegion: wordAudioRegion,
+    }) !== initialWordEditSnapshot;
   const availableRelatedWordItems = vocabularySets.flatMap((set) =>
     (set.words || []).map((word) => ({
       ...word,
@@ -692,8 +835,14 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                                 {sense.example ? (
                                   <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{sense.example}&quot;</p>
                                 ) : null}
-                                {senseIndex === 0 && group.partOfSpeech === groupVocabularySenses(senses)[0]?.partOfSpeech && w.exampleMeaning ? (
-                                  <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
+                                {(sense.exampleMeaning || (
+                                  senseIndex === 0
+                                  && group.partOfSpeech === groupVocabularySenses(senses)[0]?.partOfSpeech
+                                  && w.exampleMeaning
+                                )) ? (
+                                  <p className="text-xs text-blue-700 font-semibold leading-relaxed">
+                                    👉 {sense.exampleMeaning || w.exampleMeaning}
+                                  </p>
                                 ) : null}
                               </div>
                             ))}
@@ -1032,7 +1181,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
               </div>
             )}
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (!testTitle.trim()) {
                   setTestFormError("Vui lòng nhập tên bộ từ vựng (không được để trống).");
@@ -1279,10 +1428,19 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
               </div>
             )}
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (!wordText.trim()) {
                   setWordFormError("Vui lòng nhập từ tiếng Anh.");
+                  return;
+                }
+                const normalizedWord = wordText.trim().replace(/\s+/g, " ");
+                if (normalizedWord.length > 128 || !/^[a-zA-Z][a-zA-Z' -]*$/.test(normalizedWord)) {
+                  setWordFormError("Từ hoặc cụm từ chỉ gồm chữ cái tiếng Anh, dấu nháy, dấu gạch nối và khoảng trắng (tối đa 128 ký tự).");
+                  return;
+                }
+                if (!wordListModalTest && !editingWord && !selectedTargetSetId) {
+                  setWordFormError("Chọn bộ từ vựng để lưu mục từ mới.");
                   return;
                 }
                 if (!wordMeaning.trim() && duplicateAction !== "update-missing-audio") {
@@ -1307,6 +1465,30 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   setWordFormError("Hãy chọn có thêm từ này vào bộ hiện tại hay không.");
                   return;
                 }
+                setExampleTranslationError(null);
+                setExampleTranslationLoading(true);
+                let translatedPrimaryExample = wordExampleMeaning.trim();
+                let translatedAdditionalSenses = [...additionalWordSenses];
+                try {
+                  if (wordExample.trim() && !translatedPrimaryExample) {
+                    translatedPrimaryExample = await translatePrimaryExample();
+                  }
+                  translatedAdditionalSenses = await Promise.all(additionalWordSenses.map(async (sense) => ({
+                    ...sense,
+                    exampleMeaning: sense.exampleMeaning.trim() || (sense.example.trim()
+                      ? await translateExampleToVietnamese(sense.example.trim())
+                      : ""),
+                  })));
+                  setWordExampleMeaning(translatedPrimaryExample);
+                  setAdditionalWordSenses(translatedAdditionalSenses);
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : "Không thể dịch câu ví dụ.";
+                  setExampleTranslationError(message);
+                  setWordFormError(`${message} Bạn có thể sửa lại câu ví dụ hoặc thử lưu lại.`);
+                  setExampleTranslationLoading(false);
+                  return;
+                }
+                setExampleTranslationLoading(false);
                 setWordFormError(null);
                 const senses = deduplicateVocabularySenses([
                   {
@@ -1314,23 +1496,26 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                     subCategory: wordSubCategory,
                     meaning: wordMeaning.trim(),
                     example: wordExample.trim(),
+                    exampleMeaning: translatedPrimaryExample,
                     synonyms: wordSynonyms.trim(),
                     antonyms: wordAntonyms.trim(),
                   },
-                  ...getUniqueSenseDrafts(additionalWordSenses).map((sense) => ({
+                  ...getUniqueSenseDrafts(translatedAdditionalSenses).map((sense) => ({
                     ...sense,
                     meaning: sense.meaning.trim(),
                     example: sense.example.trim(),
+                    exampleMeaning: sense.exampleMeaning.trim(),
                     synonyms: sense.synonyms.trim(),
                     antonyms: sense.antonyms.trim(),
                   })),
                 ]);
                 onSaveWordForm({
-                  word: wordText.trim(),
+                  word: normalizedWord,
                   ipa: wordIpa.trim(),
                   partOfSpeech: wordPos,
                   meaning: wordMeaning.trim(),
                   example: wordExample.trim(),
+                  exampleMeaning: translatedPrimaryExample,
                   level: wordLevel,
                   audioUrl: wordAudioUrl.trim(),
                   audioRegion: wordAudioRegion,
@@ -1338,6 +1523,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   wordFamily: wordFamily.trim(),
                   senses,
                   relatedForms: relatedFormsToSave,
+                  targetSetId: selectedTargetSetId || undefined,
                   existingWordId: existingWordMatch?.id,
                   duplicateAction: duplicateAction || undefined,
                   duplicateSenses: otherSetWordMatches.flatMap(({ word }) => getVocabularyWordSenses(word)),
@@ -1352,7 +1538,8 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   <input
                     type="text"
                     required={duplicateAction !== "update-missing-audio"}
-                    placeholder="Ví dụ: allocate"
+                    placeholder="Ví dụ: allocate hoặc abide by"
+                    maxLength={128}
                     value={wordText}
                     onChange={(event) => {
                       setWordText(event.target.value);
@@ -1371,6 +1558,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       }
                       setDictionaryLoading(false);
                       setDictionarySuggestion(null);
+                      setSuggestionsOpen(false);
                       setSelectedDictionaryMeaningId("");
                       setDictionaryMeaningFilter("all");
                       setDictionaryError(null);
@@ -1380,8 +1568,24 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                     className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-medium transition-all focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
+                {!wordListModalTest && !editingWord && (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-xs font-bold text-slate-700">Lưu vào bộ từ vựng *</label>
+                    <select
+                      required
+                      value={selectedTargetSetId}
+                      onChange={(event) => setTargetSetId(event.target.value)}
+                      className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                    >
+                      <option value="">Chọn bộ từ vựng</option>
+                      {vocabularySets.map((set) => (
+                        <option key={set.id} value={set.id}>{set.title || set.nameVi || set.id}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <p className="mt-1 text-[10px] text-slate-400">
-                  Gợi ý từ điển là dữ liệu tham khảo riêng; chỉ nội dung bạn áp dụng hoặc thêm thành nghĩa riêng mới được lưu.
+                  Nhập một từ hoặc cụm từ tiếng Anh (ví dụ: abide by, look forward to).
                 </p>
                 {existingWordMatch ? (
                   <div role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">
@@ -1470,11 +1674,27 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                     <LoaderCircle className="h-3.5 w-3.5 animate-spin" />Đang tìm gợi ý…
                   </p>
                 ) : null}
-                {dictionaryError ? (
+                {dictionaryError && suggestionsOpen ? (
                   <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-2.5 py-2 text-[11px] text-rose-700">{dictionaryError}</p>
                 ) : null}
+                <button
+                  type="button"
+                  aria-expanded={suggestionsOpen}
+                  onClick={() => setSuggestionsOpen((open) => !open)}
+                  className="mt-2 inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  {suggestionsOpen ? "Ẩn gợi ý" : "Gợi ý từ điển"}
+                  {dictionaryLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {!dictionaryLoading && dictionarySuggestion
+                    ? <span className="rounded-full bg-blue-200 px-1.5 py-0.5 text-[9px]">{dictionarySuggestion.meanings.length}</span>
+                    : null}
+                  {!dictionaryLoading && dictionaryError
+                    ? <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] text-rose-700">!</span>
+                    : null}
+                </button>
               </div>
-              {dictionarySuggestion ? (
+              {dictionarySuggestion && suggestionsOpen ? (
                 <section aria-label="Gợi ý từ điển Anh-Việt" className="flex h-[300px] min-h-0 flex-col gap-2 overflow-hidden rounded-xl border border-blue-200 bg-blue-50/50 p-3 md:col-span-2 sm:h-[330px]">
                   <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <div className="flex min-w-0 items-baseline gap-2">
@@ -1607,6 +1827,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                           subCategory: "",
                           meaning: selectedDictionaryMeaning.definition,
                           example: selectedDictionaryMeaning.example,
+                          exampleMeaning: "",
                           synonyms: "",
                           antonyms: "",
                         };
@@ -1730,8 +1951,39 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   rows={2}
                   placeholder="The committee allocated funds for the new research laboratory."
                   value={wordExample}
-                  onChange={(e) => setWordExample(e.target.value)}
+                  onChange={(e) => {
+                    setWordExample(e.target.value);
+                    if (wordExample.trim() !== e.target.value.trim()) {
+                      setWordExampleMeaning("");
+                      autoTranslatedPrimaryExample.current = "";
+                    }
+                    setExampleTranslationError(null);
+                  }}
+                  onBlur={() => {
+                    if (wordExample.trim() && !wordExampleMeaning.trim()) {
+                      void translatePrimaryExample().catch(() => undefined);
+                    }
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all resize-none"
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  {exampleTranslationLoading ? "Đang dịch ví dụ sang tiếng Việt…" : "Tự dịch khi rời ô hoặc lưu; bạn có thể chỉnh bản dịch sau đó."}
+                </p>
+                {exampleTranslationError ? (
+                  <p role="alert" className="mt-1 text-[10px] text-rose-700">{exampleTranslationError}</p>
+                ) : null}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Dịch nghĩa ví dụ</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ủy ban đã phân bổ ngân sách cho phòng thí nghiệm nghiên cứu mới."
+                  value={wordExampleMeaning}
+                  onChange={(event) => {
+                    setWordExampleMeaning(event.target.value);
+                    autoTranslatedPrimaryExample.current = "";
+                  }}
+                  className="w-full resize-none rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-medium transition-all focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
                 />
               </div>
               <div>
@@ -1762,7 +2014,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                     type="button"
                     onClick={() => setAdditionalWordSenses((current) => [
                       ...current,
-                      { partOfSpeech: "Noun", subCategory: "", meaning: "", example: "", synonyms: "", antonyms: "" },
+                    { partOfSpeech: "Noun", subCategory: "", meaning: "", example: "", exampleMeaning: "", synonyms: "", antonyms: "" },
                     ])}
                     className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
                   >
@@ -1825,9 +2077,28 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       aria-label={`Ví dụ bổ sung ${index + 1}`}
                       value={sense.example}
                       onChange={(event) => setAdditionalWordSenses((current) => current.map((item) =>
-                        getSenseIdentity(item) === senseIdentity ? { ...item, example: event.target.value } : item,
+                        getSenseIdentity(item) === senseIdentity
+                          ? { ...item, example: event.target.value, exampleMeaning: "" }
+                          : item,
                       ))}
+                      onBlur={() => {
+                        if (sense.example.trim() && !sense.exampleMeaning.trim()) {
+                          void translateAdditionalExample(senseIdentity, sense.example)
+                            .catch((error: unknown) => setExampleTranslationError(
+                              error instanceof Error ? error.message : "Không thể dịch ví dụ bổ sung.",
+                            ));
+                        }
+                      }}
                       placeholder="Ví dụ ngữ cảnh (không bắt buộc)"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs md:col-span-2"
+                    />
+                    <input
+                      aria-label={`Dịch ví dụ bổ sung ${index + 1}`}
+                      value={sense.exampleMeaning}
+                      onChange={(event) => setAdditionalWordSenses((current) => current.map((item) =>
+                        getSenseIdentity(item) === senseIdentity ? { ...item, exampleMeaning: event.target.value } : item,
+                      ))}
+                      placeholder="Dịch ví dụ (không bắt buộc)"
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs md:col-span-2"
                     />
                     <input
@@ -1941,10 +2212,13 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={audioUploading}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
+                  disabled={audioUploading || exampleTranslationLoading || (Boolean(editingWord) && !hasWordEditChanges)}
+                  title={editingWord && !hasWordEditChanges ? "Chỉnh sửa thông tin trước khi cập nhật." : undefined}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {editingWord ? "Cập nhật từ" : "Thêm vào danh sách"}
+                  {editingWord
+                    ? hasWordEditChanges ? "Cập nhật từ" : "Chưa có thay đổi"
+                    : "Thêm vào danh sách"}
                 </button>
               </div>
             </form>

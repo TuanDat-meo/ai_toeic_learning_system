@@ -211,7 +211,7 @@ public class ContentImportService {
             preparedRows.add(new PreparedImportRow(row, result, errors));
         }
         Map<String, UUID> existingContent = findExistingContentIds(type,
-                preparedRows.stream().map(PreparedImportRow::result).toList(), dedupeKeys);
+                preparedRows.stream().map(row -> row.result()).toList(), dedupeKeys);
         Set<String> publishedQuestionCodes = type == ContentType.MOCK_TEST
                 ? findPublishedQuestionCodes(mockQuestionCodes) : Set.of();
         if (type == ContentType.MOCK_TEST) {
@@ -491,7 +491,7 @@ public class ContentImportService {
                 .map(row -> validator.validate(type, row.rawData()))
                 .toList();
         Set<String> dedupeKeys = new java.util.HashSet<>();
-        validations.stream().filter(ContentPayloadValidator.ValidationResult::valid)
+        validations.stream().filter(validation -> validation.valid())
                 .forEach(result -> dedupeKeys.add(result.dedupeKey()));
         Map<String, UUID> existingContent = findExistingContentIds(
                 type, validations, dedupeKeys);
@@ -683,7 +683,7 @@ public class ContentImportService {
                 if (type != ContentType.VOCABULARY) return found;
 
                 Set<String> words = validations.stream()
-                        .filter(ContentPayloadValidator.ValidationResult::valid)
+                        .filter(validation -> validation.valid())
                         .map(result -> result.normalizedData().path("word").asText().trim().toLowerCase(Locale.ROOT))
                         .filter(word -> !word.isBlank())
                         .collect(java.util.stream.Collectors.toSet());

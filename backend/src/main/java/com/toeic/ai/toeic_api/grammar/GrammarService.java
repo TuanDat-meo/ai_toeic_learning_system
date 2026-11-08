@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +26,11 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class GrammarService {
 
+    private static final Pattern CATEGORY_CODE = Pattern.compile("^[a-z][a-z0-9_]{1,63}$");
+    private static final List<String> TOEIC_PARTS = List.of("Part 5", "Part 6", "Part 7");
+    private static final List<String> TARGET_SCORES = List.of("350_500", "500_750", "750_PLUS", "ALL");
+    private static final List<String> DIFFICULTIES = List.of("EASY", "MEDIUM", "HARD");
+
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -35,11 +41,24 @@ public class GrammarService {
     public List<GrammarTopic> listTopics(UUID userId) {
         String sql = """
                 SELECT g.id, g.code, g.title, g.english_title, g.part, g.target_score, g.status,
-                       g.summary, g.formula,
+                       g.summary, g.formula, g.source_url, g.source_notes,
+                       g.grammar_group, g.parent_topic_id, g.toeic_parts::text AS toeic_parts,
+                       g.difficulty, g.theory::text AS theory, g.metadata::text AS metadata,
                        g.signal_words::text AS signal_words,
                        g.traps::text AS traps,
                        g.examples::text AS examples,
                        g.questions::text AS questions,
+                       COALESCE((
+                           SELECT jsonb_agg(jsonb_build_object(
+                               'vocabularyItemId', v.id,
+                               'word', v.word,
+                               'partOfSpeech', l.part_of_speech,
+                               'meaning', v.meaning
+                           ) ORDER BY l.order_index)
+                           FROM grammar_topic_vocabulary_words l
+                           JOIN vocabulary_items v ON v.id = l.vocabulary_item_id
+                           WHERE l.topic_id = g.id
+                       ), '[]'::jsonb)::text AS word_family_words,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
                        COALESCE(jsonb_array_length(g.questions), 0) AS total_questions,
                        COALESCE(p.status, 'Chưa học') AS user_status,
@@ -55,11 +74,24 @@ public class GrammarService {
     public GrammarTopic getTopic(String topicId, UUID userId) {
         String sql = """
                 SELECT g.id, g.code, g.title, g.english_title, g.part, g.target_score, g.status,
-                       g.summary, g.formula,
+                       g.summary, g.formula, g.source_url, g.source_notes,
+                       g.grammar_group, g.parent_topic_id, g.toeic_parts::text AS toeic_parts,
+                       g.difficulty, g.theory::text AS theory, g.metadata::text AS metadata,
                        g.signal_words::text AS signal_words,
                        g.traps::text AS traps,
                        g.examples::text AS examples,
                        g.questions::text AS questions,
+                       COALESCE((
+                           SELECT jsonb_agg(jsonb_build_object(
+                               'vocabularyItemId', v.id,
+                               'word', v.word,
+                               'partOfSpeech', l.part_of_speech,
+                               'meaning', v.meaning
+                           ) ORDER BY l.order_index)
+                           FROM grammar_topic_vocabulary_words l
+                           JOIN vocabulary_items v ON v.id = l.vocabulary_item_id
+                           WHERE l.topic_id = g.id
+                       ), '[]'::jsonb)::text AS word_family_words,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
                        COALESCE(jsonb_array_length(g.questions), 0) AS total_questions,
                        COALESCE(p.status, 'Chưa học') AS user_status,
@@ -76,8 +108,74 @@ public class GrammarService {
         return topics.get(0);
     }
 
+    public List<GrammarCategory> listCategories() {
+        return jdbc.query("""
+                SELECT code, name, field_definitions::text AS field_definitions, is_system
+                FROM grammar_categories
+                ORDER BY is_system DESC, name ASC
+                """, (rs, rowNum) -> new GrammarCategory(
+                rs.getString("code"),
+                rs.getString("name"),
+                parseMapList(rs.getString("field_definitions")),
+                rs.getBoolean("is_system")));
+    }
+
+    @Transactional
+    public GrammarCategory createCategory(GrammarCategoryRequest request) {
+        validateCategoryRequest(request);
+        try {
+            jdbc.update("""
+                    INSERT INTO grammar_categories (code, name, field_definitions, is_system)
+                    VALUES (?, ?, ?::jsonb, false)
+                    """, request.code().trim(), request.name().trim(), toJsonString(request.fieldDefinitions()));
+        } catch (org.springframework.dao.DuplicateKeyException exception) {
+            throw badRequest("Mã nhóm ngữ pháp đã tồn tại.");
+        }
+        return findCategory(request.code().trim());
+    }
+
+    @Transactional
+    public GrammarCategory updateCategory(String code, GrammarCategoryRequest request) {
+        if (request == null) {
+            throw badRequest("Dữ liệu nhóm ngữ pháp không hợp lệ.");
+        }
+        validateCategoryRequest(new GrammarCategoryRequest(code, request.name(), request.fieldDefinitions()));
+        int updated = jdbc.update("""
+                UPDATE grammar_categories
+                SET name = ?, field_definitions = ?::jsonb, updated_at = now()
+                WHERE code = ?
+                """, request.name().trim(), toJsonString(request.fieldDefinitions()), code);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy nhóm ngữ pháp.");
+        }
+        return findCategory(code);
+    }
+
+    @Transactional
+    public void deleteCategory(String code) {
+        Boolean isSystem = jdbc.query(
+                "SELECT is_system FROM grammar_categories WHERE code = ?",
+                rs -> rs.next() ? rs.getBoolean(1) : null,
+                code);
+        if (isSystem == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy nhóm ngữ pháp.");
+        }
+        if (isSystem) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Không thể xóa nhóm ngữ pháp tích hợp.");
+        }
+        Integer topicCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM grammar_topics WHERE grammar_group = ?", Integer.class, code);
+        if (topicCount != null && topicCount > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhóm đang được chủ điểm sử dụng, không thể xóa.");
+        }
+        jdbc.update("DELETE FROM grammar_categories WHERE code = ?", code);
+    }
+
     @Transactional
     public GrammarTopic createTopic(CreateGrammarTopicRequest req) {
+        if (req == null) {
+            throw badRequest("Dữ liệu chuyên đề không hợp lệ.");
+        }
         String title = req.titleVi() != null && !req.titleVi().isBlank() ? req.titleVi()
                 : (req.title() != null && !req.title().isBlank() ? req.title() : "Chủ điểm ngữ pháp");
         String englishTitle = req.titleEn() != null && !req.titleEn().isBlank() ? req.titleEn()
@@ -85,10 +183,22 @@ public class GrammarService {
         String code = req.code() != null && !req.code().isBlank() ? req.code().trim()
                 : generateTopicCode(title);
         String part = req.part() != null && !req.part().isBlank() ? formatPart(req.part()) : "Part 5";
-        String targetScore = req.targetScore() != null && !req.targetScore().isBlank() ? req.targetScore() : "350-500";
+        String targetScore = normalizeTargetScore(req.targetScore() != null && !req.targetScore().isBlank()
+                ? req.targetScore() : "350-500");
         String status = req.status() != null && !req.status().isBlank() ? req.status() : "DRAFT";
         String summary = req.summary() != null ? req.summary() : "";
         String formula = req.formula() != null ? req.formula() : "";
+        String sourceUrl = normalizeBritishCouncilUrl(req.sourceUrl());
+        String grammarGroup = req.grammarGroup() != null && !req.grammarGroup().isBlank()
+                ? req.grammarGroup().trim() : "other";
+        String parentTopicId = blankToNull(req.parentTopicId());
+        String difficulty = req.difficulty() != null && !req.difficulty().isBlank() ? req.difficulty() : "MEDIUM";
+        List<String> toeicParts = req.toeicParts() != null ? req.toeicParts() : List.of(part);
+        Map<String, String> theory = req.theory() != null ? req.theory() : Map.of();
+        Map<String, Object> metadata = req.metadata() != null ? req.metadata() : Map.of();
+        validateSourceNotes(req.sourceNotes());
+        validateTopic(title, englishTitle, part, targetScore, status, summary, formula, grammarGroup,
+                parentTopicId, difficulty, toeicParts, theory, metadata, req.examples(), req.wordFamilyWords());
         String signalWords = toJsonString(req.signalWords() != null ? req.signalWords() : List.of());
         String traps = toJsonString(req.traps() != null ? req.traps() : List.of());
         String examples = toJsonString(req.examples() != null ? req.examples() : List.of());
@@ -99,51 +209,90 @@ public class GrammarService {
         int orderIndex = req.orderIndex() != null ? req.orderIndex() : (maxOrder != null ? maxOrder : 0);
 
         String insertSql = """
-                INSERT INTO grammar_topics (id, code, title, english_title, part, target_score, status, summary, formula, signal_words, traps, examples, questions, order_index, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb, ?, now(), now())
+                INSERT INTO grammar_topics (
+                    id, code, title, english_title, part, target_score, status, summary, formula,
+                    signal_words, traps, examples, questions, order_index, source_url, source_notes,
+                    grammar_group, parent_topic_id, toeic_parts, difficulty, theory, metadata, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, now(), now())
                 """;
         jdbc.update(insertSql, id, code, title, englishTitle, part, targetScore, status, summary, formula,
-                signalWords, traps, examples, questions, orderIndex);
+                signalWords, traps, examples, questions, orderIndex, sourceUrl,
+                safeText(req.sourceNotes()), grammarGroup, parentTopicId, toJsonString(toeicParts), difficulty,
+                toJsonString(theory), toJsonString(metadata));
+        if (req.wordFamilyWords() != null) {
+            syncWordFamilyWords(id, req.wordFamilyWords());
+        }
 
         return getTopic(id, null);
     }
 
     @Transactional
     public GrammarTopic updateTopic(String id, UpdateGrammarTopicRequest req) {
-        String title = req.titleVi() != null && !req.titleVi().isBlank() ? req.titleVi()
-                : (req.title() != null ? req.title() : "");
-        String englishTitle = req.titleEn() != null && !req.titleEn().isBlank() ? req.titleEn()
-                : (req.englishTitle() != null ? req.englishTitle() : title);
-        String code = req.code() != null ? req.code().trim() : "";
-        String part = req.part() != null ? formatPart(req.part()) : "Part 5";
-        String targetScore = req.targetScore() != null ? req.targetScore() : "350-500";
-        String status = req.status() != null ? req.status() : "PUBLISHED";
-        String summary = req.summary() != null ? req.summary() : "";
-        String formula = req.formula() != null ? req.formula() : "";
-        String signalWords = toJsonString(req.signalWords() != null ? req.signalWords() : List.of());
-        String traps = toJsonString(req.traps() != null ? req.traps() : List.of());
-        String examples = toJsonString(req.examples() != null ? req.examples() : List.of());
+        if (req == null) {
+            throw badRequest("Dữ liệu chuyên đề không hợp lệ.");
+        }
+        GrammarTopic existing = getTopic(id, null);
+        String title = firstNonBlank(req.titleVi(), req.title(), existing.title());
+        String englishTitle = firstNonBlank(req.titleEn(), req.englishTitle(), existing.englishTitle());
+        String code = firstNonBlank(req.code(), existing.code());
+        String part = req.part() != null ? formatPart(req.part()) : formatPart(existing.part());
+        String targetScore = req.targetScore() != null ? normalizeTargetScore(req.targetScore()) : existing.targetScore();
+        String status = req.status() != null ? req.status() : existing.status();
+        String summary = req.summary() != null ? req.summary() : existing.summary();
+        String formula = req.formula() != null ? req.formula() : existing.formula();
+        String sourceUrl = normalizeBritishCouncilUrl(req.sourceUrl());
+        if (req.sourceUrl() == null) {
+            sourceUrl = existing.sourceUrl();
+        }
+        String sourceNotes = req.sourceNotes() != null ? req.sourceNotes() : existing.sourceNotes();
+        validateSourceNotes(sourceNotes);
+        String grammarGroup = req.grammarGroup() != null ? req.grammarGroup() : existing.grammarGroup();
+        String parentTopicId = req.parentTopicId() != null ? blankToNull(req.parentTopicId()) : existing.parentTopicId();
+        String difficulty = req.difficulty() != null ? req.difficulty() : existing.difficulty();
+        List<String> toeicParts = req.toeicParts() != null ? req.toeicParts() : existing.toeicParts();
+        Map<String, String> theory = req.theory() != null ? req.theory() : existing.theory();
+        Map<String, Object> metadata = req.metadata() != null ? req.metadata() : existing.metadata();
+        List<Map<String, Object>> topicExamples = req.examples() != null ? req.examples() : existing.examples();
+        validateTopic(title, englishTitle, part, targetScore, status, summary, formula, grammarGroup,
+                parentTopicId, difficulty, toeicParts, theory, metadata, topicExamples, req.wordFamilyWords());
+        validateNoParentCycle(id, parentTopicId);
+        String signalWords = toJsonString(req.signalWords() != null ? req.signalWords() : existing.signalWords());
+        String traps = toJsonString(req.traps() != null ? req.traps() : existing.traps());
+        String examples = toJsonString(topicExamples);
 
         String updateSql = """
                 UPDATE grammar_topics SET
-                    title = CASE WHEN ? != '' THEN ? ELSE title END,
-                    english_title = CASE WHEN ? != '' THEN ? ELSE english_title END,
-                    code = CASE WHEN ? != '' THEN ? ELSE code END,
+                    title = ?,
+                    english_title = ?,
+                    code = ?,
                     part = ?,
                     target_score = ?,
                     status = ?,
                     summary = ?,
                     formula = ?,
+                    source_url = ?,
+                    source_notes = ?,
+                    grammar_group = ?,
+                    parent_topic_id = ?,
+                    toeic_parts = ?::jsonb,
+                    difficulty = ?,
+                    theory = ?::jsonb,
+                    metadata = ?::jsonb,
                     signal_words = ?::jsonb,
                     traps = ?::jsonb,
                     examples = ?::jsonb,
                     updated_at = now()
                 WHERE id = ?
                 """;
-        int rows = jdbc.update(updateSql, title, title, englishTitle, englishTitle, code, code,
-                part, targetScore, status, summary, formula, signalWords, traps, examples, id);
+        int rows = jdbc.update(updateSql, title, englishTitle, code, part, targetScore, status, summary, formula,
+                sourceUrl, sourceNotes, grammarGroup, parentTopicId, toJsonString(toeicParts), difficulty,
+                toJsonString(theory), toJsonString(metadata), signalWords, traps, examples, id);
         if (rows == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm: " + id);
+        }
+        if (req.wordFamilyWords() != null) {
+            syncWordFamilyWords(id, req.wordFamilyWords());
         }
         return getTopic(id, null);
     }
@@ -159,15 +308,101 @@ public class GrammarService {
     @Transactional
     public GrammarTopic addQuestion(String topicId, Map<String, Object> question) {
         GrammarTopic topic = getTopic(topicId, null);
+        validateQuestion(question);
         List<Map<String, Object>> currentQuestions = new ArrayList<>(topic.questions());
         if (!question.containsKey("id") || question.get("id") == null || question.get("id").toString().isBlank()) {
-            question.put("id", topicId + "-q" + (currentQuestions.size() + 1));
+            question.put("id", topicId + "-q-" + UUID.randomUUID());
         }
         currentQuestions.add(question);
         String questionsJson = toJsonString(currentQuestions);
 
         jdbc.update("UPDATE grammar_topics SET questions = ?::jsonb, updated_at = now() WHERE id = ?", questionsJson, topicId);
         return getTopic(topicId, null);
+    }
+
+    @Transactional
+    public GrammarTopic updateQuestion(String topicId, String questionId, Map<String, Object> question) {
+        GrammarTopic topic = getTopic(topicId, null);
+        validateQuestion(question);
+        List<Map<String, Object>> currentQuestions = new ArrayList<>(topic.questions());
+        int questionIndex = -1;
+        for (int i = 0; i < currentQuestions.size(); i++) {
+            if (questionId.equals(String.valueOf(currentQuestions.get(i).get("id")))) {
+                questionIndex = i;
+                break;
+            }
+        }
+        if (questionIndex < 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy câu hỏi: " + questionId);
+        }
+
+        Map<String, Object> updatedQuestion = new java.util.LinkedHashMap<>(question);
+        updatedQuestion.put("id", questionId);
+        currentQuestions.set(questionIndex, updatedQuestion);
+        jdbc.update("UPDATE grammar_topics SET questions = ?::jsonb, updated_at = now() WHERE id = ?",
+                toJsonString(currentQuestions), topicId);
+        return getTopic(topicId, null);
+    }
+
+    @Transactional
+    public GrammarTopic deleteQuestion(String topicId, String questionId) {
+        GrammarTopic topic = getTopic(topicId, null);
+        List<Map<String, Object>> currentQuestions = new ArrayList<>(topic.questions());
+        boolean removed = currentQuestions.removeIf(question ->
+                questionId.equals(String.valueOf(question.get("id"))));
+        if (!removed) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy câu hỏi: " + questionId);
+        }
+        jdbc.update("UPDATE grammar_topics SET questions = ?::jsonb, updated_at = now() WHERE id = ?",
+                toJsonString(currentQuestions), topicId);
+        return getTopic(topicId, null);
+    }
+
+    private void validateQuestion(Map<String, Object> question) {
+        if (question == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu câu hỏi không hợp lệ.");
+        }
+        Object questionText = question.get("questionText");
+        Object explanation = question.get("explanation");
+        Object correctAnswer = question.get("correctAnswer");
+        Object options = question.get("options");
+        if (questionText == null || questionText.toString().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nội dung câu hỏi là bắt buộc.");
+        }
+        if (!(options instanceof Map<?, ?> optionMap)
+                || List.of("A", "B", "C", "D").stream()
+                        .anyMatch(key -> optionMap.get(key) == null || optionMap.get(key).toString().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần nhập đầy đủ phương án A, B, C và D.");
+        }
+        if (correctAnswer == null
+                || !List.of("A", "B", "C", "D").contains(correctAnswer.toString().toUpperCase(Locale.ROOT))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đáp án đúng phải là A, B, C hoặc D.");
+        }
+        if (explanation == null || explanation.toString().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giải thích câu hỏi là bắt buộc.");
+        }
+        Object part = question.get("part");
+        if (part == null || !List.of("PART_5", "PART_6", "PART_7", "Part 5", "Part 6", "Part 7")
+                .contains(part.toString())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phần thi phải là Part 5, Part 6 hoặc Part 7.");
+        }
+    }
+
+    private String normalizeBritishCouncilUrl(String sourceUrl) {
+        if (sourceUrl == null || sourceUrl.isBlank()) return null;
+        try {
+            java.net.URI uri = java.net.URI.create(sourceUrl.trim());
+            if (!"https".equalsIgnoreCase(uri.getScheme())
+                    || !"learnenglish.britishcouncil.org".equalsIgnoreCase(uri.getHost())
+                    || uri.getUserInfo() != null
+                    || uri.getPort() != -1 && uri.getPort() != 443) {
+                throw new IllegalArgumentException();
+            }
+            return uri.toString();
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Nguồn tham khảo phải là liên kết HTTPS thuộc learnenglish.britishcouncil.org.");
+        }
     }
 
     @Transactional
@@ -350,6 +585,15 @@ public class GrammarService {
                 rs.getString("status"),
                 rs.getString("summary"),
                 rs.getString("formula"),
+                rs.getString("source_url"),
+                rs.getString("source_notes"),
+                rs.getString("grammar_group"),
+                rs.getString("parent_topic_id"),
+                parseStringList(rs.getString("toeic_parts")),
+                rs.getString("difficulty"),
+                parseStringMap(rs.getString("theory")),
+                parseObjectMap(rs.getString("metadata")),
+                parseMapList(rs.getString("word_family_words")),
                 parseStringList(rs.getString("signal_words")),
                 parseStringList(rs.getString("traps")),
                 parseMapList(rs.getString("examples")),
@@ -360,6 +604,244 @@ public class GrammarService {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()
         );
+    }
+
+    private GrammarCategory findCategory(String code) {
+        List<GrammarCategory> result = jdbc.query("""
+                SELECT code, name, field_definitions::text AS field_definitions, is_system
+                FROM grammar_categories WHERE code = ?
+                """, (rs, rowNum) -> new GrammarCategory(
+                rs.getString("code"),
+                rs.getString("name"),
+                parseMapList(rs.getString("field_definitions")),
+                rs.getBoolean("is_system")), code);
+        if (result.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy nhóm ngữ pháp.");
+        }
+        return result.get(0);
+    }
+
+    private void validateCategoryRequest(GrammarCategoryRequest request) {
+        if (request == null || request.code() == null || !CATEGORY_CODE.matcher(request.code().trim()).matches()) {
+            throw badRequest("Mã nhóm phải bắt đầu bằng chữ thường và chỉ chứa chữ thường, số hoặc dấu gạch dưới.");
+        }
+        if (request.name() == null || request.name().isBlank() || request.name().trim().length() > 120) {
+            throw badRequest("Tên nhóm ngữ pháp là bắt buộc và tối đa 120 ký tự.");
+        }
+        List<Map<String, Object>> definitions = request.fieldDefinitions() != null
+                ? request.fieldDefinitions() : List.of();
+        if (definitions.size() > 30) {
+            throw badRequest("Mỗi nhóm ngữ pháp chỉ được có tối đa 30 trường đặc thù.");
+        }
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        for (Map<String, Object> definition : definitions) {
+            if (definition == null) {
+                throw badRequest("Danh sách trường đặc thù không hợp lệ.");
+            }
+            Object keyValue = definition.get("key");
+            Object labelValue = definition.get("label");
+            Object optionsValue = definition.get("options");
+            if (!(keyValue instanceof String key)
+                    || !key.matches("^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
+                    || !(labelValue instanceof String label)
+                    || label.isBlank() || label.length() > 120
+                    || !keys.add(key)) {
+                throw badRequest("Danh sách trường đặc thù không hợp lệ.");
+            }
+            if (optionsValue != null && (!(optionsValue instanceof List<?> options)
+                    || options.size() > 100
+                    || options.stream().anyMatch(option -> !(option instanceof String value)
+                            || value.isBlank() || value.length() > 120))) {
+                throw badRequest("Danh sách lựa chọn của trường đặc thù không hợp lệ.");
+            }
+        }
+    }
+
+    private void validateTopic(
+            String title,
+            String englishTitle,
+            String part,
+            String targetScore,
+            String status,
+            String summary,
+            String formula,
+            String grammarGroup,
+            String parentTopicId,
+            String difficulty,
+            List<String> toeicParts,
+            Map<String, String> theory,
+            Map<String, Object> metadata,
+            List<Map<String, Object>> examples,
+            List<Map<String, Object>> wordFamilyWords) {
+        if (title == null || title.isBlank() || title.trim().length() > 120
+                || englishTitle == null || englishTitle.isBlank() || englishTitle.trim().length() > 120) {
+            throw badRequest("Tên chủ điểm tiếng Việt và tiếng Anh là bắt buộc, tối đa 120 ký tự.");
+        }
+        if (summary == null || summary.isBlank() || summary.length() > 1000) {
+            throw badRequest("Tóm tắt là bắt buộc và tối đa 1.000 ký tự.");
+        }
+        if (formula == null || formula.isBlank() || formula.length() > 5000) {
+            throw badRequest("Công thức / cấu trúc là bắt buộc và tối đa 5.000 ký tự.");
+        }
+        if (!TARGET_SCORES.contains(targetScore)) {
+            throw badRequest("Mục tiêu điểm TOEIC không hợp lệ.");
+        }
+        if (!List.of("DRAFT", "PUBLISHED", "ARCHIVED").contains(status)) {
+            throw badRequest("Trạng thái chủ điểm không hợp lệ.");
+        }
+        if (!DIFFICULTIES.contains(difficulty)) {
+            throw badRequest("Độ khó không hợp lệ.");
+        }
+        if (part == null || !TOEIC_PARTS.contains(formatPart(part))) {
+            throw badRequest("Part TOEIC không hợp lệ.");
+        }
+        if (grammarGroup == null || grammarGroup.isBlank()
+                || !Boolean.TRUE.equals(jdbc.query(
+                        "SELECT EXISTS(SELECT 1 FROM grammar_categories WHERE code = ?)",
+                        rs -> rs.next() && rs.getBoolean(1), grammarGroup))) {
+            throw badRequest("Chọn một nhóm ngữ pháp đang tồn tại.");
+        }
+        if (toeicParts == null || toeicParts.size() > TOEIC_PARTS.size()
+                || toeicParts.stream().anyMatch(value -> !TOEIC_PARTS.contains(value))
+                || toeicParts.stream().distinct().count() != toeicParts.size()) {
+            throw badRequest("Các Part TOEIC phải là Part 5, Part 6 hoặc Part 7.");
+        }
+        if (parentTopicId != null) {
+            if (parentTopicId.isBlank()
+                    || !Boolean.TRUE.equals(jdbc.query(
+                            "SELECT EXISTS(SELECT 1 FROM grammar_topics WHERE id = ?)",
+                            rs -> rs.next() && rs.getBoolean(1), parentTopicId))) {
+                throw badRequest("Chủ điểm cha không tồn tại.");
+            }
+        }
+        if (theory != null && (theory.size() > 30
+                || theory.values().stream().anyMatch(value -> value != null && value.length() > 5000))) {
+            throw badRequest("Nội dung lý thuyết vượt giới hạn cho phép.");
+        }
+        if (metadata != null) {
+            if (metadata.size() > 30 || toJsonString(metadata).length() > 50000) {
+                throw badRequest("Metadata ngữ pháp vượt giới hạn cho phép.");
+            }
+            validateGroupMetadata(grammarGroup, metadata);
+        }
+        if (examples != null) {
+            if (examples.size() > 50 || examples.stream().anyMatch(example -> example == null
+                    || textValue(example, "sentence").isBlank()
+                            || textValue(example, "sentence").length() > 1000
+                            || textValue(example, "translation").isBlank()
+                            || textValue(example, "translation").length() > 1000
+                            || textValue(example, "analysis").length() > 2000
+                            || textValue(example, "focusWord").length() > 200)) {
+                throw badRequest("Mỗi ví dụ cần có câu tiếng Anh và bản dịch hợp lệ.");
+            }
+        }
+        if (wordFamilyWords != null) {
+            if (!"parts_of_speech".equals(grammarGroup) && !wordFamilyWords.isEmpty()) {
+                throw badRequest("Word Family chỉ áp dụng cho nhóm Từ loại.");
+            }
+            if (wordFamilyWords.size() > 100) {
+                throw badRequest("Một Word Family không được vượt quá 100 từ.");
+            }
+        }
+    }
+
+    private void validateGroupMetadata(String grammarGroup, Map<String, Object> metadata) {
+        Object rawGroups = metadata.get("groupValues");
+        if (!(rawGroups instanceof Map<?, ?> groupValues)) return;
+        Object rawCurrent = groupValues.get(grammarGroup);
+        if (!(rawCurrent instanceof Map<?, ?> currentValues)) return;
+        for (Map.Entry<?, ?> entry : currentValues.entrySet()) {
+            if (!(entry.getKey() instanceof String key) || !key.matches("^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
+                    || entry.getValue() != null && (!(entry.getValue() instanceof String value) || value.length() > 5000)) {
+                throw badRequest("Trường đặc thù không khớp với nhóm ngữ pháp đã chọn.");
+            }
+        }
+    }
+
+    private void syncWordFamilyWords(String topicId, List<Map<String, Object>> words) {
+        jdbc.update("DELETE FROM grammar_topic_vocabulary_words WHERE topic_id = ?", topicId);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int index = 0; index < words.size(); index++) {
+            Map<String, Object> word = words.get(index);
+            if (word == null) {
+                throw badRequest("Liên kết Word Family không hợp lệ.");
+            }
+            Object rawId = word.get("vocabularyItemId");
+            Object rawPartOfSpeech = word.get("partOfSpeech");
+            if (!(rawId instanceof String vocabularyItemId) || vocabularyItemId.isBlank()
+                    || !seen.add(vocabularyItemId)
+                    || !(rawPartOfSpeech instanceof String partOfSpeech)
+                    || partOfSpeech.isBlank() || partOfSpeech.length() > 64) {
+                throw badRequest("Liên kết Word Family không hợp lệ.");
+            }
+            Boolean exists = jdbc.query(
+                    "SELECT EXISTS(SELECT 1 FROM vocabulary_items WHERE id = ?)",
+                    rs -> rs.next() && rs.getBoolean(1), vocabularyItemId);
+            if (!Boolean.TRUE.equals(exists)) {
+                throw badRequest("Không tìm thấy từ vựng được liên kết: " + vocabularyItemId);
+            }
+            jdbc.update("""
+                    INSERT INTO grammar_topic_vocabulary_words (topic_id, vocabulary_item_id, part_of_speech, order_index)
+                    VALUES (?, ?, ?, ?)
+                    """, topicId, vocabularyItemId, partOfSpeech, index);
+        }
+    }
+
+    private String textValue(Map<String, Object> item, String key) {
+        Object value = item.get(key);
+        return value instanceof String text ? text : "";
+    }
+
+    private String firstNonBlank(String... candidates) {
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank()) return candidate.trim();
+        }
+        return "";
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeTargetScore(String value) {
+        if (value == null || value.isBlank()) return value;
+        String normalized = value.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace("+", "_PLUS");
+        if (List.of("350_500", "500_750", "750_PLUS", "ALL").contains(normalized)) return normalized;
+        if (normalized.contains("750") || normalized.contains("850")) return "750_PLUS";
+        if (normalized.contains("500") || normalized.contains("650")) return "500_750";
+        if (normalized.contains("350") || normalized.contains("450")) return "350_500";
+        return normalized;
+    }
+
+    private void validateSourceNotes(String sourceNotes) {
+        if (sourceNotes != null && sourceNotes.length() > 3000) {
+            throw badRequest("Ghi chú nguồn không được vượt quá 3.000 ký tự.");
+        }
+    }
+
+    private void validateNoParentCycle(String topicId, String parentTopicId) {
+        if (parentTopicId == null) return;
+        Boolean cycle = jdbc.query("""
+                WITH RECURSIVE ancestors(id, parent_topic_id) AS (
+                    SELECT id, parent_topic_id FROM grammar_topics WHERE id = ?
+                    UNION ALL
+                    SELECT parent.id, parent.parent_topic_id
+                    FROM grammar_topics parent
+                    JOIN ancestors child ON parent.id = child.parent_topic_id
+                )
+                SELECT EXISTS(SELECT 1 FROM ancestors WHERE id = ?)
+                """, rs -> rs.next() && rs.getBoolean(1), parentTopicId, topicId);
+        if (Boolean.TRUE.equals(cycle)) {
+            throw badRequest("Chủ điểm cha không được tạo vòng lặp phân cấp.");
+        }
+    }
+
+    private ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
     private List<String> parseStringList(String json) {
@@ -380,12 +862,30 @@ public class GrammarService {
         }
     }
 
+    private Map<String, String> parseStringMap(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private Map<String, Object> parseObjectMap(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
     private String toJsonString(Object obj) {
         if (obj == null) return "[]";
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            return "[]";
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nội dung chuyên đề không thể chuyển thành JSON hợp lệ.", e);
         }
     }
 
@@ -454,6 +954,15 @@ public class GrammarService {
             String status,
             String summary,
             String formula,
+            String sourceUrl,
+            String sourceNotes,
+            String grammarGroup,
+            String parentTopicId,
+            List<String> toeicParts,
+            String difficulty,
+            Map<String, String> theory,
+            Map<String, Object> metadata,
+            List<Map<String, Object>> wordFamilyWords,
             List<String> signalWords,
             List<String> traps,
             List<Map<String, Object>> examples,
@@ -476,6 +985,15 @@ public class GrammarService {
             String status,
             String summary,
             String formula,
+            String sourceUrl,
+            String sourceNotes,
+            String grammarGroup,
+            String parentTopicId,
+            List<String> toeicParts,
+            String difficulty,
+            Map<String, String> theory,
+            Map<String, Object> metadata,
+            List<Map<String, Object>> wordFamilyWords,
             List<String> signalWords,
             List<String> traps,
             List<Map<String, Object>> examples,
@@ -494,6 +1012,15 @@ public class GrammarService {
             String status,
             String summary,
             String formula,
+            String sourceUrl,
+            String sourceNotes,
+            String grammarGroup,
+            String parentTopicId,
+            List<String> toeicParts,
+            String difficulty,
+            Map<String, String> theory,
+            Map<String, Object> metadata,
+            List<Map<String, Object>> wordFamilyWords,
             List<String> signalWords,
             List<String> traps,
             List<Map<String, Object>> examples,
@@ -515,5 +1042,18 @@ public class GrammarService {
 
     public record BulkDeleteRequest(
             List<String> ids
+    ) {}
+
+    public record GrammarCategory(
+            String code,
+            String name,
+            List<Map<String, Object>> fieldDefinitions,
+            boolean system
+    ) {}
+
+    public record GrammarCategoryRequest(
+            String code,
+            String name,
+            List<Map<String, Object>> fieldDefinitions
     ) {}
 }

@@ -26,9 +26,9 @@ import { VocabularyModals } from "@/components/admin/content/vocabulary/Vocabula
 import { deduplicateVocabularySenses } from "@/lib/vocabulary-part-of-speech";
 import { playVocabularyAudio } from "@/lib/vocabulary-pronunciation";
 
-export const LOCAL_VOCAB_TESTS_KEY = "toeic_vocab_tests";
-export const LOCAL_VOCAB_VERSION_KEY = "toeic_vocab_sync_ver";
-export const CURRENT_VOCAB_VERSION = "2026_10_22_real_data_v2";
+const LOCAL_VOCAB_TESTS_KEY = "toeic_vocab_tests";
+const LOCAL_VOCAB_VERSION_KEY = "toeic_vocab_sync_ver";
+const CURRENT_VOCAB_VERSION = "2026_10_22_real_data_v2";
 
 function getLocalVocabTests(): VocabularyTestSet[] | null {
   if (typeof window === "undefined") return null;
@@ -342,6 +342,7 @@ export default function VocabularyLearningPage() {
     partOfSpeech: string;
     meaning: string;
     example: string;
+    exampleMeaning: string;
     level: string;
     audioUrl: string;
     audioRegion: string;
@@ -349,19 +350,52 @@ export default function VocabularyLearningPage() {
     wordFamily: string;
     senses: VocabularySense[];
     relatedForms: VocabularyRelatedForm[];
+    targetSetId?: string;
     existingWordId?: string;
     duplicateAction?: "add-current-sense" | "update-missing-audio" | "add-separately" | "merge-other-senses";
     duplicateSenses?: VocabularySense[];
   }) => {
     if (!wordListModalTest) {
-      if (!editingWord) return;
       try {
+        if (!editingWord) {
+          if (!w.targetSetId) {
+            showToast("Vui lòng chọn bộ từ vựng để lưu mục từ mới.");
+            return;
+          }
+          const createdWord = await addVocabularyWord(w.targetSetId, {
+            word: w.word,
+            ipa: w.ipa,
+            partOfSpeech: w.partOfSpeech,
+            meaning: w.meaning,
+            example: w.example,
+            exampleMeaning: w.exampleMeaning,
+            level: w.level,
+            audioUrl: w.audioUrl,
+            audioRegion: w.audioRegion,
+            wordFamily: w.wordFamily,
+            senses: w.duplicateAction === "merge-other-senses"
+              ? deduplicateVocabularySenses([...w.senses, ...(w.duplicateSenses || [])])
+              : w.senses,
+            relatedForms: w.relatedForms,
+          });
+          updateTestsState((prev) => prev.map((test) => test.id === w.targetSetId
+            ? {
+                ...test,
+                words: [createdWord, ...(test.words || [])],
+                wordCount: (test.wordCount || test.words?.length || 0) + 1,
+              }
+            : test));
+          showToast(`Đã thêm từ/cụm từ "${w.word}" vào bộ từ vựng.`);
+          setShowAddWordModal(false);
+          return;
+        }
         const updatedWord = await updateVocabularyWord(editingWord.id, {
           word: w.word,
           ipa: w.ipa,
           partOfSpeech: w.partOfSpeech,
           meaning: w.meaning,
           example: w.example,
+          exampleMeaning: w.exampleMeaning,
           level: w.level,
           audioUrl: w.audioUrl,
           audioRegion: w.audioRegion,
@@ -377,8 +411,10 @@ export default function VocabularyLearningPage() {
         setEditingWord(null);
         setShowAddWordModal(false);
       } catch (error) {
-        console.error("Lỗi cập nhật từ trong ngân hàng:", error);
-        showToast("Không thể cập nhật từ vựng. Vui lòng thử lại.");
+        console.error(editingWord ? "Lỗi cập nhật từ trong ngân hàng:" : "Lỗi thêm từ vào ngân hàng:", error);
+        showToast(editingWord
+          ? "Không thể cập nhật từ vựng. Vui lòng thử lại."
+          : "Không thể thêm từ vựng vào bộ đã chọn. Vui lòng thử lại.");
       }
       return;
     }
@@ -391,6 +427,7 @@ export default function VocabularyLearningPage() {
           partOfSpeech: w.partOfSpeech,
           meaning: w.meaning,
           example: w.example,
+          exampleMeaning: w.exampleMeaning,
           level: w.level,
           audioUrl: w.audioUrl,
           audioRegion: w.audioRegion,
@@ -424,6 +461,7 @@ export default function VocabularyLearningPage() {
             partOfSpeech: existingWord.partOfSpeech || existingWord.pos || "",
             meaning: existingWord.meaning || existingWord.meanings?.[0]?.meaning || "",
             example: existingWord.example || existingWord.meanings?.[0]?.example || "",
+            exampleMeaning: existingWord.exampleMeaning || existingWord.exampleVi || "",
           }];
       const sensesToSave = w.duplicateAction === "add-current-sense"
         ? deduplicateVocabularySenses([...existingSenses, ...w.senses])
@@ -435,6 +473,7 @@ export default function VocabularyLearningPage() {
           partOfSpeech: existingSenses[0]?.partOfSpeech || w.partOfSpeech,
           meaning: existingSenses[0]?.meaning || w.meaning,
           example: existingSenses[0]?.example || w.example,
+          exampleMeaning: existingWord.exampleMeaning || existingWord.exampleVi || w.exampleMeaning,
           level: existingWord.level || w.level,
           audioUrl: existingWord.audioUrl || existingWord.audio || w.audioUrl,
           audioRegion: existingWord.audioRegion || w.audioRegion,
@@ -470,6 +509,7 @@ export default function VocabularyLearningPage() {
           partOfSpeech: w.partOfSpeech,
           meaning: w.meaning,
           example: w.example,
+          exampleMeaning: w.exampleMeaning,
           level: w.level,
           audioUrl: w.audioUrl,
           audioRegion: w.audioRegion,

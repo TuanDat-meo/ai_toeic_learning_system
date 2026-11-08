@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.mockito.ArgumentCaptor;
@@ -26,7 +27,8 @@ class PaymentTransactionServiceTest {
         UUID transactionId = UUID.randomUUID();
         PaymentTransaction transaction = transaction(transactionId, "SUCCESS");
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
-        when(jdbc.queryForObject(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(transaction);
+        when(jdbc.queryForObject(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenReturn(transaction);
         PaymentTransactionService service = new PaymentTransactionService(jdbc, subscriptions, mock(VietQrPaymentService.class));
 
         PaymentTransaction result = service.confirm(transactionId);
@@ -41,7 +43,7 @@ class PaymentTransactionServiceTest {
         SubscriptionService subscriptions = mock(SubscriptionService.class);
         UUID transactionId = UUID.randomUUID();
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
-        when(jdbc.queryForObject(anyString(), any(RowMapper.class), any(Object[].class)))
+        when(jdbc.queryForObject(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
                 .thenReturn(transaction(transactionId, "REFUNDED"));
         PaymentTransactionService service = new PaymentTransactionService(jdbc, subscriptions, mock(VietQrPaymentService.class));
 
@@ -57,7 +59,7 @@ class PaymentTransactionServiceTest {
         SubscriptionService subscriptions = mock(SubscriptionService.class);
         UUID transactionId = UUID.randomUUID();
         Instant createdAt = Instant.parse("2026-10-18T20:00:00Z");
-        when(jdbc.query(anyString(), any(RowMapper.class), eq("payment TOEICREFERENCE")))
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), eq("payment TOEICREFERENCE")))
                 .thenReturn(List.of(new PaymentTransactionService.SePayPaymentMatch(
                         transactionId, 75_000, "EXPIRED", createdAt)));
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
@@ -77,7 +79,7 @@ class PaymentTransactionServiceTest {
         SubscriptionService subscriptions = mock(SubscriptionService.class);
         UUID transactionId = UUID.randomUUID();
         Instant createdAt = Instant.parse("2026-10-18T20:00:00Z");
-        when(jdbc.query(anyString(), any(RowMapper.class), eq("payment TOEICREFERENCE")))
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), eq("payment TOEICREFERENCE")))
                 .thenReturn(List.of(new PaymentTransactionService.SePayPaymentMatch(
                         transactionId, 75_000, "EXPIRED", createdAt)));
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
@@ -99,7 +101,7 @@ class PaymentTransactionServiceTest {
         SubscriptionService subscriptions = mock(SubscriptionService.class);
         UUID transactionId = UUID.randomUUID();
         Instant createdAt = Instant.now();
-        when(jdbc.query(anyString(), any(RowMapper.class), eq("payment TOEICREFERENCE")))
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), eq("payment TOEICREFERENCE")))
                 .thenReturn(List.of(new PaymentTransactionService.SePayPaymentMatch(
                         transactionId, 75_000, "PENDING", createdAt)));
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
@@ -120,7 +122,7 @@ class PaymentTransactionServiceTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         UUID firstId = UUID.randomUUID();
         Instant createdAt = Instant.now();
-        when(jdbc.query(anyString(), any(RowMapper.class), eq("two references")))
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), eq("two references")))
                 .thenReturn(List.of(
                         new PaymentTransactionService.SePayPaymentMatch(firstId, 75_000, "PENDING", createdAt),
                         new PaymentTransactionService.SePayPaymentMatch(UUID.randomUUID(), 75_000, "PENDING", createdAt)));

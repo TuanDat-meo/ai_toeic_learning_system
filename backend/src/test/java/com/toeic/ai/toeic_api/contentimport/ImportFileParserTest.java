@@ -9,8 +9,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 class ImportFileParserTest {
     private final ImportFileParser parser = new ImportFileParser();
 

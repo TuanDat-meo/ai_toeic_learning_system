@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
-import { PART_LABEL } from "@/lib/types/domain";
 import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import {
   getAdminGrammarTopics,
@@ -10,6 +9,8 @@ import {
   updateGrammarTopic,
   deleteGrammarTopic,
   addGrammarQuestion,
+  updateGrammarQuestion,
+  deleteGrammarQuestion,
   bulkUpdateGrammarStatus,
   bulkDeleteGrammarTopics,
 } from "@/lib/api/grammar";
@@ -20,18 +21,16 @@ import {
 import { GrammarTopicList } from "@/components/admin/content/grammar/GrammarTopicList";
 import {
   GrammarQuestionBankView,
-  GrammarTrapsMatrixView,
-  GrammarCurriculumConfigView,
 } from "@/components/admin/content/grammar/GrammarViews";
+import { GrammarContentReviewView } from "@/components/admin/content/grammar/GrammarContentReviewView";
 import {
   GrammarTopicDetailModal,
   GrammarTopicEditModal,
   GrammarDeleteModal,
-  GrammarQuizModal,
   GrammarAddQuestionModal,
 } from "@/components/admin/content/grammar/GrammarModals";
 
-export const LOCAL_GRAMMAR_TOPICS_KEY = "toeic_grammar_topics";
+const LOCAL_GRAMMAR_TOPICS_KEY = "toeic_grammar_topics";
 
 function getLocalGrammarTopics(): GrammarTopicItem[] | null {
   if (typeof window === "undefined") return null;
@@ -64,8 +63,9 @@ export default function AdminGrammarPage() {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // Helper cập nhật state và đồng bộ localStorage
+  // Keep the admin cache in sync only after the backend confirms a change.
   const updateTopicsState = (updater: (prev: GrammarTopicItem[]) => GrammarTopicItem[]) => {
     setTopics((prev) => {
       const next = updater(prev);
@@ -74,16 +74,15 @@ export default function AdminGrammarPage() {
     });
   };
 
-  // Modals state
+  // Dialog state
   const [theoryTopic, setTheoryTopic] = useState<GrammarTopicItem | null>(null);
-  const [quizActive, setQuizActive] = useState<boolean>(false);
-  const [quizTitle, setQuizTitle] = useState<string>("");
-  const [quizQuestions, setQuizQuestions] = useState<GrammarQuestionItem[]>([]);
-  const [activeTopicForQuiz, setActiveTopicForQuiz] = useState<GrammarTopicItem | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [editTopicItem, setEditTopicItem] = useState<GrammarTopicItem | null>(null);
-  const [addQuestionTopic, setAddQuestionTopic] = useState<GrammarTopicItem | null>(null);
+  const [questionModal, setQuestionModal] = useState<{
+    topic: GrammarTopicItem | null;
+    question: GrammarQuestionItem | null;
+  } | null>(null);
   const [deleteConfirmTopic, setDeleteConfirmTopic] = useState<GrammarTopicItem | null>(null);
 
   const loadTopics = useCallback(async () => {
@@ -155,23 +154,8 @@ export default function AdminGrammarPage() {
     return topics.reduce((acc, t) => acc + (t.questions ? t.questions.length : 0), 0);
   }, [topics]);
 
-  // Preview / Student Simulation Quiz Trigger
-  const startTopicQuiz = (topic: GrammarTopicItem) => {
-    if (!topic.questions || topic.questions.length === 0) return;
-    setActiveTopicForQuiz(topic);
-    setQuizTitle(`Xem trước bài kiểm tra: ${topic.titleVi || topic.title} (${topic.code})`);
-    setQuizQuestions(topic.questions);
-    setQuizActive(true);
-  };
-
-  // handleRecordResult: Không cập nhật counter trên topic.
-  // Kết quả đúng/sai ghi vào question_attempts (server-side) và
-  // được tính động khi cần hiển thị.
-  const handleRecordResult = (_topicId: string, _isCorrect: boolean) => {
-    // TODO: POST /api/practice/sessions/{id}/answers
-  };
-
   const handleSaveTopic = async (topicData: Partial<GrammarTopicItem>) => {
+    setActionError(null);
     if (editTopicItem) {
       try {
         const updated = await updateGrammarTopic(editTopicItem.id, topicData);
@@ -180,61 +164,75 @@ export default function AdminGrammarPage() {
         );
       } catch (err) {
         console.error("Lỗi khi cập nhật chuyên đề:", err);
-        updateTopicsState((prev) =>
-          prev.map((t) => (t.id === editTopicItem.id ? { ...t, ...topicData } : t))
-        );
+        setActionError(err instanceof Error ? `Không thể lưu chuyên đề: ${err.message}` : "Không thể lưu chuyên đề.");
+        throw err;
       }
-      setEditTopicItem(null);
     } else {
       try {
         const created = await createGrammarTopic(topicData);
         updateTopicsState((prev) => [created, ...prev]);
       } catch (err) {
         console.error("Lỗi khi tạo chuyên đề:", err);
-        const newTopic: GrammarTopicItem = {
-          id: `g-${Date.now()}`,
-          code: topicData.code || `GT-${Math.floor(100 + Math.random() * 900)}`,
-          titleVi: topicData.titleVi || topicData.title || "",
-          titleEn: topicData.titleEn || topicData.englishTitle || "",
-          title: topicData.titleVi || topicData.title || "",
-          englishTitle: topicData.titleEn || topicData.englishTitle || "",
-          part: topicData.part || "PART_5",
-          targetScore: topicData.targetScore || "500_750",
-          status: topicData.status || "DRAFT",
-          summary: topicData.summary || "",
-          formula: topicData.formula || "",
-          signalWords: topicData.signalWords || [],
-          traps: topicData.traps || [],
-          examples: topicData.examples || [],
-          questions: [],
-          orderIndex: topicData.orderIndex || 0,
-        };
-        updateTopicsState((prev) => [newTopic, ...prev]);
+        setActionError(err instanceof Error ? `Không thể tạo chuyên đề: ${err.message}` : "Không thể tạo chuyên đề.");
+        throw err;
       }
-      setShowCreateModal(false);
     }
   };
 
-  const handleAddQuestion = async (topicId: string, question: GrammarQuestionItem) => {
+  const handleSaveQuestion = async (
+    topicId: string,
+    question: GrammarQuestionItem,
+    originalQuestionId?: string
+  ) => {
+    setActionError(null);
     try {
-      const updated = await addGrammarQuestion(topicId, question);
+      const updated = originalQuestionId
+        ? await updateGrammarQuestion(topicId, originalQuestionId, question)
+        : await addGrammarQuestion(topicId, question);
       updateTopicsState((prev) =>
         prev.map((t) => (t.id === topicId ? updated : t))
       );
     } catch (err) {
-      console.error("Lỗi khi thêm câu hỏi:", err);
-      updateTopicsState((prev) =>
-        prev.map((t) => (t.id === topicId ? { ...t, questions: [...t.questions, question] } : t))
-      );
+      const action = originalQuestionId ? "cập nhật" : "thêm";
+      console.error(`Lỗi khi ${action} câu hỏi:`, err);
+      const message = err instanceof Error ? `Không thể ${action} câu hỏi: ${err.message}` : `Không thể ${action} câu hỏi.`;
+      setActionError(message);
+      throw new Error(message);
+    }
+  };
+
+  const handleDeleteQuestion = async (topic: GrammarTopicItem, question: GrammarQuestionItem) => {
+    if (!window.confirm(`Xóa câu hỏi "${question.questionText}"? Thao tác này không thể hoàn tác.`)) return;
+    setActionError(null);
+    try {
+      const updated = await deleteGrammarQuestion(topic.id, String(question.id));
+      updateTopicsState((prev) => prev.map((item) => (item.id === topic.id ? updated : item)));
+    } catch (err) {
+      console.error("Lỗi khi xóa câu hỏi:", err);
+      setActionError(err instanceof Error ? `Không thể xóa câu hỏi: ${err.message}` : "Không thể xóa câu hỏi.");
+    }
+  };
+
+  const handleReviewStatusChange = async (topic: GrammarTopicItem, status: "DRAFT" | "PUBLISHED") => {
+    setActionError(null);
+    try {
+      const updated = await updateGrammarTopic(topic.id, { ...topic, status });
+      updateTopicsState((prev) => prev.map((item) => (item.id === topic.id ? updated : item)));
+    } catch (err) {
+      console.error("Lỗi khi đổi trạng thái chuyên đề từ rà soát:", err);
+      setActionError(err instanceof Error ? `Không thể đổi trạng thái chuyên đề: ${err.message}` : "Không thể đổi trạng thái chuyên đề.");
     }
   };
 
   const confirmDeleteTopic = async () => {
     if (!deleteConfirmTopic) return;
+    setActionError(null);
     try {
       await deleteGrammarTopic(deleteConfirmTopic.id);
     } catch (err) {
       console.error("Lỗi khi xóa chuyên đề:", err);
+      setActionError(err instanceof Error ? `Không thể xóa chuyên đề: ${err.message}` : "Không thể xóa chuyên đề.");
+      return;
     }
     updateTopicsState((prev) => prev.filter((t) => t.id !== deleteConfirmTopic.id));
     setSelectedTopicIds((prev) => prev.filter((id) => id !== deleteConfirmTopic.id));
@@ -243,10 +241,13 @@ export default function AdminGrammarPage() {
 
   // Bulk operations
   const handleBulkPublish = async () => {
+    setActionError(null);
     try {
       await bulkUpdateGrammarStatus(selectedTopicIds, "PUBLISHED");
     } catch (err) {
       console.error("Lỗi khi bulk publish:", err);
+      setActionError(err instanceof Error ? `Không thể phát hành chuyên đề: ${err.message}` : "Không thể phát hành chuyên đề.");
+      return;
     }
     updateTopicsState((prev) =>
       prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "PUBLISHED" } : t))
@@ -255,10 +256,13 @@ export default function AdminGrammarPage() {
   };
 
   const handleBulkDraft = async () => {
+    setActionError(null);
     try {
       await bulkUpdateGrammarStatus(selectedTopicIds, "DRAFT");
     } catch (err) {
       console.error("Lỗi khi bulk draft:", err);
+      setActionError(err instanceof Error ? `Không thể chuyển chuyên đề về bản nháp: ${err.message}` : "Không thể chuyển chuyên đề về bản nháp.");
+      return;
     }
     updateTopicsState((prev) =>
       prev.map((t) => (selectedTopicIds.includes(t.id) ? { ...t, status: "DRAFT" } : t))
@@ -267,10 +271,14 @@ export default function AdminGrammarPage() {
   };
 
   const handleBulkDelete = async () => {
+    if (!window.confirm(`Xóa ${selectedTopicIds.length} chuyên đề đã chọn? Thao tác này không thể hoàn tác.`)) return;
+    setActionError(null);
     try {
       await bulkDeleteGrammarTopics(selectedTopicIds);
     } catch (err) {
       console.error("Lỗi khi bulk delete:", err);
+      setActionError(err instanceof Error ? `Không thể xóa chuyên đề: ${err.message}` : "Không thể xóa chuyên đề.");
+      return;
     }
     updateTopicsState((prev) => prev.filter((t) => !selectedTopicIds.includes(t.id)));
     setSelectedTopicIds([]);
@@ -310,6 +318,11 @@ export default function AdminGrammarPage() {
 
   return (
     <div className="space-y-6">
+      {actionError ? (
+        <div role="alert" className="fixed right-5 top-5 z-[70] max-w-lg rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-lg">
+          {actionError}
+        </div>
+      ) : null}
       {/* Header and Filter Toolbar */}
       <GrammarFilterBar
         activeMainTab={activeMainTab}
@@ -334,6 +347,9 @@ export default function AdminGrammarPage() {
         onBulkDraft={handleBulkDraft}
         onBulkDelete={handleBulkDelete}
       />
+      {loading ? (
+        <p role="status" className="text-sm text-slate-500">Đang tải dữ liệu ngữ pháp…</p>
+      ) : null}
 
       {/* Main Tab Content Switching */}
       {activeMainTab === "topics" && (
@@ -354,35 +370,44 @@ export default function AdminGrammarPage() {
             )
           }
           onOpenTheoryModal={setTheoryTopic}
-          onStartQuiz={startTopicQuiz}
           onOpenEditTopic={setEditTopicItem}
-          onOpenAddQuestion={setAddQuestionTopic}
+          onOpenAddQuestion={(topic) => setQuestionModal({ topic, question: null })}
           onOpenDeleteTopic={setDeleteConfirmTopic}
         />
       )}
 
       {activeMainTab === "questions" && (
-        <GrammarQuestionBankView topics={topics} />
+        <GrammarQuestionBankView
+          topics={topics}
+          onAddQuestion={() => setQuestionModal({ topic: null, question: null })}
+          onEditQuestion={(topic, question) => setQuestionModal({ topic, question })}
+          onDeleteQuestion={handleDeleteQuestion}
+        />
       )}
 
-      {activeMainTab === "traps_matrix" && (
-        <GrammarTrapsMatrixView topics={topics} />
-      )}
-
-      {activeMainTab === "curriculum" && (
-        <GrammarCurriculumConfigView topicsCount={totalTopicsCount} />
+      {activeMainTab === "review" && (
+        <GrammarContentReviewView
+          topics={topics}
+          onEditTopic={(topic) => {
+            setActiveMainTab("topics");
+            setEditTopicItem(topic);
+          }}
+          onChangeStatus={handleReviewStatusChange}
+        />
       )}
 
       {/* Modals */}
       <GrammarTopicDetailModal
         topic={theoryTopic}
         onClose={() => setTheoryTopic(null)}
-        onStartQuiz={startTopicQuiz}
+        audience="admin"
       />
 
       <GrammarTopicEditModal
+        key={editTopicItem?.id ?? (showCreateModal ? "create-topic" : "closed")}
         isOpen={showCreateModal || !!editTopicItem}
         editTopic={editTopicItem}
+        availableTopics={topics}
         onClose={() => {
           setShowCreateModal(false);
           setEditTopicItem(null);
@@ -391,10 +416,13 @@ export default function AdminGrammarPage() {
       />
 
       <GrammarAddQuestionModal
-        isOpen={!!addQuestionTopic}
-        topic={addQuestionTopic}
-        onClose={() => setAddQuestionTopic(null)}
-        onAddQuestion={handleAddQuestion}
+        key={questionModal ? `${questionModal.topic?.id || "choose-topic"}-${questionModal.question?.id || "new"}` : "closed-question"}
+        isOpen={!!questionModal}
+        topic={questionModal?.topic || null}
+        topics={topics}
+        question={questionModal?.question || null}
+        onClose={() => setQuestionModal(null)}
+        onSaveQuestion={handleSaveQuestion}
       />
 
       <GrammarDeleteModal
@@ -403,14 +431,6 @@ export default function AdminGrammarPage() {
         onConfirm={confirmDeleteTopic}
       />
 
-      <GrammarQuizModal
-        isOpen={quizActive}
-        title={quizTitle}
-        questions={quizQuestions}
-        onClose={() => setQuizActive(false)}
-        activeTopic={activeTopicForQuiz}
-        onRecordResult={handleRecordResult}
-      />
     </div>
   );
 }

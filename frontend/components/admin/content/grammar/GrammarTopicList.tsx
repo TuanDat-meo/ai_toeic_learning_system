@@ -3,7 +3,6 @@
 import React from "react";
 import {
   BookOpen,
-  Eye,
   Pencil,
   Plus,
   Trash2,
@@ -19,7 +18,6 @@ interface GrammarTopicListProps {
   onToggleSelectTopic: (id: string) => void;
   onSelectAllTopics: () => void;
   onOpenTheoryModal: (topic: GrammarTopicItem) => void;
-  onStartQuiz: (topic: GrammarTopicItem) => void;
   onOpenEditTopic: (topic: GrammarTopicItem) => void;
   onOpenAddQuestion: (topic: GrammarTopicItem) => void;
   onOpenDeleteTopic: (topic: GrammarTopicItem) => void;
@@ -32,7 +30,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
   onToggleSelectTopic,
   onSelectAllTopics,
   onOpenTheoryModal,
-  onStartQuiz,
   onOpenEditTopic,
   onOpenAddQuestion,
   onOpenDeleteTopic,
@@ -76,7 +73,7 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   <th className="py-3.5 px-4 min-w-[240px]">Mã &amp; Chuyên đề</th>
                   <th className="py-3.5 px-4 min-w-[120px]">Phần thi</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Số câu &amp; Bẫy</th>
-                  <th className="py-3.5 px-4 min-w-[170px]">Công thức trọng tâm</th>
+                  <th className="py-3.5 px-4 min-w-[170px]">Kiểm tra nội dung</th>
                   <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>
                   <th className="py-3.5 px-4 text-center min-w-[160px]">Thao tác quản trị</th>
                 </tr>
@@ -84,12 +81,14 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {topics.map((topic) => {
                   const isSelected = selectedTopicIds.includes(topic.id);
-                  const studiedCount = topic.studiedCount ?? 0;
-                  const correctCount = topic.correctCount ?? 0;
-                  const isStudied = studiedCount > 0;
-                  const accuracy = isStudied
-                    ? Math.round((correctCount / studiedCount) * 100)
-                    : 75; // Default estimate baseline
+                  const missingContentCount = [
+                    !(topic.titleVi || topic.title)?.trim(),
+                    !(topic.titleEn || topic.englishTitle)?.trim(),
+                    !topic.summary?.trim(),
+                    !topic.formula?.trim(),
+                    !topic.examples?.some((example) => example.sentence?.trim()),
+                    !topic.questions?.length,
+                  ].filter(Boolean).length;
 
                   return (
                     <tr
@@ -136,19 +135,17 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-[11px] font-bold">
                             <span className="text-slate-500">
-                              {studiedCount > 0 ? `${studiedCount} lượt` : "Mới phát hành"}
+                              {missingContentCount === 0 ? "Đủ nội dung cơ bản" : `Thiếu ${missingContentCount} mục`}
                             </span>
-                            <span className={accuracy >= 70 ? "text-emerald-600" : "text-amber-600"}>
-                              {accuracy}%
-                            </span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className={`h-full ${
-                                accuracy >= 70 ? "bg-emerald-500" : "bg-amber-500"
-                              }`}
-                              style={{ width: `${accuracy}%` }}
-                            />
+                              <span className={missingContentCount === 0 ? "text-emerald-600" : "text-amber-600"}>
+                                {topic.examples?.length ?? 0} ví dụ
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className={`h-full ${missingContentCount === 0 ? "bg-emerald-500" : "bg-amber-500"}`}
+                                style={{ width: `${Math.round(((6 - missingContentCount) / 6) * 100)}%` }}
+                              />
                           </div>
                         </div>
                       </td>
@@ -182,14 +179,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                             title="Xem chi tiết lý thuyết & công thức"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onStartQuiz(topic)}
-                            className="p-1.5 rounded-xl border border-slate-200 hover:bg-emerald-50 text-emerald-600 transition cursor-pointer"
-                            title="Xem trước bài test học viên"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
@@ -232,12 +221,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
           {topics.map((topic) => {
             const isSelected = selectedTopicIds.includes(topic.id);
             const totalQ = topic.questions.length;
-            const studiedCount = topic.studiedCount ?? 0;
-            const correctCount = topic.correctCount ?? 0;
-            const isStudied = studiedCount > 0;
-            const accuracy = isStudied
-              ? Math.round((correctCount / studiedCount) * 100)
-              : 75;
 
             return (
               <div
@@ -298,7 +281,7 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 pt-1">
                     <span>Ngân hàng: {totalQ} câu</span>
                     <span className="text-amber-600">{topic.traps.length} bẫy đề</span>
-                    <span className="text-blue-600 font-bold">{topic.part}</span>
+                    <span>{topic.examples?.length ?? 0} ví dụ</span>
                   </div>
                 </div>
 
@@ -313,15 +296,6 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                     >
                       <BookOpen className="w-3.5 h-3.5 text-blue-600" />
                       <span>Chi tiết</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onStartQuiz(topic)}
-                      className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold transition cursor-pointer flex items-center gap-1"
-                      title="Xem trước bài test học viên"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Xem trước</span>
                     </button>
                   </div>
 

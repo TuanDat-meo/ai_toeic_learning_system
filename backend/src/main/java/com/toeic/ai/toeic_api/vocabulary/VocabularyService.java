@@ -191,7 +191,8 @@ public class VocabularyService {
         String word = req.word() != null ? req.word().trim() : "";
         String ipa = req.ipa() != null ? req.ipa().trim() : "";
         String pos = req.partOfSpeech() != null ? req.partOfSpeech().trim() : "Noun";
-        List<VocabularySenseInput> senses = normalizeSenses(req.senses(), pos, req.subCategory(), req.meaning(), req.example());
+        List<VocabularySenseInput> senses = normalizeSenses(req.senses(), pos, req.subCategory(), req.meaning(),
+                req.example(), req.exampleMeaning());
         VocabularySenseInput primarySense = senses.get(0);
         pos = primarySense.partOfSpeech();
         String meaning = primarySense.meaning();
@@ -226,7 +227,7 @@ public class VocabularyService {
                     """, ipa, audioUrl, audioRegion, wordFamily, existingWordId);
             for (VocabularySenseInput sense : senses) {
                 upsertSense(existingWordId, sense.partOfSpeech(), sense.subCategory(), sense.meaning(),
-                        sense.example(), sense.synonyms(), sense.antonyms());
+                        sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms());
             }
             addRelatedForms(existingWordId, req.relatedForms());
             return getWordsForSet(setId, null).stream()
@@ -261,7 +262,8 @@ public class VocabularyService {
         String word = req.word() != null ? req.word().trim() : "";
         String ipa = req.ipa() != null ? req.ipa().trim() : "";
         String pos = req.partOfSpeech() != null ? req.partOfSpeech().trim() : "";
-        List<VocabularySenseInput> senses = normalizeSenses(req.senses(), pos, req.subCategory(), req.meaning(), req.example());
+        List<VocabularySenseInput> senses = normalizeSenses(req.senses(), pos, req.subCategory(), req.meaning(),
+                req.example(), req.exampleMeaning());
         VocabularySenseInput primarySense = senses.get(0);
         pos = primarySense.partOfSpeech();
         String meaning = primarySense.meaning();
@@ -496,11 +498,11 @@ public class VocabularyService {
                     """, wordId, setId, word, ipa, pos, meaning, meaningSource, meaningEdited, example, exampleMeaning, level, audioUrl, wordFamily, setId);
         }
         if (importedSenses.isEmpty()) {
-            upsertSense(wordId, pos, subCategory, meaning, example, "", "");
+            upsertSense(wordId, pos, subCategory, meaning, example, exampleMeaning, "", "");
         } else {
             for (VocabularySenseInput sense : importedSenses) {
                 upsertSense(wordId, sense.partOfSpeech(), sense.subCategory(), sense.meaning(),
-                        sense.example(), sense.synonyms(), sense.antonyms());
+                        sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms());
             }
         }
 
@@ -531,6 +533,7 @@ public class VocabularyService {
                     sense.path("subCategory").asText(sense.path("sub_category").asText("")).trim(),
                     meaning,
                     sense.path("example").asText(sense.path("exampleEn").asText(sense.path("example_en").asText(""))).trim(),
+                    sense.path("exampleMeaning").asText(sense.path("exampleVi").asText(sense.path("example_vi").asText(""))).trim(),
                     sense.path("synonyms").asText("").trim(),
                     sense.path("antonyms").asText("").trim()
             ));
@@ -690,12 +693,12 @@ public class VocabularyService {
 
     private List<VocabularyWord> loadSenses(List<VocabularyWord> words) {
         if (words.isEmpty()) return words;
-        List<String> ids = words.stream().map(VocabularyWord::id).toList();
+        List<String> ids = words.stream().map(word -> word.id()).toList();
         String placeholders = String.join(",", Collections.nCopies(ids.size(), "?"));
         Map<String, List<VocabularySense>> sensesByItem = new HashMap<>();
         Map<String, List<VocabularyRelatedForm>> relatedFormsByItem = new HashMap<>();
         jdbc.query(
-                "SELECT id, vocabulary_item_id, part_of_speech, sub_category, meaning, example, synonyms, antonyms "
+                "SELECT id, vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms "
                         + "FROM vocabulary_item_senses WHERE vocabulary_item_id IN (" + placeholders + ") "
                         + "ORDER BY order_index, id",
                 (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
@@ -706,6 +709,7 @@ public class VocabularyService {
                                 rs.getString("sub_category"),
                                 rs.getString("meaning"),
                                 rs.getString("example"),
+                                rs.getString("example_meaning"),
                                 rs.getString("synonyms"),
                                 rs.getString("antonyms")
                         ));
@@ -742,7 +746,8 @@ public class VocabularyService {
         return words.stream().map(word -> {
             List<VocabularySense> senses = deduplicateSenseRecords(sensesByItem.getOrDefault(word.id(), List.of()));
             if (senses.isEmpty() && word.meaning() != null && !word.meaning().isBlank()) {
-                senses = List.of(new VocabularySense(null, word.partOfSpeech(), "", word.meaning(), word.example()));
+                senses = List.of(new VocabularySense(null, word.partOfSpeech(), "", word.meaning(), word.example(),
+                        word.exampleMeaning(), "", ""));
             }
             return new VocabularyWord(
                     word.id(), word.setId(), word.word(), word.ipa(), word.partOfSpeech(), word.meaning(),
@@ -809,10 +814,12 @@ public class VocabularyService {
             String fallbackPartOfSpeech,
             String fallbackSubCategory,
             String fallbackMeaning,
-            String fallbackExample) {
+            String fallbackExample,
+            String fallbackExampleMeaning) {
         List<VocabularySenseInput> senses = requested == null || requested.isEmpty()
                 ? List.of(new VocabularySenseInput(
-                        fallbackPartOfSpeech, fallbackSubCategory, fallbackMeaning, fallbackExample))
+                        fallbackPartOfSpeech, fallbackSubCategory, fallbackMeaning, fallbackExample,
+                        fallbackExampleMeaning, "", ""))
                 : requested;
         Map<String, VocabularySenseInput> normalized = new LinkedHashMap<>();
         for (VocabularySenseInput sense : senses) {
@@ -828,6 +835,7 @@ public class VocabularyService {
                     sense.subCategory() == null ? "" : sense.subCategory().trim(),
                     meaning,
                     sense.example() == null ? "" : sense.example().trim(),
+                    sense.exampleMeaning() == null ? "" : sense.exampleMeaning().trim(),
                     sense.synonyms() == null ? "" : sense.synonyms().trim(),
                     sense.antonyms() == null ? "" : sense.antonyms().trim()
             );
@@ -842,7 +850,8 @@ public class VocabularyService {
                         existing.meaning(),
                         existing.example().isBlank() ? normalizedSense.example() : existing.example(),
                         mergeRelationTerms(existing.synonyms(), normalizedSense.synonyms()),
-                        mergeRelationTerms(existing.antonyms(), normalizedSense.antonyms())
+                        mergeRelationTerms(existing.antonyms(), normalizedSense.antonyms()),
+                        existing.exampleMeaning().isBlank() ? normalizedSense.exampleMeaning() : existing.exampleMeaning()
                 ));
             }
         }
@@ -861,7 +870,7 @@ public class VocabularyService {
             if (existing == null) {
                 unique.put(key, new VocabularySense(
                         sense.id(), partOfSpeech, sense.subCategory(), sense.meaning(), sense.example(),
-                        sense.synonyms(), sense.antonyms()));
+                        sense.exampleMeaning(), sense.synonyms(), sense.antonyms()));
             } else {
                 unique.put(key, new VocabularySense(
                         existing.id(),
@@ -871,6 +880,8 @@ public class VocabularyService {
                         existing.meaning(),
                         existing.example() == null || existing.example().isBlank()
                                 ? sense.example() : existing.example(),
+                        existing.exampleMeaning() == null || existing.exampleMeaning().isBlank()
+                                ? sense.exampleMeaning() : existing.exampleMeaning(),
                         mergeRelationTerms(existing.synonyms(), sense.synonyms()),
                         mergeRelationTerms(existing.antonyms(), sense.antonyms())));
             }
@@ -900,20 +911,16 @@ public class VocabularyService {
             VocabularySenseInput sense = senses.get(index);
             jdbc.update("""
                     INSERT INTO vocabulary_item_senses (
-                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, synonyms, antonyms, order_index
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, order_index
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, itemId, sense.partOfSpeech(), sense.subCategory(), sense.meaning(),
-                    sense.example(), sense.synonyms(), sense.antonyms(), index);
+                    sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms(), index);
         }
-    }
-
-    private void upsertSense(String itemId, String partOfSpeech, String subCategory, String meaning, String example) {
-        upsertSense(itemId, partOfSpeech, subCategory, meaning, example, "", "");
     }
 
     private void upsertSense(
             String itemId, String partOfSpeech, String subCategory, String meaning, String example,
-            String synonyms, String antonyms) {
+            String exampleMeaning, String synonyms, String antonyms) {
         String normalizedPartOfSpeech = VocabularyPartOfSpeech.normalize(partOfSpeech);
         String normalizedMeaning = meaning == null ? "" : meaning.trim().replaceAll("\\s+", " ");
         List<UUID> senseIds = jdbc.query(
@@ -928,25 +935,26 @@ public class VocabularyService {
         if (senseIds.isEmpty()) {
             jdbc.update("""
                     INSERT INTO vocabulary_item_senses (
-                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, synonyms, antonyms, order_index
+                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, order_index
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, (
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, (
                         SELECT COALESCE(MAX(order_index) + 1, 0)
                         FROM vocabulary_item_senses WHERE vocabulary_item_id = ?
                     ))
                     """, itemId, normalizedPartOfSpeech, subCategory, normalizedMeaning, example,
-                    synonyms, antonyms, itemId);
+                    exampleMeaning, synonyms, antonyms, itemId);
             return;
         }
         jdbc.update("""
                 UPDATE vocabulary_item_senses SET
                     sub_category = COALESCE(NULLIF(?, ''), sub_category),
                     example = COALESCE(NULLIF(?, ''), example),
+                    example_meaning = COALESCE(NULLIF(?, ''), example_meaning),
                     synonyms = COALESCE(NULLIF(?, ''), synonyms),
                     antonyms = COALESCE(NULLIF(?, ''), antonyms),
                     updated_at = now()
                 WHERE id = ?
-                """, subCategory, example, synonyms, antonyms, senseIds.get(0));
+                """, subCategory, example, exampleMeaning, synonyms, antonyms, senseIds.get(0));
     }
 
     private String timestampToString(Timestamp timestamp) {
@@ -1058,11 +1066,12 @@ public class VocabularyService {
             String subCategory,
             String meaning,
             String example,
+            String exampleMeaning,
             String synonyms,
             String antonyms
     ) {
         public VocabularySense(String id, String partOfSpeech, String subCategory, String meaning, String example) {
-            this(id, partOfSpeech, subCategory, meaning, example, "", "");
+            this(id, partOfSpeech, subCategory, meaning, example, "", "", "");
         }
     }
 
@@ -1071,11 +1080,18 @@ public class VocabularyService {
             String subCategory,
             String meaning,
             String example,
+            String exampleMeaning,
             String synonyms,
             String antonyms
     ) {
         public VocabularySenseInput(String partOfSpeech, String subCategory, String meaning, String example) {
-            this(partOfSpeech, subCategory, meaning, example, "", "");
+            this(partOfSpeech, subCategory, meaning, example, "", "", "");
+        }
+
+        public VocabularySenseInput(
+                String partOfSpeech, String subCategory, String meaning, String example,
+                String synonyms, String antonyms) {
+            this(partOfSpeech, subCategory, meaning, example, "", synonyms, antonyms);
         }
     }
 

@@ -156,8 +156,10 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                           {sense.example ? (
                             <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{sense.example}&quot;</p>
                           ) : null}
-                          {senseIndex === 0 && w.exampleMeaning ? (
-                            <p className="text-xs text-blue-700 font-semibold leading-relaxed">👉 {w.exampleMeaning}</p>
+                          {(sense.exampleMeaning || (senseIndex === 0 && w.exampleMeaning)) ? (
+                            <p className="text-xs text-blue-700 font-semibold leading-relaxed">
+                              👉 {sense.exampleMeaning || w.exampleMeaning}
+                            </p>
                           ) : null}
                         </div>
                       ))}
@@ -331,9 +333,9 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                                 &quot;{sense.example}&quot;
                               </p>
                             ) : null}
-                            {senseIndex === 0 && currentWord.exampleMeaning ? (
+                            {(sense.exampleMeaning || (senseIndex === 0 && currentWord.exampleMeaning)) ? (
                               <p className="text-xs text-blue-700 font-semibold max-w-xs">
-                                👉 {currentWord.exampleMeaning}
+                                👉 {sense.exampleMeaning || currentWord.exampleMeaning}
                               </p>
                             ) : null}
                           </div>
