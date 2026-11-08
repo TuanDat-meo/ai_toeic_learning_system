@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Bookmark,
   BookOpen,
+  Target,
   Volume2,
   FolderPlus,
   Info,
@@ -222,6 +223,96 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   // Mode toggles
   const [isBilingual, setIsBilingual] = useState(false);
+  const [readingConfig, setReadingConfig] = useState<{
+    part5Minutes: number;
+    part6Minutes: number;
+    part7SingleMinutes: number;
+    part7MultiMinutes: number;
+    targetWpm: number;
+    enableBilingualByDefault: boolean;
+    enablePacingTimer: boolean;
+    enableTimeoutAlert: boolean;
+    speedDrillMode: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleConfigSync = (e?: any) => {
+      try {
+        const raw = localStorage.getItem("toeic_reading_time_config");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setReadingConfig(parsed);
+          if (parsed.enableBilingualByDefault) {
+            setIsBilingual(true);
+          }
+        }
+      } catch {}
+    };
+
+    handleConfigSync();
+
+    window.addEventListener("toeic-reading-config-updated", handleConfigSync);
+    window.addEventListener("storage", handleConfigSync);
+
+    return () => {
+      window.removeEventListener("toeic-reading-config-updated", handleConfigSync);
+      window.removeEventListener("storage", handleConfigSync);
+    };
+  }, []);
+
+  const targetPerQSeconds = useMemo(() => {
+    const p5Min = readingConfig?.part5Minutes || 12;
+    const p6Min = readingConfig?.part6Minutes || 10;
+    const p7SingleMin = readingConfig?.part7SingleMinutes || 27;
+    const p7MultiMin = readingConfig?.part7MultiMinutes || 26;
+
+    const title = (card.title || "").toLowerCase();
+    const cat = (card.category || "").toLowerCase();
+    let base = 24;
+    if (title.includes("part 5") || cat.includes("part 5") || (card.totalQuestions === 30 && !card.passageText)) {
+      base = Math.round((p5Min * 60) / 30);
+    } else if (title.includes("part 6") || cat.includes("part 6")) {
+      base = Math.round((p6Min * 60) / 16);
+    } else if (title.includes("đoạn đôi") || title.includes("đoạn ba") || title.includes("multiple")) {
+      base = Math.round((p7MultiMin * 60) / 25);
+    } else {
+      base = Math.round((p7SingleMin * 60) / 29);
+    }
+
+    // Nếu đang bật chế độ Speed Drill, giảm 20% thời gian mục tiêu để kích thích nhịp độ phản xạ
+    if (readingConfig?.speedDrillMode) {
+      return Math.max(15, Math.round(base * 0.8));
+    }
+    return base;
+  }, [card, readingConfig]);
+
+  const [timeOnCurrentGroup, setTimeOnCurrentGroup] = useState(0);
+  const [showPacingAlert, setShowPacingAlert] = useState(false);
+
+  useEffect(() => {
+    setTimeOnCurrentGroup(0);
+    setShowPacingAlert(false);
+  }, [currentGroupIndex]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTimeOnCurrentGroup((prev) => {
+        const next = prev + 1;
+        const multiplier = readingConfig?.speedDrillMode ? 1.2 : 1.5;
+        const minLimit = readingConfig?.speedDrillMode ? 20 : 30;
+        const limit = targetPerQSeconds ? Math.max(minLimit, Math.round(targetPerQSeconds * multiplier)) : 45;
+        if (
+          readingConfig?.enableTimeoutAlert &&
+          next >= limit &&
+          !isCurrentGroupChecked
+        ) {
+          setShowPacingAlert(true);
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [readingConfig, targetPerQSeconds, isCurrentGroupChecked]);
   const [showPassageTranslation, setShowPassageTranslation] = useState(true);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
 
@@ -805,6 +896,20 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               <Clock className="w-3.5 h-3.5" />
               {formatTimer(timerSeconds)}
             </span>
+            {readingConfig?.enablePacingTimer && (
+              <span
+                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-medium"
+                title="Mục tiêu nhịp độ từ Cấu hình lộ trình"
+              >
+                <Target className="w-3.5 h-3.5 text-blue-300" />
+                <span>Mục tiêu: ≤{targetPerQSeconds}s/câu</span>
+              </span>
+            )}
+            {readingConfig?.speedDrillMode && (
+              <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500 text-white text-[10px] font-bold">
+                ⚡ Speed Drill
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/90 text-white text-xs font-extrabold shadow-2xs">
               <Zap className="w-3.5 h-3.5 fill-white" />
               {energyScore}
@@ -815,6 +920,35 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           </div>
         </div>
       </header>
+
+      {/* CẢNH BÁO NHỊP ĐỘ DỪNG QUÁ LÂU THEO CẤU HÌNH */}
+      {showPacingAlert && !isCurrentGroupChecked && (
+        <div
+          className={`px-6 py-2.5 text-xs font-semibold flex items-center justify-between shadow-xs select-none animate-in slide-in-from-top-1 ${
+            readingConfig?.speedDrillMode
+              ? "bg-rose-500 text-white"
+              : "bg-amber-400 text-slate-950"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Clock className={`w-4 h-4 shrink-0 ${readingConfig?.speedDrillMode ? "text-white" : "text-slate-900"}`} />
+            <span>
+              <strong>{readingConfig?.speedDrillMode ? "⚡ Cảnh báo Speed Drill:" : "Cảnh báo nhịp độ:"}</strong> Bạn đã dừng ở câu hỏi này hơn {timeOnCurrentGroup} giây (vượt mức mục tiêu {targetPerQSeconds}s/câu theo chiến lược {readingConfig?.part5Minutes || 12}p - {readingConfig?.part6Minutes || 10}p - {(readingConfig?.part7SingleMinutes || 27) + (readingConfig?.part7MultiMinutes || 26)}p). Hãy chọn phương án khả dĩ nhất và chuyển tiếp để tránh thiếu giờ ở Part 7!
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPacingAlert(false)}
+            className={`px-3 py-1 rounded-md font-bold text-[11px] transition cursor-pointer shrink-0 ml-3 ${
+              readingConfig?.speedDrillMode
+                ? "bg-white text-rose-700 hover:bg-rose-50"
+                : "bg-slate-950/10 hover:bg-slate-950/20 text-slate-950"
+            }`}
+          >
+            Đã hiểu
+          </button>
+        </div>
+      )}
 
       {/* ANNOTATOR BAR */}
       {isAnnotatorActive && (

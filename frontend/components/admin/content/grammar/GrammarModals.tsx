@@ -752,11 +752,39 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
   initialIndex = 0,
   isRedoWrongOnly = false,
 }) => {
+  const LOCAL_STORAGE_KEY = "toeic_grammar_curriculum_config";
+
+  const [grammarConfig, setGrammarConfig] = useState({
+    minAccuracyPass: 80,
+    srsGrammarInterval: 3,
+    shuffleQuestions: true,
+    showExplanationImmediately: true,
+  });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setGrammarConfig((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch {}
+  }, [isOpen]);
+
   // Đảm bảo bài luôn có đủ 30 câu hỏi thực tế chuẩn TOEIC Part 5
   const fullQuestions = useMemo(() => {
     const topicTitle = activeTopic?.titleVi || activeTopic?.title || "Ngữ pháp";
-    return expandGrammarQuestions(rawQuestions, topicTitle, 30);
-  }, [rawQuestions, activeTopic]);
+    let list = expandGrammarQuestions(rawQuestions, topicTitle, 30);
+    // Nếu cấu hình bật xáo trộn câu hỏi và không phải chế độ redo câu sai
+    if (grammarConfig.shuffleQuestions && !isRedoWrongOnly && list.length > 1) {
+      list = [...list].sort((a, b) => {
+        const hashA = (Number(a.id || 0) * 19 + a.questionText.length * 7) % 97;
+        const hashB = (Number(b.id || 0) * 19 + b.questionText.length * 7) % 97;
+        return hashA - hashB;
+      });
+    }
+    return list;
+  }, [rawQuestions, activeTopic, grammarConfig.shuffleQuestions, isRedoWrongOnly]);
 
   // Nếu là chế độ redo câu sai, lọc các câu bị sai
   const questions = useMemo(() => {
@@ -778,16 +806,15 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     });
     return filtered.length > 0 ? filtered : fullQuestions.slice(0, Math.max(1, prog.wrongAnswers || 2));
   }, [fullQuestions, isRedoWrongOnly, activeTopic]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<"A" | "B" | "C" | "D" | null>(null);
   const [isAnswerChecked, setIsAnswerChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
 
-
   useEffect(() => {
     if (isOpen) {
-      // Tiếp tục làm từ câu tiếp theo (nếu làm 5 câu thì mở câu 6)
       const targetStart = isRedoWrongOnly ? 0 : Math.min(initialIndex, Math.max(0, questions.length - 1));
       setCurrentIndex(targetStart);
       setSelectedAnswer(null);
@@ -796,6 +823,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
       setQuizFinished(false);
     }
   }, [isOpen, initialIndex, isRedoWrongOnly, questions.length]);
+
   if (!isOpen || questions.length === 0) return null;
 
   const currentQ = questions[currentIndex];
@@ -812,7 +840,6 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     }
 
     if (activeTopic) {
-      // Ghi nhận kết quả: Nếu câu này vốn sai mà nay làm đúng thì số câu sai TỰ ĐỘNG GIẢM DẦN!
       recordQuestionAnswer(`grammar-${activeTopic.id}`, currentQ.id, isCorrect, questions.length);
       if (onRecordResult) {
         onRecordResult(activeTopic.id, isCorrect);
@@ -845,6 +872,10 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     setScore(0);
     setQuizFinished(false);
   };
+
+  const finalAccuracy = Math.round((score / Math.max(1, questions.length)) * 100);
+  const isPassed = finalAccuracy >= grammarConfig.minAccuracyPass;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -857,7 +888,12 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {grammarConfig.shuffleQuestions && !quizFinished && (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                Xáo trộn đề
+              </span>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -927,57 +963,59 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
               })}
             </div>
 
-            {/* HIỂN THỊ DỊCH NGHĨA, MẸO BẪY, VÀ TỪ CẦN HỌC SAU KHI CHỌN ĐÁP ÁN */}
+            {/* HIỂN THỊ DỊCH NGHĨA & BẪY ĐỀ NẾU CẤU HÌNH BẬT showExplanationImmediately */}
             {isAnswerChecked && (
-              <div className="space-y-3 pt-2 animate-in fade-in duration-200">
-                <div
-                  className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
-                    selectedAnswer === currentQ.correctAnswer
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                      : "bg-rose-50 border-rose-200 text-rose-900"
-                  }`}
-                >
-                  <div className="font-bold flex items-center gap-2">
-                    {selectedAnswer === currentQ.correctAnswer ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-600" />
-                        <span>Chính xác! Đáp án đúng là {currentQ.correctAnswer}</span>
-                      </>
-                    ) : (
-                      <>
-                        <X className="w-4 h-4 text-rose-600" />
-                        <span>
-                          Chưa chính xác! Đáp án đúng là <strong>{currentQ.correctAnswer}</strong>
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <p className="text-slate-700 leading-relaxed font-medium">
-                    <strong>Giải thích chi tiết:</strong> {currentQ.explanation}
-                  </p>
-                </div>
-
-                {currentQ.trapNote && (
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="block text-amber-800 mb-0.5">Mẹo làm bài &amp; Bẫy đề thi TOEIC:</strong>
-                      <p className="text-slate-700 leading-relaxed">{currentQ.trapNote}</p>
+              grammarConfig.showExplanationImmediately ? (
+                <div className="space-y-3 pt-2 animate-in fade-in duration-200">
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                      selectedAnswer === currentQ.correctAnswer
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                        : "bg-rose-50 border-rose-200 text-rose-900"
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-2">
+                      {selectedAnswer === currentQ.correctAnswer ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-600" />
+                          <span>Chính xác! Đáp án đúng là {currentQ.correctAnswer}</span>
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-4 h-4 text-rose-600" />
+                          <span>
+                            Chưa chính xác! Đáp án đúng là <strong>{currentQ.correctAnswer}</strong>
+                          </span>
+                        </>
+                      )}
                     </div>
+                    <p className="text-slate-700 leading-relaxed font-medium">
+                      <strong>Giải thích chi tiết:</strong> {currentQ.explanation}
+                    </p>
                   </div>
-                )}
 
-                {currentQ.translation && (
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1 shadow-2xs">
-                    <strong className="text-slate-900 block font-bold">Dịch nghĩa câu hỏi:</strong>
-                    <p className="italic leading-relaxed text-slate-800">&quot;{currentQ.translation}&quot;</p>
-                  </div>
-                )}
+                  {currentQ.trapNote && (
+                    <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-amber-800 mb-0.5">Mẹo làm bài &amp; Bẫy đề thi TOEIC:</strong>
+                        <p className="text-slate-700 leading-relaxed">{currentQ.trapNote}</p>
+                      </div>
+                    </div>
+                  )}
 
-                {activeTopic?.signalWords && activeTopic.signalWords.length > 0 && (
-                  <GrammarSignalWordsRenderer signalWords={activeTopic.signalWords} />
-                )}
-              </div>
+                  {currentQ.translation && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1 shadow-2xs">
+                      <strong className="text-slate-900 block font-bold">Dịch nghĩa câu hỏi:</strong>
+                      <p className="italic leading-relaxed text-slate-800">&quot;{currentQ.translation}&quot;</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-medium text-center">
+                  Đã ghi nhận câu trả lời. Theo cấu hình thi thử, giải thích chi tiết sẽ hiển thị khi bạn hoàn thành toàn bài.
+                </div>
+              )
             )}
           </div>
         ) : (
@@ -988,6 +1026,9 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
 
             <div className="space-y-1">
               <h2 className="text-2xl font-extrabold text-slate-900">Hoàn Thành Bài Luyện Tập!</h2>
+              <p className="text-xs text-slate-500">
+                Mục tiêu chuẩn đầu ra theo cấu hình: <strong>≥ {grammarConfig.minAccuracyPass}% đúng</strong>
+              </p>
             </div>
 
             <div className="inline-flex items-center gap-6 px-8 py-3.5 rounded-2xl bg-slate-50 border border-slate-200">
@@ -1000,11 +1041,34 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
               <div className="w-px h-8 bg-slate-200" />
               <div>
                 <p className="text-xs text-slate-500 uppercase font-bold">Tỷ lệ chính xác</p>
-                <p className="text-2xl font-extrabold text-blue-600">
-                  {Math.round((score / questions.length) * 100)}%
+                <p className={`text-2xl font-extrabold ${isPassed ? "text-emerald-600" : "text-amber-600"}`}>
+                  {finalAccuracy}%
                 </p>
               </div>
             </div>
+
+            {/* THÔNG BÁO ĐẠT CHUẨN & SRS ÔN TẬP */}
+            {isPassed ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-1 text-center max-w-md mx-auto">
+                <div className="flex items-center justify-center gap-1.5 font-bold text-sm text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>ĐẠT CHUẨN ĐẦU RA ({finalAccuracy}% ≥ {grammarConfig.minAccuracyPass}%)</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed">
+                  Chúc mừng bạn! Bạn đã hoàn thành xuất sắc yêu cầu và sẵn sàng mở khóa chuyên đề tiếp theo.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1 text-center max-w-md mx-auto">
+                <div className="flex items-center justify-center gap-1.5 font-bold text-sm text-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span>Chưa đạt mốc chuẩn ({finalAccuracy}% &lt; {grammarConfig.minAccuracyPass}%)</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed">
+                  Hệ thống SRS (lặp lại ngắt quãng) đã lên lịch ôn tập lại các câu sai của bài này sau <strong>{grammarConfig.srsGrammarInterval} ngày</strong>.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-center gap-3 pt-3">
               <button
