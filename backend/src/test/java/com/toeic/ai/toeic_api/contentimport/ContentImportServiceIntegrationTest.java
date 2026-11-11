@@ -31,7 +31,7 @@ class ContentImportServiceIntegrationTest {
     @Test
     void doesNotTreatDeletedGrammarTopicAsAnExistingImportDuplicate() {
         String suffix = java.util.UUID.randomUUID().toString().replace("-", "");
-        String code = "IMPORT_DELETE_" + suffix;
+        String code = "I" + suffix.substring(0, 31);
         String title = "Import deletion test " + suffix;
         var file = new MockMultipartFile("file", "grammar.json", "application/json",
                 """
