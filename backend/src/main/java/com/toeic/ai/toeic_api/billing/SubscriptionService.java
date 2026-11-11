@@ -610,7 +610,7 @@ public class SubscriptionService {
 
         Map<String, Object> config = entitlement.config() == null ? Map.of() : entitlement.config();
         Map<String, FeatureConfigField> fields = feature.configFields().stream()
-                .collect(java.util.stream.Collectors.toMap(FeatureConfigField::key, field -> field));
+                .collect(java.util.stream.Collectors.toMap(field -> field.key(), field -> field));
         for (String key : config.keySet()) {
             if (!fields.containsKey(key)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tham số " + key + " không được hỗ trợ bởi " + feature.name() + ".");
@@ -637,7 +637,8 @@ public class SubscriptionService {
     }
 
     private Map<String, LearningFeature> featureCatalogByKey() {
-        return listFeatureCatalog().stream().collect(java.util.stream.Collectors.toMap(LearningFeature::key, feature -> feature));
+        return listFeatureCatalog().stream()
+                .collect(java.util.stream.Collectors.toMap(feature -> feature.key(), feature -> feature));
     }
 
     private List<String> legacyCapabilityKeys(Map<String, PlanEntitlement> entitlements) {

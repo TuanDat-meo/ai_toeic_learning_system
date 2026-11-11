@@ -51,6 +51,7 @@ export interface VocabularySenseLike {
   subCategory?: string;
   meaning: string;
   example?: string;
+  exampleMeaning?: string;
   synonyms?: string;
   antonyms?: string;
 }
@@ -90,6 +91,7 @@ export function deduplicateVocabularySenses<T extends VocabularySenseLike>(sense
     existing.partOfSpeech = [...mergedPartOfSpeech].join(" / ");
     if (!existing.subCategory && sense.subCategory) existing.subCategory = sense.subCategory;
     if (!existing.example && sense.example) existing.example = sense.example;
+    if (!existing.exampleMeaning && sense.exampleMeaning) existing.exampleMeaning = sense.exampleMeaning;
     existing.synonyms = mergeRelationTerms(existing.synonyms, sense.synonyms);
     existing.antonyms = mergeRelationTerms(existing.antonyms, sense.antonyms);
   }

@@ -37,10 +37,7 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 import {
   getLocalReadingCards,
   saveLocalReadingCards,
-  LOCAL_READING_CARDS_KEY,
 } from "./readingStorage";
-
-export { LOCAL_READING_CARDS_KEY };
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);

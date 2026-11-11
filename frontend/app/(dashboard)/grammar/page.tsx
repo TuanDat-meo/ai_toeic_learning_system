@@ -27,11 +27,13 @@ export default function StudentGrammarPage() {
     try {
       setLoading(true);
       let rawList: GrammarTopicItem[] = [];
+      let hasServerResponse = false;
 
       // Luôn ưu tiên gọi API backend để lấy dữ liệu mới nhất từ database
       try {
         const data = await getGrammarTopics();
-        if (data && data.length > 0) {
+        if (data !== null) {
+          hasServerResponse = true;
           rawList = data;
           if (typeof window !== "undefined") {
             localStorage.setItem("toeic_grammar_topics", JSON.stringify(data));
@@ -41,18 +43,21 @@ export default function StudentGrammarPage() {
         console.warn("Could not load grammar topics from API:", apiErr);
       }
 
-      // Nếu API rỗng hoặc lỗi thì mới fallback về localStorage
-      if (rawList.length === 0) {
+      // Fallback to the cached list only when the API request failed.
+      if (!hasServerResponse) {
         const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_grammar_topics") : null;
         if (stored) {
           try {
             const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) rawList = parsed;
+            if (Array.isArray(parsed)) {
+              rawList = parsed;
+              hasServerResponse = true;
+            }
           } catch {}
         }
       }
 
-      if (rawList.length === 0) {
+      if (!hasServerResponse) {
         rawList = INITIAL_GRAMMAR_TOPICS;
       }
 
@@ -135,6 +140,7 @@ export default function StudentGrammarPage() {
       {/* Modal Xem chi tiết lý thuyết (Công thức, Dấu hiệu, Bẫy, Ví dụ) */}
       <GrammarTopicDetailModal
         topic={theoryTopic}
+        topics={topics}
         onClose={() => setTheoryTopic(null)}
         onStartQuiz={(topic) => {
           setTheoryTopic(null);

@@ -2,6 +2,7 @@ package com.toeic.ai.toeic_api.chat;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -61,7 +62,7 @@ public class GeminiChatService {
             if (response != null) {
                 for (JsonNode part : response.path("candidates").path(0).path("content").path("parts")) {
                     if (!part.path("thought").asBoolean(false)) {
-                        String partText = part.path("text").asText("");
+                        String partText = Objects.requireNonNullElse(part.path("text").asString(), "");
                         if (!partText.isBlank()) textBuilder.append(partText);
                     }
                 }

@@ -69,6 +69,7 @@ function mapWord(w: RawWordItem): WordItem {
           partOfSpeech: normalizeVocabularyPartOfSpeech(w.partOfSpeech || w.pos || 'Noun'),
           meaning: w.meaning || '',
           example: w.example || '',
+          exampleMeaning: w.exampleMeaning || '',
         }],
   };
 }

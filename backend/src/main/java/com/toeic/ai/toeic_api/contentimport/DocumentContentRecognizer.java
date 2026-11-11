@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -99,7 +100,8 @@ public class DocumentContentRecognizer {
                 String word = String.valueOf(candidate.getOrDefault("word", "")).trim();
                 if (word.isBlank()) continue;
                 String key = canonicalizeVocabularyText(word);
-                int occurrence = occurrences.merge(key, 1, Integer::sum) - 1;
+                int occurrence = occurrences.merge(key,
+                        1, (current, increment) -> Objects.requireNonNull(current) + Objects.requireNonNull(increment)) - 1;
                 List<Integer> indexes = mergedIndexes.computeIfAbsent(key, ignored -> new ArrayList<>());
                 if (occurrence == indexes.size()) {
                     indexes.add(merged.size());

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -33,7 +34,7 @@ class SubscriptionSchedulingTest {
         when(jdbc.queryForObject(contains("SELECT EXISTS"), eq(Boolean.class), any(Object[].class)))
                 .thenReturn(false);
         when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
-        when(jdbc.queryForObject(anyString(), any(RowMapper.class), any(Object[].class)))
+        when(jdbc.queryForObject(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
                 .thenAnswer(invocation -> {
                     String sql = invocation.getArgument(0);
                     ResultSet resultSet = mock(ResultSet.class);
@@ -60,7 +61,8 @@ class SubscriptionSchedulingTest {
     void blocksCheckoutWhenStudentAlreadyHasLifetimePlan() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         UUID userId = UUID.randomUUID();
-        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of(userId));
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenReturn(List.of(userId));
         when(jdbc.queryForObject(contains("SELECT EXISTS"), eq(Boolean.class), any(Object[].class)))
                 .thenReturn(true);
 

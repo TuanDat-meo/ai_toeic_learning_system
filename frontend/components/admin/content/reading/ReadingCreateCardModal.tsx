@@ -1058,7 +1058,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
       extractedPassage.includes("[132]") ||
       extractedPassage.includes("[133]") ||
       extractedPassage.includes("[134]");
-    
+
     const firstQNum = Number(parsedQuestions[0]?.questionNum || 0);
     const detectedCategory: "part5" | "part6" | "part7" =
       hasGapTokens

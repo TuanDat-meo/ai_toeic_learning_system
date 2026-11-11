@@ -24,11 +24,11 @@ import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTe
 import { MockTestDeleteModal } from "@/components/admin/content/mock-tests/MockTestDeleteModal";
 import { MockTestCreateModal } from "@/components/admin/content/mock-tests/MockTestCreateModal";
 
-export const LOCAL_MOCK_TESTS_V1 = "toeic_mock_tests_v1";
-export const LOCAL_MOCK_TESTS_V2 = "toeic_mock_tests_v2";
-export const LOCAL_MOCK_TESTS_V3 = "toeic_mock_tests_v3";
-export const LOCAL_MOCK_TESTS_VERSION_KEY = "toeic_mock_tests_sync_ver";
-export const CURRENT_TESTS_VERSION = "2026_10_22_real_data_v3";
+const LOCAL_MOCK_TESTS_V1 = "toeic_mock_tests_v1";
+const LOCAL_MOCK_TESTS_V2 = "toeic_mock_tests_v2";
+const LOCAL_MOCK_TESTS_V3 = "toeic_mock_tests_v3";
+const LOCAL_MOCK_TESTS_VERSION_KEY = "toeic_mock_tests_sync_ver";
+const CURRENT_TESTS_VERSION = "2026_10_22_real_data_v3";
 
 function getLocalMockTests(key: string): TestItem[] | null {
   if (typeof window === "undefined") return null;
@@ -44,7 +44,7 @@ function getLocalMockTests(key: string): TestItem[] | null {
   }
 }
 
-export function saveLocalMockTests(v1: TestItem[], v2: TestItem[], v3: TestItem[]) {
+function saveLocalMockTests(v1: TestItem[], v2: TestItem[], v3: TestItem[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(LOCAL_MOCK_TESTS_VERSION_KEY, CURRENT_TESTS_VERSION);

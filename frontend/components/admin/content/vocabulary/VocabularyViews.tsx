@@ -4,6 +4,10 @@ import React, { useState, useMemo } from "react";
 import {
   Search,
   Volume2,
+  Eye,
+  Pencil,
+  Trash2,
+  Plus,
   Sliders,
   CheckCircle2,
   TrendingDown,
@@ -28,6 +32,7 @@ function getVocabularySenses(word: WordItem) {
         partOfSpeech: normalizeVocabularyPartOfSpeech(word.partOfSpeech || word.pos || ""),
         meaning: word.meaning || word.meanings?.[0]?.meaning || "",
         example: word.example || word.meanings?.[0]?.example || "",
+        exampleMeaning: word.exampleMeaning || word.exampleVi || "",
       }];
   return deduplicateVocabularySenses(senses.map((sense) => ({
     ...sense,
@@ -50,6 +55,7 @@ interface VocabularyAllWordsViewProps {
 export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
   words,
   playAudio,
+  onOpenAddWord,
   onOpenEditWord,
   onOpenWordDetails,
   onDeleteWord,
@@ -57,6 +63,8 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
   const [keyword, setKeyword] = useState("");
   const [posFilter, setPosFilter] = useState("ALL");
   const [levelFilter, setLevelFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const filteredWords = useMemo(() => {
     return words.filter((w) => {
@@ -85,27 +93,93 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
       .flatMap((partOfSpeech) => partOfSpeech.split(" / ")));
     return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
   }, [words]);
+  const totalPages = Math.max(1, Math.ceil(filteredWords.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageWords = useMemo(
+    () => filteredWords.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filteredWords, currentPage, pageSize],
+  );
+  const firstVisibleWord = filteredWords.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const lastVisibleWord = Math.min(currentPage * pageSize, filteredWords.length);
+
+  const changePage = (nextPage: number) => {
+    setPage(Math.min(Math.max(1, nextPage), totalPages));
+  };
+
+  const paginationControls = (
+    <div className="flex flex-col gap-3 border-t border-slate-100 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 sm:justify-start">
+        <span>
+          Hiển thị <strong className="text-slate-700">{firstVisibleWord}–{lastVisibleWord}</strong> /{" "}
+          <strong className="text-slate-700">{filteredWords.length}</strong> từ
+        </span>
+        <label className="flex items-center gap-2">
+          Mỗi trang
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="min-h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700"
+            aria-label="Số từ vựng hiển thị mỗi trang"
+          >
+            {[25, 50, 100].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <nav className="flex items-center justify-between gap-2 sm:justify-end" aria-label="Phân trang ngân hàng từ vựng">
+        <button
+          type="button"
+          onClick={() => changePage(currentPage - 1)}
+          disabled={currentPage <= 1}
+          className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Trang trước
+        </button>
+        <span className="min-w-20 text-center text-xs font-semibold text-slate-600">
+          {currentPage} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => changePage(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Trang sau
+        </button>
+      </nav>
+    </div>
+  );
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
       {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-md sm:flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Tìm theo từ tiếng Anh, phiên âm, định nghĩa..."
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500 bg-slate-50/50"
+            onChange={(e) => {
+              setKeyword(e.target.value);
+              setPage(1);
+            }}
+            className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-hidden sm:text-xs"
           />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           <select
             value={posFilter}
-            onChange={(e) => setPosFilter(e.target.value)}
-            className="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white font-medium text-slate-700"
+            onChange={(e) => {
+              setPosFilter(e.target.value);
+              setPage(1);
+            }}
+            className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 sm:w-auto sm:text-xs"
           >
             <option value="ALL">Tất cả loại từ (PoS)</option>
             {availablePartOfSpeech.map((partOfSpeech) => (
@@ -115,8 +189,11 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
 
           <select
             value={levelFilter}
-            onChange={(e) => setLevelFilter(e.target.value)}
-            className="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white font-medium text-slate-700"
+            onChange={(e) => {
+              setLevelFilter(e.target.value);
+              setPage(1);
+            }}
+            className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 sm:w-auto sm:text-xs"
           >
             <option value="ALL">Mọi cấp độ (CEFR)</option>
             <option value="A1">A1 (Mới bắt đầu)</option>
@@ -126,13 +203,23 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
             <option value="C1">C1 (Nâng cao)</option>
             <option value="C2">C2 (Thành thạo)</option>
           </select>
+          {onOpenAddWord && (
+            <button
+              type="button"
+              onClick={onOpenAddWord}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 sm:text-xs"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Thêm từ / cụm từ
+            </button>
+          )}
         </div>
       </div>
 
       {/* Dictionary Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-        <div className="space-y-3 p-3 md:hidden">
-          {filteredWords.length ? filteredWords.map((w) => {
+        <div className="max-h-[calc(100dvh-25rem)] min-h-40 space-y-3 overflow-y-auto overscroll-contain p-3 md:hidden">
+          {pageWords.length ? pageWords.map((w) => {
             const senses = getVocabularySenses(w);
             return (
             <article key={w.id} className="rounded-xl border border-slate-200 p-3.5">
@@ -156,6 +243,13 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
                         {sense.subCategory ? <p className="text-[10px] font-semibold text-slate-500">{sense.subCategory}</p> : null}
                         <p className="text-xs font-medium text-slate-800">{sense.meaning || "Chưa có nghĩa"}</p>
                         {sense.example ? <p className="text-xs italic text-slate-500">{sense.example}</p> : null}
+                        {(sense.exampleMeaning || (
+                          index === 0
+                          && group.partOfSpeech === groupVocabularySenses(senses)[0]?.partOfSpeech
+                          && w.exampleMeaning
+                        )) ? (
+                          <p className="text-[11px] font-medium text-blue-700">{sense.exampleMeaning || w.exampleMeaning}</p>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -188,43 +282,44 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
             <p className="py-8 text-center text-xs text-slate-400">Không tìm thấy từ vựng nào khớp với bộ lọc.</p>
           )}
         </div>
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
+        <div className="hidden max-h-[calc(100dvh-22rem)] min-h-40 overflow-auto overscroll-contain md:block">
+          <table className="w-full min-w-[980px] table-fixed text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
               <tr>
-                <th className="py-3.5 px-4 min-w-[200px]">Từ vựng &amp; IPA</th>
-                <th className="py-3.5 px-4 min-w-[100px]">Từ loại</th>
-                <th className="py-3.5 px-4 min-w-[90px]">Cấp độ</th>
-                <th className="py-3.5 px-4 min-w-[220px]">Định nghĩa tiếng Việt</th>
-                <th className="py-3.5 px-4 min-w-[260px]">Ví dụ thực tế</th>
-                <th className="py-3.5 px-4 text-right min-w-[100px]">Thao tác</th>
+                <th className="w-[20%] px-3 py-3.5">Từ vựng &amp; IPA</th>
+                <th className="w-[14%] px-3 py-3.5">Từ loại</th>
+                <th className="w-[8%] px-3 py-3.5">Cấp độ</th>
+                <th className="w-[25%] px-3 py-3.5">Định nghĩa tiếng Việt</th>
+                <th className="w-[23%] px-3 py-3.5">Ví dụ thực tế</th>
+                <th className="w-[10%] px-3 py-3.5 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredWords.length > 0 ? (
-                filteredWords.map((w) => {
+              {pageWords.length > 0 ? (
+                pageWords.map((w) => {
                   const senses = getVocabularySenses(w);
                   return (
-                  <tr key={w.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">{w.word}</span>
-                        <span className="font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
-                          {w.ipa}
+                  <tr key={w.id} className="align-top transition-colors hover:bg-slate-50/80">
+                    <td className="px-3 py-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <span className="break-words font-bold text-slate-900 text-sm">{w.word}</span>
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">
+                          {w.ipa || "—"}
                         </span>
                         <button
                           type="button"
                           onClick={() => playAudio(w.audioUrl || w.audio || "", w.word)}
-                          className="p-1 rounded-full hover:bg-blue-100 text-slate-500 hover:text-blue-600 transition"
+                          className="rounded-full p-1 text-slate-500 transition hover:bg-blue-100 hover:text-blue-600"
+                          aria-label={`Phát âm thanh ${w.word}`}
                           title="Phát âm thanh"
                         >
-                          <Volume2 className="w-3.5 h-3.5" />
+                          <Volume2 className="h-3.5 w-3.5" />
                         </button>
                         <button type="button" onClick={() => playVocabularyPronunciation(w.word, "UK")} className="rounded px-1.5 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100" aria-label={`Phát âm ${w.word} giọng UK`}>UK</button>
                         <button type="button" onClick={() => playVocabularyPronunciation(w.word, "US")} className="rounded px-1.5 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100" aria-label={`Phát âm ${w.word} giọng US`}>US</button>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">
+                    <td className="px-3 py-3 font-medium text-slate-600">
                       <div className="flex max-w-[220px] flex-wrap gap-1">
                         {uniqueVocabularyPartOfSpeech(senses).map((partOfSpeech) => (
                           <span key={partOfSpeech} className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px]">
@@ -233,17 +328,17 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
                         ))}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
+                    <td className="px-3 py-3">
                       <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap inline-flex items-center">
                         {normalizeVocabularyLevel(w.level || (w.cefrLevel as string)) || "—"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-800 max-w-xs">
+                    <td className="px-3 py-3 font-semibold text-slate-800">
                       <div className="space-y-1">
                         {groupVocabularySenses(senses).map((group) => (
                           <div key={group.partOfSpeech} className="space-y-1">
                             {group.senses.map((sense, index) => (
-                              <p key={sense.id ?? `${group.partOfSpeech}-${index}`} className="truncate">
+                              <p key={sense.id ?? `${group.partOfSpeech}-${index}`} className="break-words">
                                 {sense.meaning}
                               </p>
                             ))}
@@ -251,46 +346,61 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
                         ))}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-500 italic max-w-xs">
+                    <td className="px-3 py-3 italic text-slate-500">
                       <div className="space-y-1">
                         {groupVocabularySenses(senses).map((group) => (
                           <div key={group.partOfSpeech} className="space-y-1">
                             {group.senses.map((sense, index) => (
-                              <p key={sense.id ?? `${group.partOfSpeech}-${index}`} className="truncate">
-                                {sense.example ? `"${sense.example}"` : "—"}
-                              </p>
+                              <div key={sense.id ?? `${group.partOfSpeech}-${index}`}>
+                                <p className="break-words">{sense.example ? `"${sense.example}"` : "—"}</p>
+                                {(sense.exampleMeaning || (
+                                  index === 0
+                                  && group.partOfSpeech === groupVocabularySenses(senses)[0]?.partOfSpeech
+                                  && w.exampleMeaning
+                                )) ? (
+                                  <p className="break-words not-italic text-blue-700">
+                                    {sense.exampleMeaning || w.exampleMeaning}
+                                  </p>
+                                ) : null}
+                              </div>
                             ))}
                           </div>
                         ))}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="px-2 py-3">
+                      <div className="flex items-center justify-center gap-1">
                         {onOpenWordDetails && (
                           <button
                             type="button"
                             onClick={() => onOpenWordDetails(w)}
-                            className="px-2 py-1 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold transition"
+                            aria-label={`Xem chi tiết ${w.word}`}
+                            title="Xem chi tiết"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 text-blue-700 transition hover:bg-blue-50"
                           >
-                            Chi tiết
+                            <Eye className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                         {onOpenEditWord && (
                           <button
                             type="button"
                             onClick={() => onOpenEditWord(w)}
-                            className="px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold transition"
+                            aria-label={`Sửa ${w.word}`}
+                            title="Sửa"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100"
                           >
-                            Sửa
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                         {onDeleteWord && (
                           <button
                             type="button"
                             onClick={() => onDeleteWord(w)}
-                            className="px-2 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold transition"
+                            aria-label={`Xóa ${w.word}`}
+                            title="Xóa"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 text-rose-600 transition hover:bg-rose-50"
                           >
-                            Xóa
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -308,6 +418,7 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
             </tbody>
           </table>
         </div>
+        {paginationControls}
       </div>
     </div>
   );

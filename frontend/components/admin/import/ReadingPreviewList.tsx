@@ -824,7 +824,7 @@ export function ReadingPreviewList({
                         <span>Đặc thù TOEIC Part 5: Incomplete Sentences</span>
                       </div>
                       <p className="text-xs text-slate-700 leading-relaxed">
-                        Phần Part 5 bao gồm 30 câu đơn khuyết chỗ trống (Questions 101–130) để kiểm tra ngữ pháp và từ vựng. 
+                        Phần Part 5 bao gồm 30 câu đơn khuyết chỗ trống (Questions 101–130) để kiểm tra ngữ pháp và từ vựng.
                         Phần này <strong>không có bài đọc đoạn văn dài</strong>. Các câu hỏi sẽ được hiển thị độc lập tại tab <strong>Câu hỏi</strong>.
                       </p>
                     </div>

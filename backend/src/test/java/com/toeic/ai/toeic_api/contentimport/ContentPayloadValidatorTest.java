@@ -261,6 +261,52 @@ class ContentPayloadValidatorTest {
     }
 
     @Test
+    void preservesStructuredGrammarHierarchyAndTopicFields() throws Exception {
+        var raw = new ObjectMapper().readTree("""
+                {
+                  "code": "NOUN-01",
+                  "title": "Danh từ đếm được và không đếm được",
+                  "englishTitle": "Countable and Uncountable Nouns",
+                  "parentTitleVi": "Danh từ",
+                  "grammarGroup": "parts_of_speech",
+                  "targetScore": "ALL",
+                  "part": "Part 5",
+                  "toeicParts": ["Part 5", "Part 6"],
+                  "difficulty": "EASY",
+                  "status": "DRAFT",
+                  "sourceNotes": "Imported from the nouns grammar source.",
+                  "summary": "Phân biệt danh từ đếm được và không đếm được.",
+                  "rule": "Determiner + Countable Noun",
+                  "theory": {"definition": "A noun names a person, place, thing, or idea."},
+                  "metadata": {"groupValues": {"parts_of_speech": {"wordType": "Noun"}}},
+                  "signalWords": ["many", "much"],
+                  "traps": ["Do not use much with countable nouns."],
+                  "examples": [{
+                    "sentence": "The manager reviewed the proposal.",
+                    "translation": "Người quản lý đã xem xét bản đề xuất.",
+                    "analysis": "Manager là danh từ làm chủ ngữ."
+                  }]
+                }
+                """);
+
+        var result = validator.validate(ContentType.GRAMMAR, raw);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.normalizedData().path("parentTitleVi").asText()).isEqualTo("Danh từ");
+        assertThat(result.normalizedData().path("grammarGroup").asText()).isEqualTo("parts_of_speech");
+        assertThat(result.normalizedData().path("targetScore").asText()).isEqualTo("ALL");
+        assertThat(result.normalizedData().path("status").asText()).isEqualTo("DRAFT");
+        assertThat(result.normalizedData().path("sourceNotes").asText())
+                .isEqualTo("Imported from the nouns grammar source.");
+        assertThat(result.normalizedData().path("toeicParts")).hasSize(2);
+        assertThat(result.normalizedData().path("theory").path("definition").asText()).contains("noun");
+        assertThat(result.normalizedData().path("metadata").path("groupValues")
+                .path("parts_of_speech").path("wordType").asText()).isEqualTo("Noun");
+        assertThat(result.normalizedData().path("examples").get(0).path("analysis").asText())
+                .contains("danh từ");
+    }
+
+    @Test
     void normalizesReadingPayloadWithPassagesTheorySampleQuestionsAndVocabularyAliases() throws Exception {
         var raw = new ObjectMapper().readTree("""
                 {
