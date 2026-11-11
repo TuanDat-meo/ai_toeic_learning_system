@@ -3,17 +3,23 @@ package com.toeic.ai.toeic_api.contentimport;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,8 +47,8 @@ public class ImportFileParser {
         try {
             return switch (extension) {
                 case "json" -> parseJson(file, type);
-                case "csv" -> parseCsv(file);
-                case "xlsx" -> parseXlsx(file);
+                case "csv" -> maybeGroupReadingQuestionRows(parseCsv(file), name, type);
+                case "xlsx", "xls" -> maybeGroupReadingQuestionRows(parseXlsx(file), name, type);
                 default -> throw new IllegalArgumentException("Chỉ hỗ trợ file CSV, XLSX hoặc JSON.");
             };
         } catch (IOException exception) {
@@ -198,7 +204,10 @@ public class ImportFileParser {
         JsonNode reading = root.path("reading");
         JsonNode passages = reading.path("passages");
         if (!passages.isArray()) {
-            passages = root.path("passages");
+            boolean isSingleReadingCard = root.has("questions") || root.has("sampleQuestions") || root.has("title");
+            if (!isSingleReadingCard) {
+                passages = root.path("passages");
+            }
         }
         if (passages.isArray()) {
             return mapReadingRows(root, passages);
@@ -228,11 +237,34 @@ public class ImportFileParser {
             String passageId = source.path("id").asText(source.path("passageId").asText(""));
             row.put("title", source.path("title").asText(
                     testCode + (passageId.isBlank() ? " Reading passage" : " - " + passageId)));
-            copyFirstText(source, row, "content", "content", "text", "passage", "body");
+            copyFirstText(source, row, "content", "content", "text", "passage", "passageText", "body");
+            copyFirstText(source, row, "passageTextVi", "passageTextVi");
+            copyFirstText(source, row, "part", "part");
+            copyFirstText(source, row, "category", "category");
+            copyFirstText(source, row, "subCategory", "subCategory");
+            copyFirstText(source, row, "subtitle", "subtitle");
+            copyFirstText(source, row, "tag", "tag");
             copyFirstText(source, row, "topic", "topic", "type");
+            copyFirstText(source, row, "difficulty", "difficulty");
             copyFirstText(source, row, "source", "source", "testCode");
             copyUrl(source, row, "audioUrl", "audioUrl", "audioURL");
             copyUrl(source, row, "imageUrl", "imageUrl", "imageURL", "image");
+            if (source.has("totalQuestions") && source.path("totalQuestions").isInt()) {
+                row.put("totalQuestions", source.path("totalQuestions").asInt());
+            }
+            if (source.has("questions") && source.path("questions").isArray()) {
+                row.set("questions", source.path("questions").deepCopy());
+            } else if (source.has("sampleQuestions") && source.path("sampleQuestions").isArray()) {
+                row.set("questions", source.path("sampleQuestions").deepCopy());
+            }
+            if (source.has("theory") && source.path("theory").isObject()) {
+                row.set("theory", source.path("theory").deepCopy());
+            }
+            if (source.has("vocabList") && source.path("vocabList").isArray()) {
+                row.set("vocabList", source.path("vocabList").deepCopy());
+            } else if (source.has("vocabulary") && source.path("vocabulary").isArray()) {
+                row.set("vocabList", source.path("vocabulary").deepCopy());
+            }
             rows.add(row);
         }
         return rows;
@@ -402,7 +434,7 @@ public class ImportFileParser {
     }
 
     private List<ParsedImportRow> parseXlsx(MultipartFile file) throws IOException {
-        try (XSSFWorkbook workbook = new XSSFWorkbook(file.getInputStream())) {
+        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             if (workbook.getNumberOfSheets() == 0) {
                 throw new IllegalArgumentException("File XLSX không có trang tính.");
             }
@@ -486,6 +518,179 @@ public class ImportFileParser {
             throw new IllegalArgumentException("File không có dòng dữ liệu.");
         }
         return rows;
+    }
+
+    private List<ParsedImportRow> maybeGroupReadingQuestionRows(
+            List<ParsedImportRow> rows, String fileName, ContentType type) {
+        if (type != ContentType.READING || rows.isEmpty()) {
+            return rows;
+        }
+        boolean hasQuestionColumns = rows.stream().anyMatch(r ->
+                !extractFieldByAliases(r.data(), "debaitienganh", "questiontext", "question", "debai").isBlank()
+                        && (!extractFieldByAliases(r.data(), "dapana", "optiona", "a").isBlank()
+                                || !extractFieldByAliases(r.data(), "dapandungabcd", "dapandung", "correctanswer", "answer", "key").isBlank()));
+        boolean hasCardStructure = rows.stream().anyMatch(r -> {
+            JsonNode d = r.data();
+            return d.has("questions") || d.has("sampleQuestions") || d.has("passages")
+                    || (!hasQuestionColumns && d.has("title") && (d.has("content") || d.has("passageText") || d.has("passage")));
+        });
+        if (hasCardStructure || !hasQuestionColumns) {
+            return rows;
+        }
+
+        ArrayNode questions = objectMapper.createArrayNode();
+        String title = "";
+        String rawPart = "";
+        String tag = "";
+        String passageText = "";
+        String passageTextVi = "";
+
+        for (int i = 0; i < rows.size(); i++) {
+            JsonNode rowData = rows.get(i).data();
+            if (title.isBlank()) title = extractFieldByAliases(rowData, "tieude", "title");
+            if (rawPart.isBlank()) rawPart = extractFieldByAliases(rowData, "phanthi", "part", "category");
+            if (tag.isBlank()) tag = extractFieldByAliases(rowData, "the", "tag", "topic");
+            if (passageText.isBlank()) passageText = extractFieldByAliases(rowData, "doanvan", "passagetext", "passage", "content");
+            if (passageTextVi.isBlank()) passageTextVi = extractFieldByAliases(rowData, "bandichdoanvan", "passagetextvi");
+
+            String qText = extractFieldByAliases(rowData, "debaitienganh", "questiontext", "question", "debai");
+            if (qText.isBlank()) continue;
+
+            ObjectNode qObj = objectMapper.createObjectNode();
+            String qNum = extractFieldByAliases(rowData, "causo", "questionnum", "stt", "no");
+            qObj.put("questionNum", qNum.isBlank() ? String.valueOf(101 + questions.size()) : qNum);
+            qObj.put("question", qText);
+
+            String bilingual = extractFieldByAliases(rowData, "bandichtiengviet", "bilingual", "translation", "dichcau", "dich");
+            if (!bilingual.isBlank()) qObj.put("bilingual", bilingual);
+
+            ObjectNode opts = objectMapper.createObjectNode();
+            opts.put("A", extractFieldByAliases(rowData, "dapana", "optiona", "a"));
+            opts.put("B", extractFieldByAliases(rowData, "dapanb", "optionb", "b"));
+            opts.put("C", extractFieldByAliases(rowData, "dapanc", "optionc", "c"));
+            opts.put("D", extractFieldByAliases(rowData, "dapand", "optiond", "d"));
+            qObj.set("options", opts);
+
+            String correctRaw = extractFieldByAliases(rowData, "dapandungabcd", "dapandung", "correctanswer", "answer", "key")
+                    .trim().toUpperCase(Locale.ROOT);
+            String correctLetter = correctRaw.isEmpty() ? "A" : correctRaw.substring(0, 1);
+            if (!Set.of("A", "B", "C", "D").contains(correctLetter)) correctLetter = "A";
+            qObj.put("correctAnswer", correctLetter);
+
+            String exp = extractFieldByAliases(rowData, "giaithichchitiet", "giaithich", "explanation", "loigiai");
+            if (!exp.isBlank()) qObj.put("explanation", exp);
+
+            String vocabRaw = extractFieldByAliases(rowData, "tuvung", "vocab", "vocabulary");
+            if (!vocabRaw.isBlank()) {
+                ArrayNode vocabArr = parseTabularVocabList(vocabRaw);
+                if (!vocabArr.isEmpty()) qObj.set("vocabList", vocabArr);
+            }
+            questions.add(qObj);
+        }
+
+        if (questions.isEmpty()) {
+            return rows;
+        }
+
+        ObjectNode card = objectMapper.createObjectNode();
+        card.put("title", title.isBlank() ? stripFileExtension(fileName) : title);
+        String resolvedPart = resolveReadingPart(rawPart, !passageText.isBlank(), questions);
+        card.put("part", resolvedPart);
+        if (!tag.isBlank()) card.put("tag", tag);
+        if (!passageText.isBlank()) {
+            card.put("content", passageText);
+        } else if ("PART_5".equals(resolvedPart)) {
+            card.put("content", "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence.");
+        }
+        if (!passageTextVi.isBlank()) card.put("passageTextVi", passageTextVi);
+        card.set("questions", questions);
+        card.put("totalQuestions", questions.size());
+        return List.of(new ParsedImportRow(1, card));
+    }
+
+    private String extractFieldByAliases(JsonNode rowData, String... aliases) {
+        if (rowData == null || !rowData.isObject()) return "";
+        Map<String, String> byKey = new LinkedHashMap<>();
+        rowData.fields().forEachRemaining(entry ->
+                byKey.put(normalizeHeaderKey(entry.getKey()), entry.getValue().asText("")));
+        for (String alias : aliases) {
+            String exact = byKey.get(alias);
+            if (exact != null && !exact.isBlank()) return exact.trim();
+        }
+        for (String alias : aliases) {
+            if (alias.length() < 4) continue;
+            for (Map.Entry<String, String> entry : byKey.entrySet()) {
+                if (entry.getKey().contains(alias) && entry.getValue() != null && !entry.getValue().isBlank()) {
+                    return entry.getValue().trim();
+                }
+            }
+        }
+        return "";
+    }
+
+    private ArrayNode parseTabularVocabList(String raw) {
+        ArrayNode arr = objectMapper.createArrayNode();
+        Pattern ipaPat = Pattern.compile("/([^/]+)/");
+        Pattern posPat = Pattern.compile("(?i)\\((n|v|adj|adv|prep|conj|pron|n,\\s*v)[^\\)]*\\)");
+        for (String seg : raw.split("[,;]")) {
+            String trimmed = seg.trim();
+            if (trimmed.isEmpty()) continue;
+            String ipa = "";
+            Matcher ipaM = ipaPat.matcher(trimmed);
+            if (ipaM.find()) ipa = "/" + ipaM.group(1).trim() + "/";
+            String pos = "n";
+            Matcher posM = posPat.matcher(trimmed);
+            if (posM.find()) pos = posM.group(1).trim().toLowerCase(Locale.ROOT);
+            String cleaned = trimmed
+                    .replaceAll("\\(\\s*/[^/]+/\\s*\\)", "")
+                    .replaceAll("/[^/]+/", "")
+                    .replaceAll("(?i)\\((?:n|v|adj|adv|prep|conj|pron|n,\\s*v)[^\\)]*\\)", "")
+                    .replaceAll("\\(\\s*\\)", "")
+                    .trim();
+            String[] parts = cleaned.split("[:\\-=]\\s*", 2);
+            String word = parts[0].replaceAll("[\\(\\)\\[\\]]", "").trim();
+            if (word.isEmpty() || !word.matches("^[A-Za-z][A-Za-z\\s'\\-]*$")) continue;
+            ObjectNode v = objectMapper.createObjectNode();
+            v.put("word", word);
+            if (!ipa.isEmpty()) v.put("ipa", ipa);
+            v.put("pos", pos);
+            v.put("meaning", (parts.length >= 2 && !parts[1].isBlank()) ? parts[1].trim() : "Từ vựng trọng tâm");
+            v.put("level", "B1");
+            arr.add(v);
+        }
+        return arr;
+    }
+
+    private String resolveReadingPart(String rawPart, boolean hasPassage, ArrayNode questions) {
+        String lower = rawPart.toLowerCase(Locale.ROOT);
+        if (lower.contains("6")) return "PART_6";
+        if (lower.contains("7")) return "PART_7";
+        if (lower.contains("5")) return "PART_5";
+        if (hasPassage) return "PART_7";
+        if (!questions.isEmpty()) {
+            String firstNum = questions.get(0).path("questionNum").asText("101");
+            try {
+                int n = Integer.parseInt(firstNum.replaceAll("\\D+", ""));
+                if (n >= 147) return "PART_7";
+                if (n >= 131) return "PART_6";
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return "PART_5";
+    }
+
+    private String normalizeHeaderKey(String raw) {
+        if (raw == null) return "";
+        String noBom = raw.replace("\uFEFF", "").replace('đ', 'd').replace('Đ', 'D');
+        String decomposed = Normalizer.normalize(noBom, Normalizer.Form.NFD).replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+        return decomposed.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
+    }
+
+    private String stripFileExtension(String fileName) {
+        if (fileName == null || fileName.isBlank()) return "Reading Practice";
+        int dot = fileName.lastIndexOf('.');
+        String base = dot > 0 ? fileName.substring(0, dot) : fileName;
+        return base.replace('_', ' ').replace('-', ' ').trim();
     }
 
     private String extension(String filename) {

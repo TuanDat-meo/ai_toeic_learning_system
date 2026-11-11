@@ -216,6 +216,57 @@ class ImportFileParserTest {
     }
 
     @Test
+    void keepsSingleReadingCardJsonWithPassagesQuestionsAndVocabList() {
+        var file = new MockMultipartFile("file", "reading-card.json", "application/json",
+                """
+                {
+                  "id": "part7-memo-01",
+                  "title": "Internal Cloud Maintenance Notice",
+                  "category": "part7",
+                  "passages": [{"label": "Memo", "text": "The cloud server will undergo maintenance."}],
+                  "questions": [
+                    {
+                      "questionNum": "147",
+                      "question": "What is the purpose of the memo?",
+                      "options": ["To announce maintenance", "To hire staff", "To relocate", "To cancel orders"],
+                      "correctIndex": 0
+                    }
+                  ],
+                  "vocabList": [
+                    {"word": "maintenance", "pos": "n", "ipa": "/ˈmeɪntənəns/", "meaning": "sự bảo trì"}
+                  ]
+                }
+                """.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        var rows = parser.parse(file, ContentType.READING);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().data().path("title").asText()).isEqualTo("Internal Cloud Maintenance Notice");
+        assertThat(rows.getFirst().data().path("passages")).hasSize(1);
+        assertThat(rows.getFirst().data().path("questions")).hasSize(1);
+        assertThat(rows.getFirst().data().path("vocabList")).hasSize(1);
+    }
+
+    @Test
+    void groupsTabularReadingCsvQuestionRowsIntoSingleCardWithVocab() {
+        String csv = "Câu số,Đề bài tiếng Anh,Đáp án A,Đáp án B,Đáp án C,Đáp án D,Đáp án đúng,Giải thích,Từ vựng\n"
+                + "101,Ms. Park will _______ the new policy soon.,implement,implementation,implemented,implementing,A,Sau will + V nguyên mẫu,implement (v) /ˈɪmplɪment/: thực thi\n"
+                + "102,All _______ must submit reports by Friday.,employees,employ,employment,employed,A,Sau All cần danh từ số nhiều,submit (v): nộp\n";
+        var file = new MockMultipartFile("file", "part5-test.csv", "text/csv",
+                csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        var rows = parser.parse(file, ContentType.READING);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().data().path("part").asText()).isEqualTo("PART_5");
+        assertThat(rows.getFirst().data().path("questions")).hasSize(2);
+        assertThat(rows.getFirst().data().path("questions").get(0).path("vocabList").get(0).path("word").asText())
+                .isEqualTo("implement");
+        assertThat(rows.getFirst().data().path("questions").get(0).path("vocabList").get(0).path("ipa").asText())
+                .isEqualTo("/ˈɪmplɪment/");
+    }
+
+    @Test
     void mapsEtsTestJsonToMockTestAndKeepsQuestionCodesConsistent() {
         var file = new MockMultipartFile("file", "ets-mock.json", "application/json",
                 """

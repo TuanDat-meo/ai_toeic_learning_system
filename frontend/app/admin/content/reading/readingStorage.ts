@@ -1,6 +1,8 @@
 import { ExerciseCardData } from "./types";
 import { INITIAL_CARDS } from "./mockData";
 
+import { isStaleReadingCardSnapshot } from "@/lib/readingPassageUtils";
+
 export const LOCAL_READING_CARDS_KEY = "toeic_reading_cards";
 export const LOCAL_READING_DELETED_KEY = "toeic_reading_deleted_ids";
 export const LOCAL_READING_CUSTOM_KEY = "toeic_reading_custom_cards";
@@ -36,6 +38,8 @@ export function getLocalReadingCards(): ExerciseCardData[] {
       } catch {}
     }
 
+    healEditedReadingCardsMap(editedMap);
+
     // Danh sách bài gốc đã trừ bài xóa và cập nhật bài sửa
     const baseCards = INITIAL_CARDS
       .filter((c) => !deletedIds.has(c.id))
@@ -58,7 +62,7 @@ export function getLocalReadingCards(): ExerciseCardData[] {
  * Chỉ lưu danh sách ID đã xóa, danh sách bài chỉnh sửa và bài tự tạo.
  * Đảm bảo 100% không bao giờ bị vượt quá giới hạn bộ nhớ trình duyệt.
  */
-export function saveLocalReadingCards(cards: ExerciseCardData[]) {
+export function saveLocalReadingCards(cards: ExerciseCardData[], emitEvent = true) {
   if (typeof window === "undefined") return;
   try {
     const currentIds = new Set(cards.map((c) => c.id));
@@ -82,10 +86,11 @@ export function saveLocalReadingCards(cards: ExerciseCardData[]) {
           orig.totalQuestions !== c.totalQuestions ||
           orig.passageText !== c.passageText ||
           orig.passageTextVi !== c.passageTextVi ||
+          JSON.stringify(orig.vocabList || []) !== JSON.stringify(c.vocabList || []) ||
           JSON.stringify(orig.theory) !== JSON.stringify(c.theory) ||
           JSON.stringify(orig.sampleQuestions) !== JSON.stringify(c.sampleQuestions);
 
-        if (isModified) {
+        if (isModified && !isStaleReadingCardSnapshot(orig, c)) {
           editedMap[c.id] = c;
         }
       }
@@ -94,10 +99,15 @@ export function saveLocalReadingCards(cards: ExerciseCardData[]) {
     localStorage.setItem(LOCAL_READING_DELETED_KEY, JSON.stringify(deletedIds));
     localStorage.setItem(LOCAL_READING_CUSTOM_KEY, JSON.stringify(customCards));
     localStorage.setItem(LOCAL_READING_EDITED_KEY, JSON.stringify(editedMap));
+    syncReadingRevisionKey();
 
     // Thử lưu đồng bộ legacy key nếu dung lượng cho phép
     try {
-      localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(cards));
+      const sanitizedCards = cards.map((card) => {
+        const orig = INITIAL_CARDS.find((init) => init.id === card.id);
+        return orig && isStaleReadingCardSnapshot(orig, card) ? orig : card;
+      });
+      localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(sanitizedCards));
     } catch {
       try {
         localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(customCards));
@@ -105,8 +115,77 @@ export function saveLocalReadingCards(cards: ExerciseCardData[]) {
     }
 
     // Phát sự kiện cập nhật để các trang khác (Học viên) cập nhật tức thì
-    window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated", { detail: cards }));
+    if (emitEvent) {
+      window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated", { detail: { source: "local-storage", cards } }));
+    }
   } catch (err) {
     console.error("Lỗi khi lưu dữ liệu bài đọc:", err);
   }
+}
+
+
+const READING_REVISION_KEY = "toeic_reading_data_revision";
+const CURRENT_READING_REVISION = "ets-reading-2026-11-11-v2";
+
+function syncReadingRevisionKey() {
+  try {
+    localStorage.setItem(READING_REVISION_KEY, CURRENT_READING_REVISION);
+  } catch {}
+}
+
+/**
+ * Removes outdated built-in overrides from browser localStorage when updated
+ * ETS Reading data ships, while preserving genuine user edits and custom cards.
+ */
+function healEditedReadingCardsMap(editedMap: Record<string, ExerciseCardData>): boolean {
+  let changed = false;
+
+  for (const initCard of INITIAL_CARDS) {
+    const cached = editedMap[initCard.id];
+    if (cached && isStaleReadingCardSnapshot(initCard, cached)) {
+      delete editedMap[initCard.id];
+      changed = true;
+    }
+  }
+
+  let revisionChanged = false;
+  try {
+    if (localStorage.getItem(READING_REVISION_KEY) !== CURRENT_READING_REVISION) {
+      revisionChanged = true;
+      localStorage.setItem(READING_REVISION_KEY, CURRENT_READING_REVISION);
+    }
+  } catch {}
+
+  if (changed) {
+    try {
+      localStorage.setItem(LOCAL_READING_EDITED_KEY, JSON.stringify(editedMap));
+    } catch {}
+  }
+
+  if (changed || revisionChanged) {
+    try {
+      const rawLegacy = localStorage.getItem(LOCAL_READING_CARDS_KEY);
+      if (rawLegacy) {
+        const parsedLegacy: unknown = JSON.parse(rawLegacy);
+        if (Array.isArray(parsedLegacy)) {
+          const initById = new Map(INITIAL_CARDS.map((c) => [c.id, c]));
+          let legacyDirty = false;
+          const healedLegacy = parsedLegacy.map((item) => {
+            const candidate = item as ExerciseCardData;
+            const fresh = candidate?.id ? initById.get(candidate.id) : undefined;
+            if (fresh && isStaleReadingCardSnapshot(fresh, candidate)) {
+              legacyDirty = true;
+              return fresh;
+            }
+            return candidate;
+          });
+          if (legacyDirty) {
+            localStorage.setItem(LOCAL_READING_CARDS_KEY, JSON.stringify(healedLegacy));
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return changed;
 }

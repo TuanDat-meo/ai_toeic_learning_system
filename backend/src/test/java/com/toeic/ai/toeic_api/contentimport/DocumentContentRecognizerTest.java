@@ -193,4 +193,47 @@ class DocumentContentRecognizerTest {
         assertThat(questions.get(0).get("correctAnswer")).isEqualTo("A");
         assertThat(questions.get(1).get("correctAnswer")).isEqualTo("B");
     }
+
+    @Test
+    void recognizesStructuredReadingPassageQuestionsAndVocabulary() {
+        String text = """
+                [Tiêu đề] Building Maintenance Notice
+                [Phần thi] Part 6
+                [Đoạn văn]
+                Water service will be temporarily [131]------ throughout the building.
+                [Bản dịch đoạn văn]
+                Dịch vụ nước sẽ tạm thời gián đoạn trên toàn tòa nhà.
+                [Từ vựng]
+                - schedule /ˈskedʒuːl/ (n): lịch trình
+                131. Choose the best word to complete blank [131].
+                (A) suspend (B) suspended (C) suspension (D) suspending
+                Đáp án: B
+                Giải thích: Cần phân từ bị động sau be.
+                Từ vựng: temporarily (adv) /ˌtempəˈrerəli/: tạm thời
+                """;
+
+        var recognized = recognizer.recognize(ContentType.READING, text);
+
+        assertThat(recognized).hasSize(1);
+        Map<String, Object> card = recognized.getFirst();
+        assertThat(card.get("title")).isEqualTo("Building Maintenance Notice");
+        assertThat(card.get("part")).isEqualTo("PART_6");
+        assertThat(card.get("content")).asString().contains("Water service will be temporarily [131]");
+        assertThat(card.get("passageTextVi")).asString().contains("tạm thời gián đoạn");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> cardVocab = (List<Map<String, Object>>) card.get("vocabList");
+        assertThat(cardVocab).hasSize(1);
+        assertThat(cardVocab.getFirst().get("word")).isEqualTo("schedule");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> questions = (List<Map<String, Object>>) card.get("questions");
+        assertThat(questions).hasSize(1);
+        assertThat(questions.getFirst().get("correctAnswer")).isEqualTo("B");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> qVocab = (List<Map<String, Object>>) questions.getFirst().get("vocabList");
+        assertThat(qVocab).hasSize(1);
+        assertThat(qVocab.getFirst().get("word")).isEqualTo("temporarily");
+        assertThat(qVocab.getFirst().get("ipa")).isEqualTo("/ˌtempəˈrerəli/");
+    }
 }

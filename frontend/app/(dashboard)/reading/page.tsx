@@ -5,7 +5,12 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 import { Sparkles, Layers } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
-import { getLocalReadingCards } from "@/app/admin/content/reading/readingStorage";
+import { getLocalReadingCards, saveLocalReadingCards } from "@/app/admin/content/reading/readingStorage";
+import {
+  fetchReadingCardDetails,
+  fetchReadingCards,
+  mergeReadingCardsWithBackend,
+} from "@/lib/api/reading";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
@@ -20,18 +25,71 @@ export default function StudentReadingPage() {
   const [theoryCard, setTheoryCard] = useState<ExerciseCardData | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const cardsRef = React.useRef<ExerciseCardData[]>(cards);
   React.useEffect(() => {
-    const loadCards = () => {
-      setCards(getLocalReadingCards());
+    cardsRef.current = cards;
+  }, [cards]);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const loadAndSync = async () => {
+      const local = getLocalReadingCards();
+      cardsRef.current = local;
+      if (active) setCards(local);
+      const backendCards = await fetchReadingCards();
+      if (!active || backendCards.length === 0) return;
+      const baseline = getLocalReadingCards();
+      const merged = mergeReadingCardsWithBackend(
+        backendCards,
+        baseline.length > 0 ? baseline : cardsRef.current
+      );
+      cardsRef.current = merged;
+      saveLocalReadingCards(merged, false);
+      setCards(merged);
     };
-    loadCards();
-    window.addEventListener("toeic-reading-cards-updated", loadCards);
-    window.addEventListener("storage", loadCards);
+
+    void loadAndSync();
+
+    const handleUpdated = (ev: Event) => {
+      const customEv = ev as CustomEvent<{ source?: string }>;
+      if (customEv.detail?.source === "local-storage") {
+        const local = getLocalReadingCards();
+        cardsRef.current = local;
+        setCards(local);
+        return;
+      }
+      void loadAndSync();
+    };
+
+    const handleStorage = () => {
+      const local = getLocalReadingCards();
+      cardsRef.current = local;
+      setCards(local);
+    };
+
+    window.addEventListener("toeic-reading-cards-updated", handleUpdated);
+    window.addEventListener("storage", handleStorage);
     return () => {
-      window.removeEventListener("toeic-reading-cards-updated", loadCards);
-      window.removeEventListener("storage", loadCards);
+      active = false;
+      window.removeEventListener("toeic-reading-cards-updated", handleUpdated);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
+
+  const ensureCardDetails = async (card: ExerciseCardData): Promise<ExerciseCardData> => {
+    if (card.detailsLoaded || (card.sampleQuestions && card.sampleQuestions.length > 0)) {
+      return card;
+    }
+    const detailed = await fetchReadingCardDetails(card.id);
+    if (!detailed) return card;
+    const mergedCard: ExerciseCardData = { ...card, ...detailed, detailsLoaded: true };
+    const next = cardsRef.current.map((c) => (c.id === mergedCard.id ? mergedCard : c));
+    cardsRef.current = next;
+    saveLocalReadingCards(next, false);
+    setCards(next);
+    return mergedCard;
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -43,9 +101,10 @@ export default function StudentReadingPage() {
   async function startReadingPractice(card: ExerciseCardData, startIndex = 0, isRedo = false): Promise<boolean> {
     try {
       await consumeLearningFeature("READING_PRACTICE");
+      const hydrated = await ensureCardDetails(card);
       setReadingStartIndex(startIndex);
       setIsReadingRedoWrong(isRedo);
-      setActivePracticeCard(card);
+      setActivePracticeCard(hydrated);
       return true;
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Không thể bắt đầu lượt luyện Reading.");
@@ -92,7 +151,9 @@ export default function StudentReadingPage() {
       <StudentReadingCardGrid
         cards={cards}
         onStartPractice={(card, sIdx, isRedo) => { void startReadingPractice(card, sIdx, isRedo); }}
-        onOpenTheory={(card) => setTheoryCard(card)}
+        onOpenTheory={(card) => {
+          void ensureCardDetails(card).then((hydrated) => setTheoryCard(hydrated));
+        }}
       />
 
       {/* Modal Xem Lý Thuyết */}

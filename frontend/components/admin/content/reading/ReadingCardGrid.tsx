@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { formatReadingPartLabel } from "@/lib/readingPassageUtils";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 import {
   Pencil,
@@ -120,13 +121,13 @@ function ReadingGridItem({
   const fallbackTotal = card.totalQuestions || 10;
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
+    <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase whitespace-nowrap">
             {card.category}
           </span>
-          <span className="text-[11px] font-mono text-slate-400">
+          <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap shrink-0">
             {card.totalQuestions} câu
           </span>
         </div>
@@ -136,46 +137,46 @@ function ReadingGridItem({
             {card.title}
           </h4>
           {card.tag && (
-            <p className="text-xs text-slate-400 mt-0.5">{card.tag}</p>
+            <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{card.tag}</p>
           )}
         </div>
 
         {/* Quy mô bài học (Admin chỉ hiển thị tổng số câu) */}
         <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
-          <div className="flex justify-between items-center text-slate-600">
+          <div className="flex justify-between items-center gap-2 text-slate-600">
             <span className="font-medium">Tổng số câu hỏi:</span>
-            <strong className="text-blue-700 font-mono font-bold">{fallbackTotal} câu</strong>
+            <strong className="text-blue-700 font-mono font-bold whitespace-nowrap">{fallbackTotal} câu</strong>
           </div>
-          <div className="flex justify-between items-center text-slate-600">
+          <div className="flex justify-between items-center gap-2 text-slate-600">
             <span className="font-medium">Phần thi:</span>
-            <span className="text-slate-800 font-semibold">{(card as any).part || "Part 7"}</span>
+            <span className="text-slate-800 font-semibold whitespace-nowrap">{formatReadingPartLabel(card as any)}</span>
           </div>
         </div>
       </div>
 
-      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5 mt-4">
+      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 mt-4">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => onOpenTheory(card)}
-            className="px-2.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap"
             title="Xem chi tiết bài đọc & đáp án (Part 5, 6, 7)"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-3.5 h-3.5 shrink-0" />
             <span>Chi tiết</span>
           </button>
           <button
             type="button"
             onClick={() => onStartPractice(card)}
-            className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap"
             title="Kiểm duyệt & đối soát đề thi"
           >
-            <ClipboardCheck className="w-3.5 h-3.5" />
+            <ClipboardCheck className="w-3.5 h-3.5 shrink-0" />
             <span>Kiểm duyệt</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 ml-auto">
           <button
             type="button"
             onClick={(e) => onOpenEditCard(card, e)}
@@ -277,7 +278,7 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
     }
 
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-3 @6xl:grid-cols-4 gap-4">
         {items.map((card) => (
           <ReadingGridItem
             key={card.id}
@@ -293,7 +294,7 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="@container w-full space-y-8">
       {/* NHÓM 1: 10 BỘ ĐỀ ETS 2024 */}
       {testCards.length > 0 && (
         <section className="space-y-3">
@@ -305,9 +306,9 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
       {levelCards.length > 0 && (
         <section className="space-y-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex flex-wrap items-center gap-2">
               <span>🎯 Luyện Đọc Theo 4 Cấp Độ Điểm Target</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold font-mono">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold font-mono whitespace-nowrap">
                 {levelCards.length} Bài
               </span>
             </h3>
@@ -323,9 +324,9 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
       {topicAndGrammarCards.length > 0 && (
         <section className="space-y-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 flex flex-wrap items-center gap-2">
               <span>⚡ Chuyên Đề &amp; Dạng Bài Tập Trọng Tâm</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-extrabold font-mono">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-extrabold font-mono whitespace-nowrap">
                 {topicAndGrammarCards.length} Chuyên đề
               </span>
             </h3>

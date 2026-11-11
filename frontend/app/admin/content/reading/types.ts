@@ -53,6 +53,8 @@ export interface ExerciseCardData {
     rules: string[];
     example: string;
   };
+  vocabList?: VocabItem[];
+  detailsLoaded?: boolean;
   sampleQuestions: SampleQuestion[];
 }
 

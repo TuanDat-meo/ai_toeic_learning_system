@@ -38,13 +38,15 @@ import {
   Plus,
   Languages,
 } from "lucide-react";
-import { ExerciseCardData } from "@/app/admin/content/reading/types";
+import { ExerciseCardData, VocabItem } from "@/app/admin/content/reading/types";
+import { extractCardPassageBlocks } from "@/lib/readingPassageUtils";
 
 export interface ReadingPassageBankViewProps {
   cards?: ExerciseCardData[];
   onStartPractice?: (card: ExerciseCardData) => void;
   onOpenEditCard?: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm?: (card: ExerciseCardData) => void;
+  onEnsureCardDetails?: (card: ExerciseCardData) => Promise<ExerciseCardData>;
   onOpenCreatePassage?: () => void;
 }
 
@@ -71,6 +73,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
   onStartPractice,
   onOpenEditCard,
   onOpenDeleteConfirm,
+  onEnsureCardDetails,
   onOpenCreatePassage,
 }) => {
   const [search, setSearch] = useState("");
@@ -289,25 +292,40 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
       },
     ];
 
-    // 2. Real cards from user & database that are Part 6 or Part 7 (or have passages)
-    const realPartCards = (cards || []).filter(
-      (c) =>
-        c.category === "part6" ||
-        c.category === "part7" ||
-        Boolean(c.passageText?.trim()) ||
-        Boolean(c.sampleQuestions?.some((q) => q.passageText?.trim()))
-    );
+    // 2. Real cards from user & database that have genuine Part 6 or Part 7 passages
+    const realCardWithBlocks = (cards || [])
+      .filter((c) => c.category === "part6" || c.category === "part7")
+      .map((c) => ({ card: c, blocks: extractCardPassageBlocks(c) }))
+      .filter(({ blocks }) => blocks.length > 0);
 
-    if (realPartCards.length === 0) {
+    if (realCardWithBlocks.length === 0) {
       return builtinPassages;
     }
 
-    const convertedRealCards: PassageItem[] = realPartCards.map((c, idx) => {
-      const text = c.passageText || c.sampleQuestions?.[0]?.passageText || "";
-      const translation = c.passageTextVi || c.sampleQuestions?.[0]?.passageTextVi || "";
-      const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 150;
-      const questionsCount = c.sampleQuestions?.length || c.totalQuestions || 2;
-      const vocabCount = c.sampleQuestions?.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0) || 0;
+    const convertedRealCards: PassageItem[] = realCardWithBlocks.map(({ card: c, blocks }, idx) => {
+      const text =
+        blocks.length > 1
+          ? blocks.map((b) => `[${b.label}]\n${b.text}`).join("\n\n---\n\n")
+          : blocks[0].text;
+      const viParts = blocks
+        .map((b) => (b.textVi ? (blocks.length > 1 ? `[${b.label}]\n${b.textVi}` : b.textVi) : ""))
+        .filter(Boolean);
+      const translation = viParts.join("\n\n---\n\n");
+      const wordCount = blocks.reduce(
+        (sum, b) => sum + b.text.trim().split(/\s+/).filter(Boolean).length,
+        0
+      );
+      const questionsCount = c.sampleQuestions?.length || c.totalQuestions || 0;
+      const seenVocab = new Set<string>();
+      (c.vocabList || []).forEach((v) => {
+        if (v.word?.trim()) seenVocab.add(v.word.trim().toLowerCase());
+      });
+      (c.sampleQuestions || []).forEach((q) => {
+        (q.vocabList || []).forEach((v) => {
+          if (v.word?.trim()) seenVocab.add(v.word.trim().toLowerCase());
+        });
+      });
+      const vocabCount = seenVocab.size;
 
       // Determine Type (Part 6 / Part 7 Single / Double / Triple)
       let type = "Part 7 Single";
@@ -316,12 +334,22 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
       } else if (c.category === "part7") {
         const lowerTitle = c.title.toLowerCase();
         const lowerTag = (c.tag || "").toLowerCase();
-        if (lowerTitle.includes("triple") || lowerTag.includes("triple") || (c.passages && c.passages.length >= 3)) {
+        const hasTriple =
+          lowerTitle.includes("triple") ||
+          lowerTag.includes("triple") ||
+          lowerTitle.includes("đoạn ba") ||
+          (c.sampleQuestions || []).some((q) => (q.passages?.length || 0) >= 3);
+        const hasDouble =
+          lowerTitle.includes("double") ||
+          lowerTag.includes("double") ||
+          lowerTitle.includes("đoạn đôi") ||
+          (c.sampleQuestions || []).some((q) => (q.passages?.length || 0) === 2);
+        if (hasTriple) {
           type = "Part 7 Triple";
-        } else if (lowerTitle.includes("double") || lowerTag.includes("double") || (c.passages && c.passages.length === 2)) {
+        } else if (hasDouble) {
           type = "Part 7 Double";
-        } else if (questionsCount >= 5) {
-          type = "Part 7 Double";
+        } else if (blocks.length > 1) {
+          type = "Part 7 Full";
         } else {
           type = "Part 7 Single";
         }
@@ -401,11 +429,11 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
   }, [passageItems, search, filterType, bilingualFilter]);
 
   return (
-    <div className="space-y-4">
+    <div className="@container w-full space-y-4">
       {/* Top Filter & Action Bar */}
-      <div className="p-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="p-3.5 sm:p-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col @4xl:flex-row @4xl:items-center justify-between gap-3">
         {/* Search */}
-        <div className="relative w-full md:w-80">
+        <div className="relative w-full @4xl:w-72 @5xl:w-80 shrink-0">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -417,12 +445,12 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
         </div>
 
         {/* Filter Selects & Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full @4xl:w-auto justify-start @4xl:justify-end">
           {/* Format / Part filter */}
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
+            className="w-full sm:w-auto px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
           >
             <option value="ALL">Tất cả định dạng đoạn văn</option>
             <option value="Part 6">Part 6 (Điền đoạn văn)</option>
@@ -435,7 +463,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
           <select
             value={bilingualFilter}
             onChange={(e) => setBilingualFilter(e.target.value as "ALL" | "BILINGUAL" | "UNTRANSLATED")}
-            className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
+            className="w-full sm:w-auto px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
           >
             <option value="ALL">Tất cả trạng thái dịch</option>
             <option value="BILINGUAL">Đã có dịch song ngữ (EN-VI)</option>
@@ -447,14 +475,14 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
             <button
               type="button"
               onClick={onOpenCreatePassage}
-              className="px-3.5 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0"
+              className="px-3.5 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Thêm đoạn văn mới</span>
             </button>
           )}
 
-          <span className="text-xs font-bold text-slate-500 whitespace-nowrap pl-1">
+          <span className="text-xs font-bold text-slate-500 whitespace-nowrap pl-1 ml-auto sm:ml-0">
             Tổng: <strong className="text-blue-700">{filtered.length}</strong> bài đọc
           </span>
         </div>
@@ -563,7 +591,36 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                           {/* 1. XEM TRƯỚC (PREVIEW) */}
                           <button
                             type="button"
-                            onClick={() => setPreviewPassage(p)}
+                            onClick={() => {
+                              setPreviewPassage(p);
+                              if (
+                                onEnsureCardDetails &&
+                                !p.card.detailsLoaded &&
+                                (!p.card.sampleQuestions || p.card.sampleQuestions.length === 0)
+                              ) {
+                                void onEnsureCardDetails(p.card).then((hydrated) => {
+                                  const hydratedSeen = new Set<string>();
+                                  (hydrated.vocabList || []).forEach((v) => {
+                                    if (v.word?.trim()) hydratedSeen.add(v.word.trim().toLowerCase());
+                                  });
+                                  (hydrated.sampleQuestions || []).forEach((q) => {
+                                    (q.vocabList || []).forEach((v) => {
+                                      if (v.word?.trim()) hydratedSeen.add(v.word.trim().toLowerCase());
+                                    });
+                                  });
+                                  setPreviewPassage((curr) =>
+                                    curr && curr.card.id === hydrated.id
+                                      ? {
+                                          ...curr,
+                                          card: hydrated,
+                                          vocabCount: hydratedSeen.size || curr.vocabCount,
+                                          questionsCount: hydrated.sampleQuestions?.length || curr.questionsCount,
+                                        }
+                                      : curr
+                                  );
+                                });
+                              }
+                            }}
                             className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 text-blue-600 transition cursor-pointer shadow-2xs"
                             title="Xem trước bài đọc song ngữ & câu hỏi"
                           >
@@ -621,31 +678,31 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+            <div className="flex items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 whitespace-nowrap">
                     {previewPassage.type}
                   </span>
                   <span className="text-[11px] text-slate-500 font-medium">
                     {previewPassage.format} • {previewPassage.topic}
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 mt-1">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-1 leading-snug">
                   {previewPassage.title}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setPreviewPassage(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition shrink-0"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-4 text-xs custom-scrollbar">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs custom-scrollbar">
               {/* Stats pill bar */}
               <div className="flex flex-wrap items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-medium">
                 <span>📏 Độ dài: <strong>{previewPassage.wordCount} từ</strong></span>
@@ -693,11 +750,11 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                   <div className="space-y-2.5">
                     {previewPassage.card.sampleQuestions.map((q, qIdx) => (
                       <div key={qIdx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900">
+                        <div className="flex flex-wrap items-start sm:items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900 min-w-0 flex-1">
                             Câu {qIdx + 1} {q.questionNum ? `(#${q.questionNum})` : ""}: {q.question}
                           </span>
-                          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] whitespace-nowrap shrink-0">
                             Đáp án: {["A", "B", "C", "D"][q.correctIndex] || "A"}
                           </span>
                         </div>
@@ -723,11 +780,54 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Card & Question Vocabulary Preview */}
+              {(() => {
+                const vocabMap = new Map<string, VocabItem>();
+                (previewPassage.card.vocabList || []).forEach((v) => {
+                  const key = v.word?.trim().toLowerCase();
+                  if (key && !vocabMap.has(key)) vocabMap.set(key, v);
+                });
+                (previewPassage.card.sampleQuestions || []).forEach((q) => {
+                  (q.vocabList || []).forEach((v) => {
+                    const key = v.word?.trim().toLowerCase();
+                    if (key && !vocabMap.has(key)) vocabMap.set(key, v);
+                  });
+                });
+                const combinedVocab = Array.from(vocabMap.values());
+                if (combinedVocab.length === 0) return null;
+                return (
+                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2.5">
+                    <span className="text-xs font-bold text-amber-900 block">
+                      Từ vựng trọng tâm của bài đọc ({combinedVocab.length} từ):
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {combinedVocab.map((v, vIdx) => (
+                        <div
+                          key={`${v.word}-${vIdx}`}
+                          className="p-2.5 rounded-xl bg-white border border-amber-200/70 text-[11px]"
+                        >
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-slate-900">{v.word}</span>
+                            {v.ipa && <span className="font-mono text-slate-500">{v.ipa}</span>}
+                            {v.pos && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
+                                {v.pos}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-600 mt-0.5">{v.meaning}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer with quick action buttons */}
-            <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-100 bg-slate-50/50 shrink-0">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 px-4 sm:px-6 py-3.5 border-t border-slate-100 bg-slate-50/50 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 {onStartPractice && (
                   <button
                     type="button"
@@ -736,7 +836,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                       setPreviewPassage(null);
                       onStartPractice(c);
                     }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>Luyện tập bài này ngay</span>
@@ -751,7 +851,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                       setPreviewPassage(null);
                       onOpenEditCard(c, e);
                     }}
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>Chỉnh sửa bài này</span>
@@ -762,7 +862,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
               <button
                 type="button"
                 onClick={() => setPreviewPassage(null)}
-                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs cursor-pointer transition"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs cursor-pointer transition"
               >
                 Đóng
               </button>
@@ -1085,7 +1185,7 @@ export const ReadingAnalyticsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 text-slate-800 animate-in fade-in duration-150">
+    <div className="@container w-full space-y-6 text-slate-800 animate-in fade-in duration-150">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-semibold text-white shadow-xl animate-in fade-in">
@@ -1094,25 +1194,25 @@ export const ReadingAnalyticsView: React.FC = () => {
         </div>
       )}
 
-{/* 1. THANH CÔNG CỤ & BỘ LỌC */}
-      <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
+      {/* 1. THANH CÔNG CỤ & BỘ LỌC */}
+      <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex flex-col @4xl:flex-row @4xl:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900">
               Phân tích tốc độ đọc &amp; Quản lý thời gian làm bài
             </h2>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 whitespace-nowrap shrink-0">
               {timeMod.submissions.toLocaleString("vi-VN")} bài nộp
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
             Dữ liệu {timeMod.label} của <span className="font-semibold text-slate-700">{baseProfile.targetLabel}</span> so với khung chuẩn {totalStandardMinutes} phút
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Lọc thời gian */}
-          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium text-slate-600">
+          <div className="flex flex-wrap sm:inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium text-slate-600">
             {[
               { id: "7_days", label: "7 ngày qua" },
               { id: "30_days", label: "30 ngày qua" },
@@ -1123,7 +1223,7 @@ export const ReadingAnalyticsView: React.FC = () => {
                 key={item.id}
                 type="button"
                 onClick={() => setTimeRange(item.id as any)}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition cursor-pointer whitespace-nowrap ${
                   timeRange === item.id
                     ? "bg-white text-blue-700 font-bold shadow-2xs"
                     : "hover:text-slate-900"
@@ -1150,7 +1250,7 @@ export const ReadingAnalyticsView: React.FC = () => {
           <button
             type="button"
             onClick={handleExportCSV}
-            className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Xuất file</span>
@@ -1159,22 +1259,22 @@ export const ReadingAnalyticsView: React.FC = () => {
       </div>
 
       {/* 2. 4 THẺ CHỈ SỐ TỔNG QUAN (KEY METRICS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 @lg:grid-cols-2 @4xl:grid-cols-4 gap-4">
         {/* Metric 1: WPM động theo cấu hình */}
         <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs transition-all">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500">
             <span>Tốc độ đọc trung bình</span>
-            <Gauge className="w-4 h-4 text-slate-400" />
+            <Gauge className="w-4 h-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
             <span className="text-2xl font-bold font-mono text-slate-900">{currentWpm}</span>
             <span className="text-xs text-slate-500 font-medium">WPM (từ/phút)</span>
           </div>
-          <div className="mt-1 flex items-center justify-between text-[11px]">
-            <span className={currentWpm >= config.targetWpm ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold"}>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[11px]">
+            <span className={currentWpm >= config.targetWpm ? "text-emerald-700 font-semibold whitespace-nowrap" : "text-amber-700 font-semibold whitespace-nowrap"}>
               {currentWpm >= config.targetWpm ? `Đạt mục tiêu (+${currentWpm - config.targetWpm} WPM)` : `Thiếu -${config.targetWpm - currentWpm} WPM`}
             </span>
-            <span className="text-slate-400">Chuẩn: {config.targetWpm} WPM</span>
+            <span className="text-slate-400 whitespace-nowrap">Chuẩn: {config.targetWpm} WPM</span>
           </div>
         </div>
 
@@ -1227,17 +1327,17 @@ export const ReadingAnalyticsView: React.FC = () => {
       </div>
 
       {/* 3. KHUNG PHÂN BỔ THỜI GIAN THEO TỪNG PHẦN (ĐỒNG BỘ ĐỘNG THEO SLIDERS) */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
+      <div className="p-4 sm:p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-5">
+        <div className="flex flex-col @2xl:flex-row @2xl:items-center justify-between gap-2">
+          <div className="min-w-0">
             <h3 className="text-sm font-bold text-slate-900">
               Phân bổ thời gian thực tế cho từng phần thi (Part 5, 6, 7)
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               Thời gian học viên hoàn thành đối chiếu với mốc chuẩn do giáo viên cấu hình ({totalStandardMinutes} phút)
             </p>
           </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 whitespace-nowrap self-start @2xl:self-auto shrink-0">
             Khung chuẩn đã thiết lập: {totalStandardMinutes} phút
           </span>
         </div>
@@ -1247,26 +1347,26 @@ export const ReadingAnalyticsView: React.FC = () => {
           {partSpeedBenchmarks.map((item) => (
             <div
               key={item.id}
-              className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-2.5"
+              className="p-3.5 sm:p-4 rounded-xl border border-slate-200/80 bg-white space-y-2.5"
             >
               {/* Header của row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <div>
+              <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-2">
+                <div className="min-w-0">
                   <span className="font-bold text-slate-900 text-sm">{item.part}</span>
                   <span className="text-xs text-slate-500 block mt-0.5">{item.desc}</span>
                 </div>
-                <div className="text-left sm:text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:gap-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-blue-600 text-base">{item.actualMinutes} phút</span>
+                <div className="text-left @xl:text-right flex flex-col @xl:items-end gap-0.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-blue-600 text-base whitespace-nowrap">{item.actualMinutes} phút</span>
                     <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded whitespace-nowrap ${
                         item.diffType === "good" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
                       }`}
                     >
                       {item.diffText}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400 font-mono">
+                  <span className="text-[11px] sm:text-xs text-slate-400 font-mono">
                     Thực tế: ~{item.actualPerQSeconds}s/câu • Chuẩn: {item.standardMinutes}p (~{item.standardPerQSeconds}s/câu)
                   </span>
                 </div>
@@ -1288,20 +1388,20 @@ export const ReadingAnalyticsView: React.FC = () => {
               </div>
 
               {/* Mốc thời gian 3 điểm: Nhanh - Khuyến nghị cấu hình - Chậm */}
-              <div className="flex justify-between items-center text-[11px] text-slate-400 font-medium">
-                <span>{item.minLabel}</span>
-                <span className="text-blue-600 font-semibold">{item.recommendedLabel}</span>
-                <span>{item.maxLabel}</span>
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-[11px] text-slate-400 font-medium">
+                <span className="whitespace-nowrap">{item.minLabel}</span>
+                <span className="text-blue-600 font-semibold whitespace-nowrap">{item.recommendedLabel}</span>
+                <span className="whitespace-nowrap">{item.maxLabel}</span>
               </div>
             </div>
           ))}
 
           {/* Dòng tổng kết toàn bộ Part 7 */}
-          <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 flex items-center justify-between text-xs">
+          <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
             <span className="font-semibold text-slate-800">
               Tổng thời gian dành cho toàn bộ Part 7 (54 câu) theo cấu hình:
             </span>
-            <span className="font-bold text-blue-700 font-mono text-sm">
+            <span className="font-bold text-blue-700 font-mono text-sm whitespace-nowrap shrink-0">
               {part7TotalConfigured} phút / {totalStandardMinutes} phút
             </span>
           </div>
@@ -1309,20 +1409,20 @@ export const ReadingAnalyticsView: React.FC = () => {
       </div>
 
       {/* 4. MỤC TIÊU TỐC ĐỘ ĐỌC (TARGET WPM) - ĐỒNG BỘ ĐỘNG */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-          <div>
+      <div className="p-4 sm:p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-2">
+          <div className="min-w-0">
             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Gauge className="w-4 h-4 text-blue-600" />
+              <Gauge className="w-4 h-4 text-blue-600 shrink-0" />
               <span>Mục Tiêu Tốc Độ Đọc (Target WPM - Words Per Minute)</span>
             </h4>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               Tốc độ đọc lướt và quét thông tin khuyến nghị cho học viên khi đọc văn bản TOEIC.
             </p>
           </div>
-          <div className="text-left sm:text-right">
-            <span className="font-bold text-blue-600 text-base">{config.targetWpm} WPM</span>
-            <span className="text-xs text-slate-500 block font-medium">{wpmBandText}</span>
+          <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
+            <span className="font-bold text-blue-600 text-base whitespace-nowrap">{config.targetWpm} WPM</span>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">{wpmBandText}</span>
           </div>
         </div>
 
@@ -1340,15 +1440,15 @@ export const ReadingAnalyticsView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex justify-between items-center text-[11px] text-slate-400 font-medium">
-          <span>110 WPM (Cơ bản)</span>
-          <span className="text-blue-600 font-semibold">{config.targetWpm} WPM (Mục tiêu hiện hành)</span>
-          <span>220 WPM (Bậc thầy)</span>
+        <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-[11px] text-slate-400 font-medium">
+          <span className="whitespace-nowrap">110 WPM (Cơ bản)</span>
+          <span className="text-blue-600 font-semibold whitespace-nowrap">{config.targetWpm} WPM (Mục tiêu hiện hành)</span>
+          <span className="whitespace-nowrap">220 WPM (Bậc thầy)</span>
         </div>
       </div>
 
       {/* 5. BIỂU ĐỒ TỶ LỆ ĐẠT THEO DẠNG BÀI ĐỌC */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+      <div className="p-4 sm:p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
         <div>
           <h3 className="text-sm font-bold text-slate-900">
             Biểu đồ phân phối tỷ lệ đạt theo dạng bài đọc
@@ -1360,9 +1460,9 @@ export const ReadingAnalyticsView: React.FC = () => {
 
         <div className="space-y-3.5 text-xs font-semibold text-slate-700">
           <div>
-            <div className="flex justify-between mb-1.5">
+            <div className="flex justify-between items-baseline gap-2 mb-1.5">
               <span>Part 5 - Câu đơn ngữ pháp &amp; từ vựng (Incomplete Sentences)</span>
-              <span className="text-emerald-600 font-bold">{partSpeedBenchmarks[0].accuracy}% đúng</span>
+              <span className="text-emerald-600 font-bold whitespace-nowrap shrink-0">{partSpeedBenchmarks[0].accuracy}% đúng</span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
               <div
@@ -1373,9 +1473,9 @@ export const ReadingAnalyticsView: React.FC = () => {
           </div>
 
           <div>
-            <div className="flex justify-between mb-1.5">
+            <div className="flex justify-between items-baseline gap-2 mb-1.5">
               <span>Part 6 - Hoàn thành đoạn văn (Text Completion)</span>
-              <span className="text-blue-600 font-bold">{partSpeedBenchmarks[1].accuracy}% đúng</span>
+              <span className="text-blue-600 font-bold whitespace-nowrap shrink-0">{partSpeedBenchmarks[1].accuracy}% đúng</span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
               <div
@@ -1386,9 +1486,9 @@ export const ReadingAnalyticsView: React.FC = () => {
           </div>
 
           <div>
-            <div className="flex justify-between mb-1.5">
+            <div className="flex justify-between items-baseline gap-2 mb-1.5">
               <span>Part 7 - Đọc hiểu đoạn đơn (Single Passage)</span>
-              <span className="text-indigo-600 font-bold">{partSpeedBenchmarks[2].accuracy}% đúng</span>
+              <span className="text-indigo-600 font-bold whitespace-nowrap shrink-0">{partSpeedBenchmarks[2].accuracy}% đúng</span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
               <div
@@ -1399,9 +1499,9 @@ export const ReadingAnalyticsView: React.FC = () => {
           </div>
 
           <div>
-            <div className="flex justify-between mb-1.5">
+            <div className="flex justify-between items-baseline gap-2 mb-1.5">
               <span>Part 7 - Đọc hiểu đoạn đôi &amp; ba (Multiple Passages)</span>
-              <span className="text-rose-600 font-bold">{partSpeedBenchmarks[3].accuracy}% đúng</span>
+              <span className="text-rose-600 font-bold whitespace-nowrap shrink-0">{partSpeedBenchmarks[3].accuracy}% đúng</span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
               <div
@@ -1414,7 +1514,7 @@ export const ReadingAnalyticsView: React.FC = () => {
       </div>
 
       {/* 6. MA TRẬN KỸ NĂNG ĐỌC HIỂU */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+      <div className="p-4 sm:p-6 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
         <div>
           <h3 className="text-sm font-bold text-slate-900">
             Ma trận chẩn đoán kỹ năng đọc hiểu chuyên sâu
@@ -1425,9 +1525,9 @@ export const ReadingAnalyticsView: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full min-w-[680px] text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px]">
+              <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px] whitespace-nowrap">
                 <th className="pb-3 pr-4">KỸ NĂNG &amp; DẠNG CÂU HỎI</th>
                 <th className="pb-3 px-3 text-center">THỜI GIAN TB</th>
                 <th className="pb-3 px-3 text-center">CHUẨN ĐỀ XUẤT</th>
@@ -1442,18 +1542,18 @@ export const ReadingAnalyticsView: React.FC = () => {
                     <div className="font-semibold text-slate-900">{item.skill}</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">{item.example}</div>
                   </td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-900">
+                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-900 whitespace-nowrap">
                     {item.time}
                   </td>
-                  <td className="py-3 px-3 text-center font-mono text-slate-400">
+                  <td className="py-3 px-3 text-center font-mono text-slate-400 whitespace-nowrap">
                     {item.standard}
                   </td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-900">
+                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-900 whitespace-nowrap">
                     {item.accuracy}
                   </td>
-                  <td className="py-3 pl-3 text-right">
+                  <td className="py-3 pl-3 text-right whitespace-nowrap">
                     <span
-                      className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                      className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${
                         item.status === "good"
                           ? "bg-emerald-50 text-emerald-700"
                           : item.status === "warning"
@@ -1609,28 +1709,28 @@ export const ReadingCurriculumView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl animate-in fade-in duration-150">
+    <div className="@container w-full space-y-6 animate-in fade-in duration-150">
       {/* 1. KHUNG TỔNG THỜI GIAN 75 PHÚT & ĐÁNH GIÁ PHÂN BỔ */}
-      <div className="p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-2xl bg-blue-50 text-blue-600">
+      <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col @2xl:flex-row @2xl:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+            <span className="p-2 rounded-2xl bg-blue-50 text-blue-600 shrink-0">
               <Sliders className="w-5 h-5" />
             </span>
-            <div>
-              <h3 className="text-base font-black text-slate-900">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
                 Chiến Lược Phân Bổ Thời Gian Chuẩn 75 Phút TOEIC Reading
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 Cấu hình thời gian tối đa và tốc độ đọc mục tiêu cho 100 câu hỏi (Part 5: 30 câu, Part 6: 16 câu, Part 7: 54 câu).
               </p>
             </div>
           </div>
 
           {/* Badge tổng thời gian */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 self-start @2xl:self-auto">
             <span
-              className={`px-4 py-2 rounded-2xl font-black text-xs font-mono inline-flex items-center gap-1.5 shadow-xs transition-colors ${
+              className={`px-4 py-2 rounded-2xl font-black text-xs font-mono inline-flex items-center gap-1.5 shadow-xs transition-colors whitespace-nowrap shrink-0 ${
                 totalMinutes === 75
                   ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
                   : totalMinutes > 75
@@ -1638,36 +1738,36 @@ export const ReadingCurriculumView: React.FC = () => {
                   : "bg-blue-100 text-blue-900 border border-blue-300"
               }`}
             >
-              <Timer className="w-4 h-4" />
+              <Timer className="w-4 h-4 shrink-0" />
               <span>Tổng: {totalMinutes} / 75 phút</span>
             </span>
           </div>
         </div>
 
-{/* 3 PRESETS CHIẾN LƯỢC 1-CLICK */}
-        <div className="space-y-2 pt-2">
+        {/* 3 PRESETS CHIẾN LƯỢC 1-CLICK */}
+        <div className="space-y-2.5 pt-1">
           <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
             Chọn nhanh chiến lược phân bổ thời gian:
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => applyPreset("balanced")}
-              className={`p-3.5 rounded-2xl border text-left transition cursor-pointer group ${
+              className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
                 part5Minutes === 12 && part6Minutes === 10 && part7SingleMinutes === 27 && part7MultiMinutes === 26
                   ? "border-blue-500 bg-blue-50/70 shadow-xs"
                   : "border-slate-200 hover:border-blue-400 hover:bg-slate-50"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-slate-900 group-hover:text-blue-700">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-xs text-slate-900 group-hover:text-blue-700 leading-snug">
                   🌟 Chuẩn ETS (Cân bằng)
                 </span>
-                <span className="text-[10px] font-extrabold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-extrabold text-blue-600 bg-blue-100 px-2 py-0.5 rounded whitespace-nowrap shrink-0">
                   Khuyên dùng
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 P5: 12p • P6: 10p • P7: 53p (27p đơn + 26p kép/ba). Tốc độ 160 WPM.
               </p>
             </button>
@@ -1675,21 +1775,21 @@ export const ReadingCurriculumView: React.FC = () => {
             <button
               type="button"
               onClick={() => applyPreset("part7_focus")}
-              className={`p-3.5 rounded-2xl border text-left transition cursor-pointer group ${
+              className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
                 part5Minutes === 10 && part6Minutes === 8 && part7SingleMinutes === 29 && part7MultiMinutes === 28
                   ? "border-indigo-500 bg-indigo-50/70 shadow-xs"
                   : "border-slate-200 hover:border-indigo-400 hover:bg-slate-50"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-slate-900 group-hover:text-indigo-700">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 leading-snug">
                   ⚡ Bứt phá Part 7 (750+)
                 </span>
-                <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded whitespace-nowrap shrink-0">
                   Target cao
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 P5: 10p • P6: 8p • P7: 57p (Dồn tối đa thời gian cho đoạn văn dài).
               </p>
             </button>
@@ -1697,21 +1797,21 @@ export const ReadingCurriculumView: React.FC = () => {
             <button
               type="button"
               onClick={() => applyPreset("grammar_focus")}
-              className={`p-3.5 rounded-2xl border text-left transition cursor-pointer group ${
+              className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
                 part5Minutes === 15 && part6Minutes === 10 && part7SingleMinutes === 27 && part7MultiMinutes === 23
                   ? "border-emerald-500 bg-emerald-50/70 shadow-xs"
                   : "border-slate-200 hover:border-emerald-400 hover:bg-slate-50"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-slate-900 group-hover:text-emerald-700">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 leading-snug">
                   🛡️ Vững ngữ pháp (500-650)
                 </span>
-                <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded whitespace-nowrap shrink-0">
                   Cơ bản
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 P5: 15p • P6: 10p • P7: 50p (Làm chắc chắn điểm ngữ pháp Part 5-6).
               </p>
             </button>
@@ -1720,23 +1820,23 @@ export const ReadingCurriculumView: React.FC = () => {
       </div>
 
       {/* 2. THANH TRƯỢT CHI TIẾT TỪNG PHẦN THI (SLIDERS CHUẨN TỪNG GIÂY) */}
-      <div className="p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-6">
+      <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-5 sm:space-y-6">
         <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-blue-600" />
+          <Clock className="w-4 h-4 text-blue-600 shrink-0" />
           <span>Tùy Chỉnh Thời Gian Chi Tiết Cho Từng Phần Thi (Sliders)</span>
         </h4>
 
-        <div className="space-y-5 text-xs font-semibold text-slate-700">
+        <div className="space-y-4 sm:space-y-5 text-xs font-semibold text-slate-700">
           {/* Part 5 Slider */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-            <div className="flex justify-between items-center">
-              <div>
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2.5">
+            <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-1.5 @xl:gap-3">
+              <div className="min-w-0">
                 <span className="font-bold text-slate-900 text-sm">Part 5 - Điền câu ngữ pháp &amp; từ vựng</span>
-                <span className="text-[11px] text-slate-500 block">30 câu hỏi đơn (Câu 101 - 130)</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">30 câu hỏi đơn (Câu 101 - 130)</span>
               </div>
-              <div className="text-right">
-                <span className="font-black text-blue-700 font-mono text-base">{part5Minutes} phút</span>
-                <span className="text-[11px] text-slate-500 block font-mono">
+              <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
+                <span className="font-black text-blue-700 font-mono text-base whitespace-nowrap">{part5Minutes} phút</span>
+                <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
                   ~{Math.round((part5Minutes * 60) / 30)} giây / câu
                 </span>
               </div>
@@ -1750,23 +1850,23 @@ export const ReadingCurriculumView: React.FC = () => {
               onChange={(e) => setPart5Minutes(Number(e.target.value))}
               className="w-full accent-blue-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>8 phút (Siêu tốc: 16s/câu)</span>
-              <span className="text-blue-600 font-bold">Khuyến nghị: 10 - 12 phút</span>
-              <span>18 phút (Tối đa)</span>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] sm:text-[11px] text-slate-400 font-mono">
+              <span className="whitespace-nowrap">8 phút (Siêu tốc: 16s/câu)</span>
+              <span className="text-blue-600 font-bold whitespace-nowrap">Khuyến nghị: 10 - 12 phút</span>
+              <span className="whitespace-nowrap">18 phút (Tối đa)</span>
             </div>
           </div>
 
           {/* Part 6 Slider */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-            <div className="flex justify-between items-center">
-              <div>
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2.5">
+            <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-1.5 @xl:gap-3">
+              <div className="min-w-0">
                 <span className="font-bold text-slate-900 text-sm">Part 6 - Hoàn thành đoạn văn</span>
-                <span className="text-[11px] text-slate-500 block">16 câu hỏi trong 4 đoạn văn (Câu 131 - 146)</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">16 câu hỏi trong 4 đoạn văn (Câu 131 - 146)</span>
               </div>
-              <div className="text-right">
-                <span className="font-black text-blue-700 font-mono text-base">{part6Minutes} phút</span>
-                <span className="text-[11px] text-slate-500 block font-mono">
+              <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
+                <span className="font-black text-blue-700 font-mono text-base whitespace-nowrap">{part6Minutes} phút</span>
+                <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
                   ~{Math.round((part6Minutes * 60) / 16)} giây / câu (~2.3p / đoạn)
                 </span>
               </div>
@@ -1780,23 +1880,23 @@ export const ReadingCurriculumView: React.FC = () => {
               onChange={(e) => setPart6Minutes(Number(e.target.value))}
               className="w-full accent-blue-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>6 phút (Nhanh)</span>
-              <span className="text-blue-600 font-bold">Khuyến nghị: 8 - 10 phút</span>
-              <span>15 phút (Chậm)</span>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] sm:text-[11px] text-slate-400 font-mono">
+              <span className="whitespace-nowrap">6 phút (Nhanh)</span>
+              <span className="text-blue-600 font-bold whitespace-nowrap">Khuyến nghị: 8 - 10 phút</span>
+              <span className="whitespace-nowrap">15 phút (Chậm)</span>
             </div>
           </div>
 
           {/* Part 7 Single Slider */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-            <div className="flex justify-between items-center">
-              <div>
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2.5">
+            <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-1.5 @xl:gap-3">
+              <div className="min-w-0">
                 <span className="font-bold text-slate-900 text-sm">Part 7 - Đoạn đơn (Single Passages)</span>
-                <span className="text-[11px] text-slate-500 block">29 câu hỏi (Câu 147 - 175)</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">29 câu hỏi (Câu 147 - 175)</span>
               </div>
-              <div className="text-right">
-                <span className="font-black text-indigo-700 font-mono text-base">{part7SingleMinutes} phút</span>
-                <span className="text-[11px] text-slate-500 block font-mono">
+              <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
+                <span className="font-black text-indigo-700 font-mono text-base whitespace-nowrap">{part7SingleMinutes} phút</span>
+                <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
                   ~{Math.round((part7SingleMinutes * 60) / 29)} giây / câu
                 </span>
               </div>
@@ -1810,23 +1910,23 @@ export const ReadingCurriculumView: React.FC = () => {
               onChange={(e) => setPart7SingleMinutes(Number(e.target.value))}
               className="w-full accent-indigo-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>20 phút</span>
-              <span className="text-indigo-600 font-bold">Khuyến nghị: 26 - 28 phút (~55s/câu)</span>
-              <span>35 phút</span>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] sm:text-[11px] text-slate-400 font-mono">
+              <span className="whitespace-nowrap">20 phút</span>
+              <span className="text-indigo-600 font-bold whitespace-nowrap">Khuyến nghị: 26 - 28 phút (~55s/câu)</span>
+              <span className="whitespace-nowrap">35 phút</span>
             </div>
           </div>
 
           {/* Part 7 Multiple (Double & Triple) Slider */}
-          <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-            <div className="flex justify-between items-center">
-              <div>
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2.5">
+            <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-1.5 @xl:gap-3">
+              <div className="min-w-0">
                 <span className="font-bold text-slate-900 text-sm">Part 7 - Đoạn đôi &amp; Đoạn ba (Double &amp; Triple)</span>
-                <span className="text-[11px] text-slate-500 block">25 câu hỏi tổng hợp chéo (Câu 176 - 200)</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">25 câu hỏi tổng hợp chéo (Câu 176 - 200)</span>
               </div>
-              <div className="text-right">
-                <span className="font-black text-indigo-700 font-mono text-base">{part7MultiMinutes} phút</span>
-                <span className="text-[11px] text-slate-500 block font-mono">
+              <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
+                <span className="font-black text-indigo-700 font-mono text-base whitespace-nowrap">{part7MultiMinutes} phút</span>
+                <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
                   ~{Math.round((part7MultiMinutes * 60) / 25)} giây / câu (~5p / bài đọc)
                 </span>
               </div>
@@ -1840,19 +1940,19 @@ export const ReadingCurriculumView: React.FC = () => {
               onChange={(e) => setPart7MultiMinutes(Number(e.target.value))}
               className="w-full accent-indigo-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>20 phút</span>
-              <span className="text-indigo-600 font-bold">Khuyến nghị: 25 - 28 phút (~60s/câu)</span>
-              <span>35 phút</span>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] sm:text-[11px] text-slate-400 font-mono">
+              <span className="whitespace-nowrap">20 phút</span>
+              <span className="text-indigo-600 font-bold whitespace-nowrap">Khuyến nghị: 25 - 28 phút (~60s/câu)</span>
+              <span className="whitespace-nowrap">35 phút</span>
             </div>
           </div>
 
           {/* Tổng Part 7 Review Info */}
-          <div className="p-3.5 bg-indigo-50/60 rounded-2xl border border-indigo-200/80 flex items-center justify-between text-xs">
+          <div className="p-3.5 bg-indigo-50/60 rounded-2xl border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
             <span className="font-bold text-indigo-900">
               Tổng thời gian dành cho toàn bộ Part 7 (54 câu):
             </span>
-            <span className="font-black text-indigo-700 text-sm font-mono">
+            <span className="font-black text-indigo-700 text-sm font-mono whitespace-nowrap shrink-0">
               {part7TotalMinutes} phút / 75 phút
             </span>
           </div>
@@ -1860,20 +1960,20 @@ export const ReadingCurriculumView: React.FC = () => {
       </div>
 
       {/* 3. MỤC TIÊU TỐC ĐỘ ĐỌC (TARGET WPM) */}
-      <div className="p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
+      <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-2">
+          <div className="min-w-0">
             <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Gauge className="w-4 h-4 text-blue-600" />
+              <Gauge className="w-4 h-4 text-blue-600 shrink-0" />
               <span>Mục Tiêu Tốc Độ Đọc (Target WPM - Words Per Minute)</span>
             </h4>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               Tốc độ đọc lướt và quét thông tin khuyến nghị cho học viên trong khi đọc bài văn dài.
             </p>
           </div>
-          <div className="text-right">
-            <span className="font-black text-blue-700 text-lg font-mono">{targetWpm} WPM</span>
-            <span className="text-[11px] text-slate-500 block font-medium">
+          <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
+            <span className="font-black text-blue-700 text-lg font-mono whitespace-nowrap">{targetWpm} WPM</span>
+            <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap">
               {targetWpm >= 180 ? "Band 850 - 990" : targetWpm >= 150 ? "Band 650 - 800" : "Band 450 - 600"}
             </span>
           </div>
@@ -1888,31 +1988,31 @@ export const ReadingCurriculumView: React.FC = () => {
           onChange={(e) => setTargetWpm(Number(e.target.value))}
           className="w-full accent-blue-600 cursor-pointer"
         />
-        <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-          <span>110 WPM (Cơ bản)</span>
-          <span className="text-blue-600 font-bold">160 WPM (Chuẩn quốc tế TOEIC)</span>
-          <span>220 WPM (Bậc thầy)</span>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] sm:text-[11px] text-slate-400 font-mono">
+          <span className="whitespace-nowrap">110 WPM (Cơ bản)</span>
+          <span className="text-blue-600 font-bold whitespace-nowrap">160 WPM (Chuẩn quốc tế TOEIC)</span>
+          <span className="whitespace-nowrap">220 WPM (Bậc thầy)</span>
         </div>
       </div>
 
       {/* 4. CHẾ ĐỘ HỖ TRỢ & CẢNH BÁO TIẾN ĐỘ THỜI GIAN THỰC */}
-      <div className="p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+      <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
         <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-blue-600" />
+          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
           <span>Tùy Chọn Chế Độ Hỗ Trợ Đọc Hiểu &amp; Cảnh Báo Phòng Thi</span>
         </h4>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-semibold text-slate-800">
+        <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-3 text-xs font-semibold text-slate-800">
           <label className="flex items-start gap-3 p-3.5 bg-slate-50 hover:bg-slate-100/80 rounded-2xl cursor-pointer border border-slate-200 transition">
             <input
               type="checkbox"
               checked={enableBilingualByDefault}
               onChange={(e) => setEnableBilingualByDefault(e.target.checked)}
-              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
+              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <span className="block font-bold">Xem bản dịch song ngữ khi xem lại câu sai</span>
-              <span className="text-[11px] text-slate-500 font-normal">
+              <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
                 Hiển thị bản dịch tiếng Việt song song đoạn văn để đối chiếu từ vựng.
               </span>
             </div>
@@ -1923,11 +2023,11 @@ export const ReadingCurriculumView: React.FC = () => {
               type="checkbox"
               checked={enablePacingTimer}
               onChange={(e) => setEnablePacingTimer(e.target.checked)}
-              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
+              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <span className="block font-bold">Đồng hồ tiến độ từng phần (Pacing Timer)</span>
-              <span className="text-[11px] text-slate-500 font-normal">
+              <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
                 Cảnh báo học viên khi dành quá thời gian khuyến nghị cho mỗi phần.
               </span>
             </div>
@@ -1938,11 +2038,11 @@ export const ReadingCurriculumView: React.FC = () => {
               type="checkbox"
               checked={enableTimeoutAlert}
               onChange={(e) => setEnableTimeoutAlert(e.target.checked)}
-              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
+              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <span className="block font-bold">Cảnh báo dừng quá lâu ở 1 câu hỏi</span>
-              <span className="text-[11px] text-slate-500 font-normal">
+              <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
                 Nhắc nhở học viên chuyển câu nếu quá 45s (Part 5) hoặc 90s (Part 7).
               </span>
             </div>
@@ -1953,11 +2053,11 @@ export const ReadingCurriculumView: React.FC = () => {
               type="checkbox"
               checked={speedDrillMode}
               onChange={(e) => setSpeedDrillMode(e.target.checked)}
-              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
+              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <span className="block font-bold">Chế độ Luyện tốc độ cao (Speed Drill)</span>
-              <span className="text-[11px] text-slate-500 font-normal">
+              <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
                 Bấm giờ áp lực cao cho từng đoạn đơn lẻ để rèn luyện tốc độ đọc lướt.
               </span>
             </div>
@@ -1966,29 +2066,29 @@ export const ReadingCurriculumView: React.FC = () => {
       </div>
 
       {/* 5. THANH THAO TÁC NÚT LƯU & RESET */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
         <button
           type="button"
           onClick={handleResetDefault}
-          className="w-full sm:w-auto px-4 py-2.5 rounded-2xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-2xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-4 h-4 shrink-0" />
           <span>Khôi phục chuẩn 75 phút</span>
         </button>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-end">
           {saved && (
             <span className="text-xs font-bold text-emerald-600 animate-in fade-in flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>Đã lưu cấu hình phân bổ thời gian thành công!</span>
             </span>
           )}
           <button
             type="button"
             onClick={handleSave}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-600/20 transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
           >
-            <Save className="w-4 h-4" />
+            <Save className="w-4 h-4 shrink-0" />
             <span>{saved ? "Đã lưu!" : "Lưu cấu hình"}</span>
           </button>
         </div>

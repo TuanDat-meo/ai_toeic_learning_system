@@ -1,7 +1,19 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ExerciseCardData, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
+import {
+  ReadingVocabExtractorPanel,
+  type AppliedVocabEntry,
+} from "./ReadingVocabExtractorPanel";
+import {
+  enrichInlineParsedVocab,
+  toModalPosSelectValue,
+} from "@/lib/readingVocabExtractor";
+import {
+  lookupEnglishDictionary,
+  type EnglishDictionarySuggestion,
+} from "@/lib/api/english-dictionary";
 import {
   X,
   BookOpen,
@@ -18,6 +30,7 @@ import {
   BookMarked,
   Info,
   Volume2,
+  Loader2,
 } from "lucide-react";
 
 export interface ReadingCreateCardModalProps {
@@ -44,6 +57,8 @@ export interface ReadingCreateCardModalProps {
   setCardFormPassageTextVi: (val: string) => void;
   cardFormSampleQuestions: SampleQuestion[];
   setCardFormSampleQuestions: React.Dispatch<React.SetStateAction<SampleQuestion[]>>;
+  cardFormVocabList?: VocabItem[];
+  setCardFormVocabList?: React.Dispatch<React.SetStateAction<VocabItem[]>>;
   onSaveCard: (e: React.FormEvent) => void;
   onClose: () => void;
 }
@@ -235,6 +250,8 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   setCardFormPassageTextVi,
   cardFormSampleQuestions,
   setCardFormSampleQuestions,
+  cardFormVocabList = [],
+  setCardFormVocabList,
   onSaveCard,
   onClose,
 }) => {
@@ -259,9 +276,76 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   const [vocabFormError, setVocabFormError] = useState<string | null>(null);
   const [playingRegion, setPlayingRegion] = useState<"UK" | "US" | null>(null);
 
-  // Scope filter for Tab 4 Vocab list ("all" or question index)
-  const [vocabFilterScope, setVocabFilterScope] = useState<number | "all">("all");
+  // Scope filter for Tab 4 Vocab list ("all", "card", or question index)
+  const [vocabFilterScope, setVocabFilterScope] = useState<number | "all" | "card">("all");
   const [vocabTargetQuestionIdx, setVocabTargetQuestionIdx] = useState<number>(0);
+
+  // Live dictionary lookup state inside Tab 4 manual form
+  const [dictSuggestion, setDictSuggestion] = useState<EnglishDictionarySuggestion | null>(null);
+  const [dictLoading, setDictLoading] = useState(false);
+  const [dictError, setDictError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== "vocab") return;
+    const trimmed = vocabInputWord.trim();
+    if (
+      !trimmed ||
+      trimmed.length < 2 ||
+      trimmed.length > 60 ||
+      !/^[a-zA-Z][a-zA-Z' -]*$/.test(trimmed)
+    ) {
+      setDictSuggestion(null);
+      setDictError(null);
+      setDictLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setDictLoading(true);
+      setDictError(null);
+      try {
+        const res = await lookupEnglishDictionary(trimmed, controller.signal);
+        if (!controller.signal.aborted) {
+          setDictSuggestion(res);
+          setDictError(null);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setDictSuggestion(null);
+          setDictError(err instanceof Error ? err.message : null);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setDictLoading(false);
+        }
+      }
+    }, 450);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [activeTab, vocabInputWord]);
+
+  const handleApplyDictSuggestion = (meaningIdx = 0) => {
+    if (!dictSuggestion) return;
+    const picked =
+      dictSuggestion.meanings[meaningIdx] ||
+      dictSuggestion.meanings.find((m) => m.meaningLanguage === "vi") ||
+      dictSuggestion.meanings[0];
+    if (!picked) return;
+    if (dictSuggestion.phonetic && !vocabInputIpa.trim()) {
+      setVocabInputIpa(dictSuggestion.phonetic);
+    }
+    if (picked.partOfSpeech) {
+      setVocabInputPos(toModalPosSelectValue(picked.partOfSpeech));
+    }
+    setVocabInputMeaning(picked.definition);
+    if (picked.example && !vocabInputExample.trim()) {
+      setVocabInputExample(picked.example);
+    }
+  };
 
   // Quick Paste raw text
   const [rawPasteText, setRawPasteText] = useState("");
@@ -294,8 +378,8 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   }, [detectorInput]);
 
   // Audio Pronunciation Synth for UK / US
-  const playRegionalPronunciation = (region: "UK" | "US") => {
-    const word = vocabInputWord.trim();
+  const playRegionalPronunciation = (region: "UK" | "US", wordOverride?: string) => {
+    const word = (wordOverride ?? vocabInputWord).trim();
     if (!word) {
       setVocabFormError("Vui lòng nhập từ tiếng Anh trước khi nghe phát âm.");
       return;
@@ -336,16 +420,40 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   }, [cardFormSampleQuestions]);
 
   const activeQuestion = questions[selectedQuestionIndex] || questions[0];
+  const hasPassageTab = cardFormCategory !== "part5" && cardFormCategory !== "grammar";
 
-  // Total vocab count across all questions
+  // Total vocab count (card-level + all questions)
   const totalVocabCount = useMemo(() => {
-    return questions.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0);
-  }, [questions]);
+    return cardFormVocabList.length + questions.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0);
+  }, [cardFormVocabList, questions]);
 
-  // Vocab list displayed according to vocabFilterScope (supports all words or per question)
+  const existingVocabWords = useMemo(() => {
+    const words: string[] = [];
+    cardFormVocabList.forEach((v) => {
+      if (v.word?.trim()) words.push(v.word.trim().toLowerCase());
+    });
+    questions.forEach((q) => {
+      (q.vocabList || []).forEach((v) => {
+        if (v.word?.trim()) words.push(v.word.trim().toLowerCase());
+      });
+    });
+    return words;
+  }, [cardFormVocabList, questions]);
+
+  // Vocab list displayed according to vocabFilterScope
   const displayedVocabList = useMemo(() => {
+    const list: { item: VocabItem; qIdx: number; qNum: string; itemIdx: number }[] = [];
+    if (vocabFilterScope === "card" || vocabFilterScope === "all") {
+      cardFormVocabList.forEach((item, itemIdx) => {
+        list.push({
+          item,
+          qIdx: -1,
+          qNum: "Bài đọc",
+          itemIdx,
+        });
+      });
+    }
     if (vocabFilterScope === "all") {
-      const list: { item: VocabItem; qIdx: number; qNum: string; itemIdx: number }[] = [];
       questions.forEach((q, qIdx) => {
         (q.vocabList || []).forEach((item, itemIdx) => {
           list.push({
@@ -356,20 +464,26 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           });
         });
       });
-      return list;
-    } else {
-      const targetIdx = typeof vocabFilterScope === "number" ? Math.min(vocabFilterScope, questions.length - 1) : 0;
+    } else if (typeof vocabFilterScope === "number") {
+      const targetIdx = Math.min(Math.max(0, vocabFilterScope), questions.length - 1);
       const q = questions[targetIdx] || questions[0];
-      return (q.vocabList || []).map((item, itemIdx) => ({
-        item,
-        qIdx: targetIdx,
-        qNum: q.questionNum || String(100 + targetIdx + 1),
-        itemIdx,
-      }));
+      (q.vocabList || []).forEach((item, itemIdx) => {
+        list.push({
+          item,
+          qIdx: targetIdx,
+          qNum: q.questionNum || String(100 + targetIdx + 1),
+          itemIdx,
+        });
+      });
     }
-  }, [vocabFilterScope, questions]);
+    return list;
+  }, [vocabFilterScope, cardFormVocabList, questions]);
 
   const handleDeleteVocabGlobal = (qIdx: number, itemIdx: number) => {
+    if (qIdx === -1 && setCardFormVocabList) {
+      setCardFormVocabList((prev) => prev.filter((_, i) => i !== itemIdx));
+      return;
+    }
     setCardFormSampleQuestions((prev) => {
       const copy = [...prev];
       if (copy[qIdx]) {
@@ -432,7 +546,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   // Tự động đánh số lại câu hỏi theo chuẩn Part (101+, 131+, 147+)
   const handleRenumberQuestions = () => {
     const startNum =
-      cardFormCategory === "part5" ? 101 : cardFormCategory === "part6" ? 131 : 147;
+      !hasPassageTab ? 101 : cardFormCategory === "part6" ? 131 : 147;
     setCardFormSampleQuestions((prev) =>
       prev.map((q, idx) => ({
         ...q,
@@ -545,14 +659,19 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         : undefined,
     };
 
-    setCardFormSampleQuestions((prev) => {
-      const copy = prev.length > 0 ? [...prev] : [{ ...questions[0] }];
-      const targetIdx = Math.min(Math.max(0, vocabTargetQuestionIdx), copy.length - 1);
-      const targetQ = { ...copy[targetIdx] };
-      targetQ.vocabList = [...(targetQ.vocabList || []), newItem];
-      copy[targetIdx] = targetQ;
-      return copy;
-    });
+    if (vocabTargetQuestionIdx === -1 && setCardFormVocabList) {
+      setCardFormVocabList((prev) => [...prev, newItem]);
+    } else {
+      setCardFormSampleQuestions((prev) => {
+        const copy = prev.length > 0 ? [...prev] : [{ ...questions[0] }];
+        const fallbackIdx = vocabTargetQuestionIdx >= 0 ? vocabTargetQuestionIdx : 0;
+        const targetIdx = Math.min(Math.max(0, fallbackIdx), copy.length - 1);
+        const targetQ = { ...copy[targetIdx] };
+        targetQ.vocabList = [...(targetQ.vocabList || []), newItem];
+        copy[targetIdx] = targetQ;
+        return copy;
+      });
+    }
 
     // Reset vocab inputs
     setVocabInputWord("");
@@ -562,6 +681,51 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     setVocabInputSynonyms("");
     setVocabInputAntonyms("");
     setVocabFormError(null);
+    setDictSuggestion(null);
+    setDictError(null);
+  };
+
+  const handleApplyExtractedVocab = (entries: AppliedVocabEntry[]) => {
+    if (entries.length === 0) return;
+
+    const cardLevelEntries = entries.filter(
+      (entry) => (entry.targetQuestionIndex === null || entry.targetQuestionIndex < 0) && Boolean(setCardFormVocabList)
+    );
+    const questionEntries = entries.filter(
+      (entry) => !((entry.targetQuestionIndex === null || entry.targetQuestionIndex < 0) && Boolean(setCardFormVocabList))
+    );
+
+    if (cardLevelEntries.length > 0 && setCardFormVocabList) {
+      setCardFormVocabList((prev) => {
+        const existingKeys = new Set(prev.map((v) => v.word.trim().toLowerCase()));
+        const next = [...prev];
+        cardLevelEntries.forEach(({ item }) => {
+          const key = item.word.trim().toLowerCase();
+          if (key && !existingKeys.has(key)) {
+            existingKeys.add(key);
+            next.push(item);
+          }
+        });
+        return next;
+      });
+    }
+
+    if (questionEntries.length > 0) {
+      setCardFormSampleQuestions((prev) => {
+        const copy = prev.length > 0 ? prev.map((q) => ({ ...q, vocabList: [...(q.vocabList || [])] })) : [{ ...questions[0], vocabList: [...(questions[0].vocabList || [])] }];
+        const fallbackIdx = vocabTargetQuestionIdx >= 0 ? vocabTargetQuestionIdx : 0;
+        questionEntries.forEach(({ item, targetQuestionIndex }) => {
+          const desired = targetQuestionIndex !== null && targetQuestionIndex >= 0 ? targetQuestionIndex : fallbackIdx;
+          const targetIdx = Math.min(Math.max(0, desired), copy.length - 1);
+          const existingKeys = new Set((copy[targetIdx].vocabList || []).map((v) => v.word.trim().toLowerCase()));
+          const key = item.word.trim().toLowerCase();
+          if (key && !existingKeys.has(key)) {
+            copy[targetIdx].vocabList = [...(copy[targetIdx].vocabList || []), item];
+          }
+        });
+        return copy;
+      });
+    }
   };
 
   const handleDeleteVocabItem = (vIdx: number) => {
@@ -600,7 +764,10 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   };
 
   // Smart Parser for Quick Paste (Supports text from either Tab 1 detector or Tab 5 raw paste)
-  const handleParseRawText = (textOverride?: string) => {
+  const handleParseRawText = (
+    textOverride?: string,
+    onDetectedCategory?: (cat: "part5" | "part6" | "part7") => void
+  ) => {
     const textToParse = (typeof textOverride === "string" ? textOverride : (rawPasteText || detectorInput)).trim();
     if (!textToParse) {
       setErrorMsg("Vui lòng dán văn bản bài đọc và câu hỏi vào ô trước khi bóc tách!");
@@ -787,9 +954,32 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         }
       }
 
-      // Vocab item (Can be inside question or general section)
-      if (line.startsWith("-") || line.startsWith("•") || lower.startsWith("từ vựng:")) {
-        if (lower.startsWith("từ vựng:")) continue;
+      // Vocab item (inline comma-separated or bullet list)
+      const inlineVocabHeader = line.match(/^(?:từ vựng|vocab|vocabulary)\s*\:?\s*(.*)$/i);
+      if (inlineVocabHeader && (lower.startsWith("từ vựng:") || lower.startsWith("vocab:") || lower.startsWith("vocabulary:"))) {
+        const rest = inlineVocabHeader[1].trim();
+        if (rest) {
+          rest.split(/[,;]/).forEach((seg) => {
+            const trimmed = seg.trim();
+            if (!trimmed) return;
+            const parts = trimmed.match(/^([a-zA-Z\s\-']+?)(?:\s*\/([^\/]+)\/)?(?:\s*\(([a-z]+)\))?(?:\s*[\:\-\=]\s*(.+))?$/i);
+            if (parts && parts[1]?.trim()) {
+              const item = enrichInlineParsedVocab({
+                word: parts[1].trim(),
+                ipa: parts[2] ? `/${parts[2].trim()}/` : "",
+                pos: parts[3] ? parts[3].toLowerCase() : "n",
+                meaning: parts[4]?.trim() || "",
+                level: "B1",
+              });
+              if (currentQ) currentVocab.push(item);
+              else globalVocab.push(item);
+            }
+          });
+        }
+        continue;
+      }
+
+      if (line.startsWith("-") || line.startsWith("•")) {
         const cleanLine = line.replace(/^[\-\•\*\d\.]\s*/, "").trim();
         let word = "";
         let pos = "n";
@@ -806,13 +996,12 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           pos = posMatch[1].toLowerCase();
         }
 
-        // Clean line step by step to avoid leaving empty `()`
         const noIpaNoPos = cleanLine
-          .replace(/\(\s*\/[^\/]+\/\s*\)/g, "") // remove (/ipa/)
-          .replace(/\/([^\/]+)\//g, "")         // remove /ipa/
-          .replace(/\((?:n|v|adj|adv|prep|conj)[^\)]*\)/gi, "") // remove (n), (v)...
-          .replace(/\(\s*\)/g, "")              // remove empty ()
-          .replace(/\[\s*\]/g, "")              // remove empty []
+          .replace(/\(\s*\/[^\/]+\/\s*\)/g, "")
+          .replace(/\/([^\/]+)\//g, "")
+          .replace(/\((?:n|v|adj|adv|prep|conj)[^\)]*\)/gi, "")
+          .replace(/\(\s*\)/g, "")
+          .replace(/\[\s*\]/g, "")
           .trim();
 
         const splitColon = noIpaNoPos.split(/[\:\-–]\s*(.+)/);
@@ -823,17 +1012,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           word = noIpaNoPos;
         }
 
-        // Strip any residual brackets/parentheses around word
         word = word.replace(/[\(\)\[\]]/g, "").trim();
 
-        if (word) {
-          const item: VocabItem = {
+        if (word && /^[a-zA-Z][a-zA-Z\s'\-]*$/.test(word)) {
+          const item = enrichInlineParsedVocab({
             word,
             pos,
             ipa,
             meaning,
             level: "B1",
-          };
+          });
           if (currentQ) {
             currentVocab.push(item);
           } else {
@@ -846,8 +1034,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
     commitCurrentQ();
 
-    // Attach globalVocab to first question if present
-    if (globalVocab.length > 0 && parsedQuestions.length > 0) {
+    if (setCardFormVocabList) {
+      setCardFormVocabList(globalVocab);
+    } else if (globalVocab.length > 0 && parsedQuestions.length > 0) {
       parsedQuestions[0].vocabList = [...(parsedQuestions[0].vocabList || []), ...globalVocab];
     }
 
@@ -880,6 +1069,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
     const preset = PART_PRESETS[detectedCategory];
     setCardFormCategory(detectedCategory);
+    onDetectedCategory?.(detectedCategory);
     setCardFormSubCategory(preset.subCategory);
 
     // Question number range
@@ -927,11 +1117,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     // Reset vocab filter to "all" so user sees all extracted words immediately
     setVocabFilterScope("all");
 
-    const totalParsedVocab = parsedQuestions.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0);
+    const totalParsedVocab = (setCardFormVocabList ? globalVocab.length : 0) + parsedQuestions.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0);
     setParseSuccessMsg(
       `Đã bóc tách thành công: ${parsedQuestions.length} câu hỏi trắc nghiệm, ${totalParsedVocab} từ vựng trọng tâm${
         extractedPassage ? " & đoạn văn đọc" : ""
-      }! Toàn bộ Thông tin (Tab 1), Đoạn văn (Tab 2), Đáp án & Dịch (Tab 3), Từ vựng (Tab 4) đã được tự động điền đầy đủ 100%.`
+      }! ${detectedCategory === "part5" ? "Toàn bộ Thông tin (Tab 1), Đáp án & Dịch (Tab 2), Từ vựng (Tab 3)" : "Toàn bộ Thông tin (Tab 1), Đoạn văn (Tab 2), Đáp án & Dịch (Tab 3), Từ vựng (Tab 4)"} đã được tự động điền đầy đủ 100%.`
     );
     setErrorMsg(null);
   };
@@ -975,26 +1165,26 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150 font-sans">
       <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100">
         {/* HEADER (Styling matching VocabularyModals) */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
+        <div className="flex shrink-0 items-start sm:items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4">
+          <div className="min-w-0">
             <span className="text-[11px] font-extrabold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 uppercase tracking-wider">
               READING
             </span>
-            <h3 className="mt-1 text-base sm:text-lg font-bold text-slate-900">
+            <h3 className="mt-1 text-base sm:text-lg font-bold text-slate-900 leading-snug">
               {editingCard ? "Chỉnh sửa bài đọc / chuyên đề TOEIC" : "Thêm bài đọc Reading mới"}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition cursor-pointer shrink-0"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* TAB NAVIGATION */}
-        <div className="flex shrink-0 items-center gap-1 border-b border-slate-100 bg-slate-50/50 px-6 py-2 overflow-x-auto text-xs font-bold custom-scrollbar">
+        <div className="flex shrink-0 items-center gap-1 border-b border-slate-100 bg-slate-50/50 px-4 sm:px-6 py-2 overflow-x-auto text-xs font-bold custom-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab("info")}
@@ -1008,7 +1198,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <span>1. Thông tin bài đọc</span>
           </button>
 
-{(cardFormCategory !== "part5" && cardFormCategory !== "grammar") && (
+{hasPassageTab && (
             <button
               type="button"
               onClick={() => setActiveTab("passage")}
@@ -1039,7 +1229,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             }`}
           >
             <ListOrdered className="w-3.5 h-3.5" />
-            <span>{cardFormCategory === "part5" ? "2. Bộ câu hỏi & Đáp án" : "3. Bộ câu hỏi & Đáp án"}</span>
+            <span>{hasPassageTab ? "3. Bộ câu hỏi & Đáp án" : "2. Bộ câu hỏi & Đáp án"}</span>
             <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px]">
               {questions.length} câu
             </span>
@@ -1055,7 +1245,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             }`}
           >
             <BookMarked className="w-3.5 h-3.5" />
-            <span>{cardFormCategory === "part5" ? "3. Từ vựng cần học" : "4. Từ vựng cần học"}</span>
+            <span>{hasPassageTab ? "4. Từ vựng cần học" : "3. Từ vựng cần học"}</span>
             {totalVocabCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 text-[10px]">
                 {totalVocabCount} từ
@@ -1137,26 +1327,34 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               )}
 
               {/* THÔNG BÁO PART 5 ẨN ĐOẠN VĂN */}
-              {cardFormCategory === "part5" && (
+              {!hasPassageTab && (
                 <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>
-                    <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc. Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
+                    {cardFormCategory === "grammar" ? (
+                      <>
+                        <strong>Chế độ Ngữ pháp đọc (Grammar / Câu đơn):</strong> Vì dạng câu đơn không có đoạn văn dài nên hệ thống tự động ẩn tab Đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Nếu bạn muốn thêm bài đọc Part 6 hoặc Part 7 có đoạn văn, hãy chọn <strong>Part 6</strong> hoặc <strong>Part 7</strong> ở bên dưới!
+                      </>
+                    ) : (
+                      <>
+                        <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
+                      </>
+                    )}
                   </span>
                 </div>
               )}
 
               {/* KHUÔN MẪU PART CHUẨN TOEIC */}
               <div className="space-y-2 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/50 via-indigo-50/30 to-purple-50/30 border border-blue-100/80">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-blue-600" />
+                    <Layers className="w-4 h-4 text-blue-600 shrink-0" />
                     <span>Khuôn mẫu Part chuẩn TOEIC (1-Click áp dụng)</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowAutoDetector(!showAutoDetector)}
-                    className="text-[11px] font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-500" />
                     <span>{showAutoDetector ? "Ẩn tự động nhận diện" : "Tự động nhận diện câu hỏi"}</span>
@@ -1249,8 +1447,10 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          handleParseRawText(detectorInput);
-                          setActiveTab("passage");
+                          handleParseRawText(detectorInput, (cat) =>
+                            setActiveTab(cat === "part5" ? "questions" : "passage")
+                          );
+
                         }}
                         className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
                       >
@@ -1372,7 +1572,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           )}
 
           {/* TAB 2: ĐOẠN VĂN ĐỌC (PASSAGE) & BẢN DỊCH SONG NGỮ */}
-          {activeTab === "passage" && cardFormCategory !== "part5" && cardFormCategory !== "grammar" && (
+          {activeTab === "passage" && hasPassageTab && (
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-200/90 text-xs space-y-1.5">
                 <div className="flex items-center gap-1.5 font-bold text-blue-900">
@@ -1511,7 +1711,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     title="Tự động đánh số lại câu hỏi theo chuẩn Part hiện tại"
                   >
                     <ListOrdered className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Đánh số ({cardFormCategory === "part5" ? "#101+" : cardFormCategory === "part6" ? "#131+" : "#147+"})</span>
+                    <span>Đánh số ({!hasPassageTab ? "#101+" : cardFormCategory === "part6" ? "#131+" : "#147+"})</span>
                   </button>
 
                   <button
@@ -1724,10 +1924,20 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: TỪ VỰNG CẦN HỌC (THIẾT KẾ Y CHANG KHUNG TỪ VỰNG TRONG ẢNH USER GỬI) */}
+          {/* TAB 4: TỪ VỰNG CẦN HỌC */}
           {activeTab === "vocab" && (
             <div className="space-y-5">
-              {/* FORM THÊM TỪ VỰNG MỚI (EXACT LAYOUT FROM USER'S SCREENSHOT) */}
+              <ReadingVocabExtractorPanel
+                passageText={cardFormPassageText}
+                questions={questions}
+                existingWords={existingVocabWords}
+                allowCardLevelTarget={Boolean(setCardFormVocabList)}
+                defaultTargetQuestionIndex={vocabTargetQuestionIdx >= 0 ? vocabTargetQuestionIdx : null}
+                applyButtonLabel="Thêm từ đã chọn vào bản preview"
+                onApplyVocab={handleApplyExtractedVocab}
+              />
+
+              {/* FORM THÊM TỪ VỰNG MỚI */}
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div>
@@ -1745,6 +1955,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       onChange={(e) => setVocabTargetQuestionIdx(Number(e.target.value))}
                       className="rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs font-bold text-blue-800 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
                     >
+                      {Boolean(setCardFormVocabList) && (
+                        <option value={-1}>Chung toàn bài đọc</option>
+                      )}
                       {questions.map((q, qIdx) => (
                         <option key={qIdx} value={qIdx}>
                           Câu {qIdx + 1} {q.questionNum ? `(#${q.questionNum})` : ""}
@@ -1779,6 +1992,50 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   <p className="mt-1 text-[10px] text-slate-400">
                     Gợi ý từ điển là dữ liệu tham khảo riêng; chỉ nội dung bạn áp dụng hoặc thêm thành nghĩa riêng mới được lưu.
                   </p>
+                  {(dictLoading || dictSuggestion || dictError) && (
+                    <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] space-y-1.5">
+                      {dictLoading && (
+                        <div className="flex items-center gap-1.5 text-blue-700 font-semibold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Đang tra gợi ý từ điển cho &ldquo;{vocabInputWord.trim()}&rdquo;...</span>
+                        </div>
+                      )}
+                      {!dictLoading && dictSuggestion && (
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-blue-900">{dictSuggestion.word}</span>
+                              {dictSuggestion.phonetic && (
+                                <span className="font-mono text-slate-600">{dictSuggestion.phonetic}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyDictSuggestion(0)}
+                              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition cursor-pointer"
+                            >
+                              Áp dụng gợi ý này
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {dictSuggestion.meanings.slice(0, 4).map((m, idx) => (
+                              <button
+                                key={m.id || idx}
+                                type="button"
+                                onClick={() => handleApplyDictSuggestion(idx)}
+                                className="px-2 py-0.5 rounded-lg bg-white border border-blue-200 hover:border-blue-400 text-slate-700 text-[10px] text-left cursor-pointer transition"
+                              >
+                                {m.partOfSpeech ? `(${m.partOfSpeech}) ` : ""}{m.definition}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!dictLoading && !dictSuggestion && dictError && (
+                        <span className="text-slate-500">{dictError}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 2 COLUMNS: PHIÊN ÂM IPA vs TỪ LOẠI */}
@@ -1967,6 +2224,25 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       </span>
                     </button>
 
+                    {(Boolean(setCardFormVocabList) || cardFormVocabList.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => setVocabFilterScope("card")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                          vocabFilterScope === "card"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <span>Chung bài đọc</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                          vocabFilterScope === "card" ? "bg-purple-700 text-white" : "bg-slate-200 text-slate-700"
+                        }`}>
+                          {cardFormVocabList.length}
+                        </span>
+                      </button>
+                    )}
+
                     {questions.map((q, qIdx) => {
                       const count = q.vocabList?.length || 0;
                       const isSelected = vocabFilterScope === qIdx;
@@ -2011,8 +2287,12 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                             <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] uppercase border border-blue-200">
                               {v.pos}
                             </span>
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[10px] border border-slate-200">
-                              Câu {qIdx + 1} (#{qNum})
+                            <span className={`px-2 py-0.5 rounded-full font-semibold text-[10px] border ${
+                              qIdx === -1
+                                ? "bg-purple-50 text-purple-700 border-purple-200"
+                                : "bg-slate-100 text-slate-600 border-slate-200"
+                            }`}>
+                              {qIdx === -1 ? "Chung bài đọc" : `Câu ${qIdx + 1} (#${qNum})`}
                             </span>
                             {v.ipa && (
                               <span className="font-mono text-slate-500 text-[11px]">
@@ -2021,10 +2301,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                             )}
                             <button
                               type="button"
-                              onClick={() => {
-                                setVocabInputWord(v.word);
-                                playRegionalPronunciation("US");
-                              }}
+                              onClick={() => playRegionalPronunciation("US", v.word)}
                               className="text-slate-400 hover:text-blue-600 transition cursor-pointer"
                               title="Nghe phát âm US"
                             >
@@ -2073,9 +2350,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               </div>
 
               {parseSuccessMsg && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex flex-wrap items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{parseSuccessMsg}</span>
+                  <span className="flex-1">{parseSuccessMsg}</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("vocab")}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition cursor-pointer shrink-0"
+                  >
+                    Xem &amp; Gợi ý từ vựng →
+                  </button>
                 </div>
               )}
 
@@ -2092,7 +2376,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 />
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span className="text-[11px] text-slate-400">
                   Hỗ trợ định dạng chuẩn ETS TOEIC
                 </span>
@@ -2110,14 +2394,14 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         </div>
 
         {/* FOOTER (Matching VocabularyModals layout: Helper text on left, Hủy & Submit on right) */}
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-6 py-3.5 bg-slate-50/50">
-          <p className="text-[11px] text-slate-400 truncate max-w-sm">
+        <div className="flex shrink-0 flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t border-slate-100 px-4 sm:px-6 py-3.5 bg-slate-50/50">
+          <p className="text-[11px] text-slate-400 truncate max-w-full sm:max-w-sm">
             {totalVocabCount > 0
               ? `Đã liên kết ${totalVocabCount} từ vựng và ${questions.length} câu hỏi vào bài đọc.`
               : "Chưa có từ vựng riêng. Khi các dạng liên quan được thêm vào, hệ thống sẽ tự phát hiện và liên kết."}
           </p>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 justify-end w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
