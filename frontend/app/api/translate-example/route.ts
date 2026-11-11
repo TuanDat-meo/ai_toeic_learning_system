@@ -20,16 +20,24 @@ export async function POST(request: NextRequest) {
   }
 
   if (!isRecord(payload) || typeof payload.text !== "string") {
-    return errorResponse("Vui lòng gửi câu ví dụ cần dịch.", 400);
+    return errorResponse("Vui lòng gửi nội dung cần dịch.", 400);
   }
 
   const text = payload.text.trim();
   if (!text || text.length > 1000) {
-    return errorResponse("Câu ví dụ cần có từ 1 đến 1000 ký tự.", 400);
+    return errorResponse("Nội dung cần dịch phải có từ 1 đến 1000 ký tự.", 400);
+  }
+  const sourceLanguage = payload.sourceLanguage === "vi" ? "vi" : "en";
+  const targetLanguage = payload.targetLanguage === "en" ? "en" : "vi";
+  if (sourceLanguage === targetLanguage) {
+    return errorResponse("Ngôn ngữ nguồn và đích phải khác nhau.", 400);
   }
 
   try {
-    const query = new URLSearchParams({ q: text, langpair: "en|vi" });
+    const query = new URLSearchParams({
+      q: text,
+      langpair: `${sourceLanguage}|${targetLanguage}`,
+    });
     const response = await fetch(`https://api.mymemory.translated.net/get?${query}`, {
       cache: "no-store",
       headers: { Accept: "application/json" },

@@ -12,6 +12,7 @@ import {
   Code2,
   Eye,
   FileSpreadsheet,
+  FileText,
   GraduationCap,
   Image as ImageIcon,
   Layers,
@@ -52,8 +53,8 @@ export function GrammarPreviewList({
   editable,
   onBatchUpdated,
 }: GrammarPreviewListProps) {
-  const [selectedItemIndex, setSelectedItemIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<'questions' | 'theory' | 'tips' | 'table' | 'raw'>('questions');
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'questions' | 'examples' | 'theory' | 'tips' | 'table' | 'raw'>('questions');
   const [questionLevelFilter, setQuestionLevelFilter] = useState<string>('ALL');
   const [expandedQuestionIds, setExpandedQuestionIds] = useState<Record<string | number, boolean>>({});
 
@@ -108,7 +109,50 @@ export function GrammarPreviewList({
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const currentItem = items[selectedItemIndex] ?? items[0];
+  const topicGroups = useMemo(() => {
+    const dataFor = (item: ImportPreviewItem) => ({
+      ...(item.rawData ?? {}),
+      ...(item.normalizedData ?? {}),
+    });
+    const text = (data: Record<string, unknown>, ...keys: string[]) => {
+      for (const key of keys) {
+        const value = data[key];
+        if (typeof value === 'string' && value.trim()) return value.trim();
+      }
+      return '';
+    };
+    const titleFor = (item: ImportPreviewItem) => {
+      const data = dataFor(item);
+      return text(data, 'titleVi', 'title', 'titleEn', 'englishTitle') || `Dòng ${item.rowNumber}`;
+    };
+    const parentReferenceFor = (item: ImportPreviewItem) => {
+      const data = dataFor(item);
+      return text(data, 'parentTitleVi', 'parent_title_vi', 'parentTopicId', 'parent_topic_id');
+    };
+    const roots = items.filter((item) => !parentReferenceFor(item));
+    const groups = roots.map((parent) => {
+      const parentData = dataFor(parent);
+      const aliases = [
+        parent.id,
+        titleFor(parent),
+        text(parentData, 'titleEn', 'englishTitle'),
+        text(parentData, 'code', 'topicCode'),
+      ].filter(Boolean).map((value) => value.toLocaleLowerCase('vi'));
+      return {
+        parent,
+        children: items.filter((item) => {
+          if (item.id === parent.id) return false;
+          const reference = parentReferenceFor(item).toLocaleLowerCase('vi');
+          return reference.length > 0 && aliases.includes(reference);
+        }),
+      };
+    }).filter((group) => group.children.length > 0);
+    return groups;
+  }, [items]);
+  const firstChild = topicGroups[0]?.children[0];
+  const currentItem = (selectedItemId
+    ? items.find((item) => item.id === selectedItemId)
+    : undefined) ?? firstChild ?? items[0];
 
   // Trích xuất dữ liệu chuyên đề từ normalizedData hoặc rawData
   const grammarData = useMemo<GrammarNormalizedData>(() => {
@@ -128,6 +172,7 @@ export function GrammarPreviewList({
       tipsAndTricks: (norm.tipsAndTricks ?? raw.tipsAndTricks ?? '') as string,
       commonTraps: (norm.commonTraps ?? raw.commonTraps ?? '') as string,
       traps: (Array.isArray(norm.traps) ? norm.traps : Array.isArray(raw.traps) ? raw.traps : []) as string[],
+      examples: (Array.isArray(norm.examples) ? norm.examples : Array.isArray(raw.examples) ? raw.examples : []) as GrammarNormalizedData['examples'],
       summaryTable: (norm.summaryTable ?? raw.summaryTable ?? '') as string,
       reference: (norm.reference ?? raw.reference ?? '') as string,
       imageUrl: (norm.imageUrl ?? raw.imageUrl ?? '') as string,
@@ -349,6 +394,20 @@ export function GrammarPreviewList({
   }
 
   const status = itemStatus(currentItem.status);
+  const itemData = (item: ImportPreviewItem) => ({
+    ...(item.rawData ?? {}),
+    ...(item.normalizedData ?? {}),
+  });
+  const itemTitle = (item: ImportPreviewItem) => {
+    const data = itemData(item);
+    const title = data.titleVi ?? data.title ?? data.titleEn ?? data.englishTitle;
+    return typeof title === 'string' && title.trim() ? title : `Dòng ${item.rowNumber}`;
+  };
+  const questionCount = (item: ImportPreviewItem) => {
+    const data = itemData(item);
+    const questions = data.questions ?? data.gradedQuestions;
+    return Array.isArray(questions) ? questions.length : 0;
+  };
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -358,6 +417,79 @@ export function GrammarPreviewList({
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-600" />
           <p>{errorMsg}</p>
         </div>
+      ) : null}
+
+      {topicGroups.length > 0 ? (
+        <section className="overflow-hidden rounded-2xl border border-indigo-200 bg-indigo-50/50">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100 bg-white px-4 py-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Cấu trúc chủ điểm cha – con</h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Chọn một chủ điểm con để xem lý thuyết và câu hỏi trước khi publish.
+              </p>
+            </div>
+            <div className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800">
+              {topicGroups.reduce((count, group) => count + group.children.length, 0)} chủ điểm con
+              <span className="mx-1.5 text-indigo-300">·</span>
+              {topicGroups.reduce((count, group) => count + group.children.reduce(
+                (childCount, child) => childCount + questionCount(child), 0,
+              ), 0).toLocaleString('vi-VN')} câu hỏi
+            </div>
+          </div>
+          <div className="space-y-3 p-3 sm:p-4">
+            {topicGroups.map((group) => {
+              const parentStatus = itemStatus(group.parent.status);
+              return (
+                <div key={group.parent.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItemId(group.parent.id)}
+                    aria-current={currentItem.id === group.parent.id ? 'true' : undefined}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${
+                      currentItem.id === group.parent.id ? 'bg-indigo-50 ring-1 ring-indigo-200' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600">Chủ điểm cha</span>
+                      <span className="mt-0.5 block truncate text-sm font-bold text-slate-900">{itemTitle(group.parent)}</span>
+                    </span>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${parentStatus.classes}`}>
+                      {parentStatus.label}
+                    </span>
+                  </button>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.children.map((child) => {
+                      const childStatus = itemStatus(child.status);
+                      return (
+                        <button
+                          key={child.id}
+                          type="button"
+                          onClick={() => setSelectedItemId(child.id)}
+                          aria-current={currentItem.id === child.id ? 'true' : undefined}
+                          className={`rounded-lg border p-3 text-left transition ${
+                            currentItem.id === child.id
+                              ? 'border-blue-400 bg-blue-50 shadow-xs'
+                              : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/50'
+                          }`}
+                        >
+                          <span className="flex items-start justify-between gap-2">
+                            <span className="text-xs font-semibold leading-5 text-slate-800">{itemTitle(child)}</span>
+                            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${childStatus.classes}`}>
+                              {childStatus.label}
+                            </span>
+                          </span>
+                          <span className="mt-1 block text-[11px] text-slate-500">
+                            {questionCount(child).toLocaleString('vi-VN')} câu hỏi
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       ) : null}
 
       {/* Header Chuyên đề Ngữ pháp */}
@@ -472,6 +604,18 @@ export function GrammarPreviewList({
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200">
         <button
           type="button"
+          onClick={() => setActiveTab('examples')}
+          className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition ${
+            activeTab === 'examples'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileText size={16} />
+          Ví dụ minh họa ({grammarData.examples?.length ?? 0})
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('questions')}
           className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition ${
             activeTab === 'questions'
@@ -480,7 +624,7 @@ export function GrammarPreviewList({
           }`}
         >
           <GraduationCap size={16} />
-          Bài tập phân cấp ({questionsList.length})
+          Câu hỏi ({questionsList.length})
         </button>
 
         <button
@@ -811,6 +955,23 @@ export function GrammarPreviewList({
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {activeTab === 'examples' ? (
+        <div className="space-y-3">
+          {grammarData.examples?.length ? grammarData.examples.map((example, index) => (
+            <article key={`${index}-${example.sentence}`} className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-xs font-bold text-slate-700">Ví dụ {index + 1}</h3>
+              <p className="text-sm font-semibold text-slate-900">{example.sentence || 'Chưa có nội dung câu.'}</p>
+              {example.translation ? <p className="text-xs italic text-slate-600">{example.translation}</p> : null}
+              {example.analysis ? <p className="rounded-lg bg-blue-50 p-2.5 text-xs leading-relaxed text-blue-950">{example.analysis}</p> : null}
+            </article>
+          )) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-xs text-slate-500">
+              Chưa có ví dụ minh họa cho chủ điểm này.
+            </div>
+          )}
         </div>
       ) : null}
 

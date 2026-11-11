@@ -32,6 +32,7 @@ export interface GrammarTopicItem {
   part: GrammarPart | string;
   targetScore: TargetScore | string;
   status: ContentStatus | string;
+  archivedAt?: string;
   summary: string;
   formula: string;
   sourceUrl?: string;
@@ -60,6 +61,7 @@ export interface GrammarTopicItem {
     analysis?: string;
     focusWord?: string;
     difficulty?: string;
+    annotations?: GrammarExampleAnnotation[];
   }[];
   questions: GrammarQuestionItem[];
   orderIndex?: number;
@@ -101,6 +103,21 @@ export interface GrammarWordFamilyLink {
   word: string;
   partOfSpeech: string;
   meaning: string;
+}
+
+export interface GrammarExampleAnnotation {
+  start: number;
+  end: number;
+  selectedText: string;
+  kind: "grammar" | "highlight" | "note";
+  label: string;
+  partOfSpeech?: string;
+  number?: string;
+  countability?: string;
+  role?: string;
+  phraseType?: string;
+  color?: string;
+  explanation?: string;
 }
 
 /** Tiến độ học viên theo chuyên đề. DB: grammar_topic_progress */

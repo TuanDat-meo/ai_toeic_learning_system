@@ -13,9 +13,10 @@ import {
   LayoutGrid,
   List,
   CheckCircle2,
+  Archive,
 } from "lucide-react";
 
-export type GrammarAdminTab = "topics" | "questions" | "review" | "traps_matrix" | "curriculum";
+export type GrammarAdminTab = "topics" | "archived" | "questions" | "review" | "traps_matrix" | "curriculum";
 
 interface GrammarFilterBarProps {
   activeMainTab: GrammarAdminTab;
@@ -29,6 +30,7 @@ interface GrammarFilterBarProps {
   viewMode: "table" | "grid";
   setViewMode: (vm: "table" | "grid") => void;
   totalTopicsCount: number;
+  archivedTopicsCount: number;
   totalQuestionsCount: number;
   selectedTopicIds: string[];
   onOpenCreateModal: () => void;
@@ -50,6 +52,7 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
   viewMode,
   setViewMode,
   totalTopicsCount,
+  archivedTopicsCount,
   totalQuestionsCount,
   selectedTopicIds,
   onOpenCreateModal,
@@ -105,6 +108,19 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
         >
           <BookOpen className="w-4 h-4" />
           <span>Quản lý chuyên đề ({totalTopicsCount})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("archived")}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
+            activeMainTab === "archived"
+              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <Archive className="w-4 h-4" />
+          <span>Lưu trữ ({archivedTopicsCount})</span>
         </button>
 
         <button

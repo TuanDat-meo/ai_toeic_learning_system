@@ -8,32 +8,71 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Archive,
 } from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 
 interface GrammarTopicListProps {
   topics: GrammarTopicItem[];
+  allTopics: GrammarTopicItem[];
   viewMode: "table" | "grid";
   selectedTopicIds: string[];
   onToggleSelectTopic: (id: string) => void;
   onSelectAllTopics: () => void;
   onOpenTheoryModal: (topic: GrammarTopicItem) => void;
   onOpenEditTopic: (topic: GrammarTopicItem) => void;
+  onCreateChildTopic: (topic: GrammarTopicItem) => void;
   onOpenAddQuestion: (topic: GrammarTopicItem) => void;
   onOpenDeleteTopic: (topic: GrammarTopicItem) => void;
+  onArchiveTopic: (topic: GrammarTopicItem) => void;
 }
 
 export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
   topics,
+  allTopics,
   viewMode,
   selectedTopicIds,
   onToggleSelectTopic,
   onSelectAllTopics,
   onOpenTheoryModal,
   onOpenEditTopic,
+  onCreateChildTopic,
   onOpenAddQuestion,
   onOpenDeleteTopic,
+  onArchiveTopic,
 }) => {
+  const [expandedTopicIds, setExpandedTopicIds] = React.useState<Set<string>>(() => new Set());
+  const topicById = new Map(allTopics.map((topic) => [topic.id, topic]));
+  const hasHiddenAncestor = (topic: GrammarTopicItem) => {
+    const visited = new Set<string>();
+    let parentId = topic.parentTopicId;
+    while (parentId && !visited.has(parentId)) {
+      if (!expandedTopicIds.has(parentId) && topics.some((item) => item.id === parentId)) return true;
+      visited.add(parentId);
+      parentId = topicById.get(parentId)?.parentTopicId;
+    }
+    return false;
+  };
+  const visibleTopics = topics.filter((topic) => !hasHiddenAncestor(topic));
+  const childrenCount = (topicId: string) =>
+    allTopics.filter((topic) => topic.parentTopicId === topicId).length;
+  const toggleTopicExpansion = (topicId: string) => {
+    setExpandedTopicIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(topicId)) next.delete(topicId);
+      else next.add(topicId);
+      return next;
+    });
+  };
+  const parentTitle = (topic: GrammarTopicItem) => {
+    if (!topic.parentTopicId) return null;
+    const parent = topicById.get(topic.parentTopicId);
+    return parent ? parent.titleVi || parent.title : "Chủ điểm cha";
+  };
+
   if (topics.length === 0) {
     return (
       <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200/80 text-xs">
@@ -79,15 +118,16 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {topics.map((topic) => {
+                {visibleTopics.map((topic) => {
                   const isSelected = selectedTopicIds.includes(topic.id);
+                  const childCount = childrenCount(topic.id);
                   const missingContentCount = [
                     !(topic.titleVi || topic.title)?.trim(),
                     !(topic.titleEn || topic.englishTitle)?.trim(),
                     !topic.summary?.trim(),
                     !topic.formula?.trim(),
                     !topic.examples?.some((example) => example.sentence?.trim()),
-                    !topic.questions?.length,
+                    childCount === 0 && !topic.questions?.length,
                   ].filter(Boolean).length;
 
                   return (
@@ -106,13 +146,45 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                         />
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 ${topic.parentTopicId ? "ml-5 border-l-2 border-slate-200 pl-2" : ""}`}>
+                          {childCount > 0 ? (
+                            <button
+                              type="button"
+                              aria-label={`${expandedTopicIds.has(topic.id) ? "Thu gọn" : "Mở"} ${childCount} chủ điểm con của ${topic.titleVi || topic.title}`}
+                              aria-expanded={expandedTopicIds.has(topic.id)}
+                              onClick={() => toggleTopicExpansion(topic.id)}
+                              className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                            >
+                              {expandedTopicIds.has(topic.id)
+                                ? <ChevronDown className="h-3.5 w-3.5" />
+                                : <ChevronRight className="h-3.5 w-3.5" />}
+                            </button>
+                          ) : <span className="w-6 shrink-0" />}
                           <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0 whitespace-nowrap">
                             {topic.code}
                           </span>
                           <div>
-                            <p className="font-bold text-slate-900 leading-snug">{topic.titleVi || topic.title}</p>
+                            {childCount > 0 ? (
+                              <button
+                                type="button"
+                                aria-expanded={expandedTopicIds.has(topic.id)}
+                                onClick={() => toggleTopicExpansion(topic.id)}
+                                className="text-left font-bold text-slate-900 leading-snug hover:text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-600"
+                              >
+                                {topic.titleVi || topic.title}
+                              </button>
+                            ) : (
+                              <p className="font-bold text-slate-900 leading-snug">{topic.titleVi || topic.title}</p>
+                            )}
                             <p className="text-[11px] text-slate-400 italic">{topic.titleEn || topic.englishTitle}</p>
+                            <p className="mt-1 flex flex-wrap gap-1 text-[10px] font-semibold">
+                              {parentTitle(topic) ? <span className="text-slate-500">Chủ điểm cha: {parentTitle(topic)}</span> : null}
+                              {childCount > 0 ? (
+                                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">
+                                  {childCount} chủ điểm con
+                                </span>
+                              ) : null}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -174,6 +246,15 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                         <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
+                            onClick={() => onCreateChildTopic(topic)}
+                            className="p-1.5 rounded-xl border border-slate-200 hover:bg-indigo-50 text-indigo-600 transition cursor-pointer"
+                            title="Tạo chủ điểm con"
+                            aria-label={`Tạo chủ điểm con cho ${topic.titleVi || topic.title}`}
+                          >
+                            <GitBranch className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => onOpenTheoryModal(topic)}
                             className="p-1.5 rounded-xl border border-slate-200 hover:bg-blue-50 text-blue-600 transition cursor-pointer"
                             title="Xem chi tiết lý thuyết & công thức"
@@ -198,6 +279,15 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                           </button>
                           <button
                             type="button"
+                            onClick={() => onArchiveTopic(topic)}
+                            className="p-1.5 rounded-xl border border-slate-200 hover:bg-amber-50 text-amber-600 transition cursor-pointer"
+                            title="Lưu trữ chủ điểm"
+                            aria-label={`Lưu trữ ${topic.titleVi || topic.title}`}
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => onOpenDeleteTopic(topic)}
                             className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-600 transition cursor-pointer"
                             title="Xóa chuyên đề"
@@ -218,9 +308,10 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
       {/* GRID VIEW */}
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {topics.map((topic) => {
+          {visibleTopics.map((topic) => {
             const isSelected = selectedTopicIds.includes(topic.id);
             const totalQ = topic.questions.length;
+            const childCount = childrenCount(topic.id);
 
             return (
               <div
@@ -262,11 +353,35 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
 
                   {/* Title & English Title */}
                   <div>
-                    <h3
-                      onClick={() => onOpenTheoryModal(topic)}
-                      className="text-base font-extrabold text-slate-900 hover:text-blue-600 transition cursor-pointer leading-snug"
-                    >
-                      {topic.titleVi || topic.title}
+                    <div className="mb-1 flex flex-wrap items-center gap-1">
+                      {parentTitle(topic) ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                          Chủ điểm cha: {parentTitle(topic)}
+                        </span>
+                      ) : null}
+                      {childCount > 0 ? (
+                        <button
+                          type="button"
+                          aria-expanded={expandedTopicIds.has(topic.id)}
+                          onClick={() => toggleTopicExpansion(topic.id)}
+                          className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100"
+                        >
+                          {expandedTopicIds.has(topic.id)
+                            ? <ChevronDown className="h-3 w-3" />
+                            : <ChevronRight className="h-3 w-3" />}
+                          {childCount} chủ điểm con
+                        </button>
+                      ) : null}
+                    </div>
+                    <h3 className="text-base font-extrabold leading-snug">
+                      <button
+                        type="button"
+                        onClick={() => childCount > 0 ? toggleTopicExpansion(topic.id) : onOpenTheoryModal(topic)}
+                        aria-expanded={childCount > 0 ? expandedTopicIds.has(topic.id) : undefined}
+                        className="text-left text-slate-900 hover:text-blue-600 transition"
+                      >
+                        {topic.titleVi || topic.title}
+                      </button>
                     </h3>
                     <p className="text-xs text-slate-500 font-medium italic">{topic.titleEn || topic.englishTitle}</p>
                   </div>
@@ -302,6 +417,15 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
+                      onClick={() => onCreateChildTopic(topic)}
+                      className="p-1.5 rounded-xl border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                      title="Tạo chủ điểm con"
+                      aria-label={`Tạo chủ điểm con cho ${topic.titleVi || topic.title}`}
+                    >
+                      <GitBranch className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => onOpenAddQuestion(topic)}
                       className="p-1.5 rounded-xl border border-slate-200 text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
                       title="Thêm câu hỏi mới"
@@ -315,6 +439,15 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                       title="Chỉnh sửa chuyên đề"
                     >
                       <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onArchiveTopic(topic)}
+                      className="p-1.5 rounded-xl border border-slate-200 text-amber-600 hover:bg-amber-50 transition cursor-pointer"
+                      title="Lưu trữ chủ điểm"
+                      aria-label={`Lưu trữ ${topic.titleVi || topic.title}`}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"

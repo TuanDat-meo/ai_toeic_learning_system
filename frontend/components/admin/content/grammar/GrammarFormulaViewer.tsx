@@ -15,8 +15,9 @@ import {
   ArrowRight,
   Lightbulb,
   FileText,
-  ListChecks,
 } from "lucide-react";
+import type { GrammarExampleAnnotation } from "@/app/admin/content/grammar/types";
+import { AnnotatedGrammarSentence } from "./GrammarExampleAnnotations";
 
 // ==========================================
 // 1. FORMATTED TEXT COMPONENT (INLINE MARKDOWN)
@@ -1016,34 +1017,13 @@ export const GrammarTrapsViewer: React.FC<{ traps: string[] }> = ({ traps }) => 
 // ==========================================
 // 8. EXAMPLES VIEWER (VÍ DỤ MINH HỌA)
 // ==========================================
-export interface SampleQuestionItem {
-  id?: string | number;
-  part?: string;
-  questionText: string;
-  options?: {
-    A?: string;
-    B?: string;
-    C?: string;
-    D?: string;
-    [key: string]: string | undefined;
-  };
-  correctAnswer: string;
-  explanation: string;
-  trapNote?: string;
-  translation?: string;
-  difficulty?: string;
-}
-
 export const GrammarExamplesViewer: React.FC<{
-  examples: Array<{ sentence: string; translation?: string; analysis?: string }>;
-  topicCode?: string;
-  sampleQuestions?: Array<SampleQuestionItem>;
+  examples: Array<{ sentence: string; translation?: string; analysis?: string; annotations?: GrammarExampleAnnotation[] }>;
   emptyMessage?: string;
-}> = ({ examples, topicCode, sampleQuestions, emptyMessage }) => {
+}> = ({ examples, emptyMessage }) => {
   const validExamples = (examples || []).filter((ex) => ex && ex.sentence && ex.sentence.trim().length > 0);
-  const sampleList = (sampleQuestions || []).slice(0, 2);
 
-  if (validExamples.length === 0 && sampleList.length === 0) {
+  if (validExamples.length === 0) {
     return (
       <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs space-y-1">
         <p className="font-bold text-slate-700">Đang cập nhật ví dụ minh họa cho chủ điểm này.</p>
@@ -1073,7 +1053,8 @@ export const GrammarExamplesViewer: React.FC<{
 
           <div className="space-y-3">
             {validExamples.map((ex, idx) => {
-              const isMultiLineTips = ex.sentence.includes("\n") || ex.sentence.includes("Thần chú") || ex.sentence.includes("Mẹo");
+              const isMultiLineTips = !ex.annotations?.length
+                && (ex.sentence.includes("\n") || ex.sentence.includes("Thần chú") || ex.sentence.includes("Mẹo"));
 
               return (
                 <div
@@ -1119,8 +1100,26 @@ export const GrammarExamplesViewer: React.FC<{
                         <span>Mẫu câu thực hành #{idx + 1}:</span>
                       </div>
                       <p className="font-bold text-slate-900 text-xs sm:text-sm leading-relaxed">
-                        <FormattedText text={ex.sentence} />
+                        {ex.annotations?.length
+                          ? <AnnotatedGrammarSentence sentence={ex.sentence} annotations={ex.annotations} />
+                          : <FormattedText text={ex.sentence} />}
                       </p>
+                      {ex.annotations?.length ? (
+                        <ul className="space-y-1 rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-[11px] font-medium">
+                          {ex.annotations.map((annotation, annotationIndex) => (
+                            <li key={`${annotation.start}-${annotation.end}-${annotationIndex}`}>
+                              <strong className="text-slate-900">{annotation.selectedText}</strong>
+                              <span className="text-slate-600"> — {annotation.label}</span>
+                              {annotation.phraseType ? <span className="text-slate-500"> · {annotation.phraseType}</span> : null}
+                              {annotation.partOfSpeech && annotation.partOfSpeech !== annotation.label ? <span className="text-slate-500"> · {annotation.partOfSpeech}</span> : null}
+                              {annotation.number ? <span className="text-slate-500"> · {annotation.number}</span> : null}
+                              {annotation.countability ? <span className="text-slate-500"> · {annotation.countability}</span> : null}
+                              {annotation.role ? <span className="text-slate-500"> · {annotation.role}</span> : null}
+                              {annotation.explanation ? <span className="block text-slate-500">{annotation.explanation}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   )}
 
@@ -1146,123 +1145,118 @@ export const GrammarExamplesViewer: React.FC<{
         </div>
       )}
 
-      {/* 2. Phần Câu hỏi mẫu trích xuất từ đề thi ETS */}
-      {sampleList.length > 0 && (
-        <div className="space-y-3 pt-2">
-          <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-100 text-emerald-950 text-xs flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ListChecks className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-bold">
-                Câu hỏi thi mẫu minh họa (Kèm đáp án & phân tích chi tiết):
+    </div>
+  );
+};
+
+export const GrammarQuestionsViewer: React.FC<{
+  questions: Array<{
+    id?: string | number;
+    questionText?: string;
+    question?: string;
+    options?: Record<string, string>;
+    correctAnswer?: string;
+    explanation?: string;
+    solutionMethod?: string;
+    trapNote?: string;
+    translation?: string | { questionVi?: string; fullSentenceVi?: string };
+    difficulty?: string;
+    level?: string;
+  }>;
+}> = ({ questions }) => {
+  if (!questions.length) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-xs text-slate-500">
+        Chưa có câu hỏi cho chủ điểm này.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 font-sans">
+      {questions.map((question, index) => {
+        const correctAnswer = (question.correctAnswer || "").trim().toUpperCase();
+        const questionText = question.questionText || question.question || "";
+        const explanation = question.explanation || question.solutionMethod || "";
+        const translation = typeof question.translation === "string"
+          ? question.translation
+          : question.translation?.fullSentenceVi || question.translation?.questionVi || "";
+
+        return (
+          <article
+            key={question.id ?? index}
+            className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">CÂU HỎI #{index + 1}</span>
+              {question.difficulty || question.level ? (
+                <span className="text-[11px] font-medium text-slate-500">{question.difficulty || question.level}</span>
+              ) : null}
+              <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-700">
+                Đáp án đúng: {question.correctAnswer}
               </span>
             </div>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-              {sampleList.length} câu mẫu
-            </span>
-          </div>
 
-          <div className="space-y-3">
-            {sampleList.map((q, qIdx) => {
-              // Lấy câu hỏi sạch nếu questionText gộp cả options
-              const rawText = q.questionText || "";
-              const cleanQuestion = rawText
-                .split("\nA.")[0]
-                .split("\n(A)")[0]
-                .trim();
+            <p className="text-xs font-bold leading-relaxed text-slate-900 sm:text-sm">
+              <FormattedText text={questionText} />
+            </p>
 
-              return (
-                <div
-                  key={q.id || qIdx}
-                  className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 hover:border-emerald-300 transition-all"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-black">
-                        ĐỀ THI MẪU #{qIdx + 1}
-                      </span>
-                      {q.difficulty && (
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          Độ khó: {q.difficulty}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                      Đáp án đúng: {q.correctAnswer}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {Object.entries(question.options || {}).map(([optionKey, optionValue]) => {
+                const isCorrect = optionKey.trim().toUpperCase() === correctAnswer;
+
+                return (
+                  <div
+                    key={optionKey}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+                      isCorrect
+                        ? "border-emerald-300 bg-emerald-50 font-bold text-emerald-950"
+                        : "border-slate-200 bg-slate-50/70 font-medium text-slate-700"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-lg text-[11px] font-black ${
+                        isCorrect ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {optionKey}
                     </span>
+                    <span>{optionValue}</span>
+                    {isCorrect ? <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-emerald-600" /> : null}
                   </div>
+                );
+              })}
+            </div>
 
-                  <p className="font-bold text-slate-900 text-xs sm:text-sm leading-relaxed">
-                    <FormattedText text={cleanQuestion || rawText} />
-                  </p>
+            {translation ? (
+              <p className="rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-xs italic text-slate-600">
+                <strong className="not-italic text-slate-700">Dịch đề: </strong>
+                {translation}
+              </p>
+            ) : null}
 
-                  {/* 4 phương án lựa chọn */}
-                  {q.options && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {Object.entries(q.options).map(([optKey, optVal]) => {
-                        const isCorrect =
-                          optKey.toUpperCase() === (q.correctAnswer || "").trim().toUpperCase();
-                        return (
-                          <div
-                            key={optKey}
-                            className={`px-3 py-2 rounded-xl text-xs flex items-center gap-2 border transition-all ${
-                              isCorrect
-                                ? "bg-emerald-50 text-emerald-950 border-emerald-300 font-bold shadow-2xs"
-                                : "bg-slate-50/70 text-slate-700 border-slate-200/80 font-medium"
-                            }`}
-                          >
-                            <span
-                              className={`w-5 h-5 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0 ${
-                                isCorrect
-                                  ? "bg-emerald-600 text-white"
-                                  : "bg-slate-200 text-slate-700"
-                              }`}
-                            >
-                              {optKey}
-                            </span>
-                            <span className="truncate">{optVal}</span>
-                            {isCorrect && (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600 ml-auto shrink-0" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Dịch câu hỏi */}
-                  {q.translation && (
-                    <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                      <strong className="font-semibold text-slate-700 not-italic">Dịch đề: </strong>
-                      {q.translation}
-                    </p>
-                  )}
-
-                  {/* Giải thích chi tiết */}
-                  {q.explanation && (
-                    <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-100 text-xs text-blue-950 font-medium leading-relaxed flex items-start gap-2">
-                      <span className="font-black text-blue-700 shrink-0">💡 Phân tích giải thích:</span>
-                      <div>
-                        <FormattedText text={q.explanation} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Cảnh báo bẫy thi */}
-                  {q.trapNote && (
-                    <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 font-medium leading-relaxed flex items-start gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <strong className="font-bold text-amber-800">Bẫy ETS cần chú ý: </strong>
-                        <FormattedText text={q.trapNote} />
-                      </div>
-                    </div>
-                  )}
+            {explanation ? (
+              <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/90 p-2.5 text-xs font-medium leading-relaxed text-blue-950">
+                <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />
+                <div>
+                  <strong className="font-black text-blue-800">Giải thích: </strong>
+                  <FormattedText text={explanation} />
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              </div>
+            ) : null}
+
+            {question.trapNote ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/90 p-2.5 text-xs font-medium leading-relaxed text-amber-950">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                <div>
+                  <strong className="font-bold text-amber-800">Bẫy cần chú ý: </strong>
+                  <FormattedText text={question.trapNote} />
+                </div>
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
     </div>
   );
 };

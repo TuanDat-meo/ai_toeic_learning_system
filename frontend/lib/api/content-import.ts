@@ -139,6 +139,13 @@ export function deleteContentImportBatch(batchId: string) {
   );
 }
 
+export function revalidateContentImportBatch(batchId: string) {
+  return writeAuthRequest<ImportBatchDetails>(
+    'POST',
+    `/api/admin/data/import/batches/${encodeURIComponent(batchId)}/revalidate`,
+  );
+}
+
 export function publishContentImport(batchId: string) {
   return writeAuthRequest<ImportBatchSummary>(
     'POST',

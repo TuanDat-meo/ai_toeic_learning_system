@@ -26,6 +26,7 @@ import {
   previewContentImport,
   publishContentImport,
   deleteContentImportBatch,
+  revalidateContentImportBatch,
   extractContentImportDocument,
   parseTextToContentImportPreview,
   uploadContentImportAsset,
@@ -214,6 +215,23 @@ export function ContentImportManagement() {
       setError(cleanErrorMessage(requestError));
     } finally {
       setLoadingDetails(false);
+    }
+  }
+
+  async function revalidateBatch() {
+    if (!details || !['PREVIEW', 'NO_VALID_ROWS'].includes(details.batch.status)) return;
+    setProcessing(true);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await revalidateContentImportBatch(details.batch.id);
+      setDetails(updated);
+      await refreshBatches();
+      setNotice('Đã kiểm tra lại dữ liệu bằng bộ quy tắc hiện tại.');
+    } catch (requestError) {
+      setError(cleanErrorMessage(requestError));
+    } finally {
+      setProcessing(false);
     }
   }
 
@@ -771,6 +789,17 @@ export function ContentImportManagement() {
                 <span className="text-xs text-slate-500 sm:text-right">
                   {filteredPreviewItems.length.toLocaleString('vi-VN')} / {details.items.length.toLocaleString('vi-VN')} dòng
                 </span>
+                {['PREVIEW', 'NO_VALID_ROWS'].includes(details.batch.status) ? (
+                  <button
+                    type="button"
+                    disabled={processing || loadingDetails}
+                    onClick={() => void revalidateBatch()}
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} className={processing ? 'animate-spin' : ''} aria-hidden="true" />
+                    Kiểm tra lại
+                  </button>
+                ) : null}
                 {details.hasMore && (previewSearch.trim() || previewStatus !== 'ALL') ? (
                   <button
                     type="button"

@@ -6,13 +6,18 @@ import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import {
   getAdminGrammarTopics,
   createGrammarTopic,
+  createGrammarTopicWithNewParent,
   updateGrammarTopic,
-  deleteGrammarTopic,
+  deleteGrammarTopicWithChildren,
+  archiveGrammarTopic,
+  restoreGrammarTopic,
   addGrammarQuestion,
   updateGrammarQuestion,
   deleteGrammarQuestion,
   bulkUpdateGrammarStatus,
   bulkDeleteGrammarTopics,
+  getGrammarTopicLifecycleImpact,
+  type DeleteGrammarTopicRequest,
 } from "@/lib/api/grammar";
 import {
   GrammarFilterBar,
@@ -29,6 +34,7 @@ import {
   GrammarTopicDetailModal,
   GrammarTopicEditModal,
   GrammarDeleteModal,
+  GrammarArchiveModal,
   GrammarAddQuestionModal,
 } from "@/components/admin/content/grammar/GrammarModals";
 
@@ -40,7 +46,7 @@ function getLocalGrammarTopics(): GrammarTopicItem[] | null {
     const raw = localStorage.getItem(LOCAL_GRAMMAR_TOPICS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+    return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -66,6 +72,7 @@ export default function AdminGrammarPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   // Keep the admin cache in sync only after the backend confirms a change.
   const updateTopicsState = (updater: (prev: GrammarTopicItem[]) => GrammarTopicItem[]) => {
@@ -81,25 +88,25 @@ export default function AdminGrammarPage() {
 
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [editTopicItem, setEditTopicItem] = useState<GrammarTopicItem | null>(null);
+  const [createParentTopicId, setCreateParentTopicId] = useState<string | undefined>();
   const [questionModal, setQuestionModal] = useState<{
     topic: GrammarTopicItem | null;
     question: GrammarQuestionItem | null;
   } | null>(null);
   const [deleteConfirmTopic, setDeleteConfirmTopic] = useState<GrammarTopicItem | null>(null);
+  const [archiveConfirmTopic, setArchiveConfirmTopic] = useState<GrammarTopicItem | null>(null);
 
   const loadTopics = useCallback(async () => {
     try {
       setLoading(true);
-      // Luôn ưu tiên gọi API backend để lấy dữ liệu mới nhất từ database
       const data = await getAdminGrammarTopics();
-      if (data && data.length > 0) {
+      if (data !== null) {
         setTopics(data);
         saveLocalGrammarTopics(data);
         return;
       }
-      // Fallback về localStorage hoặc mock nếu API trả về rỗng
       const local = getLocalGrammarTopics();
-      if (local && local.length > 0) {
+      if (local !== null) {
         setTopics(local);
       } else {
         setTopics(INITIAL_GRAMMAR_TOPICS);
@@ -108,7 +115,7 @@ export default function AdminGrammarPage() {
     } catch (err) {
       console.warn("Could not load grammar topics from API, falling back:", err);
       const local = getLocalGrammarTopics();
-      if (local && local.length > 0) {
+      if (local !== null) {
         setTopics(local);
       } else {
         setTopics(INITIAL_GRAMMAR_TOPICS);
@@ -131,8 +138,11 @@ export default function AdminGrammarPage() {
   }, [loadTopics]);
 
   // Filter Logic
+  const activeTopics = useMemo(() => topics.filter((topic) => topic.status !== "ARCHIVED"), [topics]);
+  const archivedTopics = useMemo(() => topics.filter((topic) => topic.status === "ARCHIVED"), [topics]);
+
   const filteredTopics = useMemo(() => {
-    return topics.filter((t) => {
+    return activeTopics.filter((t) => {
       const titleVi = t.titleVi || t.title || "";
       const titleEn = t.titleEn || t.englishTitle || "";
       const matchSearch =
@@ -148,15 +158,18 @@ export default function AdminGrammarPage() {
 
       return matchSearch && matchPart && matchStatus;
     });
-  }, [topics, searchQuery, filterPart, filterStatus]);
+  }, [activeTopics, searchQuery, filterPart, filterStatus]);
 
   // Statistics
-  const totalTopicsCount = topics.length;
+  const totalTopicsCount = activeTopics.length;
   const totalQuestionsCount = useMemo(() => {
-    return topics.reduce((acc, t) => acc + (t.questions ? t.questions.length : 0), 0);
-  }, [topics]);
+    return activeTopics.reduce((acc, t) => acc + (t.questions ? t.questions.length : 0), 0);
+  }, [activeTopics]);
 
-  const handleSaveTopic = async (topicData: Partial<GrammarTopicItem>) => {
+  const handleSaveTopic = async (
+    topicData: Partial<GrammarTopicItem>,
+    newParent?: { titleVi: string; titleEn: string },
+  ) => {
     setActionError(null);
     if (editTopicItem) {
       try {
@@ -171,6 +184,15 @@ export default function AdminGrammarPage() {
       }
     } else {
       try {
+        if (newParent) {
+          const created = await createGrammarTopicWithNewParent(
+            newParent.titleVi,
+            newParent.titleEn,
+            topicData,
+          );
+          updateTopicsState((prev) => [created.child, created.parent, ...prev]);
+          return;
+        }
         const created = await createGrammarTopic(topicData);
         updateTopicsState((prev) => [created, ...prev]);
       } catch (err) {
@@ -226,19 +248,66 @@ export default function AdminGrammarPage() {
     }
   };
 
-  const confirmDeleteTopic = async () => {
+  const confirmDeleteTopic = async (request: DeleteGrammarTopicRequest) => {
     if (!deleteConfirmTopic) return;
     setActionError(null);
+    setActionNotice(null);
     try {
-      await deleteGrammarTopic(deleteConfirmTopic.id);
+      await deleteGrammarTopicWithChildren(deleteConfirmTopic.id, request);
     } catch (err) {
       console.error("Lỗi khi xóa chuyên đề:", err);
       setActionError(err instanceof Error ? `Không thể xóa chuyên đề: ${err.message}` : "Không thể xóa chuyên đề.");
-      return;
+      throw err;
     }
-    updateTopicsState((prev) => prev.filter((t) => t.id !== deleteConfirmTopic.id));
-    setSelectedTopicIds((prev) => prev.filter((id) => id !== deleteConfirmTopic.id));
-    setDeleteConfirmTopic(null);
+    const deletedId = deleteConfirmTopic.id;
+    updateTopicsState((prev) =>
+      prev
+        .filter((t) => t.id !== deletedId)
+        .map((t) => t.parentTopicId === deletedId
+          ? { ...t, parentTopicId: request.childAction === "MOVE" ? request.targetParentId || undefined : undefined }
+          : t)
+    );
+    setSelectedTopicIds((prev) => prev.filter((id) => id !== deletedId));
+    setActionNotice("Đã xóa chủ điểm; dữ liệu con đã được chuyển theo lựa chọn.");
+  };
+
+  const confirmArchiveTopic = async () => {
+    if (!archiveConfirmTopic) return;
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      await archiveGrammarTopic(archiveConfirmTopic.id);
+    } catch (err) {
+      console.error("Lỗi khi lưu trữ chủ điểm:", err);
+      setActionError(err instanceof Error ? `Không thể lưu trữ chủ điểm: ${err.message}` : "Không thể lưu trữ chủ điểm.");
+      throw err;
+    }
+    const archivedId = archiveConfirmTopic.id;
+    const archivedAt = new Date().toISOString();
+    updateTopicsState((prev) => prev.map((topic) => {
+      if (topic.id === archivedId) {
+        return { ...topic, archivedAt, status: "ARCHIVED" };
+      }
+      if (topic.parentTopicId === archivedId) {
+        return { ...topic, parentTopicId: undefined };
+      }
+      return topic;
+    }));
+    setSelectedTopicIds((prev) => prev.filter((id) => id !== archivedId));
+    setActionNotice("Đã lưu trữ chủ điểm. Các chủ điểm con vẫn hoạt động ở cấp gốc.");
+  };
+
+  const handleRestoreTopic = async (topic: GrammarTopicItem) => {
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const restored = await restoreGrammarTopic(topic.id);
+      updateTopicsState((prev) => prev.map((item) => item.id === topic.id ? restored : item));
+      setActionNotice(`Đã khôi phục “${restored.titleVi || restored.title}”.`);
+    } catch (err) {
+      console.error("Lỗi khi khôi phục chủ điểm:", err);
+      setActionError(err instanceof Error ? `Không thể khôi phục chủ điểm: ${err.message}` : "Không thể khôi phục chủ điểm.");
+    }
   };
 
   // Bulk operations
@@ -273,8 +342,28 @@ export default function AdminGrammarPage() {
   };
 
   const handleBulkDelete = async () => {
-    if (!window.confirm(`Xóa ${selectedTopicIds.length} chuyên đề đã chọn? Thao tác này không thể hoàn tác.`)) return;
     setActionError(null);
+    setActionNotice(null);
+    let impacts;
+    try {
+      impacts = await Promise.all(selectedTopicIds.map((id) => getGrammarTopicLifecycleImpact(id)));
+    } catch (err) {
+      setActionError(err instanceof Error ? `Không thể kiểm tra dữ liệu trước khi xóa: ${err.message}` : "Không thể kiểm tra dữ liệu trước khi xóa.");
+      return;
+    }
+    const blockedTopics = impacts.filter((impact) =>
+      impact.childCount > 0
+      || impact.userProgressCount > 0
+      || impact.wordFamilyLinkCount > 0
+      || impact.toeicQuestionLinkCount > 0
+      || impact.learningPathLinkCount > 0);
+    if (blockedTopics.length > 0) {
+      setActionError(`Không thể xóa hàng loạt vì các mục sau còn chủ điểm con hoặc dữ liệu liên kết: ${blockedTopics.map((item) => `${item.title} (con: ${item.childCount}, tiến độ: ${item.userProgressCount}, Word Family: ${item.wordFamilyLinkCount}, câu hỏi TOEIC: ${item.toeicQuestionLinkCount})`).join("; ")}. Hãy dùng thao tác xóa riêng để chuyển con hoặc lưu trữ để bảo toàn dữ liệu.`);
+      return;
+    }
+    const impactSummary = impacts.map((item) =>
+      `${item.title}: ${item.questionCount} câu hỏi, ${item.exampleCount} ví dụ, ${item.theoryFieldCount} mục lý thuyết`).join("\n");
+    if (!window.confirm(`Xóa ${selectedTopicIds.length} chủ điểm? Nội dung trực tiếp sau đây sẽ bị xóa; dữ liệu liên kết được kiểm tra và giữ an toàn.\n\n${impactSummary}\n\nThao tác này không thể hoàn tác.`)) return;
     try {
       await bulkDeleteGrammarTopics(selectedTopicIds);
     } catch (err) {
@@ -282,8 +371,10 @@ export default function AdminGrammarPage() {
       setActionError(err instanceof Error ? `Không thể xóa chuyên đề: ${err.message}` : "Không thể xóa chuyên đề.");
       return;
     }
-    updateTopicsState((prev) => prev.filter((t) => !selectedTopicIds.includes(t.id)));
+    const deletedIds = new Set(selectedTopicIds);
+    updateTopicsState((prev) => prev.filter((t) => !deletedIds.has(t.id)));
     setSelectedTopicIds([]);
+    setActionNotice("Đã xóa các chủ điểm đã chọn.");
   };
 
   // CSV Export
@@ -325,6 +416,11 @@ export default function AdminGrammarPage() {
           {actionError}
         </div>
       ) : null}
+      {actionNotice ? (
+        <div role="status" className="fixed right-5 top-5 z-[69] max-w-lg rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-lg">
+          {actionNotice}
+        </div>
+      ) : null}
       {/* Header and Filter Toolbar */}
       <GrammarFilterBar
         activeMainTab={activeMainTab}
@@ -338,10 +434,12 @@ export default function AdminGrammarPage() {
         viewMode={viewMode}
         setViewMode={setViewMode}
         totalTopicsCount={totalTopicsCount}
+        archivedTopicsCount={archivedTopics.length}
         totalQuestionsCount={totalQuestionsCount}
         selectedTopicIds={selectedTopicIds}
         onOpenCreateModal={() => {
           setEditTopicItem(null);
+          setCreateParentTopicId(undefined);
           setShowCreateModal(true);
         }}
         onExportCsv={handleExportCsv}
@@ -357,6 +455,7 @@ export default function AdminGrammarPage() {
       {activeMainTab === "topics" && (
         <GrammarTopicList
           topics={filteredTopics}
+          allTopics={activeTopics}
           viewMode={viewMode}
           selectedTopicIds={selectedTopicIds}
           onToggleSelectTopic={(id) =>
@@ -373,11 +472,52 @@ export default function AdminGrammarPage() {
           }
           onOpenTheoryModal={setTheoryTopic}
           onOpenEditTopic={setEditTopicItem}
+          onCreateChildTopic={(parentTopic) => {
+            setEditTopicItem(null);
+            setCreateParentTopicId(parentTopic.id);
+            setShowCreateModal(true);
+          }}
           onOpenAddQuestion={(topic) => setQuestionModal({ topic, question: null })}
           onOpenDeleteTopic={setDeleteConfirmTopic}
+          onArchiveTopic={setArchiveConfirmTopic}
         />
       )}
 
+      {activeMainTab === "archived" && (
+        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Chủ điểm đã lưu trữ</h2>
+            <p className="mt-1 text-xs text-slate-500">Nội dung vẫn được giữ nguyên trong cơ sở dữ liệu và không xuất hiện với học viên cho đến khi khôi phục.</p>
+          </div>
+          {archivedTopics.length === 0 ? (
+            <p className="rounded-2xl bg-slate-50 p-8 text-center text-xs text-slate-500">Chưa có chủ điểm nào được lưu trữ.</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {archivedTopics.map((topic) => (
+                <article key={topic.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-lg bg-slate-100 px-2 py-1 font-mono text-[11px] font-bold text-slate-700">{topic.code}</span>
+                      <span className="text-xs font-bold text-slate-900">{topic.titleVi || topic.title}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {topic.archivedAt ? `Lưu trữ ${new Date(topic.archivedAt).toLocaleString("vi-VN")}` : "Đã lưu trữ"}
+                      {" · "}{topic.questions.length} câu hỏi · {topic.examples.length} ví dụ · {topic.wordFamilyWords?.length || 0} từ Word Family
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRestoreTopic(topic)}
+                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    Khôi phục
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       {activeMainTab === "questions" && (
         <GrammarQuestionBankView
           topics={topics}
@@ -409,18 +549,21 @@ export default function AdminGrammarPage() {
       {/* Modals */}
       <GrammarTopicDetailModal
         topic={theoryTopic}
+        topics={activeTopics}
         onClose={() => setTheoryTopic(null)}
         audience="admin"
       />
 
       <GrammarTopicEditModal
-        key={editTopicItem?.id ?? (showCreateModal ? "create-topic" : "closed")}
+        key={editTopicItem?.id ?? (showCreateModal ? `create-topic-${createParentTopicId || "root"}` : "closed")}
         isOpen={showCreateModal || !!editTopicItem}
         editTopic={editTopicItem}
+        initialParentTopicId={createParentTopicId}
         availableTopics={topics}
         onClose={() => {
           setShowCreateModal(false);
           setEditTopicItem(null);
+          setCreateParentTopicId(undefined);
         }}
         onSave={handleSaveTopic}
       />
@@ -436,11 +579,19 @@ export default function AdminGrammarPage() {
       />
 
       <GrammarDeleteModal
+        key={deleteConfirmTopic?.id || "no-delete-topic"}
         deleteConfirmTopic={deleteConfirmTopic}
+        topics={topics}
         onClose={() => setDeleteConfirmTopic(null)}
         onConfirm={confirmDeleteTopic}
       />
 
+      <GrammarArchiveModal
+        key={archiveConfirmTopic?.id || "no-archive-topic"}
+        topic={archiveConfirmTopic}
+        onClose={() => setArchiveConfirmTopic(null)}
+        onConfirm={confirmArchiveTopic}
+      />
     </div>
   );
 }

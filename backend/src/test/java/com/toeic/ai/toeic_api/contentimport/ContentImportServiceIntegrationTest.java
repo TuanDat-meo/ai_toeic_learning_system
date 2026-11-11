@@ -3,18 +3,64 @@ package com.toeic.ai.toeic_api.contentimport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.toeic.ai.toeic_api.grammar.GrammarService;
 
 @SpringBootTest
 @Transactional
 class ContentImportServiceIntegrationTest {
     @Autowired
     private ContentImportService importService;
+
+    @Autowired
+    private GrammarService grammarService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void doesNotTreatDeletedGrammarTopicAsAnExistingImportDuplicate() {
+        String suffix = java.util.UUID.randomUUID().toString().replace("-", "");
+        String code = "IMPORT_DELETE_" + suffix;
+        String title = "Import deletion test " + suffix;
+        var file = new MockMultipartFile("file", "grammar.json", "application/json",
+                """
+                [{
+                  "code":"%s",
+                  "title":"%s",
+                  "englishTitle":"Import deletion test",
+                  "rule":"Noun + verb",
+                  "explanation":"A unique grammar test topic.",
+                  "status":"DRAFT"
+                }]
+                """.formatted(code, title).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        var initialPreview = previewGrammar(file);
+        assertThat(initialPreview.batch().validCount()).isEqualTo(1);
+        importService.publish(initialPreview.batch().id(), null);
+
+        String topicId = jdbcTemplate.queryForObject(
+                "SELECT id FROM grammar_topics WHERE code = ?", String.class, code);
+        grammarService.bulkDelete(java.util.List.of(topicId));
+
+        var afterDeletionPreview = previewGrammar(file);
+        assertThat(afterDeletionPreview.batch().validCount()).isEqualTo(1);
+        assertThat(afterDeletionPreview.batch().duplicateCount()).isZero();
+
+        var republished = importService.publish(afterDeletionPreview.batch().id(), null);
+        assertThat(republished.publishedCount()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM grammar_topics WHERE code = ?", Integer.class, code)).isEqualTo(1);
+
+        var activeDuplicatePreview = previewGrammar(file);
+        assertThat(activeDuplicatePreview.batch().duplicateCount()).isEqualTo(1);
+    }
 
     @Test
     void doesNotTreatAnUnpublishedVocabularyPreviewAsPublishedDuplicate() {
@@ -171,5 +217,9 @@ class ContentImportServiceIntegrationTest {
 
     private ContentImportService.BatchDetails previewVocabulary(MockMultipartFile file) {
         return importService.preview(ContentType.VOCABULARY, file, null, null, "Test Vocabulary");
+    }
+
+    private ContentImportService.BatchDetails previewGrammar(MockMultipartFile file) {
+        return importService.preview(ContentType.GRAMMAR, file, null, null, "Test Grammar");
     }
 }

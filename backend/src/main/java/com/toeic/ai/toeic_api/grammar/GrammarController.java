@@ -83,13 +83,20 @@ public class GrammarController {
     @GetMapping("/api/admin/grammar/topics")
     public List<GrammarService.GrammarTopic> adminListTopics(Authentication authentication) {
         UUID userId = extractUserId(authentication);
-        return grammarService.listTopics(userId);
+        return grammarService.listAdminTopics(userId);
     }
 
     @PostMapping("/api/admin/grammar/topics")
     @ResponseStatus(HttpStatus.CREATED)
     public GrammarService.GrammarTopic createTopic(@RequestBody GrammarService.CreateGrammarTopicRequest request) {
         return grammarService.createTopic(request);
+    }
+
+    @PostMapping("/api/admin/grammar/topics/with-new-parent")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarService.GrammarTopicHierarchy createTopicWithNewParent(
+            @RequestBody GrammarService.CreateGrammarTopicWithParentRequest request) {
+        return grammarService.createTopicWithNewParent(request);
     }
 
     @PostMapping("/api/admin/grammar/suggestions")
@@ -107,6 +114,30 @@ public class GrammarController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTopic(@PathVariable String id) {
         grammarService.deleteTopic(id);
+    }
+
+    @GetMapping("/api/admin/grammar/topics/{id}/lifecycle-impact")
+    public GrammarService.TopicLifecycleImpact getTopicLifecycleImpact(@PathVariable String id) {
+        return grammarService.getTopicLifecycleImpact(id);
+    }
+
+    @PostMapping("/api/admin/grammar/topics/{id}/delete")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTopic(
+            @PathVariable String id,
+            @RequestBody GrammarService.DeleteTopicRequest request) {
+        grammarService.deleteTopic(id, request);
+    }
+
+    @PostMapping("/api/admin/grammar/topics/{id}/archive")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void archiveTopic(@PathVariable String id) {
+        grammarService.archiveTopic(id);
+    }
+
+    @PostMapping("/api/admin/grammar/topics/{id}/restore")
+    public GrammarService.GrammarTopic restoreTopic(@PathVariable String id) {
+        return grammarService.restoreTopic(id);
     }
 
     @PostMapping("/api/admin/grammar/topics/{id}/questions")

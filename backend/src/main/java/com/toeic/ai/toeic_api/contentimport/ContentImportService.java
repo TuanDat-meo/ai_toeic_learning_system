@@ -306,6 +306,13 @@ public class ContentImportService {
     }
 
     @Transactional
+    public BatchDetails revalidateBatch(UUID batchId) {
+        ContentType type = requireEditableBatch(batchId);
+        refreshBatchPreview(batchId, type);
+        return getBatch(batchId, 0, PREVIEW_LIMIT);
+    }
+
+    @Transactional
     public void deleteBatch(UUID batchId) {
         List<EditableBatch> batches = jdbcTemplate.query(
                 "SELECT content_type, status FROM import_batches WHERE id = ? FOR UPDATE",
@@ -587,12 +594,29 @@ public class ContentImportService {
                 batchId);
         int publishedCount = 0;
         for (PublishableItem item : validItems) {
-            int inserted = jdbcTemplate.update(
-                    "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
-                            + "source_import_item_id, created_by) VALUES (?, ?, ?, ?::jsonb, ?, ?) "
-                            + "ON CONFLICT (content_type, dedupe_key) DO NOTHING",
-                    batch.contentType().name(), item.dedupeKey(), item.title(),
-                    toJson(item.normalizedData()), item.id(), publishedBy);
+            int inserted;
+            if (batch.contentType() == ContentType.GRAMMAR) {
+                inserted = jdbcTemplate.update(
+                        "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
+                                + "source_import_item_id, created_by) VALUES (?, ?, ?, ?::jsonb, ?, ?) "
+                                + "ON CONFLICT (content_type, dedupe_key) DO UPDATE SET "
+                                + "title = EXCLUDED.title, payload_json = EXCLUDED.payload_json, "
+                                + "source_import_item_id = EXCLUDED.source_import_item_id, "
+                                + "created_by = EXCLUDED.created_by, published_at = now() "
+                                + "WHERE NOT EXISTS (SELECT 1 FROM grammar_topics g "
+                                + "WHERE (NULLIF(EXCLUDED.payload_json ->> 'code', '') IS NOT NULL "
+                                + "AND g.code = EXCLUDED.payload_json ->> 'code') "
+                                + "OR lower(g.title) = lower(EXCLUDED.payload_json ->> 'title'))",
+                        batch.contentType().name(), item.dedupeKey(), item.title(),
+                        toJson(item.normalizedData()), item.id(), publishedBy);
+            } else {
+                inserted = jdbcTemplate.update(
+                        "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
+                                + "source_import_item_id, created_by) VALUES (?, ?, ?, ?::jsonb, ?, ?) "
+                                + "ON CONFLICT (content_type, dedupe_key) DO NOTHING",
+                        batch.contentType().name(), item.dedupeKey(), item.title(),
+                        toJson(item.normalizedData()), item.id(), publishedBy);
+            }
             if (inserted == 1) {
                 if (batch.contentType() == ContentType.GRAMMAR) {
                     grammarService.syncFromImportItem(item.normalizedData());
@@ -687,6 +711,23 @@ public class ContentImportService {
 
     private Map<String, UUID> findExistingContentIds(ContentType type,
                     Collection<ContentPayloadValidator.ValidationResult> validations, Collection<String> dedupeKeys) {
+                if (type == ContentType.GRAMMAR) {
+                    if (dedupeKeys.isEmpty()) return Map.of();
+                    return namedParameterJdbcTemplate.query(
+                            "SELECT ic.dedupe_key, ic.id FROM imported_content ic "
+                                    + "WHERE ic.content_type = 'GRAMMAR' AND ic.dedupe_key IN (:keys) "
+                                    + "AND EXISTS (SELECT 1 FROM grammar_topics g "
+                                    + "WHERE (NULLIF(ic.payload_json ->> 'code', '') IS NOT NULL "
+                                    + "AND g.code = ic.payload_json ->> 'code') "
+                                    + "OR lower(g.title) = lower(ic.payload_json ->> 'title'))",
+                            Map.of("keys", dedupeKeys),
+                            rs -> {
+                                Map<String, UUID> found = new java.util.HashMap<>();
+                                while (rs.next()) found.put(rs.getString("dedupe_key"),
+                                        rs.getObject("id", UUID.class));
+                                return found;
+                            });
+                }
                 Map<String, UUID> found = new java.util.HashMap<>(findContentIds(type, dedupeKeys));
                 if (type != ContentType.VOCABULARY) return found;
 
