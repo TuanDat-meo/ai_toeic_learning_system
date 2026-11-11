@@ -82,7 +82,7 @@ const SENTENCE_TRANSLATIONS: Record<string, string> = {
 /**
  * Từ điển tra cứu từ vựng cốt lõi TOEIC kèm đầy đủ phiên âm, từ loại, nghĩa và ví dụ
  */
-const TOEIC_VOCAB_DICT: Record<string, VocabListItem> = {
+export const TOEIC_VOCAB_DICT: Record<string, VocabListItem> = {
   "adjust": {
     word: "adjust",
     pos: "v.",

@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ExerciseCardData, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
+import {
+  ReadingVocabExtractorPanel,
+  type AppliedVocabEntry,
+} from "./ReadingVocabExtractorPanel";
+import { enrichInlineParsedVocab } from "@/lib/readingVocabExtractor";
+import { parseAdminReadingFile } from "@/lib/api/reading";
 import {
   X,
   Upload,
@@ -15,7 +21,103 @@ import {
   BookOpen,
   Download,
   Check,
+  Trash2,
+  Volume2,
+  Loader2,
 } from "lucide-react";
+
+function normalizeCsvHeader(raw: string): string {
+  return raw
+    .replace(/^\uFEFF/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function parseCsvRows(text: string): string[][] {
+  const cleanText = text.replace(/^\uFEFF/, "");
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < cleanText.length; i++) {
+    const ch = cleanText[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (cleanText[i + 1] === '"') {
+          currentField += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        currentField += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      currentRow.push(currentField.trim());
+      currentField = "";
+    } else if (ch === "\r" || ch === "\n") {
+      if (ch === "\r" && cleanText[i + 1] === "\n") i++;
+      currentRow.push(currentField.trim());
+      if (currentRow.some((cell) => cell.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentField = "";
+    } else {
+      currentField += ch;
+    }
+  }
+  currentRow.push(currentField.trim());
+  if (currentRow.some((cell) => cell.length > 0)) {
+    rows.push(currentRow);
+  }
+  return rows;
+}
+
+function parseBulkVocabToken(raw: string): VocabItem | null {
+  const clean = raw.replace(/^[\-\•\*\d\.]+\s*/, "").trim();
+  if (!clean) return null;
+  let word = "";
+  let pos = "n";
+  let ipa = "";
+  let meaning = "";
+
+  const ipaMatch = clean.match(/\/([^\/]+)\//);
+  if (ipaMatch) ipa = `/${ipaMatch[1].trim()}/`;
+  const posMatch = clean.match(/\((n|v|adj|adv|prep|conj)[^\)]*\)/i);
+  if (posMatch) pos = posMatch[1].toLowerCase();
+
+  const stripped = clean
+    .replace(/\(\s*\/[^\/]+\/\s*\)/g, "")
+    .replace(/\/([^\/]+)\//g, "")
+    .replace(/\((?:n|v|adj|adv|prep|conj)[^\)]*\)/gi, "")
+    .replace(/\(\s*\)/g, "")
+    .trim();
+  const split = stripped.split(/[\:\-\=]\s*(.+)/);
+  if (split.length >= 2) {
+    word = split[0].trim();
+    meaning = split[1].trim();
+  } else {
+    word = stripped;
+  }
+  word = word.replace(/[\(\)\[\]]/g, "").trim();
+  if (!word || !/^[a-zA-Z][a-zA-Z\s'\-]*$/.test(word)) return null;
+  return enrichInlineParsedVocab({ word, ipa, pos, meaning, level: "B1" });
+}
+
+function parseBulkVocabList(raw: string): VocabItem[] {
+  return raw
+    .split(/[,;]/)
+    .map((part) => parseBulkVocabToken(part))
+    .filter((item): item is VocabItem => item !== null);
+}
 
 export interface ReadingBulkImportModalProps {
   isOpen: boolean;
@@ -47,9 +149,85 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
 
   // Parsed Output
   const [parsedQuestions, setParsedQuestions] = useState<SampleQuestion[]>([]);
-  const [parsedVocabCount, setParsedVocabCount] = useState(0);
+  const [cardVocabList, setCardVocabList] = useState<VocabItem[]>([]);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const parsedVocabCount = useMemo(
+    () => cardVocabList.length + parsedQuestions.reduce((sum, q) => sum + (q.vocabList?.length || 0), 0),
+    [cardVocabList, parsedQuestions]
+  );
+
+  const existingVocabWords = useMemo(() => {
+    const words: string[] = [];
+    cardVocabList.forEach((v) => {
+      if (v.word?.trim()) words.push(v.word.trim().toLowerCase());
+    });
+    parsedQuestions.forEach((q) => {
+      (q.vocabList || []).forEach((v) => {
+        if (v.word?.trim()) words.push(v.word.trim().toLowerCase());
+      });
+    });
+    return words;
+  }, [cardVocabList, parsedQuestions]);
+
+  const playPreviewWord = (word: string) => {
+    if (!word || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = "en-US";
+    utterance.rate = 0.88;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleApplyExtractedVocab = (entries: AppliedVocabEntry[]) => {
+    if (entries.length === 0) return;
+    const cardEntries = entries.filter((e) => e.targetQuestionIndex === null || parsedQuestions.length === 0);
+    const qEntries = entries.filter((e) => e.targetQuestionIndex !== null && parsedQuestions.length > 0);
+
+    if (cardEntries.length > 0) {
+      setCardVocabList((prev) => {
+        const seen = new Set(prev.map((v) => v.word.trim().toLowerCase()));
+        const next = [...prev];
+        cardEntries.forEach(({ item }) => {
+          const k = item.word.trim().toLowerCase();
+          if (k && !seen.has(k)) {
+            seen.add(k);
+            next.push(item);
+          }
+        });
+        return next;
+      });
+    }
+
+    if (qEntries.length > 0) {
+      setParsedQuestions((prev) => {
+        const copy = prev.map((q) => ({ ...q, vocabList: [...(q.vocabList || [])] }));
+        qEntries.forEach(({ item, targetQuestionIndex }) => {
+          const idx = Math.min(Math.max(0, targetQuestionIndex ?? 0), copy.length - 1);
+          const seen = new Set((copy[idx].vocabList || []).map((v) => v.word.trim().toLowerCase()));
+          const k = item.word.trim().toLowerCase();
+          if (k && !seen.has(k)) {
+            copy[idx].vocabList = [...(copy[idx].vocabList || []), item];
+          }
+        });
+        return copy;
+      });
+    }
+  };
+
+  const handleRemoveCardVocab = (idx: number) => {
+    setCardVocabList((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleRemoveQuestionVocab = (qIdx: number, vIdx: number) => {
+    setParsedQuestions((prev) =>
+      prev.map((q, idx) =>
+        idx === qIdx ? { ...q, vocabList: (q.vocabList || []).filter((_, i) => i !== vIdx) } : q
+      )
+    );
+  };
 
   if (!isOpen) return null;
 
@@ -196,6 +374,7 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
 
     setErrorMsg(null);
     setSuccessMsg(null);
+    setCardVocabList([]);
 
     const lines = text.split(/\r?\n/).map((l) => l.trim());
     let extPassage = "";
@@ -207,6 +386,7 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
     const questions: SampleQuestion[] = [];
     let currentQ: Partial<SampleQuestion> | null = null;
     let currentVocabs: VocabItem[] = [];
+    const globalVocabs: VocabItem[] = [];
     let totalVocabCount = 0;
 
     const commitCurrentQ = () => {
@@ -350,34 +530,32 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
           continue;
         }
 
-        // Vocabulary
-        const vocabMatch = line.match(/^(?:từ vựng|vocab|vocabulary)[\:\s]+(.+)/i);
-        if (vocabMatch) {
-          const rawItems = vocabMatch[1].split(/[,;]/);
-          rawItems.forEach((raw) => {
-            const trimmed = raw.trim();
-            if (!trimmed) return;
-            const parts = trimmed.match(/^([a-zA-Z\s\-]+)(?:\s*\(([a-z]+)\))?[\:\-\=]\s*(.+)/);
-            if (parts) {
-              currentVocabs.push({
-                word: parts[1].trim(),
-                ipa: "/.../",
-                meaning: parts[3].trim(),
-                pos: parts[2] ? parts[2] : "n",
-                level: "B1",
-              });
-            } else {
-              currentVocabs.push({
-                word: trimmed,
-                ipa: "/.../",
-                meaning: "Từ vựng trọng tâm",
-                pos: "n",
-                level: "B1",
-              });
-            }
-          });
+        // Vocabulary inline
+        const vocabMatch = line.match(/^(?:từ vựng|vocab|vocabulary)\s*\:?\s*(.*)$/i);
+        if (vocabMatch && (lower.startsWith("từ vựng:") || lower.startsWith("vocab:") || lower.startsWith("vocabulary:"))) {
+          const payload = vocabMatch[1].trim();
+          if (payload) {
+            currentVocabs.push(...parseBulkVocabList(payload));
+          }
           continue;
         }
+      }
+
+      // Vocabulary bullet lines (outside passage sections)
+      if (readingMode !== "passage" && readingMode !== "passageVi" && (line.startsWith("-") || line.startsWith("•"))) {
+        const parsedItem = parseBulkVocabToken(line);
+        if (parsedItem) {
+          if (currentQ) currentVocabs.push(parsedItem);
+          else {
+            globalVocabs.push(parsedItem);
+            totalVocabCount++;
+          }
+          continue;
+        }
+      }
+      if (lower === "[từ vựng]" || lower === "từ vựng:" || lower === "[vocabulary]") {
+        readingMode = "none";
+        continue;
       }
 
       // Appending to passage
@@ -400,8 +578,8 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
       return;
     }
 
+    setCardVocabList(globalVocabs);
     setParsedQuestions(questions);
-    setParsedVocabCount(totalVocabCount);
 
     const hasExtPassage = !!extPassage || !!passageText.trim();
     if ((category === "part6" || category === "part7") && !hasExtPassage) {
@@ -411,42 +589,188 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
     }
   };
 
-  // Import từ file (JSON hoặc CSV hoặc TXT)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Import từ file (XLSX / CSV / JSON / TXT)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (!content) return;
+    const lowerName = file.name.toLowerCase();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsUploadingFile(true);
 
-      if (file.name.endsWith(".json")) {
+    try {
+      if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
+        const parsedCard = await parseAdminReadingFile(file);
+        setTitle(parsedCard.title);
+        setCategory(parsedCard.category);
+        if (parsedCard.tag) setTag(parsedCard.tag);
+        setPassageText(parsedCard.passageText || "");
+        setPassageTextVi(parsedCard.passageTextVi || "");
+        setCardVocabList(parsedCard.vocabList || []);
+        const loadedQs = parsedCard.sampleQuestions || [];
+        setParsedQuestions(loadedQs);
+        setSuccessMsg(`Đã nạp file Excel "${file.name}" gồm ${loadedQs.length} câu hỏi! ✨`);
+        return;
+      }
+
+      const content = await file.text();
+      if (!content.trim()) {
+        setErrorMsg("File tải lên không có nội dung.");
+        return;
+      }
+
+      if (lowerName.endsWith(".json")) {
         try {
-          const data = JSON.parse(content);
-          if (Array.isArray(data)) {
-            // Danh sách SampleQuestion
-            setParsedQuestions(data);
-            setSuccessMsg(`Đã nạp ${data.length} câu hỏi từ file JSON! 🎉`);
-          } else if (data.sampleQuestions && Array.isArray(data.sampleQuestions)) {
-            if (data.title) setTitle(data.title);
-            if (data.category) setCategory(data.category);
-            if (data.tag) setTag(data.tag);
-            if (data.passageText) setPassageText(data.passageText);
-            if (data.passageTextVi) setPassageTextVi(data.passageTextVi);
-            setParsedQuestions(data.sampleQuestions);
-            setSuccessMsg(`Đã nạp chuyên đề "${data.title || "Mới"}" với ${data.sampleQuestions.length} câu hỏi! 🎉`);
+          const rawJson = JSON.parse(content);
+          const root = Array.isArray(rawJson?.items) ? rawJson.items[0] : rawJson;
+          if (Array.isArray(root)) {
+            const firstObj = root[0] as Record<string, unknown> | undefined;
+            if (firstObj && (Array.isArray(firstObj.sampleQuestions) || Array.isArray(firstObj.questions))) {
+              const cardObj = firstObj as Record<string, unknown>;
+              if (typeof cardObj.title === "string") setTitle(cardObj.title);
+              if (typeof cardObj.category === "string") setCategory(cardObj.category as "part5" | "part6" | "part7" | "grammar");
+              if (typeof cardObj.tag === "string") setTag(cardObj.tag);
+              setPassageText(String(cardObj.passageText || cardObj.content || ""));
+              setPassageTextVi(String(cardObj.passageTextVi || ""));
+              const cardVocab = Array.isArray(cardObj.vocabList) ? (cardObj.vocabList as VocabItem[]) : [];
+              setCardVocabList(cardVocab);
+              const qs = ((cardObj.sampleQuestions || cardObj.questions) as SampleQuestion[]) || [];
+              setParsedQuestions(qs);
+              setSuccessMsg(`Đã nạp chuyên đề "${String(cardObj.title || file.name)}" với ${qs.length} câu hỏi! 🎉`);
+            } else {
+              setCardVocabList([]);
+              setParsedQuestions(root as SampleQuestion[]);
+              setSuccessMsg(`Đã nạp ${root.length} câu hỏi từ file JSON! 🎉`);
+            }
+          } else if (root && typeof root === "object") {
+            const cardObj = root as Record<string, unknown>;
+            const rawQs = Array.isArray(cardObj.sampleQuestions)
+              ? (cardObj.sampleQuestions as Record<string, unknown>[])
+              : Array.isArray(cardObj.questions)
+                ? (cardObj.questions as Record<string, unknown>[])
+                : [];
+            if (rawQs.length === 0) {
+              setErrorMsg("File JSON chưa có mảng câu hỏi (sampleQuestions / questions).");
+              return;
+            }
+            if (typeof cardObj.title === "string" && cardObj.title.trim()) setTitle(cardObj.title);
+            const rawCat = String(cardObj.category || cardObj.part || "").toLowerCase();
+            if (rawCat.includes("6")) setCategory("part6");
+            else if (rawCat.includes("7")) setCategory("part7");
+            else if (rawCat.includes("grammar")) setCategory("grammar");
+            else if (rawCat.includes("5")) setCategory("part5");
+            if (typeof cardObj.tag === "string") setTag(cardObj.tag);
+            setPassageText(String(cardObj.passageText || cardObj.content || cardObj.passage || ""));
+            setPassageTextVi(String(cardObj.passageTextVi || ""));
+            const loadedCardVocab = Array.isArray(cardObj.vocabList)
+              ? (cardObj.vocabList as VocabItem[])
+              : Array.isArray(cardObj.vocabulary)
+                ? (cardObj.vocabulary as VocabItem[])
+                : [];
+            setCardVocabList(loadedCardVocab);
+            const mappedQs: SampleQuestion[] = rawQs.map((q, idx) => {
+              let opts = ["", "", "", ""];
+              if (Array.isArray(q.options)) {
+                opts = [0, 1, 2, 3].map((i) => String((q.options as unknown[])[i] ?? ""));
+              } else if (q.options && typeof q.options === "object") {
+                const obj = q.options as Record<string, string>;
+                opts = [obj.A || "", obj.B || "", obj.C || "", obj.D || ""];
+              }
+              let correctIdx = typeof q.correctIndex === "number" ? q.correctIndex : -1;
+              if (correctIdx < 0 || correctIdx > 3) {
+                const letter = String(q.correctAnswer || "A").trim().toUpperCase();
+                correctIdx = Math.max(0, ["A", "B", "C", "D"].indexOf(letter));
+              }
+              return {
+                questionNum: String(q.questionNum ?? q.id ?? idx + 1),
+                question: String(q.question ?? q.questionText ?? ""),
+                bilingual: typeof q.bilingual === "string" ? q.bilingual : undefined,
+                options: opts,
+                optionMeanings: Array.isArray(q.optionMeanings) ? (q.optionMeanings as string[]) : undefined,
+                correctIndex: correctIdx,
+                explanation: String(q.explanation ?? ""),
+                vocabList: Array.isArray(q.vocabList) ? (q.vocabList as VocabItem[]) : [],
+              };
+            });
+            setParsedQuestions(mappedQs);
+            setSuccessMsg(`Đã nạp chuyên đề "${String(cardObj.title || "Mới")}" với ${mappedQs.length} câu hỏi! 🎉`);
           }
         } catch {
           setErrorMsg("File JSON không hợp lệ hoặc sai cấu trúc!");
         }
-      } else {
-        // Plain text hoặc CSV
-        setRawText(content);
-        handleParseText(content);
+        return;
       }
-    };
-    reader.readAsText(file, "UTF-8");
+
+      if (lowerName.endsWith(".csv")) {
+        const csvRows = parseCsvRows(content);
+        if (csvRows.length >= 2) {
+          const headers = csvRows[0].map(normalizeCsvHeader);
+          const colIdx = (aliases: string[]) => {
+            const exact = headers.findIndex((h) => aliases.some((a) => h === a));
+            return exact !== -1 ? exact : headers.findIndex((h) => aliases.some((a) => a.length >= 4 && h.includes(a)));
+          };
+          const idxQText = colIdx(["debaitienganh", "questiontext", "question", "debai"]);
+          if (idxQText >= 0) {
+            const idxNum = colIdx(["causo", "questionnum", "stt", "no"]);
+            const idxVi = colIdx(["bandichtiengviet", "bilingual", "translation", "dichcau", "dich"]);
+            const idxA = colIdx(["dapana", "optiona", "a"]);
+            const idxB = colIdx(["dapanb", "optionb", "b"]);
+            const idxC = colIdx(["dapanc", "optionc", "c"]);
+            const idxD = colIdx(["dapand", "optiond", "d"]);
+            const idxAns = colIdx(["dapandung", "correctanswer", "answer", "key"]);
+            const idxExp = colIdx(["giaithichchitiet", "giaithich", "explanation", "loigiai"]);
+            const idxVocab = colIdx(["tuvung", "vocab", "vocabulary"]);
+            const idxPassage = colIdx(["doanvan", "passagetext", "passage", "content"]);
+            const idxPassageVi = colIdx(["bandichdoanvan", "passagetextvi"]);
+
+            const csvQuestions: SampleQuestion[] = [];
+            let csvPassage = "";
+            let csvPassageVi = "";
+            csvRows.slice(1).forEach((cells, rIdx) => {
+              const qText = cells[idxQText] || "";
+              if (!qText) return;
+              if (idxPassage >= 0 && !csvPassage && cells[idxPassage]?.trim()) csvPassage = cells[idxPassage].trim();
+              if (idxPassageVi >= 0 && !csvPassageVi && cells[idxPassageVi]?.trim()) csvPassageVi = cells[idxPassageVi].trim();
+              const ansChar = (idxAns >= 0 ? cells[idxAns] || "A" : "A").trim().toUpperCase().slice(0, 1);
+              const ansIdx = Math.max(0, ["A", "B", "C", "D"].indexOf(ansChar));
+              const vocabRaw = idxVocab >= 0 ? cells[idxVocab] || "" : "";
+              csvQuestions.push({
+                questionNum: (idxNum >= 0 && cells[idxNum]) || String(101 + rIdx),
+                question: qText,
+                bilingual: idxVi >= 0 ? cells[idxVi] || "" : "",
+                options: [
+                  idxA >= 0 ? cells[idxA] || "" : "",
+                  idxB >= 0 ? cells[idxB] || "" : "",
+                  idxC >= 0 ? cells[idxC] || "" : "",
+                  idxD >= 0 ? cells[idxD] || "" : "",
+                ],
+                correctIndex: ansIdx,
+                explanation: idxExp >= 0 ? cells[idxExp] || "" : "",
+                vocabList: vocabRaw ? parseBulkVocabList(vocabRaw) : [],
+              });
+            });
+
+            if (csvQuestions.length > 0) {
+              if (csvPassage) setPassageText(csvPassage);
+              if (csvPassageVi) setPassageTextVi(csvPassageVi);
+              setCardVocabList([]);
+              setParsedQuestions(csvQuestions);
+              setSuccessMsg(`Đã nạp ${csvQuestions.length} câu hỏi từ file CSV "${file.name}"! 🎉`);
+              return;
+            }
+          }
+        }
+      }
+
+      setRawText(content);
+      handleParseText(content);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Không thể đọc file vừa chọn!");
+    } finally {
+      setIsUploadingFile(false);
+      e.target.value = "";
+    }
   };
 
   // Tải file mẫu CSV
@@ -502,6 +826,7 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
       wrongAnswers: 0,
       passageText: passageText.trim() || undefined,
       passageTextVi: passageTextVi.trim() || undefined,
+      ...(cardVocabList.length > 0 ? { vocabList: cardVocabList } : {}),
       theory: {
         summary: `Chuyên đề ${category.toUpperCase()} gồm ${parsedQuestions.length} câu hỏi chọn lọc có đáp án và giải thích chi tiết.`,
         rules: ["Nắm chắc dấu hiệu nhận biết ngữ pháp và từ vựng trọng tâm.", "Đọc kỹ đề và loại trừ phương án sai."],
@@ -541,9 +866,9 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6">
           {/* Metadata Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Tên bài đọc / Chuyên đề <span className="text-rose-500">*</span>
@@ -584,38 +909,38 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("paste")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer text-left ${
                   activeTab === "paste"
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                <ClipboardPaste className="w-4 h-4" />
+                <ClipboardPaste className="w-4 h-4 shrink-0" />
                 <span>1. Copy-Paste Văn Bản Đề Thi Trực Tiếp</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab("file")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer text-left ${
                   activeTab === "file"
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                <FileSpreadsheet className="w-4 h-4" />
+                <FileSpreadsheet className="w-4 h-4 shrink-0" />
                 <span>2. Tải Lên File (Excel / CSV / JSON)</span>
               </button>
             </div>
 
             {/* Quick Sample Presets */}
             {activeTab === "paste" && (
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-slate-400 font-medium">Dán nhanh mẫu:</span>
                 <button
                   type="button"
@@ -657,15 +982,15 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
           {activeTab === "paste" && (
             <div className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-blue-600" />
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                     <span>Dán toàn bộ văn bản đề thi vào đây (Copy từ Word, PDF, Web hoặc ETS):</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => handleParseText()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     <span>Phân tích văn bản ngay</span>
@@ -752,19 +1077,21 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
                   </p>
                 </div>
                 <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition cursor-pointer shadow-sm">
-                  <span>Chọn file từ máy tính</span>
+                  {isUploadingFile && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isUploadingFile ? "Đang xử lý file..." : "Chọn file từ máy tính"}</span>
                   <input
                     type="file"
-                    accept=".json,.csv,.txt"
+                    accept=".xlsx,.xls,.json,.csv,.txt"
+                    disabled={isUploadingFile}
                     onChange={handleFileUpload}
                     className="hidden"
                   />
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-blue-50/80 border border-blue-200">
-                <div className="flex items-center gap-3">
-                  <FileSpreadsheet className="w-5 h-5 text-blue-700" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-blue-50/80 border border-blue-200">
+                <div className="flex items-start sm:items-center gap-3">
+                  <FileSpreadsheet className="w-5 h-5 text-blue-700 shrink-0 mt-0.5 sm:mt-0" />
                   <div>
                     <p className="text-xs font-bold text-blue-950">Chưa có file mẫu Excel chuẩn?</p>
                     <p className="text-[11px] text-blue-700">
@@ -775,7 +1102,7 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
                 <button
                   type="button"
                   onClick={handleDownloadCsvTemplate}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-blue-300 text-xs font-bold text-blue-800 hover:bg-blue-50 transition cursor-pointer shadow-xs"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-blue-300 text-xs font-bold text-blue-800 hover:bg-blue-50 transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Tải file mẫu CSV</span>
@@ -799,11 +1126,25 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
             </div>
           )}
 
-          {/* Live Questions Preview */}
+          {/* Interactive Vocab Extractor from Passage & Questions */}
+          {(parsedQuestions.length > 0 || passageText.trim().length > 0) && (
+            <ReadingVocabExtractorPanel
+              passageText={passageText}
+              questions={parsedQuestions}
+              existingWords={existingVocabWords}
+              allowCardLevelTarget
+              defaultTargetQuestionIndex={parsedQuestions.length > 0 ? 0 : null}
+              compact
+              applyButtonLabel="Đưa từ đã chọn vào bản preview"
+              onApplyVocab={handleApplyExtractedVocab}
+            />
+          )}
+
+          {/* Live Questions & Vocab Preview */}
           {parsedQuestions.length > 0 && (
             <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-bold text-slate-900">
                     Bảng xem trước câu hỏi đã nhận diện ({parsedQuestions.length} câu)
                   </h3>
@@ -820,6 +1161,43 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
                   Kiểm tra câu hỏi trước khi lưu vào kho
                 </span>
               </div>
+
+              {cardVocabList.length > 0 && (
+                <div className="p-3 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-2">
+                  <div className="text-[11px] font-bold text-indigo-900">
+                    Từ vựng chung toàn bài ({cardVocabList.length} từ)
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cardVocabList.map((v, vIdx) => (
+                      <div
+                        key={`${v.word}-${vIdx}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-indigo-200 text-[11px] shadow-2xs"
+                      >
+                        <span className="font-bold text-indigo-800">{v.word}</span>
+                        {v.pos && <span className="text-slate-500">({v.pos})</span>}
+                        {v.ipa && <span className="font-mono text-slate-400 text-[10px]">{v.ipa}</span>}
+                        <span className="text-slate-700 font-medium">: {v.meaning}</span>
+                        <button
+                          type="button"
+                          onClick={() => playPreviewWord(v.word)}
+                          className="text-slate-400 hover:text-blue-600 cursor-pointer"
+                          title="Nghe phát âm"
+                        >
+                          <Volume2 className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCardVocab(vIdx)}
+                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                          title="Xóa từ này"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="max-h-72 overflow-y-auto space-y-2.5 rounded-2xl border border-slate-200 p-3 bg-slate-50/50">
                 {parsedQuestions.map((q, idx) => {
@@ -850,7 +1228,7 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
                       )}
 
                       {/* Options grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                         {q.options.map((opt, oIdx) => (
                           <div
                             key={oIdx}
@@ -872,6 +1250,42 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
                           <strong>💡 Lời giải:</strong> {q.explanation}
                         </p>
                       )}
+
+                      {/* Question Vocab List */}
+                      {q.vocabList && q.vocabList.length > 0 && (
+                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500 mr-0.5">
+                            Từ vựng ({q.vocabList.length}):
+                          </span>
+                          {q.vocabList.map((v, vIdx) => (
+                            <span
+                              key={`${v.word}-${vIdx}`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50/70 border border-blue-200 text-[11px] text-slate-800"
+                            >
+                              <strong className="text-blue-700">{v.word}</strong>
+                              {v.pos && <span className="text-slate-500">({v.pos})</span>}
+                              {v.ipa && <span className="font-mono text-slate-400 text-[10px]">{v.ipa}</span>}
+                              <span>: {v.meaning}</span>
+                              <button
+                                type="button"
+                                onClick={() => playPreviewWord(v.word)}
+                                className="text-slate-400 hover:text-blue-600 cursor-pointer"
+                                title="Nghe phát âm"
+                              >
+                                <Volume2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveQuestionVocab(idx, vIdx)}
+                                className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                                title="Xóa từ này"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -881,13 +1295,13 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80">
           <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <HelpCircle className="w-4 h-4 text-slate-400" />
+            <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
             <span>Mỗi câu đúng tương đương 5 điểm TOEIC theo thang điểm chuẩn.</span>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
             <button
               type="button"
               onClick={onClose}
@@ -899,13 +1313,13 @@ Từ vựng: encourage (v): khuyến khích, staff (n): nhân viên
               type="button"
               onClick={handleSaveToBank}
               disabled={parsedQuestions.length === 0}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition cursor-pointer shadow-md ${
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition cursor-pointer shadow-md whitespace-nowrap ${
                 parsedQuestions.length > 0
                   ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
                   : "bg-slate-300 cursor-not-allowed"
               }`}
             >
-              <Check className="w-4 h-4" />
+              <Check className="w-4 h-4 shrink-0" />
               <span>Lưu {parsedQuestions.length} câu vào Kho bài đọc</span>
             </button>
           </div>

@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { ExerciseCardData, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
+import { extractCardPassageBlocks } from "@/lib/readingPassageUtils";
 import {
   X,
   BookOpen,
@@ -44,9 +45,20 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
   const [playingRegion, setPlayingRegion] = useState<"UK" | "US" | null>(null);
   const [selectedVocabDetail, setSelectedVocabDetail] = useState<WordDetail | null>(null);
 
-  const handleOpenVocabDetail = (vocab: VocabItem | { word: string; pos?: string; meaning?: string }) => {
-    const detail = lookupWordDetail(vocab.word);
-    if (vocab.meaning && (!detail.contextMeaning || detail.contextMeaning.startsWith("Thuật ngữ"))) {
+  const handleOpenVocabDetail = (
+    vocab: VocabItem | { word: string; pos?: string; meaning?: string; ipa?: string; example?: string; exampleVi?: string }
+  ) => {
+    const detail = lookupWordDetail(vocab.word, {
+      meaning: vocab.meaning,
+      pos: vocab.pos,
+      ipa: "ipa" in vocab ? vocab.ipa : undefined,
+      exampleEn: "example" in vocab ? (typeof vocab.example === "string" ? vocab.example : vocab.example?.en) : undefined,
+      exampleVi: ("exampleVi" in vocab ? vocab.exampleVi : undefined) || ("example" in vocab && vocab.example && typeof vocab.example === "object" ? vocab.example.vi : undefined),
+    });
+    if (
+      vocab.meaning &&
+      (!detail.contextMeaning || detail.contextMeaning.includes("chưa có mục giải thích chi tiết"))
+    ) {
       detail.contextMeaning = vocab.meaning;
     }
     if (vocab.pos) {
@@ -78,19 +90,35 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
 
   const activeQuestion = questions[selectedQuestionIndex] || questions[0];
 
-  // Aggregate all vocabularies
+  // Aggregate all vocabularies (both card-level and per-question, deduplicated)
   const allVocabularies = useMemo(() => {
     const list: { item: VocabItem; qNum: string }[] = [];
+    const seen = new Set<string>();
+
+    (card.vocabList || []).forEach((item) => {
+      const key = item.word.trim().toLowerCase();
+      if (!key || seen.has(`card:${key}`)) return;
+      seen.add(`card:${key}`);
+      list.push({
+        item,
+        qNum: "Bài đọc",
+      });
+    });
+
     questions.forEach((q, qIdx) => {
+      const qNum = q.questionNum || String(100 + qIdx + 1);
       (q.vocabList || []).forEach((item) => {
+        const key = item.word.trim().toLowerCase();
+        if (!key || seen.has(`${qNum}:${key}`)) return;
+        seen.add(`${qNum}:${key}`);
         list.push({
           item,
-          qNum: q.questionNum || String(100 + qIdx + 1),
+          qNum,
         });
       });
     });
     return list;
-  }, [questions]);
+  }, [card.vocabList, questions]);
 
   // Audio Pronunciation Synth for UK / US
   const playWordAudio = (word: string, region: "UK" | "US") => {
@@ -105,11 +133,14 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
-  // Word count helper
+  const passageBlocks = useMemo(() => extractCardPassageBlocks(card), [card]);
+
+  // Word count helper across all genuine passage blocks (excluding placeholders)
   const passageWordCount = useMemo(() => {
-    if (!card.passageText) return 0;
-    return card.passageText.trim().split(/\s+/).filter(Boolean).length;
-  }, [card.passageText]);
+    return passageBlocks.reduce((acc, block) => {
+      return acc + block.text.trim().split(/\s+/).filter(Boolean).length;
+    }, 0);
+  }, [passageBlocks]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
@@ -120,14 +151,18 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider border ${
-                  card.category === "part5"
+                  card.category === "grammar"
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : card.category === "part5"
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : card.category === "part6"
                     ? "bg-purple-50 text-purple-700 border-purple-200"
                     : "bg-blue-50 text-blue-700 border-blue-200"
                 }`}
               >
-                {card.category === "part5"
+                {card.category === "grammar"
+                  ? "Ngữ pháp TOEIC • Grammar"
+                  : card.category === "part5"
                   ? "Part 5 • Incomplete Sentences"
                   : card.category === "part6"
                   ? "Part 6 • Text Completion"
@@ -328,17 +363,17 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
           {/* TAB 2: ĐOẠN VĂN ĐỌC (PASSAGE) - CHỈ CÓ Ở PART 6 & PART 7 */}
           {!isPart5 && activeTab === "passage" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-bold text-slate-900 text-sm">
                     Nội dung văn bản đọc ({card.category === "part6" ? "Part 6" : "Part 7"})
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold">
-                    {passageWordCount} từ
+                    {passageBlocks.length} đoạn • {passageWordCount} từ
                   </span>
                 </div>
 
-                {card.passageTextVi && (
+                {passageBlocks.some((b) => Boolean(b.textVi)) && (
                   <button
                     type="button"
                     onClick={() => setShowBilingualPassage(!showBilingualPassage)}
@@ -350,29 +385,41 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                 )}
               </div>
 
-              {card.passageText ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Bản tiếng Anh */}
-                  <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-2">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                      Tiếng Anh (Reading Passage):
-                    </span>
-                    <div className="whitespace-pre-line font-serif text-slate-800 leading-relaxed text-[13px] bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                      {card.passageText}
-                    </div>
-                  </div>
+              {passageBlocks.length > 0 ? (
+                <div className="space-y-4">
+                  {passageBlocks.map((block, bIdx) => (
+                    <div key={bIdx} className="rounded-2xl border border-slate-200 bg-slate-50/40 p-3.5 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-slate-800">{block.label}</span>
+                        {block.questionNums.length > 0 && (
+                          <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                            Câu {block.questionNums.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`grid grid-cols-1 ${showBilingualPassage && block.textVi ? "md:grid-cols-2" : ""} gap-3`}>
+                        <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            Tiếng Anh (English):
+                          </span>
+                          <div className="whitespace-pre-line font-serif text-slate-800 leading-relaxed text-[13px]">
+                            {block.text}
+                          </div>
+                        </div>
 
-                  {/* Bản tiếng Việt song ngữ */}
-                  {showBilingualPassage && (
-                    <div className="p-4 rounded-2xl bg-emerald-50/40 border border-emerald-200/80 space-y-2">
-                      <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">
-                        Bản dịch tiếng Việt (Bilingual):
-                      </span>
-                      <div className="whitespace-pre-line text-emerald-950 leading-relaxed text-[13px] bg-white p-4 rounded-xl border border-emerald-100 shadow-2xs">
-                        {card.passageTextVi || "Chưa có bản dịch tiếng Việt cho đoạn văn này."}
+                        {showBilingualPassage && block.textVi && (
+                          <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200/80 space-y-1.5">
+                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
+                              Bản dịch tiếng Việt:
+                            </span>
+                            <div className="whitespace-pre-line font-sans text-slate-700 leading-relaxed text-[13px]">
+                              {block.textVi}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               ) : (
                 <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-500">
@@ -564,7 +611,7 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
           {/* TAB 4: TỪ VỰNG CẦN HỌC */}
           {activeTab === "vocab" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
                 <span className="font-bold text-slate-900 text-sm">
                   Danh sách từ vựng liên kết ({allVocabularies.length} từ)
                 </span>
@@ -592,7 +639,7 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                                 </span>
                               )}
                               <span className="text-[10px] font-bold text-slate-400">
-                                Câu #{entry.qNum}
+                                {entry.qNum === "Bài đọc" ? "Chung bài đọc" : `Câu #${entry.qNum}`}
                               </span>
                             </div>
                             {item.ipa && (
@@ -759,7 +806,7 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
                     Họ từ vựng (Word Family - Phân biệt từ loại Part 5):
                   </span>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {selectedVocabDetail.wordFamily.map((wf, wfIdx) => (
                       <div
                         key={wfIdx}
@@ -802,7 +849,7 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
               {/* Từ đồng nghĩa & trái nghĩa */}
               {((selectedVocabDetail.synonyms && selectedVocabDetail.synonyms.length > 0) ||
                 (selectedVocabDetail.antonyms && selectedVocabDetail.antonyms.length > 0)) && (
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   {selectedVocabDetail.synonyms && selectedVocabDetail.synonyms.length > 0 && (
                     <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs space-y-1">
                       <span className="text-[10px] font-bold text-emerald-800 uppercase block">Đồng nghĩa:</span>
@@ -838,7 +885,7 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
         )}
 
         {/* FOOTER */}
-        <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -847,7 +894,7 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
             Đóng
           </button>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto justify-end">
             {onEditCard && (
               <button
                 type="button"

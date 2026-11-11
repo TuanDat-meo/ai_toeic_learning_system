@@ -338,6 +338,12 @@ export function recordQuestionAnswer(
  */
 export function resetItemProgress(key: string, fallbackTotal: number = 0): ItemProgress {
   const current = getItemProgress(key, fallbackTotal);
+  if (typeof window !== "undefined" && key.startsWith("reading-")) {
+    try {
+      const cardId = key.slice("reading-".length);
+      localStorage.removeItem(`toeic_reading_answers_${cardId}`);
+    } catch {}
+  }
   return saveItemProgress(key, 0, current.totalQuestions || fallbackTotal, undefined, 0, 0, [], current.savedCount);
 }
 
