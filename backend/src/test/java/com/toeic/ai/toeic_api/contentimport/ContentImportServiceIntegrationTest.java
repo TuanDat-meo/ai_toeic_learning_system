@@ -266,6 +266,6 @@ class ContentImportServiceIntegrationTest {
     }
 
     private ContentImportService.BatchDetails previewGrammar(MockMultipartFile file) {
-        return importService.preview(ContentType.GRAMMAR, file, null, null, "Test Grammar");
+        return importService.preview(ContentType.GRAMMAR, file, null);
     }
 }
