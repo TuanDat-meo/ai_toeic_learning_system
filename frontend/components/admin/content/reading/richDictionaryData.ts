@@ -22,6 +22,76 @@ export interface WordDetail {
 }
 
 export const RICH_TOEIC_DICTIONARY: Record<string, WordDetail> = {
+  safely: {
+    word: "safely",
+    usIpa: "/ˈseɪf.li/",
+    ukIpa: "/ˈseɪf.li/",
+    pos: "adv",
+    contextMeaning: "một cách an toàn, cẩn thận, không có rủi ro",
+    cardTabs: [
+      { id: "word", label: "Từ", en: "safely", vi: "một cách an toàn" },
+      { id: "colloc1", label: "Cụm", en: "arrive safely", vi: "đến nơi an toàn" },
+      { id: "colloc2", label: "Cụm", en: "stored safely", vi: "được bảo quản an toàn" },
+      { id: "sentence", label: "Câu", en: "The fragile equipment was transported safely to the warehouse.", vi: "Thiết bị dễ vỡ đã được vận chuyển an toàn đến kho hàng." },
+    ],
+    collocations: [
+      { phrase: "arrive safely", meaning: "đến nơi an toàn" },
+      { phrase: "stored safely", meaning: "được lưu trữ/bảo quản an toàn" },
+      { phrase: "operate safely", meaning: "vận hành một cách an toàn" },
+      { phrase: "handle safely", meaning: "xử lý an toàn" },
+    ],
+    synonyms: [
+      { word: "securely", meaning: "chắc chắn, an toàn" },
+      { word: "cautiously", meaning: "cẩn thận" },
+      { word: "harmlessly", meaning: "vô hại" },
+    ],
+    antonyms: [
+      { word: "dangerously", meaning: "nguy hiểm" },
+      { word: "hazardously", meaning: "đầy rủi ro" },
+    ],
+    toeicTip: "safely là trạng từ (Adverb) bổ nghĩa cho động từ hành động (arrive, deliver, store, install). Trong bài thi Part 5, sau ngoại động từ hoặc trước quá khứ phân từ V3/ed thường chọn trạng từ đuôi -ly như safely.",
+    wordFamily: [
+      { word: "safe", pos: "adj", meaning: "an toàn, không có nguy cơ" },
+      { word: "safely", pos: "adv", meaning: "một cách an toàn" },
+      { word: "safety", pos: "n", meaning: "sự an toàn, an ninh" },
+      { word: "save", pos: "v", meaning: "cứu, tiết kiệm, lưu giữ" },
+    ],
+    exampleEn: "All passengers are advised to buckle up so the airplane can land safely.",
+    exampleVi: "Tất cả hành khách được khuyến nghị thắt dây an toàn để máy bay có thể hạ cánh an toàn.",
+  },
+  safe: {
+    word: "safe",
+    usIpa: "/seɪf/",
+    ukIpa: "/seɪf/",
+    pos: "adj",
+    contextMeaning: "an toàn, chắc chắn, tin cậy",
+    cardTabs: [
+      { id: "word", label: "Từ", en: "safe", vi: "an toàn" },
+      { id: "colloc1", label: "Cụm", en: "safe place", vi: "nơi an toàn" },
+      { id: "sentence", label: "Câu", en: "Please keep all original receipts in a safe place.", vi: "Vui lòng giữ tất cả biên lai gốc ở một nơi an toàn." },
+    ],
+    collocations: [
+      { phrase: "safe place", meaning: "nơi an toàn" },
+      { phrase: "safe to use", meaning: "an toàn khi sử dụng" },
+      { phrase: "safe environment", meaning: "môi trường làm việc an toàn" },
+    ],
+    synonyms: [
+      { word: "secure", meaning: "yên tâm, chắc chắn" },
+      { word: "protected", meaning: "được bảo vệ" },
+    ],
+    antonyms: [
+      { word: "unsafe", meaning: "không an toàn" },
+      { word: "dangerous", meaning: "nguy hiểm" },
+    ],
+    toeicTip: "safe vừa là tính từ (an toàn) vừa là danh từ (két sắt). Đi với giới từ: safe from (an toàn khỏi cái gì).",
+    wordFamily: [
+      { word: "safe", pos: "adj", meaning: "an toàn" },
+      { word: "safely", pos: "adv", meaning: "một cách an toàn" },
+      { word: "safety", pos: "n", meaning: "sự an toàn" },
+    ],
+    exampleEn: "Please keep all original receipts in a safe place.",
+    exampleVi: "Vui lòng giữ tất cả biên lai gốc ở một nơi an toàn.",
+  },
   various: {
     word: "various",
     usIpa: "/ˈver.i.əs/",

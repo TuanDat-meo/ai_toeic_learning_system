@@ -241,6 +241,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   const [activeTab, setActiveTab] = useState<ModalTab>("info");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
+  const [partTransitionNotice, setPartTransitionNotice] = useState<{
+    fromPart: string;
+    toPart: string;
+    count: number;
+  } | null>(null);
 
   // Form State for "Thêm từ vựng mới" (Identical to VocabularyModals layout)
   const [vocabInputWord, setVocabInputWord] = useState("");
@@ -379,6 +384,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   // Apply a Preset
   const handleApplyPreset = (presetKey: "part5" | "part6" | "part7") => {
     const preset = PART_PRESETS[presetKey];
+    const prevCategory = cardFormCategory;
     setCardFormCategory(preset.category);
     setCardFormSubCategory(preset.subCategory);
     setCardFormTag(preset.tag);
@@ -390,8 +396,10 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     setCardFormTheoryRules(preset.rules.join("\n"));
     setCardFormTheoryExample(preset.example);
 
-    // Không tự động điền đoạn văn mẫu để ô nhập luôn trống cho người dùng tự dán bài đọc của mình!
-    // (Nếu người dùng muốn xem mẫu thì có nút 'Nạp bài đọc mẫu tham khảo' riêng trong Tab 2)
+    // Nếu đổi sang Part 5 mà đang đứng ở tab đoạn văn thì chuyển ngay về tab câu hỏi
+    if (preset.category === "part5" && activeTab === "passage") {
+      setActiveTab("questions");
+    }
 
     if (questions.length > 0 && !questions[0].question.trim()) {
       setCardFormSampleQuestions([
@@ -410,8 +418,63 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           vocabList: [],
         },
       ]);
+      setPartTransitionNotice(null);
+    } else if (prevCategory !== presetKey && questions.some((q) => q.question.trim().length > 0)) {
+      setPartTransitionNotice({
+        fromPart: prevCategory,
+        toPart: presetKey,
+        count: questions.filter((q) => q.question.trim().length > 0).length,
+      });
     }
     setErrorMsg(null);
+  };
+
+  // Tự động đánh số lại câu hỏi theo chuẩn Part (101+, 131+, 147+)
+  const handleRenumberQuestions = () => {
+    const startNum =
+      cardFormCategory === "part5" ? 101 : cardFormCategory === "part6" ? 131 : 147;
+    setCardFormSampleQuestions((prev) =>
+      prev.map((q, idx) => ({
+        ...q,
+        questionNum: String(startNum + idx),
+      }))
+    );
+  };
+
+  // Gộp các câu hỏi Part 5 thành đoạn văn Part 6 có mã chỗ trống [131]-[134]
+  const handleMergeQuestionsToPart6Passage = () => {
+    const filledQuestions = questions.filter((q) => q.question.trim().length > 0);
+    if (filledQuestions.length === 0) {
+      setErrorMsg("Chưa có nội dung câu hỏi nào để gộp thành đoạn văn!");
+      return;
+    }
+
+    const sentences = filledQuestions.map((q, idx) => {
+      const qNum = 131 + idx;
+      let s = q.question.trim();
+      if (s.includes("______") || /_{2,}/.test(s)) {
+        s = s.replace(/_{2,}/g, `[${qNum}]------`);
+      } else if (/\[\d+\]/.test(s)) {
+        s = s.replace(/\[\d+\]/g, `[${qNum}]`);
+      } else {
+        s = `${s} [${qNum}]------.`;
+      }
+      return s;
+    });
+
+    const mergedPassage = sentences.join(" ");
+    setCardFormPassageText(mergedPassage);
+
+    // Đánh số lại câu hỏi thành 131, 132...
+    setCardFormSampleQuestions((prev) =>
+      prev.map((q, idx) => ({
+        ...q,
+        questionNum: String(131 + idx),
+      }))
+    );
+
+    setActiveTab("passage");
+    setPartTransitionNotice(null);
   };
 
   // Question editing helpers
@@ -945,21 +1008,26 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <span>1. Thông tin bài đọc</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("passage")}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === "passage"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-slate-600 hover:bg-slate-200/60"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>2. Đoạn văn đọc (Passage)</span>
-            {cardFormPassageText.trim() && (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            )}
-          </button>
+{(cardFormCategory !== "part5" && cardFormCategory !== "grammar") && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("passage")}
+              className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === "passage"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-600 hover:bg-slate-200/60"
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>2. Đoạn văn đọc (Passage)</span>
+              <span className="text-rose-500 font-extrabold text-xs">*</span>
+              {cardFormPassageText.trim() ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Đã có bài đọc"></span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold">Bắt buộc</span>
+              )}
+            </button>
+          )}
 
           <button
             type="button"
@@ -971,7 +1039,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             }`}
           >
             <ListOrdered className="w-3.5 h-3.5" />
-            <span>3. Bộ câu hỏi &amp; Đáp án</span>
+            <span>{cardFormCategory === "part5" ? "2. Bộ câu hỏi & Đáp án" : "3. Bộ câu hỏi & Đáp án"}</span>
             <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px]">
               {questions.length} câu
             </span>
@@ -987,7 +1055,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             }`}
           >
             <BookMarked className="w-3.5 h-3.5" />
-            <span>4. Từ vựng cần học</span>
+            <span>{cardFormCategory === "part5" ? "3. Từ vựng cần học" : "4. Từ vựng cần học"}</span>
             {totalVocabCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 text-[10px]">
                 {totalVocabCount} từ
@@ -1021,6 +1089,63 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           {/* TAB 1: THÔNG TIN BÀI ĐỌC */}
           {activeTab === "info" && (
             <div className="space-y-4">
+              {/* THÔNG BÁO CHUYỂN ĐỔI PART */}
+              {partTransitionNotice && (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>
+                        Chuyển đổi phần thi ({partTransitionNotice.fromPart.toUpperCase()} ➔ {partTransitionNotice.toPart.toUpperCase()}):
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPartTransitionNotice(null)}
+                      className="text-[10px] text-amber-700 hover:underline cursor-pointer"
+                    >
+                      Bỏ qua
+                    </button>
+                  </div>
+                  <p className="text-xs text-amber-950 font-medium leading-relaxed">
+                    Hệ thống đã <strong>bảo toàn nguyên vẹn toàn bộ {partTransitionNotice.count} câu hỏi</strong> và phương án của bạn mà không bị mất.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <button
+                      type="button"
+                      onClick={handleRenumberQuestions}
+                      className="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-300 transition cursor-pointer flex items-center gap-1"
+                    >
+                      <ListOrdered className="w-3.5 h-3.5 text-amber-700" />
+                      <span>
+                        Đánh số lại theo chuẩn {partTransitionNotice.toPart.toUpperCase()} ({partTransitionNotice.toPart === "part5" ? "#101+" : partTransitionNotice.toPart === "part6" ? "#131+" : "#147+"})
+                      </span>
+                    </button>
+
+                    {partTransitionNotice.toPart === "part6" && (
+                      <button
+                        type="button"
+                        onClick={handleMergeQuestionsToPart6Passage}
+                        className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] shadow-2xs transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Gộp các câu thành đoạn văn Part 6 ([131]-[134])</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* THÔNG BÁO PART 5 ẨN ĐOẠN VĂN */}
+              {cardFormCategory === "part5" && (
+                <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc. Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
+                  </span>
+                </div>
+              )}
+
               {/* KHUÔN MẪU PART CHUẨN TOEIC */}
               <div className="space-y-2 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/50 via-indigo-50/30 to-purple-50/30 border border-blue-100/80">
                 <div className="flex items-center justify-between">
@@ -1247,7 +1372,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           )}
 
           {/* TAB 2: ĐOẠN VĂN ĐỌC (PASSAGE) & BẢN DỊCH SONG NGỮ */}
-          {activeTab === "passage" && (
+          {activeTab === "passage" && cardFormCategory !== "part5" && cardFormCategory !== "grammar" && (
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-200/90 text-xs space-y-1.5">
                 <div className="flex items-center gap-1.5 font-bold text-blue-900">
@@ -1257,7 +1382,21 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 <p className="text-slate-600 text-[11px] leading-relaxed">
                   Khi học viên bắt đầu luyện tập, đoạn văn đọc sẽ hiển thị ở <strong>khung bên trái</strong>. Học viên có thể tra cứu nhanh từ điển hoặc bật nút <strong>&quot;Dịch song ngữ&quot;</strong> để xem bản dịch tiếng Việt tương ứng.
                 </p>
-                {cardFormCategory === "part6" && (
+                {cardFormCategory === "part6" && questions.length > 0 && questions.some((q) => q.question.trim().length > 0) && (
+                <button
+                  type="button"
+                  onClick={handleMergeQuestionsToPart6Passage}
+                  className="w-full p-3 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 text-purple-900 font-bold text-xs flex items-center justify-between transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span>Nhét {questions.filter((q) => q.question.trim().length > 0).length} câu hỏi hiện có vào đoạn văn Part 6 (tự động tạo [131]-[134])</span>
+                  </div>
+                  <span className="text-[10px] bg-purple-200 text-purple-950 px-2.5 py-1 rounded-lg">1-Click gộp</span>
+                </button>
+              )}
+
+              {cardFormCategory === "part6" && (
                   <div className="p-2 rounded-xl bg-purple-50 text-purple-900 border border-purple-200 text-[11px] font-medium">
                     📌 <strong>Mẹo Part 6:</strong> Hãy chèn các mã <code className="bg-purple-200 px-1 py-0.5 rounded font-bold">[131]</code>, <code className="bg-purple-200 px-1 py-0.5 rounded font-bold">[132]</code>, <code className="bg-purple-200 px-1 py-0.5 rounded font-bold">[133]</code>, <code className="bg-purple-200 px-1 py-0.5 rounded font-bold">[134]</code> vào các vị trí cần điền trong đoạn văn để giao diện tự đánh dấu chỗ trống chuẩn ETS!
                   </div>
@@ -1365,6 +1504,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleRenumberQuestions}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                    title="Tự động đánh số lại câu hỏi theo chuẩn Part hiện tại"
+                  >
+                    <ListOrdered className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Đánh số ({cardFormCategory === "part5" ? "#101+" : cardFormCategory === "part6" ? "#131+" : "#147+"})</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleAddQuestion}
