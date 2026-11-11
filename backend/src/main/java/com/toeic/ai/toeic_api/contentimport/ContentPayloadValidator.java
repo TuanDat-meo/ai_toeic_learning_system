@@ -378,7 +378,7 @@ public class ContentPayloadValidator {
 
     private void normalizeJsonObjectField(JsonNode raw, ObjectNode out, String field, List<String> errors) {
         JsonNode value = raw.get(field);
-        if (value == null || value.isNull()) return;
+        if (value == null || value.isNull() || (value.isTextual() && value.asText().isBlank())) return;
         JsonNode object = value;
         if (value.isTextual()) {
             try {
@@ -671,27 +671,6 @@ public class ContentPayloadValidator {
             return;
         }
         out.set(field, array);
-    }
-
-    private void normalizeJsonObjectField(JsonNode raw, ObjectNode out, String field, List<String> errors) {
-        JsonNode value = raw.get(field);
-        if (value == null || value.isNull() || (value.isTextual() && value.asText().isBlank())) {
-            return;
-        }
-        JsonNode obj = value;
-        if (value.isTextual()) {
-            try {
-                obj = objectMapper.readTree(value.asText().trim());
-            } catch (Exception exception) {
-                errors.add("Trường \"" + field + "\" phải là JSON object hợp lệ.");
-                return;
-            }
-        }
-        if (!obj.isObject()) {
-            errors.add("Trường \"" + field + "\" phải là một object.");
-            return;
-        }
-        out.set(field, obj);
     }
 
     private void normalizeOptions(JsonNode raw, ObjectNode out, List<String> errors) {
