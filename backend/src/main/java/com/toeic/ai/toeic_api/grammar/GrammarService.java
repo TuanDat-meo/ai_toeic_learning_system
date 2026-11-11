@@ -373,6 +373,7 @@ public class GrammarService {
         TopicLifecycleImpact impact = loadTopicLifecycleImpact(id);
         String action = request == null || request.childAction() == null
                 ? "NONE" : request.childAction().trim().toUpperCase(Locale.ROOT);
+        String targetParentId = request == null ? null : request.targetParentId();
         if (impact.childCount() > 0) {
             if (!"ROOTS".equals(action) && !"MOVE".equals(action)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -381,7 +382,7 @@ public class GrammarService {
             }
             String destinationId = null;
             if ("MOVE".equals(action)) {
-                destinationId = blankToNull(request.targetParentId());
+                destinationId = blankToNull(targetParentId);
                 if (destinationId == null) {
                     throw badRequest("Cần chọn chủ điểm cha đích.");
                 }

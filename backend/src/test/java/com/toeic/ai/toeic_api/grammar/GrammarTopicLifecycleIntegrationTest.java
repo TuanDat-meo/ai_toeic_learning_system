@@ -3,6 +3,7 @@ package com.toeic.ai.toeic_api.grammar;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -119,14 +120,10 @@ class GrammarTopicLifecycleIntegrationTest {
         assertThat(parentOf(childId)).isNull();
         assertThat(statusOf(childId)).isEqualTo("PUBLISHED");
         assertThat(parentOf(grandchildId)).isEqualTo(childId);
-        assertThat(grammarService.listTopics(null).stream().map(GrammarService.GrammarTopic::id))
-                .doesNotContain(parentId)
-                .contains(childId);
-        assertThat(grammarService.listAdminTopics(null).stream()
-                .filter(topic -> topic.id().equals(parentId))
-                .findFirst()
-                .orElseThrow()
-                .status()).isEqualTo("ARCHIVED");
+        List<GrammarService.GrammarTopic> activeTopics = grammarService.listTopics(null);
+        assertThat(containsTopic(activeTopics, parentId)).isFalse();
+        assertThat(containsTopic(activeTopics, childId)).isTrue();
+        assertThat(containsTopicWithStatus(grammarService.listAdminTopics(null), parentId, "ARCHIVED")).isTrue();
         assertThat(jdbc.queryForObject("SELECT archived_at IS NOT NULL FROM grammar_topics WHERE id = ?",
                 Boolean.class, parentId)).isTrue();
         assertThat(jdbc.queryForObject("SELECT questions::text FROM grammar_topics WHERE id = ?",
@@ -195,7 +192,7 @@ class GrammarTopicLifecycleIntegrationTest {
     }
 
     private String createTopic(String label, String parentId) {
-        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 24);
         String id = "lifecycle-" + suffix;
         jdbc.update("""
                 INSERT INTO grammar_topics
@@ -221,6 +218,25 @@ class GrammarTopicLifecycleIntegrationTest {
 
     private String statusOf(String id) {
         return jdbc.queryForObject("SELECT status FROM grammar_topics WHERE id = ?", String.class, id);
+    }
+
+    private boolean containsTopic(List<GrammarService.GrammarTopic> topics, String topicId) {
+        for (GrammarService.GrammarTopic topic : topics) {
+            if (topic != null && topicId.equals(topic.id())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsTopicWithStatus(
+            List<GrammarService.GrammarTopic> topics, String topicId, String expectedStatus) {
+        for (GrammarService.GrammarTopic topic : topics) {
+            if (topic != null && topicId.equals(topic.id()) && expectedStatus.equals(topic.status())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String foreignKeyDeleteAction(String constraintName) {
