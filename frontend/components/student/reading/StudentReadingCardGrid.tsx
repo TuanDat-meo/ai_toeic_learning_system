@@ -30,6 +30,20 @@ function StudentReadingCardItem({
   const fallbackTotal = card.totalQuestions || 10;
   const progress = useItemProgress(`reading-${card.id}`, fallbackTotal);
   const completed = Math.max(progress.completedQuestions, card.studiedQuestions || 0);
+  const computedVocabCount = React.useMemo(() => {
+    const seen = new Set<string>();
+    (card.vocabList || []).forEach((v) => {
+      if (v.word?.trim()) seen.add(v.word.trim().toLowerCase());
+    });
+    (card.sampleQuestions || []).forEach((q) => {
+      (q.vocabList || []).forEach((v) => {
+        if (v.word?.trim()) seen.add(v.word.trim().toLowerCase());
+      });
+    });
+    return seen.size > 0
+      ? seen.size
+      : (card as { savedVocabCount?: number }).savedVocabCount ?? 2;
+  }, [card]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
@@ -58,7 +72,7 @@ function StudentReadingCardItem({
           <StudentCardProgressAction
             progressKey={`reading-${card.id}`}
             totalQuestions={card.totalQuestions || 30}
-            savedCount={(card as any).savedVocabCount || 2}
+            savedCount={computedVocabCount}
             actionLabel="Học ngay"
             onStart={(nextIdx) => onStartPractice(card, nextIdx, false)}
             onRedoWrong={() => onStartPractice(card, 0, true)}

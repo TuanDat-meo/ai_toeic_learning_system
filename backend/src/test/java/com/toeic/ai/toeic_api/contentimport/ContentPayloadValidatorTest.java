@@ -305,4 +305,41 @@ class ContentPayloadValidatorTest {
         assertThat(result.normalizedData().path("examples").get(0).path("analysis").asText())
                 .contains("danh từ");
     }
+
+    @Test
+    void normalizesReadingPayloadWithPassagesTheorySampleQuestionsAndVocabularyAliases() throws Exception {
+        var raw = new ObjectMapper().readTree("""
+                {
+                  "id": "rc-part7-test",
+                  "title": "  Quarterly Shipping Update  ",
+                  "category": "part7",
+                  "subtitle": "  Email & Invoice  ",
+                  "passages": [{"label": "Email", "text": "Your shipment has been dispatched."}],
+                  "passageTextVi": "Lô hàng của bạn đã được gửi đi.",
+                  "sampleQuestions": [
+                    {
+                      "questionNum": "153",
+                      "question": "What is confirmed about the order?",
+                      "options": ["It was shipped", "It was canceled", "It is delayed", "It needs payment"],
+                      "correctIndex": 0
+                    }
+                  ],
+                  "theory": {"summary": "Đọc tiêu đề và dòng đầu tiên email."},
+                  "vocabulary": [{"word": "dispatch", "pos": "v", "meaning": "gửi đi"}]
+                }
+                """);
+
+        validator.validateFileShape(ContentType.READING, List.of(new ParsedImportRow(1, raw)));
+        var result = validator.validate(ContentType.READING, raw);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.normalizedData().path("id").asText()).isEqualTo("rc-part7-test");
+        assertThat(result.normalizedData().path("part").asText()).isEqualTo("PART_7");
+        assertThat(result.normalizedData().path("content").asText()).isEqualTo("Your shipment has been dispatched.");
+        assertThat(result.normalizedData().path("subtitle").asText()).isEqualTo("Email & Invoice");
+        assertThat(result.normalizedData().path("questions")).hasSize(1);
+        assertThat(result.normalizedData().path("theory").path("summary").asText()).contains("tiêu đề");
+        assertThat(result.normalizedData().path("vocabList")).hasSize(1);
+        assertThat(result.normalizedData().path("vocabList").get(0).path("word").asText()).isEqualTo("dispatch");
+    }
 }

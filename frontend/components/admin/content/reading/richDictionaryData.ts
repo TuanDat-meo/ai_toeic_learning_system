@@ -1,3 +1,5 @@
+import { CURATED_TOEIC_VOCAB } from "@/lib/toeicVocabDetailEnricher";
+
 export interface WordFamilyItem {
   word: string;
   pos: string; // "v", "n", "adj", "adv"
@@ -548,60 +550,118 @@ export const RICH_TOEIC_DICTIONARY: Record<string, WordDetail> = {
   },
 };
 
+export interface WordFallbackMeta {
+  pos?: string;
+  meaning?: string;
+  ipa?: string;
+  exampleEn?: string;
+  exampleVi?: string;
+}
+
+function findDictionaryKey<T>(dict: Record<string, T>, clean: string): T | undefined {
+  if (!clean) return undefined;
+  if (dict[clean]) return dict[clean];
+  const candidates = [
+    clean.endsWith("ies") ? clean.slice(0, -3) + "y" : "",
+    clean.endsWith("es") ? clean.slice(0, -2) : "",
+    clean.endsWith("s") ? clean.slice(0, -1) : "",
+    clean.endsWith("ied") ? clean.slice(0, -3) + "y" : "",
+    clean.endsWith("ed") ? clean.slice(0, -2) : "",
+    clean.endsWith("ed") ? clean.slice(0, -1) : "",
+    clean.endsWith("ing") ? clean.slice(0, -3) : "",
+    clean.endsWith("ing") ? clean.slice(0, -3) + "e" : "",
+  ].filter(Boolean);
+  for (const c of candidates) {
+    if (dict[c]) return dict[c];
+  }
+  return undefined;
+}
+
 /**
- * Intelligent helper to get or synthesize rich lookup data for any TOEIC word
+ * Look up rich dictionary entry from RICH_TOEIC_DICTIONARY and CURATED_TOEIC_VOCAB
+ * without synthesizing fake derivatives, synonyms, or placeholder example sentences.
  */
-export function lookupWordDetail(rawWord: string): WordDetail {
-  const clean = rawWord.trim().toLowerCase().replace(/[.,!?:;"'()[\]{}—-]/g, "");
-  
-  if (RICH_TOEIC_DICTIONARY[clean]) {
-    return RICH_TOEIC_DICTIONARY[clean];
+export function lookupWordDetail(rawWord: string, fallbackMeta?: WordFallbackMeta): WordDetail {
+  const displayWord = rawWord.trim();
+  const clean = displayWord.toLowerCase().replace(/[.,!?:;"'()[\]{}—]/g, "");
+
+  const richHit = findDictionaryKey(RICH_TOEIC_DICTIONARY, clean);
+  if (richHit) {
+    return richHit;
   }
 
-  // Singular form fallback (e.g. issues -> issue, trends -> trend)
-  if (clean.endsWith("s") && RICH_TOEIC_DICTIONARY[clean.slice(0, -1)]) {
-    return RICH_TOEIC_DICTIONARY[clean.slice(0, -1)];
+  const curatedHit = findDictionaryKey(CURATED_TOEIC_VOCAB, clean);
+  if (curatedHit) {
+    const word = curatedHit.word || clean || displayWord;
+    const pos = curatedHit.pos || fallbackMeta?.pos || "n";
+    const meaning = curatedHit.meaning || fallbackMeta?.meaning || "Chưa có định nghĩa chi tiết";
+    const ipa = curatedHit.ipa || fallbackMeta?.ipa || `/${word}/`;
+    const collocations = (curatedHit.collocations || []).map((c) => ({
+      phrase: c.en,
+      meaning: c.vi,
+    }));
+    const synonyms = (curatedHit.synonyms || []).map((s) => ({
+      word: s.en,
+      meaning: s.vi,
+    }));
+    const exampleEn = curatedHit.example?.en || fallbackMeta?.exampleEn;
+    const exampleVi = curatedHit.example?.vi || fallbackMeta?.exampleVi;
+    const cardTabs: { id: string; label: string; en: string; vi: string }[] = [
+      { id: "word", label: "Từ", en: word, vi: meaning },
+    ];
+    if (collocations[0]) {
+      cardTabs.push({ id: "colloc1", label: "Cụm", en: collocations[0].phrase, vi: collocations[0].meaning });
+    }
+    if (collocations[1]) {
+      cardTabs.push({ id: "colloc2", label: "Cụm", en: collocations[1].phrase, vi: collocations[1].meaning });
+    }
+    if (exampleEn) {
+      cardTabs.push({ id: "sentence", label: "Câu", en: exampleEn, vi: exampleVi || meaning });
+    }
+
+    return {
+      word,
+      tag: curatedHit.level,
+      usIpa: ipa,
+      ukIpa: ipa,
+      pos,
+      contextMeaning: meaning,
+      cardTabs,
+      collocations,
+      synonyms,
+      toeicTip: curatedHit.explanation,
+      exampleEn,
+      exampleVi,
+    };
   }
 
-  // Generate a smart, coherent fallback for other words
-  const isVerb = clean.endsWith("ed") || clean.endsWith("ing") || clean.endsWith("ate") || clean.endsWith("ize");
-  const isAdj = clean.endsWith("ful") || clean.endsWith("ive") || clean.endsWith("able") || clean.endsWith("ous");
-  const isAdv = clean.endsWith("ly");
-  const pos = isAdv ? "adv" : isAdj ? "adj" : isVerb ? "v" : "n";
+  const fallbackPos = fallbackMeta?.pos || "n";
+  const fallbackMeaning =
+    fallbackMeta?.meaning ||
+    `Từ vựng "${clean || displayWord}" chưa có mục giải thích chi tiết trong từ điển TOEIC.`;
+  const fallbackIpa = fallbackMeta?.ipa || `/${clean || displayWord}/`;
+  const cardTabs: { id: string; label: string; en: string; vi: string }[] = [
+    { id: "word", label: "Từ", en: clean || displayWord, vi: fallbackMeaning },
+  ];
+  if (fallbackMeta?.exampleEn) {
+    cardTabs.push({
+      id: "sentence",
+      label: "Câu",
+      en: fallbackMeta.exampleEn,
+      vi: fallbackMeta.exampleVi || fallbackMeaning,
+    });
+  }
 
   return {
-    word: clean || rawWord.trim(),
-    usIpa: `/${clean}/`,
-    ukIpa: `/${clean}/`,
-    pos: pos,
-    contextMeaning: `Thuật ngữ TOEIC: "${clean}" (ngữ cảnh bài đọc/câu hỏi)`,
-    cardTabs: [
-      { id: "word", label: "Từ", en: clean, vi: `Từ vựng "${clean}" trong kỳ thi TOEIC` },
-      { id: "colloc1", label: "Cụm", en: `standard ${clean}`, vi: `cụm từ tiêu chuẩn với ${clean}` },
-      { id: "colloc2", label: "Cụm", en: `${clean} management`, vi: `quản lý/vận hành liên quan ${clean}` },
-      { id: "sentence", label: "Câu", en: `The specialist reviewed the ${clean} carefully.`, vi: `Chuyên viên đã kiểm tra kỹ lưỡng ${clean}.` },
-    ],
-    collocations: [
-      { phrase: `key ${clean}`, meaning: `yếu tố cốt lõi liên quan ${clean}` },
-      { phrase: `manage ${clean}`, meaning: `xử lý, điều hành ${clean}` },
-      { phrase: `effective ${clean}`, meaning: `áp dụng ${clean} hiệu quả` },
-    ],
-    synonyms: [
-      { word: "term", meaning: "thuật ngữ" },
-      { word: "element", meaning: "thành tố" },
-      { word: "factor", meaning: "nhân tố" },
-    ],
-    antonyms: [
-      { word: "opposite", meaning: "yếu tố đối lập" },
-      { word: "counterpart", meaning: "bản đối ứng" },
-    ],
-    toeicTip: `Lưu ý vị trí ngữ pháp của "${clean}" (${pos}) trong câu để chọn đúng dạng từ trong bài thi Part 5 & Part 6.`,
-    wordFamily: [
-      { word: clean, pos: pos, meaning: `dạng gốc của từ` },
-      { word: `${clean}ing`, pos: "n", meaning: `dạng danh động từ` },
-      { word: `${clean}ed`, pos: "adj", meaning: `dạng quá khứ/tính từ` },
-    ],
-    exampleEn: `Understanding "${clean}" helps you accurately choose the correct answer in TOEIC tests.`,
-    exampleVi: `Nắm rõ "${clean}" giúp bạn định vị đáp án chính xác trong bài thi TOEIC.`,
+    word: clean || displayWord,
+    usIpa: fallbackIpa,
+    ukIpa: fallbackIpa,
+    pos: fallbackPos,
+    contextMeaning: fallbackMeaning,
+    cardTabs,
+    collocations: [],
+    synonyms: [],
+    exampleEn: fallbackMeta?.exampleEn,
+    exampleVi: fallbackMeta?.exampleVi,
   };
 }

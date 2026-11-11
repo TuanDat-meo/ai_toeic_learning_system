@@ -90,7 +90,7 @@ public class ContentImportService {
         String fileName = safeFileName(file.getOriginalFilename());
         String ext = fileExtension(fileName);
         List<ParsedImportRow> rows;
-        if (Set.of("json", "csv", "xlsx").contains(ext)) {
+        if (Set.of("json", "csv", "xlsx", "xls").contains(ext)) {
             rows = fileParser.parse(file, type);
         } else if (uploadService != null && recognizer != null) {
             // Unstructured file (pdf, doc, docx, txt, md, image...)
@@ -801,7 +801,7 @@ public class ContentImportService {
         String extension = fileExtension(fileName);
         return switch (extension) {
             case "csv" -> "CSV";
-            case "xlsx" -> "EXCEL";
+            case "xlsx", "xls" -> "EXCEL";
             case "json" -> "JSON";
             case "pdf" -> "PDF";
             case "doc", "docx" -> "WORD";

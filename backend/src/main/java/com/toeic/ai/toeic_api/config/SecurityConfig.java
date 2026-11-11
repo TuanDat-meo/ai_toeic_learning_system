@@ -88,7 +88,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
                             "/api/admin/announcements", "/api/admin/announcements/**",
                             "/api/admin/settings", "/api/admin/settings/**",
-                            "/api/admin/mock-tests/**")
+                            "/api/admin/mock-tests/**", "/api/admin/reading/**")
                             .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers(HttpMethod.POST, "/api/admin/data/import/preview")
                             .hasAnyRole("ADMIN", "TEACHER")

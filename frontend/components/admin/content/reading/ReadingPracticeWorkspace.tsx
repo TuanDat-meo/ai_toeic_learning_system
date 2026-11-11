@@ -1,7 +1,8 @@
 "use client";
 
 import { expandReadingQuestions } from "@/lib/toeicQuestionExpander";
-import { recordQuestionAnswer, getItemProgress, getRedoWrongQuestions, saveItemProgress } from "@/lib/practiceProgress";
+import { recordQuestionAnswer, getItemProgress, getRedoWrongQuestions, saveItemProgress, resetItemProgress } from "@/lib/practiceProgress";
+import { getPassageFingerprint, isPlaceholderPassageText } from "@/lib/readingPassageUtils";
 
 import React, { useState, useMemo, useEffect } from "react";
 import { ExerciseCardData, ReadingSubPassage, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
@@ -82,10 +83,21 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   }, [fullQuestions, isRedoWrongOnly, card]);
   // Group questions by passage (for Part 6, Part 7) or individual questions (for Part 5)
   const passageGroups: PassageGroup[] = useMemo(() => {
+    const isStandaloneSentenceMode = card.category === "part5" || card.category === "grammar";
+    const cardPassagesValid = (card.passages || []).filter((p) => !isPlaceholderPassageText(p.text));
+    const cardTextValid = !isPlaceholderPassageText(card.passageText) ? card.passageText : undefined;
+    const cardTextViValid = !isPlaceholderPassageText(card.passageTextVi) ? card.passageTextVi : undefined;
+
     const hasPassages =
-      activeQuestions.some((q) => !!q.passageText || (q.passages && q.passages.length > 0)) ||
-      !!card.passageText ||
-      (card.passages && card.passages.length > 0);
+      !isStandaloneSentenceMode &&
+      (activeQuestions.some(
+        (q) =>
+          !isPlaceholderPassageText(q.passageText) ||
+          Boolean(q.passages && q.passages.some((p) => !isPlaceholderPassageText(p.text)))
+      ) ||
+        Boolean(cardTextValid) ||
+        cardPassagesValid.length > 0);
+
     if (!hasPassages) {
       return activeQuestions.map((q, idx) => ({
         id: `q-${idx}`,
@@ -98,21 +110,24 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     let curr: PassageGroup | null = null;
 
     activeQuestions.forEach((q, idx) => {
-      const pKey =
-        q.passageTitle ||
-        q.passageText ||
-        (q.passages ? q.passages.map((p) => p.label).join("-") : "") ||
-        card.passageText ||
-        `single-${idx}`;
+      const qPassagesValid = (q.passages || []).filter((p) => !isPlaceholderPassageText(p.text));
+      const validPassages = qPassagesValid.length > 0 ? qPassagesValid : cardPassagesValid;
+      const validText = !isPlaceholderPassageText(q.passageText) ? q.passageText : cardTextValid;
+      const validTextVi = !isPlaceholderPassageText(q.passageTextVi) ? q.passageTextVi : cardTextViValid;
+      const fp = getPassageFingerprint(
+        { passageTitle: q.passageTitle, passageText: validText, passages: validPassages },
+        validText
+      );
+      const pKey = fp && fp !== "__title__:" ? fp : `single-${idx}`;
 
       if (!curr || curr.id !== pKey) {
         if (curr) groups.push(curr);
         curr = {
           id: pKey,
           passageTitle: q.passageTitle,
-          passageText: q.passageText || card.passageText,
-          passageTextVi: q.passageTextVi || card.passageTextVi,
-          passages: q.passages || card.passages,
+          passageText: validText,
+          passageTextVi: validTextVi,
+          passages: validPassages.length > 0 ? validPassages : undefined,
           startIndex: idx,
           questions: [{ question: q, globalIndex: idx }],
         };
@@ -125,21 +140,57 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return groups;
   }, [activeQuestions, card]);
 
+  const [savedLogSummary] = useState<{
+    hasSavedLog: boolean;
+    answeredCount: number;
+    checkedCount: number;
+    firstUncheckedGroup: number;
+  }>(() => {
+    if (isRedoWrongOnly || typeof window === "undefined") {
+      return { hasSavedLog: false, answeredCount: 0, checkedCount: 0, firstUncheckedGroup: 0 };
+    }
+    try {
+      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      let savedAnsCount = 0;
+      let checkedMap: Record<number, boolean> = {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        savedAnsCount = parsed?.answers ? Object.keys(parsed.answers).length : 0;
+        checkedMap = parsed?.checkedGroups || {};
+      }
+      const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length || 30);
+      const answeredCount = Math.max(savedAnsCount, prog.completedQuestions || 0);
+      const checkedCount = Object.values(checkedMap).filter(Boolean).length;
+      const firstUnchecked = passageGroups.findIndex((_, gIdx) => !checkedMap[gIdx]);
+      return {
+        hasSavedLog: answeredCount > 0,
+        answeredCount,
+        checkedCount,
+        firstUncheckedGroup: firstUnchecked !== -1 ? firstUnchecked : 0,
+      };
+    } catch {
+      return { hasSavedLog: false, answeredCount: 0, checkedCount: 0, firstUncheckedGroup: 0 };
+    }
+  });
+
+  const [showResumePromptModal, setShowResumePromptModal] = useState<boolean>(
+    () => !isRedoWrongOnly && savedLogSummary.hasSavedLog
+  );
+
   const [currentGroupIndex, setCurrentGroupIndex] = useState(() => {
     if (isRedoWrongOnly) return 0;
     if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
       return Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1));
     }
-    const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || 30);
-    if (prog && prog.completedQuestions > 0 && prog.completedQuestions < (card.totalQuestions || 30)) {
-      return Math.min(prog.completedQuestions, Math.max(0, passageGroups.length - 1));
+    if (savedLogSummary.hasSavedLog && savedLogSummary.firstUncheckedGroup > 0) {
+      return Math.min(savedLogSummary.firstUncheckedGroup, Math.max(0, passageGroups.length - 1));
     }
     return 0;
   });
   const currentGroup = passageGroups[currentGroupIndex] || passageGroups[0];
   const isMultiQuestionGroup = currentGroup && currentGroup.questions.length > 1;
 
-  // Deduplicated vocabulary across all questions in the current passage group
+  // Deduplicated vocabulary across all questions in the current passage group + card-level vocab
   const combinedGroupVocab = useMemo(() => {
     const map = new Map<string, VocabItem>();
     currentGroup.questions.forEach((item) => {
@@ -150,8 +201,14 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         }
       });
     });
+    (card.vocabList || []).forEach((v) => {
+      const key = v.word.trim().toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, v);
+      }
+    });
     return Array.from(map.values());
-  }, [currentGroup]);
+  }, [currentGroup, card.vocabList]);
 
   // Track user selections: globalIndex -> selected option index
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
@@ -269,9 +326,19 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     const title = (card.title || "").toLowerCase();
     const cat = (card.category || "").toLowerCase();
     let base = 24;
-    if (title.includes("part 5") || cat.includes("part 5") || (card.totalQuestions === 30 && !card.passageText)) {
+    if (cat === "part5" || cat === "grammar") {
       base = Math.round((p5Min * 60) / 30);
-    } else if (title.includes("part 6") || cat.includes("part 6")) {
+    } else if (cat === "part6") {
+      base = Math.round((p6Min * 60) / 16);
+    } else if (cat === "part7") {
+      if (title.includes("đoạn đôi") || title.includes("đoạn ba") || title.includes("double") || title.includes("triple") || title.includes("multiple")) {
+        base = Math.round((p7MultiMin * 60) / 25);
+      } else {
+        base = Math.round((p7SingleMin * 60) / 29);
+      }
+    } else if (title.includes("part 5") || (card.totalQuestions === 30 && isPlaceholderPassageText(card.passageText))) {
+      base = Math.round((p5Min * 60) / 30);
+    } else if (title.includes("part 6")) {
       base = Math.round((p6Min * 60) / 16);
     } else if (title.includes("đoạn đôi") || title.includes("đoạn ba") || title.includes("multiple")) {
       base = Math.round((p7MultiMin * 60) / 25);
@@ -295,6 +362,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   }, [currentGroupIndex]);
 
   useEffect(() => {
+    if (showResumePromptModal) return;
     const t = setInterval(() => {
       setTimeOnCurrentGroup((prev) => {
         const next = prev + 1;
@@ -312,7 +380,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [readingConfig, targetPerQSeconds, isCurrentGroupChecked]);
+  }, [readingConfig, targetPerQSeconds, isCurrentGroupChecked, showResumePromptModal]);
   const [showPassageTranslation, setShowPassageTranslation] = useState(true);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
 
@@ -419,13 +487,14 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return configs[workspacePart] || configs["PART 5"];
   }, [workspacePart]);
 
-  // Timer effect
+  // Timer effect (pauses while Resume/Restart confirmation dialog is visible)
   React.useEffect(() => {
+    if (showResumePromptModal) return;
     const interval = setInterval(() => {
       setTimerSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showResumePromptModal]);
 
   const totalQuestionsCount = isRedoWrongOnly
     ? activeQuestions.length
@@ -817,6 +886,82 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     }
   };
 
+  const syncProgressFromState = (
+    nextAnswers: Record<number, number>,
+    nextChecked: Record<number, boolean>
+  ) => {
+    let correctCount = 0;
+    let wrongCount = 0;
+    const wrongIds: (number | string)[] = [];
+    const answeredIds: (number | string)[] = [];
+
+    passageGroups.forEach((grp, grpIdx) => {
+      if (!nextChecked[grpIdx]) return;
+      grp.questions.forEach((item) => {
+        const chosen = nextAnswers[item.globalIndex];
+        if (chosen === undefined) return;
+        const qId = item.question.questionNum || item.globalIndex + 1;
+        answeredIds.push(qId);
+        if (chosen === item.question.correctIndex) {
+          correctCount++;
+        } else {
+          wrongCount++;
+          wrongIds.push(qId);
+        }
+      });
+    });
+
+    setSessionCorrectCount(correctCount);
+    setSessionWrongCount(wrongCount);
+
+    if (!isRedoWrongOnly) {
+      if (Object.keys(nextAnswers).length === 0 && answeredIds.length === 0) {
+        resetItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length);
+      } else {
+        saveItemProgress(
+          `reading-${card.id}`,
+          answeredIds.length,
+          card.totalQuestions || fullQuestions.length,
+          undefined,
+          correctCount,
+          wrongCount,
+          wrongIds,
+          undefined,
+          answeredIds
+        );
+        try {
+          localStorage.setItem(
+            `toeic_reading_answers_${card.id}`,
+            JSON.stringify({
+              answers: nextAnswers,
+              checkedGroups: nextChecked,
+              correctCount,
+              wrongCount,
+            })
+          );
+        } catch {}
+      }
+    }
+  };
+
+  const handleRestartAll = () => {
+    setUserAnswers({});
+    setCheckedGroups({});
+    setSessionCorrectCount(0);
+    setSessionWrongCount(0);
+    setEnergyScore(0);
+    setTimerSeconds(0);
+    setTimeOnCurrentGroup(0);
+    setShowPacingAlert(false);
+    setCurrentGroupIndex(0);
+    setShowResumePromptModal(false);
+
+    if (!isRedoWrongOnly) {
+      resetItemProgress(`reading-${card.id}`, totalQuestionsCount);
+    }
+    showToast("Đã xoá kết quả cũ — bắt đầu làm lại từ đầu! ↺");
+  };
+
   const handleResetCurrentGroup = () => {
     if (!currentGroup) return;
     const nextChecked = { ...checkedGroups, [currentGroupIndex]: false };
@@ -827,29 +972,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
     setCheckedGroups(nextChecked);
     setUserAnswers(nextAnswers);
-
-    if (!isRedoWrongOnly) {
-      saveItemProgress(
-        `reading-${card.id}`,
-        Object.keys(nextAnswers).length,
-        card.totalQuestions || fullQuestions.length,
-        undefined,
-        sessionCorrectCount,
-        sessionWrongCount
-      );
-
-      try {
-        localStorage.setItem(
-          `toeic_reading_answers_${card.id}`,
-          JSON.stringify({
-            answers: nextAnswers,
-            checkedGroups: nextChecked,
-            correctCount: sessionCorrectCount,
-            wrongCount: sessionWrongCount,
-          })
-        );
-      } catch {}
-    }
+    syncProgressFromState(nextAnswers, nextChecked);
     showToast("Đã đặt lại để bạn làm lại bài tập đoạn này! ↺");
   };
 
@@ -950,26 +1073,26 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       className="fixed inset-0 z-50 bg-slate-50 flex flex-col h-screen overflow-hidden font-sans text-slate-900 animate-in fade-in duration-150"
     >
       {/* HEADER */}
-      <header className="h-14 bg-[#1e60f0] text-white px-4 sm:px-6 flex items-center justify-between shadow-md shrink-0 select-none">
-        <div className="flex items-center gap-4">
+      <header className="min-h-14 bg-[#1e60f0] text-white px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 shadow-md shrink-0 select-none">
+        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
           <button
             type="button"
             onClick={() => {
               if (isSfxEnabled) playSfx("click");
               onClose();
             }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Thoát</span>
           </button>
 
-          <h1 className="text-base sm:text-lg font-bold tracking-tight text-white line-clamp-1">
+          <h1 className="text-sm sm:text-lg font-bold tracking-tight text-white truncate max-w-[160px] sm:max-w-xs lg:max-w-md">
             {card.title}
           </h1>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
           <button
             type="button"
             onClick={() => {
@@ -999,6 +1122,25 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             <Info className="w-3.5 h-3.5 text-blue-200" />
             <span>{partDirections.partNum} Directions</span>
           </button>
+
+          {!isRedoWrongOnly && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isSfxEnabled) playSfx("click");
+                if (Object.keys(userAnswers).length > 0) {
+                  setShowResumePromptModal(true);
+                } else {
+                  handleRestartAll();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-all shadow-xs cursor-pointer border border-white/25"
+              title="Xoá kết quả cũ và làm lại bài từ đầu"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Làm lại từ đầu</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -1062,7 +1204,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       {/* CẢNH BÁO NHỊP ĐỘ DỪNG QUÁ LÂU THEO CẤU HÌNH */}
       {showPacingAlert && !isCurrentGroupChecked && (
         <div
-          className={`px-6 py-2.5 text-xs font-semibold flex items-center justify-between shadow-xs select-none animate-in slide-in-from-top-1 ${
+          className={`px-4 sm:px-6 py-2.5 text-xs font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs select-none animate-in slide-in-from-top-1 ${
             readingConfig?.speedDrillMode
               ? "bg-rose-500 text-white"
               : "bg-amber-400 text-slate-950"
@@ -1126,9 +1268,9 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       )}
 
       {/* MAIN DUAL PANE */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden bg-slate-100">
         {/* LEFT PANE - PASSAGE DISPLAY */}
-        <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
+        <div className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-[#fafafa] md:border-r border-b md:border-b-0 border-slate-200/80 flex flex-col justify-between space-y-6 shrink-0 md:shrink">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
@@ -1276,9 +1418,64 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                           </span>
                         </div>
 
-                        {/* Đoạn văn tiếng Anh: canh chữ to, khoảng cách dòng thoáng, không bị rớt chữ cụt */}
+                        {/* Đoạn văn tiếng Anh: hỗ trợ bấm trực tiếp các ô trống [131]-[146] trong Part 6 */}
                         <div className="text-base sm:text-lg font-normal sm:font-medium font-sans whitespace-pre-line text-slate-900 leading-relaxed sm:leading-loose select-text">
-                          {sub.text}
+                          {(() => {
+                            const questionByNum = new Map<string, PassageQuestionItem>();
+                            currentGroup.questions.forEach((item) => {
+                              const num = String(item.question.questionNum || "").replace(/\D/g, "");
+                              if (num) questionByNum.set(num, item);
+                            });
+                            const blankRegex = /((?:[-_]{3,}\s*)?\[\s*(\d{3})\s*\](?:\s*[-_]{3,})?|\(\s*(\d{3})\s*\)\s*[-_]{2,})/g;
+                            if (!blankRegex.test(sub.text)) {
+                              return sub.text;
+                            }
+                            const parts: React.ReactNode[] = [];
+                            let lastIdx = 0;
+                            blankRegex.lastIndex = 0;
+                            let match: RegExpExecArray | null;
+                            while ((match = blankRegex.exec(sub.text)) !== null) {
+                              if (match.index > lastIdx) {
+                                parts.push(sub.text.slice(lastIdx, match.index));
+                              }
+                              const qNum = match[2] || match[3];
+                              const matchedItem = qNum ? questionByNum.get(qNum) : undefined;
+                              if (matchedItem) {
+                                const ansIdx = userAnswers[matchedItem.globalIndex];
+                                const letter = ansIdx !== undefined ? String.fromCharCode(65 + ansIdx) : null;
+                                const isRight = ansIdx !== undefined && ansIdx === matchedItem.question.correctIndex;
+                                const pillStyle = isCurrentGroupChecked
+                                  ? isRight
+                                    ? "bg-emerald-100 text-emerald-800 border-emerald-400"
+                                    : "bg-rose-100 text-rose-800 border-rose-400"
+                                  : letter
+                                  ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                                  : "bg-indigo-50 text-indigo-700 border-indigo-400 border-dashed hover:bg-indigo-100";
+                                parts.push(
+                                  <button
+                                    key={`blank-${qNum}-${match.index}`}
+                                    type="button"
+                                    onClick={() => {
+                                      const el = document.getElementById(`question-card-${qNum}`);
+                                      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                    }}
+                                    className={`inline-flex items-center gap-1 mx-1 px-2 py-0.5 rounded-lg border text-sm font-extrabold align-baseline transition cursor-pointer ${pillStyle}`}
+                                    title={`Nhảy đến câu ${qNum}`}
+                                  >
+                                    <span>[{qNum}]</span>
+                                    <span>{letter ? `• ${letter}` : "______"}</span>
+                                  </button>
+                                );
+                              } else {
+                                parts.push(match[0]);
+                              }
+                              lastIdx = blankRegex.lastIndex;
+                            }
+                            if (lastIdx < sub.text.length) {
+                              parts.push(sub.text.slice(lastIdx));
+                            }
+                            return parts;
+                          })()}
                         </div>
 
                         {/* Phần dịch tiếng Việt đặt ngay phía dưới đoạn văn tương ứng */}
@@ -1312,7 +1509,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         </div>
 
         {/* RIGHT PANE - ALL QUESTIONS IN PASSAGE DISPLAYED TOGETHER */}
-        <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
+        <div className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
           <div className="space-y-6">
             {/* RENDER EVERY QUESTION IN CURRENT GROUP */}
             {currentGroup.questions.map((item, qIdxInGroup) => {
@@ -1339,8 +1536,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                   }`}
                 >
                   {/* QUESTION HEADER */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
                         Câu {q.questionNum || gIdx + 1}
                       </span>
@@ -1528,17 +1725,31 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                       </div>
 
                       {/* VOCABULARY SECTION (Chỉ hiện trong từng câu nếu là câu đơn lẻ Part 5) */}
-                      {!isMultiQuestionGroup && q.vocabList && q.vocabList.length > 0 && (
+                      {!isMultiQuestionGroup && (() => {
+                        const singleVocabMap = new Map<string, VocabItem>();
+                        (q.vocabList || []).forEach((v) => {
+                          const key = v.word.trim().toLowerCase();
+                          if (key && !singleVocabMap.has(key)) singleVocabMap.set(key, v);
+                        });
+                        if (gIdx === 0) {
+                          (card.vocabList || []).forEach((v) => {
+                            const key = v.word.trim().toLowerCase();
+                            if (key && !singleVocabMap.has(key)) singleVocabMap.set(key, v);
+                          });
+                        }
+                        const singleVocabList = Array.from(singleVocabMap.values());
+                        if (singleVocabList.length === 0) return null;
+                        return (
                         <div className="rounded-3xl border border-amber-200/90 bg-amber-50/40 p-5 space-y-4 shadow-2xs">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm sm:text-base">
                               <Sparkles className="w-4 h-4 text-amber-600" />
-                              <span>Từ vựng trọng tâm ({q.vocabList.length} từ)</span>
+                              <span>Từ vựng trọng tâm ({singleVocabList.length} từ)</span>
                             </div>
                           </div>
 
                           <div className="space-y-3 pt-1 border-t border-amber-100">
-                            {q.vocabList.map((v, vIdx) => {
+                            {singleVocabList.map((v, vIdx) => {
                               const isSaved = savedWords.includes(v.word);
                               const wordKey = `${gIdx}-${v.word}`;
                               const isExpanded = !!expandedWords[wordKey];
@@ -1642,7 +1853,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                             })}
                           </div>
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -2931,6 +3143,65 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 />
                 <span className="text-[11px]">Tắt tra khi bấm đúp</span>
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESUME VS RESTART MODAL WHEN PRIOR LOG EXISTS */}
+      {showResumePromptModal && !isRedoWrongOnly && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/65 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider border border-blue-200">
+                  Phát hiện lịch sử bài làm trước đó
+                </span>
+                <h3 className="text-lg font-extrabold text-slate-900 leading-snug">
+                  Bạn muốn tiếp tục hay làm mới từ đầu?
+                </h3>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1.5 leading-relaxed">
+              <p>
+                Hệ thống ghi nhận bạn đã làm{" "}
+                <strong className="text-blue-700">
+                  {Math.max(Object.keys(userAnswers).length, savedLogSummary.answeredCount)}/{totalQuestionsCount} câu
+                </strong>{" "}
+                trong bài <strong className="text-slate-900">{card.title}</strong>.
+              </p>
+              <p className="text-slate-500">
+                Chọn <strong>Tiếp tục bài cũ</strong> để giữ lại đáp án đã chọn, hoặc{" "}
+                <strong>Làm mới từ đầu</strong> để xoá toàn bộ log cũ và tính giờ lại.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSfxEnabled) playSfx("click");
+                  setShowResumePromptModal(false);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-xs transition cursor-pointer"
+              >
+                Tiếp tục bài đang làm
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSfxEnabled) playSfx("click");
+                  handleRestartAll();
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-extrabold transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Làm mới từ đầu</span>
+              </button>
             </div>
           </div>
         </div>

@@ -828,19 +828,270 @@ public class DocumentContentRecognizer {
     }
 
     private List<Map<String, Object>> recognizeReading(String rawText) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        String[] lines = rawText.split("\\r?\\n");
-        String title = "Đoạn văn đọc hiểu";
-        for (String line : lines) {
-            String t = line.trim();
-            if (!t.isEmpty() && t.length() < 100) {
-                title = t;
-                break;
+        String[] rawLines = rawText.split("\\r?\\n");
+        String explicitTitle = "";
+        String explicitPart = "";
+        String explicitTag = "";
+        StringBuilder passageBuilder = new StringBuilder();
+        StringBuilder passageViBuilder = new StringBuilder();
+        String mode = "none";
+
+        List<Map<String, Object>> parsedQuestions = new ArrayList<>();
+        List<Map<String, Object>> globalVocab = new ArrayList<>();
+        String currentQNum = null;
+        String currentQText = null;
+        String currentBilingual = null;
+        Map<String, String> currentOptions = new LinkedHashMap<>();
+        String currentCorrect = null;
+        String currentExplanation = null;
+        List<Map<String, Object>> currentVocab = new ArrayList<>();
+
+        Pattern qStartPat = Pattern.compile("^(?:(?iu)câu\\s*|(?iu)question\\s*)?(\\d{1,3})[\\.:\\)\\s]+(.+)$");
+        Pattern optSinglePat = Pattern.compile("^\\(?([A-Da-d])[\\.:\\)\\s]+(.+)$");
+        Pattern optInlinePat = Pattern.compile("\\(?([A-D])[\\.\\)]\\s*(.+?)(?=\\s+\\(?[A-D][\\.\\)]\\s|$)");
+        Pattern ansPat = Pattern.compile("^(?iu)(?:đáp án|answer|key|chọn|đa)[:\\s]+\\(?([A-Da-d])\\)?.*$");
+        Pattern expPat = Pattern.compile("^(?iu)(?:giải thích|lời giải|explanation|hướng dẫn giải)[:\\s]+(.+)$");
+        Pattern viPat = Pattern.compile("^(?iu)(?:dịch|bản dịch|translation|dịch câu)[:\\s]+(.+)$");
+        Pattern vocabInlinePat = Pattern.compile("^(?iu)(?:từ vựng|vocab|vocabulary)\\s*:\\s*(.*)$");
+
+        for (String rawLine : rawLines) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                if ("passage".equals(mode) && passageBuilder.length() > 0) passageBuilder.append("\n\n");
+                else if ("passageVi".equals(mode) && passageViBuilder.length() > 0) passageViBuilder.append("\n\n");
+                continue;
+            }
+            String lower = line.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("[tiêu đề]") || lower.startsWith("tiêu đề:") || lower.startsWith("[title]")) {
+                explicitTitle = line.replaceFirst("^(?iu)(\\[tiêu đề\\]|tiêu đề:|\\[title\\])\\s*", "").trim();
+                continue;
+            }
+            if (lower.startsWith("[phần thi]") || lower.startsWith("phần thi:") || lower.startsWith("[part]")) {
+                if (lower.contains("6")) explicitPart = "PART_6";
+                else if (lower.contains("7")) explicitPart = "PART_7";
+                else if (lower.contains("5")) explicitPart = "PART_5";
+                continue;
+            }
+            if (lower.startsWith("[thẻ]") || lower.startsWith("thẻ:") || lower.startsWith("[tag]")) {
+                explicitTag = line.replaceFirst("^(?iu)(\\[thẻ\\]|thẻ:|\\[tag\\])\\s*", "").trim();
+                continue;
+            }
+            if (lower.startsWith("[đoạn văn]") || lower.equals("đoạn văn:") || lower.startsWith("[passage]") || lower.equals("passage:")) {
+                mode = "passage";
+                continue;
+            }
+            if (lower.startsWith("[bản dịch đoạn văn]") || lower.startsWith("[dịch đoạn văn]")
+                    || lower.startsWith("[bản dịch]") || lower.startsWith("[passage vi]") || lower.equals("bản dịch:")) {
+                mode = "passageVi";
+                continue;
+            }
+            if (lower.equals("[từ vựng]") || lower.equals("từ vựng:") || lower.equals("[vocabulary]")) {
+                mode = "vocab";
+                continue;
+            }
+            Matcher vGlobalM = vocabInlinePat.matcher(line);
+            if (vGlobalM.matches() && !"passage".equals(mode) && !"passageVi".equals(mode)) {
+                parseInlineReadingVocab(vGlobalM.group(1),
+                        ("question".equals(mode) && currentQText != null) ? currentVocab : globalVocab);
+                continue;
+            }
+
+            Matcher qm = qStartPat.matcher(line);
+            if (qm.matches() && !lower.startsWith("(a)") && !lower.startsWith("(b)")
+                    && !lower.startsWith("(c)") && !lower.startsWith("(d)")) {
+                if (currentQText != null && (!currentQText.isBlank() || currentOptions.size() >= 2)) {
+                    parsedQuestions.add(buildRecognizedReadingQuestion(
+                            currentQNum, currentQText, currentBilingual, currentOptions,
+                            currentCorrect, currentExplanation, currentVocab, parsedQuestions.size()));
+                }
+                mode = "question";
+                currentQNum = qm.group(1);
+                currentQText = qm.group(2).trim();
+                currentBilingual = null;
+                currentOptions = new LinkedHashMap<>();
+                currentCorrect = null;
+                currentExplanation = null;
+                currentVocab = new ArrayList<>();
+                continue;
+            }
+
+            if ("question".equals(mode) && currentQText != null) {
+                Matcher inlineCheck = optInlinePat.matcher(line);
+                List<String[]> inlinePairs = new ArrayList<>();
+                while (inlineCheck.find()) {
+                    inlinePairs.add(new String[] { inlineCheck.group(1).toUpperCase(Locale.ROOT), inlineCheck.group(2).trim() });
+                }
+                if (inlinePairs.size() >= 2) {
+                    for (String[] pair : inlinePairs) currentOptions.put(pair[0], pair[1]);
+                    continue;
+                }
+                Matcher optM = optSinglePat.matcher(line);
+                if (optM.matches()) {
+                    currentOptions.put(optM.group(1).toUpperCase(Locale.ROOT), optM.group(2).trim());
+                    continue;
+                }
+                Matcher ansM = ansPat.matcher(line);
+                if (ansM.matches()) {
+                    currentCorrect = ansM.group(1).toUpperCase(Locale.ROOT);
+                    continue;
+                }
+                Matcher expM = expPat.matcher(line);
+                if (expM.matches()) {
+                    currentExplanation = expM.group(1).trim();
+                    continue;
+                }
+                Matcher viM = viPat.matcher(line);
+                if (viM.matches()) {
+                    currentBilingual = viM.group(1).trim();
+                    continue;
+                }
+                Matcher vM = vocabInlinePat.matcher(line);
+                if (vM.matches()) {
+                    parseInlineReadingVocab(vM.group(1), currentVocab);
+                    continue;
+                }
+            }
+
+            if (!"passage".equals(mode) && !"passageVi".equals(mode)
+                    && (line.startsWith("-") || line.startsWith("•"))) {
+                Map<String, Object> bulletVocab = parseSingleReadingVocabToken(line);
+                if (bulletVocab != null) {
+                    if (currentQText != null && "question".equals(mode)) {
+                        currentVocab.add(bulletVocab);
+                    } else {
+                        globalVocab.add(bulletVocab);
+                    }
+                    continue;
+                }
+            }
+            if ("vocab".equals(mode)) {
+                parseInlineReadingVocab(line, globalVocab);
+                continue;
+            }
+
+            if ("passage".equals(mode)) {
+                if (passageBuilder.length() > 0 && passageBuilder.charAt(passageBuilder.length() - 1) != '\n') {
+                    passageBuilder.append("\n");
+                }
+                passageBuilder.append(line);
+            } else if ("passageVi".equals(mode)) {
+                if (passageViBuilder.length() > 0 && passageViBuilder.charAt(passageViBuilder.length() - 1) != '\n') {
+                    passageViBuilder.append("\n");
+                }
+                passageViBuilder.append(line);
             }
         }
+
+        if (currentQText != null && (!currentQText.isBlank() || currentOptions.size() >= 2)) {
+            parsedQuestions.add(buildRecognizedReadingQuestion(
+                    currentQNum, currentQText, currentBilingual, currentOptions,
+                    currentCorrect, currentExplanation, currentVocab, parsedQuestions.size()));
+        }
+
+        String passage = passageBuilder.toString().trim();
+        String passageVi = passageViBuilder.toString().trim();
+
+        Map<String, Object> map = new LinkedHashMap<>();
+        String title = explicitTitle;
+        if (title.isBlank()) {
+            for (String line : rawLines) {
+                String t = line.trim();
+                if (!t.isEmpty() && !t.startsWith("[") && t.length() < 100) {
+                    title = t;
+                    break;
+                }
+            }
+            if (title.isBlank()) title = "Đoạn văn đọc hiểu";
+        }
         map.put("title", title);
-        map.put("content", rawText.trim());
+
+        if (!parsedQuestions.isEmpty()) {
+            String resolvedPart = explicitPart;
+            if (resolvedPart.isBlank()) {
+                if (passage.contains("[131]") || passage.contains("[132]") || passage.contains("[133]")) {
+                    resolvedPart = "PART_6";
+                } else if (!passage.isBlank() || parsedQuestions.size() >= 2) {
+                    resolvedPart = "PART_7";
+                } else {
+                    resolvedPart = "PART_5";
+                }
+            }
+            map.put("part", resolvedPart);
+            if (!explicitTag.isBlank()) map.put("tag", explicitTag);
+            if (!passage.isBlank()) {
+                map.put("content", passage);
+            } else if ("PART_5".equals(resolvedPart)) {
+                map.put("content", "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence.");
+            }
+            if (!passageVi.isBlank()) map.put("passageTextVi", passageVi);
+            map.put("questions", parsedQuestions);
+            map.put("totalQuestions", parsedQuestions.size());
+            if (!globalVocab.isEmpty()) map.put("vocabList", globalVocab);
+            return List.of(map);
+        }
+
+        if (!explicitPart.isBlank()) map.put("part", explicitPart);
+        if (!explicitTag.isBlank()) map.put("tag", explicitTag);
+        map.put("content", !passage.isBlank() ? passage : rawText.trim());
+        if (!passageVi.isBlank()) map.put("passageTextVi", passageVi);
+        if (!globalVocab.isEmpty()) map.put("vocabList", globalVocab);
         return List.of(map);
+    }
+
+    private Map<String, Object> buildRecognizedReadingQuestion(
+            String qNum, String qText, String bilingual, Map<String, String> options,
+            String correct, String explanation, List<Map<String, Object>> vocabList, int index) {
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("questionNum", (qNum != null && !qNum.isBlank()) ? qNum : String.valueOf(101 + index));
+        q.put("question", qText != null ? qText : "");
+        if (bilingual != null && !bilingual.isBlank()) q.put("bilingual", bilingual);
+        Map<String, String> opts = new LinkedHashMap<>();
+        opts.put("A", options.getOrDefault("A", ""));
+        opts.put("B", options.getOrDefault("B", ""));
+        opts.put("C", options.getOrDefault("C", ""));
+        opts.put("D", options.getOrDefault("D", ""));
+        q.put("options", opts);
+        q.put("correctAnswer", (correct != null && !correct.isBlank()) ? correct : "A");
+        if (explanation != null && !explanation.isBlank()) q.put("explanation", explanation);
+        if (vocabList != null && !vocabList.isEmpty()) q.put("vocabList", new ArrayList<>(vocabList));
+        return q;
+    }
+
+    private void parseInlineReadingVocab(String payload, List<Map<String, Object>> target) {
+        if (payload == null || payload.isBlank()) return;
+        for (String seg : payload.split("[,;]")) {
+            Map<String, Object> item = parseSingleReadingVocabToken(seg);
+            if (item != null) target.add(item);
+        }
+    }
+
+    private Map<String, Object> parseSingleReadingVocabToken(String raw) {
+        if (raw == null) return null;
+        String clean = raw.replaceFirst("^[\\-\\•\\*\\d\\.]+\\s*", "").trim();
+        if (clean.isEmpty()) return null;
+        String ipa = "";
+        Matcher ipaM = Pattern.compile("/([^/]+)/").matcher(clean);
+        if (ipaM.find()) ipa = "/" + ipaM.group(1).trim() + "/";
+        String pos = "n";
+        Matcher posM = Pattern.compile("(?i)\\((n|v|adj|adv|prep|conj|pron|n,\\s*v)[^\\)]*\\)").matcher(clean);
+        if (posM.find()) pos = posM.group(1).trim().toLowerCase(Locale.ROOT);
+        String cleaned = clean
+                .replaceAll("\\(\\s*/[^/]+/\\s*\\)", "")
+                .replaceAll("/[^/]+/", "")
+                .replaceAll("(?i)\\((?:n|v|adj|adv|prep|conj|pron|n,\\s*v)[^\\)]*\\)", "")
+                .replaceAll("\\(\\s*\\)", "")
+                .trim();
+        String[] parts = cleaned.split("[:\\-=]\\s*", 2);
+        String word = parts[0].replaceAll("[\\(\\)\\[\\]]", "").trim();
+        if (word.isEmpty() || !word.matches("^[A-Za-z][A-Za-z\\s'\\-]*$")) return null;
+        String meaning = (parts.length >= 2 && !parts[1].isBlank()) ? parts[1].trim() : "Từ vựng trọng tâm";
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("word", word);
+        item.put("pos", pos);
+        item.put("ipa", ipa);
+        item.put("meaning", meaning);
+        item.put("level", "B1");
+        return item;
     }
 
     private List<Map<String, Object>> fallbackAiRecognize(ContentType type, String rawText) {

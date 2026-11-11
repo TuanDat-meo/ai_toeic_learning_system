@@ -12,11 +12,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import com.toeic.ai.toeic_api.grammar.GrammarService;
 
+import com.toeic.ai.toeic_api.reading.ReadingService;
+
 @SpringBootTest
 @Transactional
 class ContentImportServiceIntegrationTest {
     @Autowired
     private ContentImportService importService;
+    @Autowired
+    private ReadingService readingService;
 
     @Autowired
     private GrammarService grammarService;
@@ -213,6 +217,48 @@ class ContentImportServiceIntegrationTest {
         assertThat(duplicatePreview.batch().status()).isEqualTo("NO_VALID_ROWS");
         assertThatThrownBy(() -> importService.publish(preview.batch().id(), null))
                 .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void publishesReadingBatchAndSyncsCardWithVocabListToReadingModule() {
+        String cardId = "test-reading-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        String json = """
+                [
+                  {
+                    "id": "%s",
+                    "title": "Executive Logistics Memo",
+                    "part": "Part 7",
+                    "content": "Please expedite the quarterly shipment to the Osaka warehouse.",
+                    "passageTextVi": "Vui lòng đẩy nhanh lô hàng quý tới kho Osaka.",
+                    "questions": [
+                      {
+                        "questionNum": "148",
+                        "question": "Where should the shipment be sent?",
+                        "options": ["Osaka", "Tokyo", "Seoul", "Busan"],
+                        "correctIndex": 0,
+                        "vocabList": [{"word": "expedite", "pos": "v", "ipa": "/ˈekspədaɪt/", "meaning": "đẩy nhanh tiến độ"}]
+                      }
+                    ],
+                    "vocabList": [
+                      {"word": "logistics", "pos": "n", "ipa": "/ləˈdʒɪstɪks/", "meaning": "hậu cần"}
+                    ]
+                  }
+                ]
+                """.formatted(cardId);
+        var file = new MockMultipartFile("file", "reading.json", "application/json",
+                json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        var preview = importService.preview(ContentType.READING, file, null);
+        assertThat(preview.batch().validCount()).isEqualTo(1);
+
+        var published = importService.publish(preview.batch().id(), null);
+        assertThat(published.publishedCount()).isEqualTo(1);
+
+        var syncedCard = readingService.getCard(cardId, null);
+        assertThat(syncedCard.title()).isEqualTo("Executive Logistics Memo");
+        assertThat(syncedCard.category()).isEqualTo("part7");
+        assertThat(syncedCard.sampleQuestions()).hasSize(1);
+        assertThat(syncedCard.theory()).containsKey("vocabList");
     }
 
     private ContentImportService.BatchDetails previewVocabulary(MockMultipartFile file) {

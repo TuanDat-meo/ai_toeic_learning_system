@@ -1,3 +1,4 @@
+import type { VocabItem } from '@/app/admin/content/reading/types';
 import type {
   ImportBatchDetails,
   ImportBatchSummary,
@@ -93,13 +94,15 @@ export interface ReadingQuestionItem {
   explanation?: string;
   bilingual?: string;
   translation?: string | GradedQuestionTranslation;
-  vocabList?: { word: string; meaning: string; phonetic?: string }[];
+  vocabList?: VocabItem[];
+  vocabulary?: VocabItem[];
   [key: string]: unknown;
 }
 
 export interface ReadingNormalizedData {
   id?: number | string;
   title?: string;
+  subtitle?: string;
   part?: string; // PART_5, PART_6, PART_7
   category?: string;
   subCategory?: string;
@@ -116,7 +119,10 @@ export interface ReadingNormalizedData {
     example?: string;
     directionsEn?: string;
     directionsVi?: string;
+    vocabList?: VocabItem[];
   };
+  vocabList?: VocabItem[];
+  vocabulary?: VocabItem[];
   questions?: ReadingQuestionItem[];
   sampleQuestions?: ReadingQuestionItem[];
   totalQuestions?: number;

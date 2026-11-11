@@ -226,6 +226,9 @@ const TOEIC_PART5_QUESTION_BANK: Array<{
  */
 export function expandReadingQuestions(card: ExerciseCardData): SampleQuestion[] {
   const existing = card.sampleQuestions || [];
+  if (card.category === "part6" || card.category === "part7") {
+    return existing;
+  }
   const targetCount = card.totalQuestions || 30;
 
   if (existing.length >= targetCount) {
@@ -233,9 +236,7 @@ export function expandReadingQuestions(card: ExerciseCardData): SampleQuestion[]
   }
 
   const result: SampleQuestion[] = [...existing];
-  let questionNumCounter = 101;
-  if (card.category === "part6") questionNumCounter = 131;
-  else if (card.category === "part7") questionNumCounter = 147;
+  const questionNumCounter = 101;
 
   let bankIndex = 0;
   while (result.length < targetCount) {

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
   AlertCircle,
+  BookMarked,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -23,6 +24,7 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  Volume2,
   X,
 } from 'lucide-react';
 import {
@@ -31,6 +33,11 @@ import {
   type ImportBatchDetails,
   type ImportPreviewItem,
 } from '@/lib/api/content-import';
+import type { VocabItem } from '@/app/admin/content/reading/types';
+import {
+  ReadingVocabExtractorPanel,
+  type AppliedVocabEntry,
+} from '@/components/admin/content/reading/ReadingVocabExtractorPanel';
 import type {
   GradedQuestionOption,
   ReadingNormalizedData,
@@ -103,6 +110,33 @@ const PART_CONFIG: Record<
   },
 };
 
+function readVocabList(raw: unknown): VocabItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+    .map((v) => {
+      const ex = v.example;
+      let example: { en: string; vi: string } | undefined;
+      if (ex && typeof ex === 'object') {
+        const exObj = ex as Record<string, unknown>;
+        const en = String(exObj.en || exObj.sentenceEn || '').trim();
+        const vi = String(exObj.vi || exObj.sentenceVi || '').trim();
+        if (en) example = { en, vi };
+      } else if (typeof ex === 'string' && ex.trim()) {
+        example = { en: ex.trim(), vi: '' };
+      }
+      return {
+        word: String(v.word || '').trim(),
+        pos: String(v.pos || v.partOfSpeech || 'n').trim(),
+        level: String(v.level || 'B1').trim(),
+        ipa: String(v.ipa || v.phonetic || '').trim(),
+        meaning: String(v.meaning || v.meaningVi || '').trim() || 'Từ vựng trọng tâm',
+        ...(example ? { example } : {}),
+      };
+    })
+    .filter((v) => v.word.length > 0);
+}
+
 function normalizeReadingPart(rawPart?: string, content?: string): 'PART_5' | 'PART_6' | 'PART_7' {
   if (rawPart) {
     const p = rawPart.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -138,9 +172,11 @@ export function ReadingPreviewList({
   const [filterPart, setFilterPart] = useState<'ALL' | 'PART_5' | 'PART_6' | 'PART_7'>('ALL');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'VALID' | 'INVALID' | 'DUPLICATE'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'passage' | 'questions' | 'directions' | 'theory' | 'raw'>('passage');
+  const [activeTab, setActiveTab] = useState<'passage' | 'questions' | 'vocab' | 'directions' | 'theory'>('passage');
   const [showBilingualPassage, setShowBilingualPassage] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingVocab, setIsSavingVocab] = useState(false);
+  const [vocabSaveMsg, setVocabSaveMsg] = useState<string | null>(null);
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -191,8 +227,8 @@ export function ReadingPreviewList({
 
   // Selected item
   const selectedItem = filteredItems[selectedItemIndex] || filteredItems[0] || null;
-  const selectedData = (selectedItem?.normalizedData || {}) as ReadingNormalizedData;
-  const selectedRaw = (selectedItem?.rawData || {}) as Record<string, unknown>;
+  const selectedData = useMemo(() => (selectedItem?.normalizedData || {}) as ReadingNormalizedData, [selectedItem]);
+  const selectedRaw = useMemo(() => (selectedItem?.rawData || {}) as Record<string, unknown>, [selectedItem]);
 
   const currentPart = useMemo(() => {
     if (!selectedItem) return 'PART_5';
@@ -234,6 +270,134 @@ export function ReadingPreviewList({
     return [];
   }, [selectedItem, selectedData, selectedRaw]);
 
+  const cardVocabList = useMemo(() => {
+    if (!selectedItem) return [];
+    return readVocabList(
+      selectedData.vocabList ??
+        selectedData.vocabulary ??
+        selectedData.theory?.vocabList ??
+        selectedRaw.vocabList ??
+        selectedRaw.vocabulary
+    );
+  }, [selectedItem, selectedData, selectedRaw]);
+
+  const combinedVocabCount = useMemo(() => {
+    return (
+      cardVocabList.length +
+      questionsList.reduce((acc, q) => acc + readVocabList(q.vocabList ?? q.vocabulary).length, 0)
+    );
+  }, [cardVocabList, questionsList]);
+
+  const existingVocabWords = useMemo(() => {
+    const words: string[] = [];
+    cardVocabList.forEach((v) => words.push(v.word.trim().toLowerCase()));
+    questionsList.forEach((q) => {
+      readVocabList(q.vocabList ?? q.vocabulary).forEach((v) => {
+        words.push(v.word.trim().toLowerCase());
+      });
+    });
+    return words;
+  }, [cardVocabList, questionsList]);
+
+  const playWord = (word: string) => {
+    if (!word || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = 'en-US';
+    u.rate = 0.88;
+    window.speechSynthesis.speak(u);
+  };
+
+  const buildAllowedReadingPayload = (overrides: Record<string, unknown> = {}) => {
+    const base: Record<string, unknown> = {
+      title: selectedData.title || (selectedRaw.title as string) || '',
+      part: currentPart,
+      content: selectedData.content || selectedData.passageText || (selectedRaw.content as string) || '',
+      ...(selectedData.subtitle || selectedRaw.subtitle ? { subtitle: selectedData.subtitle || selectedRaw.subtitle } : {}),
+      ...(selectedData.passageTextVi || selectedRaw.passageTextVi ? { passageTextVi: selectedData.passageTextVi || selectedRaw.passageTextVi } : {}),
+      ...(selectedData.topic || selectedRaw.topic ? { topic: selectedData.topic || selectedRaw.topic } : {}),
+      ...(selectedData.difficulty || selectedRaw.difficulty ? { difficulty: selectedData.difficulty || selectedRaw.difficulty } : {}),
+      ...(selectedData.source || selectedRaw.source ? { source: selectedData.source || selectedRaw.source } : {}),
+      ...(selectedData.subCategory || selectedRaw.subCategory ? { subCategory: selectedData.subCategory || selectedRaw.subCategory } : {}),
+      ...(selectedData.tag || selectedRaw.tag ? { tag: selectedData.tag || selectedRaw.tag } : {}),
+      ...(selectedData.audioUrl || selectedRaw.audioUrl ? { audioUrl: selectedData.audioUrl || selectedRaw.audioUrl } : {}),
+      ...(selectedData.imageUrl || selectedRaw.imageUrl ? { imageUrl: selectedData.imageUrl || selectedRaw.imageUrl } : {}),
+      ...(typeof selectedData.totalQuestions === 'number' ? { totalQuestions: selectedData.totalQuestions } : {}),
+      ...(passagesList.length > 0 ? { passages: passagesList } : {}),
+      ...(selectedData.theory ? { theory: selectedData.theory } : {}),
+      ...(questionsList.length > 0 ? { questions: questionsList } : {}),
+      ...(cardVocabList.length > 0 ? { vocabList: cardVocabList } : {}),
+    };
+    return { ...base, ...overrides };
+  };
+
+  const persistVocabChanges = async (nextCardVocab: VocabItem[], nextQuestions: ReadingQuestionItem[], feedbackText: string) => {
+    if (!selectedItem || !editable) return;
+    setIsSavingVocab(true);
+    setVocabSaveMsg(null);
+    try {
+      const payload = buildAllowedReadingPayload({
+        vocabList: nextCardVocab,
+        questions: nextQuestions,
+      });
+      const updatedBatch = await updateVocabularyPreviewItem(batchId, selectedItem.id, payload);
+      onBatchUpdated?.(updatedBatch);
+      setVocabSaveMsg(feedbackText);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Không thể lưu từ vựng vào bản xem trước.');
+    } finally {
+      setIsSavingVocab(false);
+    }
+  };
+
+  const handleApplyExtractedVocab = async (entries: AppliedVocabEntry[]) => {
+    if (entries.length === 0) return;
+    const nextCardVocab = [...cardVocabList];
+    const cardSeen = new Set(nextCardVocab.map((v) => v.word.trim().toLowerCase()));
+    const nextQuestions = questionsList.map((q) => ({
+      ...q,
+      vocabList: readVocabList(q.vocabList ?? q.vocabulary),
+    }));
+
+    let addedCount = 0;
+    entries.forEach(({ item, targetQuestionIndex }) => {
+      const key = item.word.trim().toLowerCase();
+      if (!key) return;
+      if (targetQuestionIndex === null || nextQuestions.length === 0) {
+        if (!cardSeen.has(key)) {
+          cardSeen.add(key);
+          nextCardVocab.push(item);
+          addedCount++;
+        }
+      } else {
+        const idx = Math.min(Math.max(0, targetQuestionIndex), nextQuestions.length - 1);
+        const qSeen = new Set((nextQuestions[idx].vocabList || []).map((v) => v.word.trim().toLowerCase()));
+        if (!qSeen.has(key)) {
+          nextQuestions[idx].vocabList = [...(nextQuestions[idx].vocabList || []), item];
+          addedCount++;
+        }
+      }
+    });
+
+    if (addedCount > 0) {
+      await persistVocabChanges(nextCardVocab, nextQuestions, `Đã cập nhật +${addedCount} từ vựng vào bản preview!`);
+    }
+  };
+
+  const handleRemoveCardVocab = async (vIdx: number) => {
+    const nextCardVocab = cardVocabList.filter((_, idx) => idx !== vIdx);
+    await persistVocabChanges(nextCardVocab, questionsList, 'Đã xóa từ vựng khỏi bài đọc.');
+  };
+
+  const handleRemoveQuestionVocab = async (qIdx: number, vIdx: number) => {
+    const nextQuestions = questionsList.map((q, idx) =>
+      idx === qIdx
+        ? { ...q, vocabList: readVocabList(q.vocabList ?? q.vocabulary).filter((_, i) => i !== vIdx) }
+        : q
+    );
+    await persistVocabChanges(cardVocabList, nextQuestions, 'Đã xóa từ vựng khỏi câu hỏi.');
+  };
+
   // Handle open edit modal
   const handleOpenEdit = () => {
     if (!selectedItem) return;
@@ -255,8 +419,7 @@ export function ReadingPreviewList({
     if (!selectedItem) return;
     setIsSavingEdit(true);
     try {
-      const updatedPayload: Record<string, unknown> = {
-        ...selectedRaw,
+      const updatedPayload = buildAllowedReadingPayload({
         title: editForm.title.trim(),
         part: editForm.part,
         content: editForm.content.trim(),
@@ -265,7 +428,7 @@ export function ReadingPreviewList({
         difficulty: editForm.difficulty,
         subCategory: editForm.subCategory.trim(),
         tag: editForm.tag.trim(),
-      };
+      });
       const updatedBatch = await updateVocabularyPreviewItem(batchId, selectedItem.id, updatedPayload);
       onBatchUpdated?.(updatedBatch);
       setIsEditModalOpen(false);
@@ -482,10 +645,23 @@ export function ReadingPreviewList({
                   </p>
 
                   <div className="mt-2.5 flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-slate-600 flex items-center gap-1">
-                      <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
-                      {qCount > 0 ? `${qCount} câu hỏi` : cfg.questionsRange}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-slate-600 flex items-center gap-1">
+                        <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
+                        {qCount > 0 ? `${qCount} câu hỏi` : cfg.questionsRange}
+                      </span>
+                      {(() => {
+                        const itemQs = (data.questions || data.sampleQuestions || (Array.isArray(raw.questions) ? (raw.questions as ReadingQuestionItem[]) : [])) as ReadingQuestionItem[];
+                        const itemVocabTotal =
+                          readVocabList(data.vocabList ?? data.vocabulary ?? data.theory?.vocabList ?? raw.vocabList ?? raw.vocabulary).length +
+                          itemQs.reduce((sum, q) => sum + readVocabList(q.vocabList ?? q.vocabulary).length, 0);
+                        return itemVocabTotal > 0 ? (
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                            {itemVocabTotal} từ
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
 
                     {hasErrors ? (
                       <span className="flex items-center gap-1 text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-md border border-red-200 text-[10px]">
@@ -573,11 +749,11 @@ export function ReadingPreviewList({
               )}
 
               {/* TABS ĐIỀU HƯỚNG CHI TIẾT */}
-              <div className="flex items-center gap-1.5 border-b border-slate-100 pb-2 text-xs font-bold">
+              <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-2 text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setActiveTab('passage')}
-                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'passage'
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -589,7 +765,7 @@ export function ReadingPreviewList({
                 <button
                   type="button"
                   onClick={() => setActiveTab('questions')}
-                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'questions'
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -600,8 +776,34 @@ export function ReadingPreviewList({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setActiveTab('vocab')}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'vocab'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <BookMarked className="w-3.5 h-3.5" />
+                  <span>Từ vựng ({combinedVocabCount})</span>
+                </button>
+                {Boolean(selectedData.theory) && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('theory')}
+                    className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                      activeTab === 'theory'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Lý thuyết</span>
+                  </button>
+                )}
+                <button
+                  type="button"
                   onClick={() => setActiveTab('directions')}
-                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'directions'
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -726,8 +928,162 @@ export function ReadingPreviewList({
                             <p className="text-[11px] leading-relaxed">{q.explanation}</p>
                           </div>
                         )}
+                        {(() => {
+                          const qVocabs = readVocabList(q.vocabList ?? q.vocabulary);
+                          if (qVocabs.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] font-bold text-slate-500">Từ vựng ({qVocabs.length}):</span>
+                              {qVocabs.map((v, vIdx) => (
+                                <span
+                                  key={`${v.word}-${vIdx}`}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[11px] text-slate-800"
+                                >
+                                  <strong className="text-blue-700">{v.word}</strong>
+                                  {v.pos && <span className="text-slate-500">({v.pos})</span>}
+                                  {v.ipa && <span className="font-mono text-slate-400 text-[10px]">{v.ipa}</span>}
+                                  <span>: {v.meaning}</span>
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'vocab' && (
+                <div className="space-y-4">
+                  {editable && (
+                    <ReadingVocabExtractorPanel
+                      passageText={String(selectedData.content || selectedData.passageText || '')}
+                      passages={passagesList}
+                      questions={questionsList}
+                      existingWords={existingVocabWords}
+                      allowCardLevelTarget
+                      defaultTargetQuestionIndex={questionsList.length > 0 ? 0 : null}
+                      compact
+                      applyButtonLabel={isSavingVocab ? 'Đang lưu...' : 'Lưu từ đã chọn vào lô import'}
+                      onApplyVocab={handleApplyExtractedVocab}
+                    />
+                  )}
+
+                  {vocabSaveMsg && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{vocabSaveMsg}</span>
+                    </div>
+                  )}
+
+                  {combinedVocabCount === 0 ? (
+                    <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
+                      Chưa có từ vựng nào được gắn vào bài đọc này. {editable ? 'Chọn các từ gợi ý từ bảng trích xuất phía trên để hoàn thiện bản xem trước.' : ''}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {cardVocabList.length > 0 && (
+                        <div className="p-3.5 rounded-2xl bg-purple-50/50 border border-purple-200 space-y-2">
+                          <span className="text-[11px] font-bold text-purple-900 block">
+                            Từ vựng chung bài đọc ({cardVocabList.length} từ)
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {cardVocabList.map((v, vIdx) => (
+                              <div
+                                key={`card-${v.word}-${vIdx}`}
+                                className="p-2.5 rounded-xl bg-white border border-purple-200/80 flex items-start justify-between gap-2 text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <strong className="text-slate-900">{v.word}</strong>
+                                    {v.pos && <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-700">{v.pos}</span>}
+                                    {v.ipa && <span className="text-[10px] font-mono text-slate-400">{v.ipa}</span>}
+                                  </div>
+                                  <p className="text-[11px] text-slate-700 mt-0.5">{v.meaning}</p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button type="button" onClick={() => playWord(v.word)} className="p-1 text-slate-400 hover:text-blue-600 cursor-pointer" title="Nghe phát âm">
+                                    <Volume2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  {editable && (
+                                    <button type="button" disabled={isSavingVocab} onClick={() => handleRemoveCardVocab(vIdx)} className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer" title="Xóa từ này">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {questionsList.map((q, qIdx) => {
+                        const qVocabs = readVocabList(q.vocabList ?? q.vocabulary);
+                        if (qVocabs.length === 0) return null;
+                        return (
+                          <div key={q.id || qIdx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                            <span className="text-[11px] font-bold text-blue-900 block">
+                              Câu {q.questionNum || qIdx + 1} ({qVocabs.length} từ)
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {qVocabs.map((v, vIdx) => (
+                                <div
+                                  key={`q-${qIdx}-${v.word}-${vIdx}`}
+                                  className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-start justify-between gap-2 text-xs"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <strong className="text-slate-900">{v.word}</strong>
+                                      {v.pos && <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700">{v.pos}</span>}
+                                      {v.ipa && <span className="text-[10px] font-mono text-slate-400">{v.ipa}</span>}
+                                    </div>
+                                    <p className="text-[11px] text-slate-700 mt-0.5">{v.meaning}</p>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button type="button" onClick={() => playWord(v.word)} className="p-1 text-slate-400 hover:text-blue-600 cursor-pointer" title="Nghe phát âm">
+                                      <Volume2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    {editable && (
+                                      <button type="button" disabled={isSavingVocab} onClick={() => handleRemoveQuestionVocab(qIdx, vIdx)} className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer" title="Xóa từ này">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'theory' && selectedData.theory && (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+                  {selectedData.theory.summary && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">Tóm tắt lý thuyết &amp; Hướng dẫn</span>
+                      <p className="text-slate-700 leading-relaxed">{selectedData.theory.summary}</p>
+                    </div>
+                  )}
+                  {Array.isArray(selectedData.theory.rules) && selectedData.theory.rules.length > 0 && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">Quy tắc cốt lõi</span>
+                      <ul className="list-disc list-inside space-y-1 text-slate-700">
+                        {selectedData.theory.rules.map((r, i) => (
+                          <li key={i}>{r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {selectedData.theory.example && (
+                    <div>
+                      <span className="font-bold text-slate-900 block mb-1">Ví dụ</span>
+                      <p className="italic text-slate-700">&ldquo;{selectedData.theory.example}&rdquo;</p>
+                    </div>
                   )}
                 </div>
               )}

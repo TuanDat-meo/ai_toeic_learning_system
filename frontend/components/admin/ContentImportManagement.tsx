@@ -301,6 +301,12 @@ export function ContentImportManagement() {
           localStorage.removeItem('toeic_grammar_topics');
           window.dispatchEvent(new CustomEvent('toeic-grammar-topics-updated'));
         }
+      } else if (details.batch.contentType === 'READING') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('toeic-reading-cards-updated', { detail: { source: 'content-import' } })
+          );
+        }
       }
       await refreshBatches();
     } catch (requestError) {

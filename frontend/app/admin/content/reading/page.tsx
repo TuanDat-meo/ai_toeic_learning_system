@@ -5,8 +5,16 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { ExerciseCardData, SampleQuestion } from "./types";
+import { ExerciseCardData, SampleQuestion, VocabItem } from "./types";
 import { INITIAL_CARDS } from "./mockData";
+import {
+  createAdminReadingCard,
+  deleteAdminReadingCard,
+  fetchReadingCardDetails,
+  fetchReadingCards,
+  mergeReadingCardsWithBackend,
+  updateAdminReadingCard,
+} from "@/lib/api/reading";
 
 import {
   ReadingHeader,
@@ -40,23 +48,88 @@ export default function ReadingLearningPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
-  // Helper cập nhật cards và lưu localStorage
-  const updateCardsState = (updater: (prev: ExerciseCardData[]) => ExerciseCardData[]) => {
-    setCards((prev) => {
-      const next = updater(prev);
-      saveLocalReadingCards(next);
-      return next;
-    });
+  const cardsRef = React.useRef<ExerciseCardData[]>(cards);
+  useEffect(() => {
+    cardsRef.current = cards;
+  }, [cards]);
+
+  // Helper cập nhật cards và lưu localStorage (không tự kích hoạt loop listener)
+  const updateCardsState = (
+    updater: (prev: ExerciseCardData[]) => ExerciseCardData[],
+    emitEvent = true
+  ) => {
+    const base = cardsRef.current;
+    const next = updater(base);
+    cardsRef.current = next;
+    saveLocalReadingCards(next, emitEvent);
+    setCards(next);
   };
 
   useEffect(() => {
-    const local = getLocalReadingCards();
-    if (local && local.length > 0) {
+    let active = true;
+
+    const loadAndSync = async (skipBackend = false) => {
+      const local = getLocalReadingCards();
+      if (local && local.length > 0) {
+        cardsRef.current = local;
+        if (active) setCards(local);
+      } else {
+        saveLocalReadingCards(INITIAL_CARDS, false);
+      }
+      if (skipBackend) return;
+      const backendCards = await fetchReadingCards();
+      if (!active || backendCards.length === 0) return;
+      const baseline = getLocalReadingCards();
+      const merged = mergeReadingCardsWithBackend(
+        backendCards,
+        baseline.length > 0 ? baseline : cardsRef.current
+      );
+      cardsRef.current = merged;
+      saveLocalReadingCards(merged, false);
+      setCards(merged);
+    };
+
+    void loadAndSync(false);
+
+    const handleUpdated = (ev: Event) => {
+      const customEv = ev as CustomEvent<{ source?: string }>;
+      if (customEv.detail?.source === "local-storage") {
+        const local = getLocalReadingCards();
+        cardsRef.current = local;
+        setCards(local);
+        return;
+      }
+      void loadAndSync(false);
+    };
+
+    const handleStorage = () => {
+      const local = getLocalReadingCards();
+      cardsRef.current = local;
       setCards(local);
-    } else {
-      saveLocalReadingCards(INITIAL_CARDS);
-    }
+    };
+
+    window.addEventListener("toeic-reading-cards-updated", handleUpdated);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      active = false;
+      window.removeEventListener("toeic-reading-cards-updated", handleUpdated);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
+
+  const ensureCardDetails = async (card: ExerciseCardData): Promise<ExerciseCardData> => {
+    if (card.detailsLoaded || (card.sampleQuestions && card.sampleQuestions.length > 0)) {
+      return card;
+    }
+    const detailed = await fetchReadingCardDetails(card.id);
+    if (!detailed) return card;
+    const mergedCard: ExerciseCardData = { ...card, ...detailed, detailsLoaded: true };
+    updateCardsState(
+      (prev) => prev.map((c) => (c.id === mergedCard.id ? mergedCard : c)),
+      false
+    );
+    return mergedCard;
+  };
 
   // State Workspace
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
@@ -98,6 +171,7 @@ export default function ReadingLearningPage() {
   const [cardFormPassageText, setCardFormPassageText] = useState("");
   const [cardFormPassageTextVi, setCardFormPassageTextVi] = useState("");
   const [cardFormSampleQuestions, setCardFormSampleQuestions] = useState<SampleQuestion[]>([]);
+  const [cardFormVocabList, setCardFormVocabList] = useState<VocabItem[]>([]);
 
   // Filtered Cards
   const filteredCards = useMemo(() => {
@@ -112,18 +186,29 @@ export default function ReadingLearningPage() {
   }, [cards, selectedCategory, searchQuery]);
 
   // Handlers
-  const handleOpenCreateCard = () => {
+  const openCreateCardModal = (
+    initialCategory: "grammar" | "part5" | "part6" | "part7" = "grammar"
+  ) => {
     setEditingCard(null);
     setCardFormTitle("");
-    setCardFormCategory("grammar");
-    setCardFormSubCategory("word_types");
+    setCardFormCategory(initialCategory);
+    setCardFormSubCategory(
+      initialCategory === "part6"
+        ? "text_types"
+        : initialCategory === "part7"
+        ? "levels"
+        : "word_types"
+    );
     setCardFormTag("");
-    setCardFormTotalQuestions(30);
+    setCardFormTotalQuestions(
+      initialCategory === "part6" ? 4 : initialCategory === "part7" ? 2 : 30
+    );
     setCardFormTheorySummary("");
     setCardFormTheoryRules("");
     setCardFormTheoryExample("");
     setCardFormPassageText("");
     setCardFormPassageTextVi("");
+    setCardFormVocabList([]);
     setCardFormSampleQuestions([
       {
         questionNum: "101",
@@ -143,22 +228,32 @@ export default function ReadingLearningPage() {
     setShowCreateCardModal(true);
   };
 
-  const handleOpenEditCard = (card: ExerciseCardData, e?: React.MouseEvent) => {
+  const handleOpenCreateCard = () => {
+    openCreateCardModal(selectedCategory === "all" ? "grammar" : selectedCategory);
+  };
+
+  const handleOpenEditCard = async (card: ExerciseCardData, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setEditingCard(card);
-    setCardFormTitle(card.title);
-    setCardFormCategory(card.category);
-    setCardFormSubCategory(card.subCategory || "word_types");
-    setCardFormTag(card.tag || "");
-    setCardFormTotalQuestions(card.totalQuestions);
-    setCardFormTheorySummary(card.theory?.summary || "");
-    setCardFormTheoryRules(card.theory?.rules?.join("\n") || "");
-    setCardFormTheoryExample(card.theory?.example || "");
-    setCardFormPassageText(card.passageText || card.sampleQuestions?.[0]?.passageText || "");
-    setCardFormPassageTextVi(card.passageTextVi || card.sampleQuestions?.[0]?.passageTextVi || "");
+    const resolved = await ensureCardDetails(card);
+    setEditingCard(resolved);
+    setCardFormTitle(resolved.title);
+    setCardFormCategory(resolved.category);
+    setCardFormSubCategory(resolved.subCategory || "word_types");
+    setCardFormTag(resolved.tag || "");
+    setCardFormTotalQuestions(resolved.totalQuestions);
+    setCardFormTheorySummary(resolved.theory?.summary || "");
+    setCardFormTheoryRules(resolved.theory?.rules?.join("\n") || "");
+    setCardFormTheoryExample(resolved.theory?.example || "");
+    setCardFormPassageText(resolved.passageText || resolved.sampleQuestions?.[0]?.passageText || "");
+    setCardFormPassageTextVi(resolved.passageTextVi || resolved.sampleQuestions?.[0]?.passageTextVi || "");
+    setCardFormVocabList(
+      resolved.vocabList && resolved.vocabList.length > 0
+        ? JSON.parse(JSON.stringify(resolved.vocabList))
+        : []
+    );
     setCardFormSampleQuestions(
-      card.sampleQuestions && card.sampleQuestions.length > 0
-        ? JSON.parse(JSON.stringify(card.sampleQuestions))
+      resolved.sampleQuestions && resolved.sampleQuestions.length > 0
+        ? JSON.parse(JSON.stringify(resolved.sampleQuestions))
         : [
             {
               questionNum: "101",
@@ -179,7 +274,7 @@ export default function ReadingLearningPage() {
     setShowCreateCardModal(true);
   };
 
-  const handleSaveCard = (e: React.FormEvent) => {
+  const handleSaveCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cardFormTitle.trim()) {
       showToast("Vui lòng nhập tên chủ điểm đọc! ⚠️");
@@ -228,30 +323,43 @@ export default function ReadingLearningPage() {
 
     const totalCount = Math.max(cardFormTotalQuestions, finalQuestions.length);
 
+    const cleanVocab = cardFormVocabList.length > 0 ? cardFormVocabList : undefined;
+
     if (editingCard) {
+      const updatedCandidate: ExerciseCardData = {
+        ...editingCard,
+        title: cardFormTitle.trim(),
+        category: cardFormCategory,
+        subCategory: cardFormSubCategory,
+        tag: cardFormTag.trim() || undefined,
+        totalQuestions: totalCount,
+        passageText: cardFormPassageText.trim() || undefined,
+        passageTextVi: cardFormPassageTextVi.trim() || undefined,
+        vocabList: cleanVocab,
+        detailsLoaded: true,
+        theory: {
+          summary: cardFormTheorySummary.trim() || editingCard.theory?.summary || "",
+          rules: rulesArr.length > 0 ? rulesArr : editingCard.theory?.rules || [],
+          example: cardFormTheoryExample.trim() || editingCard.theory?.example || "",
+        },
+        sampleQuestions: finalQuestions,
+      };
+      let savedCard = updatedCandidate;
+      let syncedBackend = false;
+      try {
+        savedCard = await updateAdminReadingCard(editingCard.id, updatedCandidate);
+        syncedBackend = true;
+      } catch (err) {
+        console.warn("Saved reading card locally (backend sync skipped):", err);
+      }
       updateCardsState((prev) =>
-        prev.map((c) =>
-          c.id === editingCard.id
-            ? {
-                ...c,
-                title: cardFormTitle.trim(),
-                category: cardFormCategory,
-                subCategory: cardFormSubCategory,
-                tag: cardFormTag.trim() || undefined,
-                totalQuestions: totalCount,
-                passageText: cardFormPassageText.trim() || undefined,
-                passageTextVi: cardFormPassageTextVi.trim() || undefined,
-                theory: {
-                  summary: cardFormTheorySummary.trim() || c.theory?.summary || "",
-                  rules: rulesArr.length > 0 ? rulesArr : c.theory?.rules || [],
-                  example: cardFormTheoryExample.trim() || c.theory?.example || "",
-                },
-                sampleQuestions: finalQuestions,
-              }
-            : c
-        )
+        prev.map((c) => (c.id === editingCard.id ? { ...savedCard, detailsLoaded: true } : c))
       );
-      showToast(`Đã cập nhật chuyên đề "${cardFormTitle}" (${finalQuestions.length} câu hỏi)! 💾`);
+      showToast(
+        syncedBackend
+          ? `Đã cập nhật & đồng bộ chuyên đề "${savedCard.title}" (${finalQuestions.length} câu hỏi)! 💾`
+          : `Đã cập nhật cục bộ chuyên đề "${savedCard.title}" (${finalQuestions.length} câu hỏi)! 💾`
+      );
     } else {
       const newId = `reading-${cards.length + 1}-${Date.now().toString().slice(-4)}`;
       const newCard: ExerciseCardData = {
@@ -266,6 +374,8 @@ export default function ReadingLearningPage() {
         wrongAnswers: 0,
         passageText: cardFormPassageText.trim() || undefined,
         passageTextVi: cardFormPassageTextVi.trim() || undefined,
+        vocabList: cleanVocab,
+        detailsLoaded: true,
         theory: {
           summary: cardFormTheorySummary.trim() || "Tóm tắt ngữ pháp và mẹo thi TOEIC Reading.",
           rules: rulesArr.length > 0 ? rulesArr : ["Nắm chắc dấu hiệu nhận biết."],
@@ -273,16 +383,43 @@ export default function ReadingLearningPage() {
         },
         sampleQuestions: finalQuestions,
       };
-      updateCardsState((prev) => [newCard, ...prev]);
-      showToast(`Đã thêm chuyên đề "${newCard.title}" với ${finalQuestions.length} câu hỏi! 🎉`);
+      let savedCard = newCard;
+      let syncedBackend = false;
+      try {
+        savedCard = await createAdminReadingCard(newCard);
+        syncedBackend = true;
+      } catch (err) {
+        console.warn("Created reading card locally (backend sync skipped):", err);
+      }
+      updateCardsState((prev) => [
+        { ...savedCard, detailsLoaded: true },
+        ...prev.filter((c) => c.id !== savedCard.id),
+      ]);
+      showToast(
+        syncedBackend
+          ? `Đã thêm & lưu chuyên đề "${savedCard.title}" (${finalQuestions.length} câu hỏi) lên hệ thống! 🎉`
+          : `Đã thêm cục bộ chuyên đề "${savedCard.title}" (${finalQuestions.length} câu hỏi)! 🎉`
+      );
     }
     setShowCreateCardModal(false);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteCardConfirm) return;
-    updateCardsState((prev) => prev.filter((c) => c.id !== deleteCardConfirm.id));
-    showToast(`Đã xóa chuyên đề "${deleteCardConfirm.title}"`);
+    const target = deleteCardConfirm;
+    let deletedBackend = false;
+    try {
+      await deleteAdminReadingCard(target.id);
+      deletedBackend = true;
+    } catch (err) {
+      console.warn("Deleted reading card locally (backend delete skipped):", err);
+    }
+    updateCardsState((prev) => prev.filter((c) => c.id !== target.id));
+    showToast(
+      deletedBackend
+        ? `Đã xóa chuyên đề "${target.title}" khỏi hệ thống`
+        : `Đã xóa chuyên đề "${target.title}"`
+    );
     setDeleteCardConfirm(null);
   };
 
@@ -355,9 +492,9 @@ export default function ReadingLearningPage() {
     <div className="space-y-6">
       {/* Toast notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce">
-          <Sparkles className="w-5 h-5 text-amber-300" />
-          <span className="font-semibold text-sm">{toastMessage}</span>
+        <div className="fixed bottom-4 sm:bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 bg-blue-600 text-white px-4 sm:px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce max-w-md sm:max-w-lg">
+          <Sparkles className="w-5 h-5 text-amber-300 shrink-0" />
+          <span className="font-semibold text-xs sm:text-sm">{toastMessage}</span>
         </div>
       )}
 
@@ -382,9 +519,15 @@ export default function ReadingLearningPage() {
         <ReadingCardGrid
           cards={filteredCards}
           viewMode={viewMode}
-          onStartPractice={(card) => setAuditCard(card)}
-          onOpenTheory={(card) => setTheoryCard(card)}
-          onOpenEditCard={handleOpenEditCard}
+          onStartPractice={(card) => {
+            void ensureCardDetails(card).then((hydrated) => setAuditCard(hydrated));
+          }}
+          onOpenTheory={(card) => {
+            void ensureCardDetails(card).then((hydrated) => setTheoryCard(hydrated));
+          }}
+          onOpenEditCard={(card, e) => {
+            void handleOpenEditCard(card, e);
+          }}
           onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
         />
       )}
@@ -392,12 +535,17 @@ export default function ReadingLearningPage() {
       {activeMainTab === "passages" && (
         <ReadingPassageBankView
           cards={cards}
-          onStartPractice={(card) => setAuditCard(card)}
-          onOpenEditCard={handleOpenEditCard}
+          onStartPractice={(card) => {
+            void ensureCardDetails(card).then((hydrated) => setAuditCard(hydrated));
+          }}
+          onOpenEditCard={(card, e) => {
+            void handleOpenEditCard(card, e);
+          }}
           onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
+          onEnsureCardDetails={ensureCardDetails}
           onOpenCreatePassage={() => {
-            setCardFormCategory("part7");
-            handleOpenCreateCard();
+            openCreateCardModal("part7");
+
           }}
         />
       )}
@@ -418,7 +566,7 @@ export default function ReadingLearningPage() {
           onStartPractice={(card) => setActivePracticeCard(card)}
           onEditCard={(card) => {
             setTheoryCard(null);
-            handleOpenEditCard(card);
+            void handleOpenEditCard(card);
           }}
         />
       )}
@@ -434,9 +582,25 @@ export default function ReadingLearningPage() {
       <ReadingBulkImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
-        onImportSuccess={(newCard) => {
-          updateCardsState((prev) => [newCard, ...prev]);
-          showToast(`Đã import thành công "${newCard.title}" với ${newCard.totalQuestions} câu hỏi! 🎉`);
+        onImportSuccess={async (newCard) => {
+          const cardWithFlag: ExerciseCardData = { ...newCard, detailsLoaded: true };
+          let savedCard = cardWithFlag;
+          let syncedBackend = false;
+          try {
+            savedCard = await createAdminReadingCard(cardWithFlag);
+            syncedBackend = true;
+          } catch (err) {
+            console.warn("Imported reading card locally (backend sync skipped):", err);
+          }
+          updateCardsState((prev) => [
+            { ...savedCard, detailsLoaded: true },
+            ...prev.filter((c) => c.id !== savedCard.id),
+          ]);
+          showToast(
+            syncedBackend
+              ? `Đã import & lưu "${savedCard.title}" (${savedCard.totalQuestions} câu hỏi) lên hệ thống! 🎉`
+              : `Đã import cục bộ "${savedCard.title}" với ${savedCard.totalQuestions} câu hỏi! 🎉`
+          );
         }}
       />
 
@@ -465,6 +629,8 @@ export default function ReadingLearningPage() {
           setCardFormPassageTextVi={setCardFormPassageTextVi}
           cardFormSampleQuestions={cardFormSampleQuestions}
           setCardFormSampleQuestions={setCardFormSampleQuestions}
+          cardFormVocabList={cardFormVocabList}
+          setCardFormVocabList={setCardFormVocabList}
           onSaveCard={handleSaveCard}
           onClose={() => setShowCreateCardModal(false)}
         />
