@@ -37,8 +37,16 @@ public class ReadingService {
     }
 
     public List<ReadingExerciseCard> listCards(String category, UUID userId) {
+        return listCards(category, userId, false);
+    }
+
+    public List<ReadingExerciseCard> listAdminCards(String category, UUID userId) {
+        return listCards(category, userId, true);
+    }
+
+    private List<ReadingExerciseCard> listCards(String category, UUID userId, boolean includeDrafts) {
         String sql = """
-                SELECT r.id, r.title, r.category, r.sub_category, r.subtitle, r.tag,
+                SELECT r.id, r.title, r.category, r.sub_category, r.subtitle, r.tag, r.status,
                        r.total_questions,
                        COALESCE(p.studied_questions, 0) AS studied_questions,
                        COALESCE(p.correct_answers, 0) AS correct_answers,
@@ -52,19 +60,32 @@ public class ReadingService {
                 FROM reading_exercise_cards r
                 LEFT JOIN user_reading_progress p ON p.exercise_id = r.id AND p.user_id = ?
                 """;
+        List<Object> params = new ArrayList<>();
+        params.add(userId);
 
         if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
-            sql += " WHERE r.category = ? ORDER BY r.order_index ASC, r.id ASC";
-            return jdbc.query(sql, this::mapCardSummary, userId, category);
-        } else {
-            sql += " ORDER BY r.order_index ASC, r.id ASC";
-            return jdbc.query(sql, this::mapCardSummary, userId);
+            sql += " WHERE ";
+            if (!includeDrafts) sql += "r.status = 'published' AND ";
+            sql += "r.category = ?";
+            params.add(category);
+        } else if (!includeDrafts) {
+            sql += " WHERE r.status = 'published'";
         }
+        sql += " ORDER BY r.order_index ASC, r.id ASC";
+        return jdbc.query(sql, this::mapCardSummary, params.toArray());
     }
 
     public ReadingExerciseCard getCard(String cardId, UUID userId) {
+        return getCard(cardId, userId, false);
+    }
+
+    public ReadingExerciseCard getAdminCard(String cardId, UUID userId) {
+        return getCard(cardId, userId, true);
+    }
+
+    private ReadingExerciseCard getCard(String cardId, UUID userId, boolean includeDrafts) {
         String sql = """
-                SELECT r.id, r.title, r.category, r.sub_category, r.subtitle, r.tag,
+                SELECT r.id, r.title, r.category, r.sub_category, r.subtitle, r.tag, r.status,
                        r.total_questions,
                        COALESCE(p.studied_questions, 0) AS studied_questions,
                        COALESCE(p.correct_answers, 0) AS correct_answers,
@@ -77,10 +98,10 @@ public class ReadingService {
                        r.created_at, r.updated_at
                 FROM reading_exercise_cards r
                 LEFT JOIN user_reading_progress p ON p.exercise_id = r.id AND p.user_id = ?
-                WHERE r.id = ?
+                WHERE r.id = ? AND (? OR r.status = 'published')
                 """;
 
-        List<ReadingExerciseCard> cards = jdbc.query(sql, this::mapCardFull, userId, cardId);
+        List<ReadingExerciseCard> cards = jdbc.query(sql, this::mapCardFull, userId, cardId, includeDrafts);
         if (cards.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bài đọc: " + cardId);
         }
@@ -162,7 +183,7 @@ public class ReadingService {
         if (id == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu tiêu đề bài đọc.");
         }
-        return getCard(id, userId);
+        return getAdminCard(id, userId);
     }
 
     @Transactional
@@ -175,7 +196,7 @@ public class ReadingService {
         if (id == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu tiêu đề bài đọc.");
         }
-        return getCard(id, userId);
+        return getAdminCard(id, userId);
     }
 
     @Transactional
@@ -198,6 +219,7 @@ public class ReadingService {
         out.put("subCategory", card.subCategory());
         out.put("subtitle", card.subtitle());
         out.put("tag", card.tag());
+        out.put("status", card.status());
         out.put("totalQuestions", card.totalQuestions());
         out.put("passageText", card.passageText());
         out.put("passageTextVi", card.passageTextVi());
@@ -218,6 +240,7 @@ public class ReadingService {
                 rs.getString("sub_category"),
                 rs.getString("subtitle"),
                 rs.getString("tag"),
+                rs.getString("status"),
                 rs.getInt("total_questions"),
                 rs.getInt("studied_questions"),
                 rs.getInt("correct_answers"),
@@ -241,6 +264,7 @@ public class ReadingService {
                 rs.getString("sub_category"),
                 rs.getString("subtitle"),
                 rs.getString("tag"),
+                rs.getString("status"),
                 rs.getInt("total_questions"),
                 rs.getInt("studied_questions"),
                 rs.getInt("correct_answers"),
@@ -285,16 +309,17 @@ public class ReadingService {
 
         String upsert = """
                 INSERT INTO reading_exercise_cards (
-                    id, title, category, sub_category, subtitle, tag,
+                    id, title, category, sub_category, subtitle, tag, status,
                     total_questions, passage_text, passage_text_vi,
                     passages, theory, sample_questions, order_index, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, 0, now())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, 0, now())
                 ON CONFLICT (id) DO UPDATE SET
                     title = EXCLUDED.title,
                     category = EXCLUDED.category,
                     sub_category = EXCLUDED.sub_category,
                     subtitle = EXCLUDED.subtitle,
                     tag = EXCLUDED.tag,
+                    status = EXCLUDED.status,
                     total_questions = EXCLUDED.total_questions,
                     passage_text = EXCLUDED.passage_text,
                     passage_text_vi = EXCLUDED.passage_text_vi,
@@ -306,7 +331,7 @@ public class ReadingService {
 
         jdbc.update(upsert,
                 card.id(), card.title(), card.category(), card.subCategory(),
-                card.subtitle(), card.tag(), card.totalQuestions(),
+                card.subtitle(), card.tag(), card.status(), card.totalQuestions(),
                 card.passageText(), card.passageTextVi(),
                 toJson(card.passages()), toJson(card.theory()), toJson(card.sampleQuestions()));
         return card.id();
@@ -340,6 +365,11 @@ public class ReadingService {
                 : category.equals("grammar") ? "Ngữ pháp Reading" : "Part 7 - Đọc hiểu";
         String tag = firstText(data, "tag", "topic");
         if (tag.isBlank()) tag = defaultTag;
+        String status = firstText(data, "status");
+        if (status.isBlank()) status = "published";
+        if (!"draft".equals(status) && !"published".equals(status)) {
+            throw new IllegalArgumentException("Trạng thái Reading phải là draft hoặc published.");
+        }
 
         ArrayNode passagesNode = data.path("passages").isArray()
                 ? (ArrayNode) data.path("passages").deepCopy()
@@ -401,6 +431,7 @@ public class ReadingService {
                 clamp(subCategory, 64),
                 clamp(subtitle, 255),
                 clamp(tag, 64),
+                status,
                 totalQuestions,
                 passageText,
                 passageTextVi,
@@ -543,6 +574,7 @@ public class ReadingService {
             String subCategory,
             String subtitle,
             String tag,
+            String status,
             int totalQuestions,
             String passageText,
             String passageTextVi,

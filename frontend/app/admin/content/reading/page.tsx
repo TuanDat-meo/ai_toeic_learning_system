@@ -9,8 +9,8 @@ import { ExerciseCardData, SampleQuestion, VocabItem } from "./types";
 import {
   createAdminReadingCard,
   deleteAdminReadingCard,
-  fetchReadingCardDetails,
-  fetchReadingCards,
+  fetchAdminReadingCardDetails,
+  fetchAdminReadingCards,
   updateAdminReadingCard,
 } from "@/lib/api/reading";
 
@@ -26,12 +26,16 @@ import {
 } from "@/components/admin/content/reading/ReadingViews";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingCreateCardModal } from "@/components/admin/content/reading/ReadingCreateCardModal";
-import { ReadingDeleteCardModal } from "@/components/admin/content/reading/ReadingDeleteCardModal";
+import {
+  ReadingDeleteCardModal,
+  ReadingDeleteAllDraftsModal,
+} from "@/components/admin/content/reading/ReadingDeleteCardModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
 import { ReadingContentAuditWorkspace } from "@/components/admin/content/reading/ReadingContentAuditWorkspace";
 import { ReadingBulkImportModal } from "@/components/admin/content/reading/ReadingBulkImportModal";
 import { exportToExcel } from "@/lib/exportExcel";
 import { playUnifiedAnswerSound } from "@/lib/sound";
+import { normalizeReadingCardTitle } from "./readingTitleUtils";
 
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>([]);
@@ -70,7 +74,7 @@ export default function ReadingLearningPage() {
       setLoading(true);
       setLoadError(null);
       try {
-        const backendCards = await fetchReadingCards();
+        const backendCards = await fetchAdminReadingCards();
         if (!active) return;
         cardsRef.current = backendCards;
         setCards(backendCards);
@@ -98,7 +102,7 @@ export default function ReadingLearningPage() {
     if (card.detailsLoaded || (card.sampleQuestions && card.sampleQuestions.length > 0)) {
       return card;
     }
-    const detailed = await fetchReadingCardDetails(card.id);
+    const detailed = await fetchAdminReadingCardDetails(card.id);
     if (!detailed) return card;
     const mergedCard: ExerciseCardData = { ...card, ...detailed, detailsLoaded: true };
     updateCardsState(
@@ -112,6 +116,73 @@ export default function ReadingLearningPage() {
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
   const [auditCard, setAuditCard] = useState<ExerciseCardData | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null);
+  const [deleteAllDraftsList, setDeleteAllDraftsList] = useState<ExerciseCardData[] | null>(null);
+
+  const handleToggleCardStatus = async (card: ExerciseCardData) => {
+    const nextStatus: "draft" | "published" = card.status === "draft" ? "published" : "draft";
+    const updatedCard: ExerciseCardData = {
+      ...card,
+      status: nextStatus,
+    };
+    try {
+      const savedCard = await updateAdminReadingCard(card.id, updatedCard);
+      updateCardsState((prev) => prev.map((c) => (c.id === card.id ? savedCard : c)));
+    } catch (err) {
+      showToast(err instanceof Error ? `Không thể cập nhật trạng thái: ${err.message}` : "Không thể cập nhật trạng thái.");
+      return;
+    }
+    showToast(
+      nextStatus === "published"
+        ? `Đã phát hành "${card.title}" thành công! 🎉`
+        : `Đã chuyển "${card.title}" về Bản nháp! 📝`
+    );
+  };
+
+  const handleOpenDeleteAllDrafts = (draftCards: ExerciseCardData[]) => {
+    setDeleteAllDraftsList(draftCards);
+  };
+
+  const handleConfirmDeleteAllDrafts = async () => {
+    if (!deleteAllDraftsList || deleteAllDraftsList.length === 0) return;
+    const targets = [...deleteAllDraftsList];
+    const targetIds = new Set(targets.map((c) => c.id));
+
+    try {
+      await Promise.all(targets.map((card) => deleteAdminReadingCard(card.id)));
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
+      showToast(err instanceof Error ? `Không thể xóa toàn bộ bản nháp: ${err.message}` : "Không thể xóa toàn bộ bản nháp.");
+      return;
+    }
+
+    updateCardsState((prev) => prev.filter((c) => !targetIds.has(c.id)));
+    setDeleteAllDraftsList(null);
+    showToast(`Đã dọn sạch toàn bộ ${targets.length} bài đọc bản nháp! 🗑️`);
+  };
+
+  const handlePublishAllDrafts = async (draftCards: ExerciseCardData[]) => {
+    if (draftCards.length === 0) return;
+    const targetIds = new Set(draftCards.map((c) => c.id));
+    let updatedCards: ExerciseCardData[];
+    try {
+      updatedCards = await Promise.all(
+        draftCards.map((card) =>
+          updateAdminReadingCard(card.id, { ...card, status: "published" })
+        )
+      );
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
+      showToast(err instanceof Error ? `Không thể phát hành toàn bộ bản nháp: ${err.message}` : "Không thể phát hành toàn bộ bản nháp.");
+      return;
+    }
+
+    const updatedById = new Map(updatedCards.map((card) => [card.id, card]));
+    updateCardsState((prev) =>
+      prev.map((card) => (targetIds.has(card.id) ? updatedById.get(card.id) ?? card : card))
+    );
+    showToast(`Đã phát hành thành công toàn bộ ${draftCards.length} bài đọc cho học viên! 🎉`);
+  };
 
   // State Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -146,6 +217,7 @@ export default function ReadingLearningPage() {
   const [cardFormTheoryExample, setCardFormTheoryExample] = useState("");
   const [cardFormPassageText, setCardFormPassageText] = useState("");
   const [cardFormPassageTextVi, setCardFormPassageTextVi] = useState("");
+  const [cardFormTotalQuestions, setCardFormTotalQuestions] = useState(1);
   const [cardFormSampleQuestions, setCardFormSampleQuestions] = useState<SampleQuestion[]>([]);
   const [cardFormVocabList, setCardFormVocabList] = useState<VocabItem[]>([]);
 
@@ -181,6 +253,7 @@ export default function ReadingLearningPage() {
     setCardFormTheoryExample("");
     setCardFormPassageText("");
     setCardFormPassageTextVi("");
+    setCardFormTotalQuestions(1);
     setCardFormVocabList([]);
     setCardFormSampleQuestions([
       {
@@ -206,15 +279,21 @@ export default function ReadingLearningPage() {
     if (e) e.stopPropagation();
     const resolved = await ensureCardDetails(card);
     setEditingCard(resolved);
-    setCardFormTitle(resolved.title);
+    setCardFormTotalQuestions(resolved.totalQuestions);
+    const cleanInitialTitle = normalizeReadingCardTitle(resolved.title, resolved.category, resolved.totalQuestions);
+    setCardFormTitle(cleanInitialTitle);
     setCardFormCategory(resolved.category);
     setCardFormSubCategory(resolved.subCategory || "word_types");
     setCardFormTag(resolved.tag || "");
     setCardFormTheorySummary(resolved.theory?.summary || "");
     setCardFormTheoryRules(resolved.theory?.rules?.join("\n") || "");
     setCardFormTheoryExample(resolved.theory?.example || "");
-    setCardFormPassageText(resolved.passageText || resolved.sampleQuestions?.[0]?.passageText || "");
-    setCardFormPassageTextVi(resolved.passageTextVi || resolved.sampleQuestions?.[0]?.passageTextVi || "");
+    const firstQPassage = resolved.sampleQuestions?.find((q) => q.passageText?.trim())?.passageText?.trim() || "";
+    const firstQPassageVi = resolved.sampleQuestions?.find((q) => q.passageTextVi?.trim())?.passageTextVi?.trim() || "";
+    const initialPassage = (resolved.passageText && resolved.passageText.trim()) || firstQPassage;
+    const initialPassageVi = (resolved.passageTextVi && resolved.passageTextVi.trim()) || firstQPassageVi;
+    setCardFormPassageText(initialPassage);
+    setCardFormPassageTextVi(initialPassageVi);
     setCardFormVocabList(
       resolved.vocabList && resolved.vocabList.length > 0
         ? JSON.parse(JSON.stringify(resolved.vocabList))
@@ -240,7 +319,7 @@ export default function ReadingLearningPage() {
     setShowCreateCardModal(true);
   };
 
-  const handleSaveCard = async (e: React.FormEvent) => {
+  const handleSaveCard = async (e: React.FormEvent, overwriteTargetId?: string) => {
     e.preventDefault();
     if (!cardFormTitle.trim()) {
       showToast("Vui lòng nhập tên chủ điểm đọc! ⚠️");
@@ -252,15 +331,47 @@ export default function ReadingLearningPage() {
       .map((r) => r.trim())
       .filter((r) => r.length > 0);
 
-    // Filter valid questions
-    const validQuestions = cardFormSampleQuestions.filter(
-      (q) => q.question.trim().length > 0 || q.options.some((opt) => opt.trim().length > 0)
-    );
-
-    if (validQuestions.length === 0) {
-      showToast("Vui lòng nhập ít nhất 1 câu hỏi có nội dung và đáp án! ⚠️");
+    // Kiểm tra câu hỏi & đầy đủ 4 đáp án A/B/C/D
+    if (!cardFormSampleQuestions || cardFormSampleQuestions.length === 0) {
+      showToast("Vui lòng nhập ít nhất 1 câu hỏi ở tab 'Bộ câu hỏi & Đáp án'! ⚠️");
       return;
     }
+
+    for (let i = 0; i < cardFormSampleQuestions.length; i++) {
+      const q = cardFormSampleQuestions[i];
+      const qNumStr = q.questionNum ? ` (#${q.questionNum})` : ` ${i + 1}`;
+      if (!q.question.trim()) {
+        showToast(`Câu${qNumStr} chưa có nội dung câu hỏi tiếng Anh! ⚠️`);
+        return;
+      }
+      if (!q.bilingual?.trim()) {
+        showToast(`Câu${qNumStr} chưa có bản dịch tiếng Việt! ⚠️`);
+        return;
+      }
+      const missingOpts = [0, 1, 2, 3].filter((idx) => !(q.options?.[idx] || "").trim());
+      if (missingOpts.length > 0) {
+        const letters = missingOpts.map((idx) => ["A", "B", "C", "D"][idx]).join(", ");
+        showToast(`Câu${qNumStr} chưa điền đủ 4 đáp án (đang thiếu: ${letters})! ⚠️`);
+        return;
+      }
+      const missingMeanings = [0, 1, 2, 3].filter((idx) => !(q.optionMeanings?.[idx] || "").trim());
+      if (missingMeanings.length > 0) {
+        const letters = missingMeanings.map((idx) => ["A", "B", "C", "D"][idx]).join(", ");
+        showToast(`Câu${qNumStr} chưa nhập nghĩa tiếng Việt cho phương án (${letters})! ⚠️`);
+        return;
+      }
+    }
+
+    // Kiểm tra từ vựng
+    const totalVocab =
+      cardFormVocabList.length +
+      cardFormSampleQuestions.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0);
+    if (totalVocab === 0) {
+      showToast("Vui lòng thêm ít nhất 1 từ vựng trọng tâm ở tab 'Từ vựng cần học' trước khi lưu! ⚠️");
+      return;
+    }
+
+    const validQuestions = cardFormSampleQuestions;
 
     // KIỂM TRA ĐỊNH DẠNG THEO CHUẨN TOEIC (PART NÀO ĐI VỚI NỘI DUNG ĐÓ)
     const hasAnyPassage = !!cardFormPassageText.trim() || validQuestions.some((q) => !!q.passageText);
@@ -269,62 +380,73 @@ export default function ReadingLearningPage() {
     if (cardFormCategory === "part6" || cardFormCategory === "part7") {
       if (!hasAnyPassage) {
         const partLabel = cardFormCategory === "part6" ? "Part 6 (Điền đoạn văn)" : "Part 7 (Đọc hiểu văn bản)";
-        showToast(`❌ Không thể lưu: Đề thi ${partLabel} bắt buộc phải có Đoạn văn/Bài đọc (Passage). Bạn không thể đưa câu đơn của Part 5 vào ${partLabel}!`);
+        showToast(`❌ Không thể lưu: Bài đọc ${partLabel} bắt buộc phải có Đoạn văn/Bài đọc (Passage). Bạn không thể đưa câu đơn của Part 5 vào ${partLabel}!`);
         return;
       }
     }
 
-    // 2. Nếu là Part 5: Bắt buộc là câu đơn, KHÔNG được có đoạn văn dài
-    if (cardFormCategory === "part5" && cardFormPassageText.trim().length > 0) {
-      showToast("❌ Không thể lưu: Part 5 là phần thi câu đơn độc lập (Incomplete Sentences), không chứa đoạn văn. Vui lòng chuyển sang Part 6 hoặc Part 7 nếu bạn có bài đọc!");
-      return;
+    // 2. Nếu là Part 5: Bắt buộc là câu đơn, tự động dọn dẹp đoạn văn cũ (nếu có)
+    const isPart5 = cardFormCategory === "part5";
+    const totalCount = Math.max(cardFormTotalQuestions, validQuestions.length);
+    let finalTitle = normalizeReadingCardTitle(cardFormTitle.trim(), cardFormCategory, totalCount);
+    if (isPart5) {
+      if (validQuestions.length !== 30 && (finalTitle.includes("101 - 130") || finalTitle.includes("101-130"))) {
+        finalTitle = finalTitle
+          .replace(/\(Câu 101\s*-\s*130\)/gi, `(${validQuestions.length} câu luyện tập)`)
+          .replace(/101\s*-\s*130/gi, `${validQuestions.length} câu`);
+      }
     }
 
     const finalQuestions = validQuestions.map((q, idx) => ({
       ...q,
-      questionNum: q.questionNum?.trim() || String(idx + 1),
-      passageText: q.passageText || cardFormPassageText.trim() || undefined,
-      passageTextVi: q.passageTextVi || cardFormPassageTextVi.trim() || undefined,
+      questionNum:
+        isPart5 && Number(validQuestions[0]?.questionNum) > 130
+          ? String(101 + idx)
+          : q.questionNum?.trim() || String(idx + 1),
+      passageText: isPart5 ? undefined : (q.passageText || cardFormPassageText.trim() || undefined),
+      passageTextVi: isPart5 ? undefined : (q.passageTextVi || cardFormPassageTextVi.trim() || undefined),
     }));
-
-    const totalCount = finalQuestions.length;
 
     const cleanVocab = cardFormVocabList.length > 0 ? cardFormVocabList : undefined;
 
-    if (editingCard) {
+    const targetId = editingCard?.id || overwriteTargetId;
+    const targetCard = targetId ? cards.find((c) => c.id === targetId) : null;
+
+    if (targetCard) {
       const updatedCandidate: ExerciseCardData = {
-        ...editingCard,
-        title: cardFormTitle.trim(),
+        ...targetCard,
+        title: finalTitle,
         category: cardFormCategory,
         subCategory: cardFormSubCategory,
         tag: cardFormTag.trim() || undefined,
+        status: "published",
         totalQuestions: totalCount,
-        passageText: cardFormPassageText.trim() || undefined,
-        passageTextVi: cardFormPassageTextVi.trim() || undefined,
+        passageText: isPart5 ? undefined : (cardFormPassageText.trim() || undefined),
+        passageTextVi: isPart5 ? undefined : (cardFormPassageTextVi.trim() || undefined),
         vocabList: cleanVocab,
         detailsLoaded: true,
         theory: {
-          summary: cardFormTheorySummary.trim() || editingCard.theory?.summary || "",
-          rules: rulesArr.length > 0 ? rulesArr : editingCard.theory?.rules || [],
-          example: cardFormTheoryExample.trim() || editingCard.theory?.example || "",
+          summary: cardFormTheorySummary.trim() || targetCard.theory?.summary || "",
+          rules: rulesArr.length > 0 ? rulesArr : targetCard.theory?.rules || [],
+          example: cardFormTheoryExample.trim() || targetCard.theory?.example || "",
         },
         sampleQuestions: finalQuestions,
       };
       let savedCard: ExerciseCardData;
       try {
-        savedCard = await updateAdminReadingCard(editingCard.id, updatedCandidate);
+        savedCard = await updateAdminReadingCard(targetCard.id, updatedCandidate);
       } catch (err) {
         showToast(err instanceof Error ? `Không thể cập nhật Reading: ${err.message}` : "Không thể cập nhật Reading.");
         return;
       }
       updateCardsState((prev) =>
-        prev.map((c) => (c.id === editingCard.id ? { ...savedCard, detailsLoaded: true } : c))
+        prev.map((c) => (c.id === targetCard.id ? { ...savedCard, detailsLoaded: true } : c))
       );
       showToast(`Đã cập nhật chuyên đề "${savedCard.title}" (${finalQuestions.length} câu hỏi)! 💾`);
     } else {
       const newCard: ExerciseCardData = {
         id: "",
-        title: cardFormTitle.trim(),
+        title: finalTitle,
         category: cardFormCategory,
         subCategory: cardFormSubCategory,
         tag: cardFormTag.trim() || undefined,
@@ -332,8 +454,8 @@ export default function ReadingLearningPage() {
         studiedQuestions: 0,
         correctAnswers: 0,
         wrongAnswers: 0,
-        passageText: cardFormPassageText.trim() || undefined,
-        passageTextVi: cardFormPassageTextVi.trim() || undefined,
+        passageText: isPart5 ? undefined : (cardFormPassageText.trim() || undefined),
+        passageTextVi: isPart5 ? undefined : (cardFormPassageTextVi.trim() || undefined),
         vocabList: cleanVocab,
         detailsLoaded: true,
         theory: {
@@ -440,8 +562,8 @@ export default function ReadingLearningPage() {
 
   return (
     <div className="space-y-6">
-      {/* Toast notification */}
-      {toastMessage && (
+      {/* Toast notification (chỉ hiển thị ở góc màn hình ngoài khi KHÔNG mở modal tạo/sửa để tránh hiển thị lạc lõng bên ngoài popup) */}
+      {toastMessage && !showCreateCardModal && !showImportModal && !theoryCard && (
         <div className="fixed bottom-4 sm:bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 bg-blue-600 text-white px-4 sm:px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-blue-400 animate-bounce max-w-md sm:max-w-lg">
           <Sparkles className="w-5 h-5 text-amber-300 shrink-0" />
           <span className="font-semibold text-xs sm:text-sm">{toastMessage}</span>
@@ -484,6 +606,7 @@ export default function ReadingLearningPage() {
         <ReadingCardGrid
           cards={filteredCards}
           viewMode={viewMode}
+          highlightedCardId={highlightedCardId}
           onStartPractice={(card) => {
             void ensureCardDetails(card).then((hydrated) => setAuditCard(hydrated));
           }}
@@ -494,6 +617,9 @@ export default function ReadingLearningPage() {
             void handleOpenEditCard(card, e);
           }}
           onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
+          onToggleCardStatus={handleToggleCardStatus}
+          onDeleteAllDrafts={handleOpenDeleteAllDrafts}
+          onPublishAllDrafts={handlePublishAllDrafts}
         />
       )}
 
@@ -544,23 +670,72 @@ export default function ReadingLearningPage() {
         />
       )}
 
+      {deleteAllDraftsList && (
+        <ReadingDeleteAllDraftsModal
+          count={deleteAllDraftsList.length}
+          onClose={() => setDeleteAllDraftsList(null)}
+          onConfirmDelete={handleConfirmDeleteAllDrafts}
+        />
+      )}
+
       <ReadingBulkImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
-        onImportSuccess={async (newCard) => {
-          const cardWithFlag: ExerciseCardData = { ...newCard, detailsLoaded: true };
-          let savedCard: ExerciseCardData;
-          try {
-            savedCard = await createAdminReadingCard(cardWithFlag);
-          } catch (err) {
-            showToast(err instanceof Error ? `Không thể lưu nội dung đã import: ${err.message}` : "Không thể lưu nội dung đã import.");
-            return;
+        existingCards={cards}
+        onImportSuccess={async (imported) => {
+          const cardList = Array.isArray(imported) ? imported : [imported];
+          const savedCards: ExerciseCardData[] = [];
+
+          for (const card of cardList) {
+            const cardWithFlag: ExerciseCardData = { ...card, detailsLoaded: true };
+            try {
+              savedCards.push(await createAdminReadingCard(cardWithFlag));
+            } catch (err) {
+              if (savedCards.length > 0) {
+                updateCardsState((prev) => [
+                  ...savedCards.reverse().map((saved) => ({ ...saved, detailsLoaded: true })),
+                  ...prev.filter((existing) => !savedCards.some((saved) => saved.id === existing.id)),
+                ]);
+                window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
+              }
+              showToast(err instanceof Error ? `Không thể lưu nội dung đã import: ${err.message}` : "Không thể lưu nội dung đã import.");
+              return;
+            }
           }
-          updateCardsState((prev) => [
-            { ...savedCard, detailsLoaded: true },
-            ...prev.filter((c) => c.id !== savedCard.id),
-          ]);
-          showToast(`Đã import "${savedCard.title}" (${savedCard.totalQuestions} câu hỏi) vào hệ thống! 🎉`);
+
+          updateCardsState((prev) => {
+            let next = [...prev];
+            for (const sc of [...savedCards].reverse()) {
+              const existingIdx = next.findIndex((c) => c.id === sc.id);
+              if (existingIdx >= 0) {
+                next[existingIdx] = { ...sc, detailsLoaded: true };
+              } else {
+                next = [{ ...sc, detailsLoaded: true }, ...next];
+              }
+            }
+            return next;
+          });
+
+          if (savedCards.length > 0) {
+            setHighlightedCardId(savedCards[0].id);
+            setTimeout(() => {
+              setHighlightedCardId((current) => (savedCards.some((c) => c.id === current) ? null : current));
+            }, 8000);
+          }
+
+          if (savedCards.length === 1) {
+            const savedCard = savedCards[0];
+            const isExisting = cards.some((c) => c.id === savedCard.id);
+            showToast(
+              isExisting
+                ? `Đã cập nhật & ghi đè chuyên đề "${savedCard.title}" (${savedCard.totalQuestions} câu)! ✨`
+                : `Đã import & lưu "${savedCard.title}" (${savedCard.totalQuestions} câu) dưới dạng ${savedCard.status === "draft" ? "Bản nháp" : "Đã phát hành"}! 🎉`
+            );
+          } else {
+            showToast(
+              `Đã import & lưu thành công ${savedCards.length} bài đọc! 🎉`
+            );
+          }
         }}
       />
 
@@ -585,12 +760,17 @@ export default function ReadingLearningPage() {
           setCardFormPassageText={setCardFormPassageText}
           cardFormPassageTextVi={cardFormPassageTextVi}
           setCardFormPassageTextVi={setCardFormPassageTextVi}
+          cardFormTotalQuestions={cardFormTotalQuestions}
+          setCardFormTotalQuestions={setCardFormTotalQuestions}
           cardFormSampleQuestions={cardFormSampleQuestions}
           setCardFormSampleQuestions={setCardFormSampleQuestions}
           cardFormVocabList={cardFormVocabList}
           setCardFormVocabList={setCardFormVocabList}
+          existingCards={cards}
           onSaveCard={handleSaveCard}
           onClose={() => setShowCreateCardModal(false)}
+          externalToast={toastMessage}
+          onClearToast={() => setToastMessage(null)}
         />
       )}
     </div>

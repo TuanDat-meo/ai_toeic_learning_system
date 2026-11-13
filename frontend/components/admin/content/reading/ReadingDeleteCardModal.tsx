@@ -91,3 +91,47 @@ export const ReadingResetModal: React.FC<ReadingResetModalProps> = ({
     </div>
   );
 };
+
+interface ReadingDeleteAllDraftsModalProps {
+  count: number;
+  onClose: () => void;
+  onConfirmDelete: () => void;
+}
+
+export const ReadingDeleteAllDraftsModal: React.FC<ReadingDeleteAllDraftsModalProps> = ({
+  count,
+  onClose,
+  onConfirmDelete,
+}) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
+      <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100 shadow-xs">
+          <Trash2 className="w-6 h-6" />
+        </div>
+        <div>
+          <h3 className="text-base font-bold text-slate-900">Xóa toàn bộ {count} bài bản nháp?</h3>
+          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            Bạn có chắc chắn muốn dọn sạch tất cả <strong className="text-rose-600 font-bold">{count} bài đọc bản nháp</strong> này khỏi hệ thống? Thao tác này sẽ xóa toàn bộ các bộ đề vừa thêm và không thể hoàn tác.
+          </p>
+        </div>
+        <div className="flex gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition active:scale-95"
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="button"
+            onClick={onConfirmDelete}
+            className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 cursor-pointer transition active:scale-95"
+          >
+            Xác nhận xóa hết
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

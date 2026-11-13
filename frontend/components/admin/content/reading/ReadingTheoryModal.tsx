@@ -10,18 +10,25 @@ import {
   FileText,
   ListOrdered,
   BookMarked,
-  CheckCircle2,
   Volume2,
   Edit3,
   Play,
-  Layers,
-  Clock,
   Sparkles,
   Languages,
   Check,
   Tag,
-  ArrowRight,
+  Save,
+  AlertCircle,
 } from "lucide-react";
+import {
+  normalizeVocabItem,
+  buildVocabItemFromCandidate,
+  extractReadingVocabCandidates,
+} from "@/lib/readingVocabExtractor";
+import {
+  fetchAdminReadingCardDetails,
+  updateAdminReadingCard,
+} from "@/lib/api/reading";
 
 export interface ReadingTheoryModalProps {
   card: ExerciseCardData;
@@ -42,8 +49,11 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
   const [activeTab, setActiveTab] = useState<ModalDetailTab>("info");
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [showBilingualPassage, setShowBilingualPassage] = useState(true);
-  const [playingRegion, setPlayingRegion] = useState<"UK" | "US" | null>(null);
+  const [playingWordKey, setPlayingWordKey] = useState<string | null>(null);
   const [selectedVocabDetail, setSelectedVocabDetail] = useState<WordDetail | null>(null);
+  const [isSavedVocab, setIsSavedVocab] = useState(false);
+  const [isSavingVocab, setIsSavingVocab] = useState(false);
+  const [vocabSaveError, setVocabSaveError] = useState<string | null>(null);
 
   const handleOpenVocabDetail = (
     vocab: VocabItem | { word: string; pos?: string; meaning?: string; ipa?: string; example?: string; exampleVi?: string }
@@ -91,45 +101,97 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
   const activeQuestion = questions[selectedQuestionIndex] || questions[0];
 
   // Aggregate all vocabularies (both card-level and per-question, deduplicated)
-  const allVocabularies = useMemo(() => {
+  const { allVocabularies, isExtracted } = useMemo(() => {
     const list: { item: VocabItem; qNum: string }[] = [];
     const seen = new Set<string>();
 
-    (card.vocabList || []).forEach((item) => {
+    const rawCardList: unknown[] = [...(card.vocabList || [])];
+    const cardAnyVocab = (card as unknown as { vocabulary?: unknown }).vocabulary;
+    if (Array.isArray(cardAnyVocab)) rawCardList.push(...cardAnyVocab);
+    rawCardList.forEach((raw) => {
+      const item = normalizeVocabItem(raw);
+      if (!item) return;
       const key = item.word.trim().toLowerCase();
       if (!key || seen.has(`card:${key}`)) return;
       seen.add(`card:${key}`);
-      list.push({
-        item,
-        qNum: "Bài đọc",
-      });
+      list.push({ item, qNum: "Bài đọc" });
     });
 
     questions.forEach((q, qIdx) => {
       const qNum = q.questionNum || String(100 + qIdx + 1);
-      (q.vocabList || []).forEach((item) => {
+      const qAny = q as unknown as { vocabulary?: unknown; vocab?: unknown };
+      const rawQList: unknown[] = [...(q.vocabList || [])];
+      if (Array.isArray(qAny.vocabulary)) rawQList.push(...(qAny.vocabulary as unknown[]));
+      if (Array.isArray(qAny.vocab)) rawQList.push(...(qAny.vocab as unknown[]));
+      rawQList.forEach((raw) => {
+        const item = normalizeVocabItem(raw);
+        if (!item) return;
         const key = item.word.trim().toLowerCase();
         if (!key || seen.has(`${qNum}:${key}`)) return;
         seen.add(`${qNum}:${key}`);
-        list.push({
-          item,
-          qNum,
-        });
+        list.push({ item, qNum });
       });
     });
-    return list;
-  }, [card.vocabList, questions]);
+
+    let autoExtracted = false;
+    // NẾU BÀI ĐỌC CHƯA CÓ TỪ VỰNG: TỰ ĐỘNG BÓC TÁCH TỪ VỰNG TRỌNG TÂM KÈM PHÁT ÂM VÀ VÍ DỤ TỪ CÂU HỎI
+    if (list.length === 0 && (questions.length > 0 || card.passageText)) {
+      autoExtracted = true;
+      const candidates = extractReadingVocabCandidates({
+        passageText: card.passageText,
+        passages: card.passages,
+        questions: questions as unknown as Parameters<typeof extractReadingVocabCandidates>[0]["questions"],
+        maxCandidates: 40,
+      });
+
+      candidates.forEach((cand) => {
+        const key = cand.word.trim().toLowerCase();
+        if (!key || seen.has(`cand:${key}`)) return;
+        seen.add(`cand:${key}`);
+
+        const item = buildVocabItemFromCandidate(cand);
+        const targetQ = cand.suggestedQuestionIndex !== null ? questions[cand.suggestedQuestionIndex] : null;
+        const qNum = targetQ?.questionNum || (cand.suggestedQuestionIndex !== null ? String(100 + cand.suggestedQuestionIndex + 1) : "Trọng tâm");
+        list.push({ item, qNum });
+      });
+    }
+
+    return { allVocabularies: list, isExtracted: autoExtracted };
+  }, [card, questions]);
+
+  const handleSaveExtractedVocab = async () => {
+    if (allVocabularies.length === 0) return;
+    setIsSavingVocab(true);
+    setVocabSaveError(null);
+    try {
+      const currentCard = await fetchAdminReadingCardDetails(card.id);
+      if (!currentCard) {
+        throw new Error("Không tìm thấy bài Reading cần cập nhật.");
+      }
+      await updateAdminReadingCard(card.id, {
+        ...currentCard,
+        vocabList: allVocabularies.map((v) => v.item),
+      });
+      setIsSavedVocab(true);
+      window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
+      setTimeout(() => setIsSavedVocab(false), 3000);
+    } catch (err) {
+      setVocabSaveError(err instanceof Error ? err.message : "Không thể lưu từ vựng vào Reading.");
+    } finally {
+      setIsSavingVocab(false);
+    }
+  };
 
   // Audio Pronunciation Synth for UK / US
   const playWordAudio = (word: string, region: "UK" | "US") => {
     if (!word || typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    setPlayingRegion(region);
+    setPlayingWordKey(`${word}-${region}`);
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = region === "UK" ? "en-GB" : "en-US";
     utterance.rate = 0.88;
-    utterance.onend = () => setPlayingRegion(null);
-    utterance.onerror = () => setPlayingRegion(null);
+    utterance.onend = () => setPlayingWordKey(null);
+    utterance.onerror = () => setPlayingWordKey(null);
     window.speechSynthesis.speak(utterance);
   };
 
@@ -143,8 +205,8 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
   }, [passageBlocks]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] shadow-2xl border border-slate-100 relative flex flex-col animate-in zoom-in-95 duration-150 font-sans overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 md:p-6 animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1400px] max-h-[94vh] shadow-2xl border border-slate-100 relative flex flex-col animate-in zoom-in-95 duration-150 font-sans overflow-hidden">
         {/* HEADER */}
         <div className="p-5 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 via-blue-50/20 to-white shrink-0">
           <div className="space-y-1.5">
@@ -611,14 +673,64 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
           {/* TAB 4: TỪ VỰNG CẦN HỌC */}
           {activeTab === "vocab" && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                <span className="font-bold text-slate-900 text-sm">
-                  Danh sách từ vựng liên kết ({allVocabularies.length} từ)
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Học viên có thể tra cứu nhanh khi làm bài
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 text-sm">
+                      Danh sách từ vựng liên kết ({allVocabularies.length} từ)
+                    </span>
+                    {isExtracted && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-blue-600" />
+                        AI Auto-Enriched
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">
+                    Học viên có thể tra cứu nhanh phát âm, phiên âm và ví dụ khi làm bài
+                  </span>
+                </div>
+
+                {isExtracted && (
+                  <button
+                    type="button"
+                    onClick={handleSaveExtractedVocab}
+                    disabled={isSavingVocab}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/20 disabled:opacity-60 disabled:cursor-wait"
+                    title="Lưu danh sách từ vựng này vào bài đọc"
+                  >
+                    {isSavingVocab ? (
+                      <span>Đang lưu...</span>
+                    ) : isSavedVocab ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-300" />
+                        <span>Đã lưu thành công!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Lưu bộ từ vựng vào bài học</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
+
+              {vocabSaveError && (
+                <p role="alert" className="flex items-center gap-2 text-xs font-semibold text-rose-700">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{vocabSaveError}</span>
+                </p>
+              )}
+
+              {isExtracted && !isSavedVocab && (
+                <div className="p-3 bg-blue-50/80 border border-blue-200/80 rounded-2xl flex items-center gap-2 text-xs text-blue-900">
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>
+                    Hệ thống đã tự động bóc tách và phân tích <strong>{allVocabularies.length} từ vựng trọng tâm</strong> từ các câu hỏi của đề thi này kèm đầy đủ phiên âm, audio UK/US, phân loại từ và ngữ cảnh dịch tiếng Việt chuẩn TOEIC.
+                  </span>
+                </div>
+              )}
 
               {allVocabularies.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -661,7 +773,11 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                             <button
                               type="button"
                               onClick={() => playWordAudio(item.word, "UK")}
-                              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                              className={`px-2 py-1 rounded-lg ${
+                                playingWordKey === `${item.word}-UK`
+                                  ? "bg-blue-200 text-blue-900 ring-2 ring-blue-400 font-extrabold"
+                                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                              } text-[10px] flex items-center gap-1 cursor-pointer transition`}
                               title="Nghe phát âm UK"
                             >
                               <Volume2 className="w-3 h-3 text-blue-600" />
@@ -670,7 +786,11 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                             <button
                               type="button"
                               onClick={() => playWordAudio(item.word, "US")}
-                              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                              className={`px-2 py-1 rounded-lg ${
+                                playingWordKey === `${item.word}-US`
+                                  ? "bg-red-200 text-red-900 ring-2 ring-red-400 font-extrabold"
+                                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                              } text-[10px] flex items-center gap-1 cursor-pointer transition`}
                               title="Nghe phát âm US"
                             >
                               <Volume2 className="w-3 h-3 text-red-600" />
