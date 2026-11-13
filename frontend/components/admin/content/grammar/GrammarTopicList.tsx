@@ -14,10 +14,12 @@ import {
   Archive,
 } from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
+import { getGrammarTopicDisplayStats } from "@/lib/grammarDisplayStats";
 
 interface GrammarTopicListProps {
   topics: GrammarTopicItem[];
   allTopics: GrammarTopicItem[];
+  recentTopicId?: string;
   viewMode: "table" | "grid";
   selectedTopicIds: string[];
   onToggleSelectTopic: (id: string) => void;
@@ -33,6 +35,7 @@ interface GrammarTopicListProps {
 export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
   topics,
   allTopics,
+  recentTopicId,
   viewMode,
   selectedTopicIds,
   onToggleSelectTopic,
@@ -44,7 +47,16 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
   onOpenDeleteTopic,
   onArchiveTopic,
 }) => {
-  const [expandedTopicIds, setExpandedTopicIds] = React.useState<Set<string>>(() => new Set());
+  const [expandedTopicIds, setExpandedTopicIds] = React.useState<Set<string>>(() => {
+    const expanded = new Set<string>();
+    const topicsById = new Map(allTopics.map((topic) => [topic.id, topic]));
+    let parentId = recentTopicId ? topicsById.get(recentTopicId)?.parentTopicId : undefined;
+    while (parentId && !expanded.has(parentId)) {
+      expanded.add(parentId);
+      parentId = topicsById.get(parentId)?.parentTopicId;
+    }
+    return expanded;
+  });
   const topicById = new Map(allTopics.map((topic) => [topic.id, topic]));
   const hasHiddenAncestor = (topic: GrammarTopicItem) => {
     const visited = new Set<string>();
@@ -103,10 +115,10 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
 
       {/* TABLE VIEW */}
       {viewMode === "table" && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="grammar-list-scroll bg-white rounded-3xl border border-slate-200/80 shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
                   <th className="py-3.5 px-4 w-10"></th>
                   <th className="py-3.5 px-4 min-w-[240px]">Mã &amp; Chuyên đề</th>
@@ -117,25 +129,26 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                   <th className="py-3.5 px-4 text-center min-w-[160px]">Thao tác quản trị</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
                 {visibleTopics.map((topic) => {
                   const isSelected = selectedTopicIds.includes(topic.id);
                   const childCount = childrenCount(topic.id);
+                  const stats = getGrammarTopicDisplayStats(topic, allTopics);
                   const missingContentCount = [
                     !(topic.titleVi || topic.title)?.trim(),
                     !(topic.titleEn || topic.englishTitle)?.trim(),
                     !topic.summary?.trim(),
                     !topic.formula?.trim(),
-                    !topic.examples?.some((example) => example.sentence?.trim()),
-                    childCount === 0 && !topic.questions?.length,
+                    !stats.hasExamples,
+                    childCount === 0 && !stats.hasQuestions,
                   ].filter(Boolean).length;
 
                   return (
                     <tr
                       key={topic.id}
-                      className={`hover:bg-slate-50/70 transition ${
+                      className={`odd:bg-slate-50/50 hover:bg-blue-50/50 transition-colors ${
                         isSelected ? "bg-blue-50/30" : ""
-                      }`}
+                      } ${recentTopicId === topic.id ? "bg-emerald-50 ring-2 ring-inset ring-emerald-400" : ""}`}
                     >
                       <td className="py-3.5 px-4">
                         <input
@@ -146,7 +159,7 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                         />
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className={`flex items-center gap-2 ${topic.parentTopicId ? "ml-5 border-l-2 border-slate-200 pl-2" : ""}`}>
+                        <div className={`flex items-center gap-2 ${topic.parentTopicId ? "ml-5 border-l-2 border-indigo-200 pl-3" : ""}`}>
                           {childCount > 0 ? (
                             <button
                               type="button"
@@ -196,10 +209,10 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex flex-col text-[11px]">
                           <span className="font-semibold text-slate-800">
-                            {topic.questions.length} câu hỏi
+                            {stats.questionCount} câu hỏi
                           </span>
                           <span className="text-amber-600 font-medium">
-                            {topic.traps.length} bẫy đề
+                            {stats.trapCount} bẫy đề
                           </span>
                         </div>
                       </td>
@@ -210,7 +223,7 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
                               {missingContentCount === 0 ? "Đủ nội dung cơ bản" : `Thiếu ${missingContentCount} mục`}
                             </span>
                               <span className={missingContentCount === 0 ? "text-emerald-600" : "text-amber-600"}>
-                                {topic.examples?.length ?? 0} ví dụ
+                                {stats.exampleCount} ví dụ
                               </span>
                             </div>
                             <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
@@ -307,19 +320,21 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
 
       {/* GRID VIEW */}
       {viewMode === "grid" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        <div className="grammar-list-scroll grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 content-start gap-4 p-1">
           {visibleTopics.map((topic) => {
             const isSelected = selectedTopicIds.includes(topic.id);
-            const totalQ = topic.questions.length;
+            const stats = getGrammarTopicDisplayStats(topic, allTopics);
             const childCount = childrenCount(topic.id);
 
             return (
               <div
                 key={topic.id}
                 className={`p-5 rounded-3xl bg-white border transition-all duration-200 shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20"
-                    : "border-slate-200/80"
+                  recentTopicId === topic.id
+                      ? "border-emerald-400 bg-emerald-50/70 ring-2 ring-emerald-300"
+                      : isSelected
+                        ? "border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20"
+                        : "border-slate-200/80"
                 }`}
               >
                 <div className="space-y-3">
@@ -394,9 +409,9 @@ export const GrammarTopicList: React.FC<GrammarTopicListProps> = ({
 
                   {/* Content Stats */}
                   <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 pt-1">
-                    <span>Ngân hàng: {totalQ} câu</span>
-                    <span className="text-amber-600">{topic.traps.length} bẫy đề</span>
-                    <span>{topic.examples?.length ?? 0} ví dụ</span>
+                    <span>Ngân hàng: {stats.questionCount} câu</span>
+                    <span className="text-amber-600">{stats.trapCount} bẫy đề</span>
+                    <span>{stats.exampleCount} ví dụ</span>
                   </div>
                 </div>
 

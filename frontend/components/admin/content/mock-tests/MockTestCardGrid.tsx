@@ -53,7 +53,7 @@ function MockTestTableRow({
             <p className="font-bold text-slate-900 leading-snug">{test.title}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">#{test.id}</span>
-              <span className="text-[10px] text-slate-400">200Q · 120 min</span>
+              <span className="text-[10px] text-slate-400">{test.totalQuestions ?? 0}Q · {test.durationMinutes ?? 0} min</span>
             </div>
           </div>
         </div>
@@ -67,8 +67,8 @@ function MockTestTableRow({
 
       <td className="py-3.5 px-4 whitespace-nowrap">
         <div className="space-y-0.5 text-xs">
-          <span className="font-bold text-slate-900 font-mono block">200 câu • 120 phút</span>
-          <span className="text-[11px] text-slate-500">Listening &amp; Reading (7 Parts)</span>
+          <span className="font-bold text-slate-900 font-mono block">{test.totalQuestions ?? 0} câu • {test.durationMinutes ?? 0} phút</span>
+          <span className="text-[11px] text-slate-500">Số câu theo câu hỏi đã liên kết</span>
         </div>
       </td>
 
@@ -219,18 +219,18 @@ function MockTestGridItem({
           <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
             {test.title}
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">200 câu • 120 phút • 7 Parts</p>
+          <p className="text-xs text-slate-400 mt-0.5">{test.totalQuestions ?? 0} câu • {test.durationMinutes ?? 0} phút</p>
         </div>
 
         {/* Thông tin quy mô quản trị nội dung (Admin chỉ hiển thị tổng số câu) */}
         <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
           <div className="flex justify-between items-center text-slate-600">
             <span className="font-medium">Tổng số câu hỏi:</span>
-            <strong className="text-blue-700 font-mono font-bold">200 câu</strong>
+            <strong className="text-blue-700 font-mono font-bold">{test.totalQuestions ?? 0} câu</strong>
           </div>
           <div className="flex justify-between items-center text-slate-600">
             <span className="font-medium">Thời gian chuẩn:</span>
-            <span className="font-mono text-slate-800 font-semibold">120 phút</span>
+            <span className="font-mono text-slate-800 font-semibold">{test.durationMinutes ?? 0} phút</span>
           </div>
           <div className="flex justify-between items-center text-slate-600">
             <span className="font-medium">Cấu trúc đề thi:</span>

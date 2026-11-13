@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
-import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
 import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { getGrammarTopics, saveGrammarProgress } from "@/lib/api/grammar";
 import { StudentGrammarGrid } from "@/components/student/grammar/StudentGrammarGrid";
@@ -12,8 +11,9 @@ import {
 } from "@/components/admin/content/grammar/GrammarModals";
 
 export default function StudentGrammarPage() {
-  const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
+  const [topics, setTopics] = useState<GrammarTopicItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modal State
   const [theoryTopic, setTheoryTopic] = useState<GrammarTopicItem | null>(null);
@@ -26,48 +26,12 @@ export default function StudentGrammarPage() {
   const loadTopics = useCallback(async () => {
     try {
       setLoading(true);
-      let rawList: GrammarTopicItem[] = [];
-      let hasServerResponse = false;
-
-      // Luôn ưu tiên gọi API backend để lấy dữ liệu mới nhất từ database
-      try {
-        const data = await getGrammarTopics();
-        if (data !== null) {
-          hasServerResponse = true;
-          rawList = data;
-          if (typeof window !== "undefined") {
-            localStorage.setItem("toeic_grammar_topics", JSON.stringify(data));
-          }
-        }
-      } catch (apiErr) {
-        console.warn("Could not load grammar topics from API:", apiErr);
-      }
-
-      // Fallback to the cached list only when the API request failed.
-      if (!hasServerResponse) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_grammar_topics") : null;
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) {
-              rawList = parsed;
-              hasServerResponse = true;
-            }
-          } catch {}
-        }
-      }
-
-      if (!hasServerResponse) {
-        rawList = INITIAL_GRAMMAR_TOPICS;
-      }
-
-      // CHỈ HIỂN THỊ CÁC CHUYÊN ĐỀ ĐÃ XUẤT BẢN CHO HỌC VIÊN
-      const published = rawList.filter((t) => t.status === "PUBLISHED" || (!t.status && t.status !== "DRAFT"));
-      setTopics(published);
+      setLoadError(null);
+      const data = await getGrammarTopics();
+      setTopics(data.filter((topic) => topic.status === "PUBLISHED"));
     } catch (err) {
-      console.warn("Could not load topics from server, using fallback data:", err);
-      const published = INITIAL_GRAMMAR_TOPICS.filter((t) => t.status === "PUBLISHED" || (!t.status && t.status !== "DRAFT"));
-      setTopics(published);
+      setTopics([]);
+      setLoadError(err instanceof Error ? err.message : "Không thể tải dữ liệu ngữ pháp từ máy chủ.");
     } finally {
       setLoading(false);
     }
@@ -77,10 +41,8 @@ export default function StudentGrammarPage() {
     loadTopics();
     const handleSync = () => { loadTopics(); };
     window.addEventListener("toeic-grammar-topics-updated", handleSync);
-    window.addEventListener("storage", handleSync);
     return () => {
       window.removeEventListener("toeic-grammar-topics-updated", handleSync);
-      window.removeEventListener("storage", handleSync);
     };
   }, [loadTopics]);
 
@@ -121,7 +83,7 @@ export default function StudentGrammarPage() {
             Chuyên Đề Ngữ Pháp TOEIC Trọng Tâm
           </h1>
           <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Hệ thống 25 chuyên đề ngữ pháp TOEIC trọng tâm từ cơ bản đến nâng cao (phát âm, từ loại, các thì, mệnh đề quan hệ, câu bị động, đảo ngữ...) kèm giải thích chi tiết.
+            Các chủ điểm ngữ pháp TOEIC đã được phát hành.
           </p>
         </div>
 
@@ -131,6 +93,16 @@ export default function StudentGrammarPage() {
       </header>
 
       {/* Grid chuyên đề cho học viên */}
+      {loadError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Không thể tải chủ điểm từ backend: {loadError}
+        </div>
+      ) : null}
+      {!loading && !loadError && topics.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
+          Chưa có chủ điểm ngữ pháp được phát hành.
+        </div>
+      ) : null}
       <StudentGrammarGrid
         topics={topics}
         onOpenTheory={(topic) => setTheoryTopic(topic)}

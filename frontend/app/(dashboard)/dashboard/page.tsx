@@ -43,18 +43,6 @@ interface TargetGoalData {
   focusNote: string;
 }
 
-const DEFAULT_LATEST_SCORE: LatestScoreData = {
-  lc: 360,
-  rc: 325,
-  total: 685,
-  testName: "ETS Crack Vol 1 • Test 1",
-};
-
-const DEFAULT_TARGET_GOAL: TargetGoalData = {
-  targetBand: 800,
-  focusNote: "Tập trung cải thiện Part 3, 4 & Part 7",
-};
-
 export default function Home() {
   // Study Tracker & Streak Data
   const [trackerData, setTrackerData] = useState<StudyTrackerData>(getStudyTrackerData);
@@ -78,28 +66,34 @@ export default function Home() {
   }, []);
 
   // Latest Score & Target Goal State
-  const [latestScore, setLatestScore] = useState<LatestScoreData>(() => {
+  const [latestScore, setLatestScore] = useState<LatestScoreData | null>(() => {
     if (typeof window !== "undefined") {
       try {
         const savedScore = localStorage.getItem("toeic_dashboard_latest_score");
-        if (savedScore) return JSON.parse(savedScore);
+        if (savedScore) {
+          const parsed = JSON.parse(savedScore) as LatestScoreData;
+          if (Number.isFinite(parsed.lc) && Number.isFinite(parsed.rc)) return parsed;
+        }
       } catch {
-        // fallback
+        console.error("Could not read the saved TOEIC score.");
       }
     }
-    return DEFAULT_LATEST_SCORE;
+    return null;
   });
 
-  const [targetGoal, setTargetGoal] = useState<TargetGoalData>(() => {
+  const [targetGoal, setTargetGoal] = useState<TargetGoalData | null>(() => {
     if (typeof window !== "undefined") {
       try {
         const savedTarget = localStorage.getItem("toeic_dashboard_target_goal");
-        if (savedTarget) return JSON.parse(savedTarget);
+        if (savedTarget) {
+          const parsed = JSON.parse(savedTarget) as TargetGoalData;
+          if (Number.isFinite(parsed.targetBand)) return parsed;
+        }
       } catch {
-        // fallback
+        console.error("Could not read the saved TOEIC target.");
       }
     }
-    return DEFAULT_TARGET_GOAL;
+    return null;
   });
 
   // Modal open states for Score & Target
@@ -107,13 +101,13 @@ export default function Home() {
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
 
   // Form states for Score editing
-  const [editLc, setEditLc] = useState<number>(DEFAULT_LATEST_SCORE.lc);
-  const [editRc, setEditRc] = useState<number>(DEFAULT_LATEST_SCORE.rc);
-  const [editTestName, setEditTestName] = useState<string>(DEFAULT_LATEST_SCORE.testName);
+  const [editLc, setEditLc] = useState<number>(0);
+  const [editRc, setEditRc] = useState<number>(0);
+  const [editTestName, setEditTestName] = useState<string>("");
 
   // Form states for Target editing
-  const [editTargetBand, setEditTargetBand] = useState<number>(DEFAULT_TARGET_GOAL.targetBand);
-  const [editFocusNote, setEditFocusNote] = useState<string>(DEFAULT_TARGET_GOAL.focusNote);
+  const [editTargetBand, setEditTargetBand] = useState<number>(0);
+  const [editFocusNote, setEditFocusNote] = useState<string>("");
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -128,15 +122,15 @@ export default function Home() {
 
   // Handlers to open modals with current values
   const handleOpenScoreModal = () => {
-    setEditLc(latestScore.lc);
-    setEditRc(latestScore.rc);
-    setEditTestName(latestScore.testName);
+    setEditLc(latestScore?.lc ?? 0);
+    setEditRc(latestScore?.rc ?? 0);
+    setEditTestName(latestScore?.testName ?? "");
     setIsScoreModalOpen(true);
   };
 
   const handleOpenTargetModal = () => {
-    setEditTargetBand(targetGoal.targetBand);
-    setEditFocusNote(targetGoal.focusNote);
+    setEditTargetBand(targetGoal?.targetBand ?? 0);
+    setEditFocusNote(targetGoal?.focusNote ?? "");
     setIsTargetModalOpen(true);
   };
 
@@ -149,7 +143,7 @@ export default function Home() {
       lc: clampedLc,
       rc: clampedRc,
       total: clampedLc + clampedRc,
-      testName: editTestName.trim() || "ETS Crack Vol 1 • Test 1",
+      testName: editTestName.trim(),
     };
     setLatestScore(updated);
     try {
@@ -167,7 +161,7 @@ export default function Home() {
     const clampedTarget = Math.max(0, Math.min(990, Number(editTargetBand) || 0));
     const updated: TargetGoalData = {
       targetBand: clampedTarget,
-      focusNote: editFocusNote.trim() || "Tập trung cải thiện Part 3, 4 & Part 7",
+      focusNote: editFocusNote.trim(),
     };
     setTargetGoal(updated);
     try {
@@ -192,69 +186,68 @@ export default function Home() {
   };
 
   // Calculations for dynamic cards
-  const scoreGap = targetGoal.targetBand - latestScore.total;
+  const scoreGap = latestScore && targetGoal ? targetGoal.targetBand - latestScore.total : null;
   const todayStr = getTodayDateString();
   const todayRecord = trackerData.history[todayStr] || { minutesSpent: 0, completedLessons: 0, secondsSpent: 0 };
   const todayMinutes = todayRecord.minutesSpent;
-  const todaySeconds = (todayRecord as any).secondsSpent ?? (todayMinutes * 60);
+  const todaySeconds = todayRecord.secondsSpent ?? (todayMinutes * 60);
   const displayTodayTime = todayMinutes > 0
     ? `${todayMinutes}p`
     : todaySeconds >= 10
     ? `< 1p`
     : `0p`;
-  const progressPercent = Math.min(
-    100,
-    Math.round((trackerData.totalCompletedLessons / trackerData.totalAvailableLessons) * 100)
-  );
+  const progressPercent = trackerData.totalAvailableLessons > 0
+    ? Math.min(100, Math.round((trackerData.totalCompletedLessons / trackerData.totalAvailableLessons) * 100))
+    : null;
   const weekDays = getCurrentWeekDaysStatus(trackerData);
 
   const modules = [
     {
       title: "Từ vựng",
-      detail: "Học từ vựng ETS 2024 theo Test, lật Flashcard ghi nhớ và Mini-game phản xạ.",
+      detail: "Ôn tập từ vựng bằng các bài học được cung cấp.",
       icon: BookOpen,
       href: "/vocabulary",
-      stats: "30 bộ từ • ~548 từ vựng",
+      stats: "Mở để xem dữ liệu hiện có",
       badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
       accentColor: "from-blue-500 to-indigo-600",
       iconBg: "bg-blue-50 text-blue-600",
     },
     {
       title: "Ngữ pháp",
-      detail: "Nắm vững công thức, bẫy đề thi Part 5 & 6 kèm bài tập trắc nghiệm giải thích chi tiết.",
+      detail: "Ôn tập các chủ điểm và bài tập ngữ pháp được cung cấp.",
       icon: Brain,
       href: "/grammar",
-      stats: "12 chuyên đề • 36 câu hỏi",
+      stats: "Mở để xem dữ liệu hiện có",
       badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
       accentColor: "from-emerald-500 to-teal-600",
       iconBg: "bg-emerald-50 text-emerald-600",
     },
     {
       title: "Listening",
-      detail: "Luyện nghe tranh Part 1, phản xạ Part 2, hội thoại Part 3-4 & Chép chính tả Studio.",
+      detail: "Luyện nghe theo các bài và câu hỏi được cung cấp.",
       icon: Headphones,
       href: "/listening",
-      stats: "Full Part 1-4 • Chép chính tả",
+      stats: "Mở để xem dữ liệu hiện có",
       badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
       accentColor: "from-purple-500 to-pink-600",
       iconBg: "bg-purple-50 text-purple-600",
     },
     {
       title: "Reading",
-      detail: "Luyện bài đọc ETS 2024 Part 5, 6, 7 tích hợp bôi đen tra từ điển trực tiếp trên bài.",
+      detail: "Luyện đọc theo các bài và câu hỏi được cung cấp.",
       icon: ListChecks,
       href: "/reading",
-      stats: "ETS 2024 • 1.340+ câu đọc",
+      stats: "Mở để xem dữ liệu hiện có",
       badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
       accentColor: "from-amber-500 to-orange-600",
       iconBg: "bg-amber-50 text-amber-600",
     },
     {
       title: "Thi thử",
-      detail: "Thi thử 200 câu với đồng hồ đếm ngược 120 phút hoặc luyện tập từng phần linh hoạt.",
+      detail: "Làm đề thi và luyện tập theo nội dung được cung cấp.",
       icon: ClipboardCheck,
       href: "/mock-tests",
-      stats: "20 đề thi • Crack Vol 1 & 2",
+      stats: "Mở để xem dữ liệu hiện có",
       badgeColor: "bg-rose-50 text-rose-700 border-rose-200",
       accentColor: "from-rose-500 to-red-600",
       iconBg: "bg-rose-600/10 text-rose-600",
@@ -282,7 +275,7 @@ export default function Home() {
             Bảng Điều Khiển Học Viên
           </h1>
           <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Theo dõi thời gian học thực tế, duy trì chuỗi ngày liên tục và hoàn thành mục tiêu điểm thi TOEIC.
+          Theo dõi thời gian học, điểm thi và mục tiêu do bạn cập nhật.
           </p>
         </div>
 
@@ -322,7 +315,7 @@ export default function Home() {
             <div className="mt-4 cursor-pointer" onClick={() => setIsProgressModalOpen(true)} title="Bấm để xem chi tiết thời gian học">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-black text-slate-900 font-mono group-hover:text-blue-600 transition-colors">
-                  {progressPercent}%
+                  {progressPercent === null ? "—" : `${progressPercent}%`}
                 </span>
                 <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
                   <Clock className="w-3 h-3 text-emerald-600" />
@@ -332,11 +325,13 @@ export default function Home() {
               <div className="mt-3 w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progressPercent}%` }}
+                  style={{ width: `${progressPercent ?? 0}%` }}
                 />
               </div>
               <p className="mt-2 text-[11px] text-slate-400">
-                Đã hoàn thành {trackerData.totalCompletedLessons} / {trackerData.totalAvailableLessons} bài rèn luyện
+                {progressPercent === null
+                  ? `Đã hoàn thành ${trackerData.totalCompletedLessons} bài rèn luyện`
+                  : `Đã hoàn thành ${trackerData.totalCompletedLessons} / ${trackerData.totalAvailableLessons} bài rèn luyện`}
               </p>
             </div>
           </div>
@@ -412,17 +407,23 @@ export default function Home() {
             <div className="mt-4 cursor-pointer" onClick={handleOpenScoreModal} title="Bấm để chỉnh sửa">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-black text-slate-900 font-mono group-hover:text-emerald-600 transition-colors">
-                  {latestScore.total}
+                  {latestScore?.total ?? "Chưa có"}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">/ 990</span>
+                {latestScore && <span className="text-xs text-slate-400 font-mono">/ 990</span>}
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-slate-600 pt-2 border-t border-slate-100 font-mono">
-                <span>LC: <strong className="text-blue-600">{latestScore.lc}</strong></span>
-                <span>RC: <strong className="text-emerald-600">{latestScore.rc}</strong></span>
-              </div>
-              <p className="mt-2 text-[11px] text-slate-400 truncate" title={latestScore.testName}>
-                {latestScore.testName}
-              </p>
+              {latestScore ? (
+                <>
+                  <div className="mt-2 flex items-center justify-between text-xs text-slate-600 pt-2 border-t border-slate-100 font-mono">
+                    <span>LC: <strong className="text-blue-600">{latestScore.lc}</strong></span>
+                    <span>RC: <strong className="text-emerald-600">{latestScore.rc}</strong></span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-400 truncate" title={latestScore.testName}>
+                    {latestScore.testName}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-[11px] text-slate-400">Nhấn Sửa để nhập điểm của bạn.</p>
+              )}
             </div>
           </div>
 
@@ -448,19 +449,21 @@ export default function Home() {
             <div className="mt-4 cursor-pointer" onClick={handleOpenTargetModal} title="Bấm để chỉnh sửa">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-black text-purple-700 font-mono group-hover:text-purple-800 transition-colors">
-                  {targetGoal.targetBand}+
+                  {targetGoal ? `${targetGoal.targetBand}+` : "Chưa đặt"}
                 </span>
-                <span className="text-xs text-purple-600 font-bold">Mục tiêu</span>
+                {targetGoal && <span className="text-xs text-purple-600 font-bold">Mục tiêu</span>}
               </div>
               <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
                 <span>Khoảng cách:</span>
-                <span className={`font-bold font-mono ${scoreGap <= 0 ? "text-emerald-600" : "text-slate-800"}`}>
-                  {scoreGap <= 0 ? "Đã đạt mục tiêu! 🎯" : `+${scoreGap} điểm nữa`}
+                <span className={`font-bold font-mono ${scoreGap !== null && scoreGap <= 0 ? "text-emerald-600" : "text-slate-800"}`}>
+                  {scoreGap === null ? "Chưa đủ dữ liệu" : scoreGap <= 0 ? "Đã đạt mục tiêu! 🎯" : `+${scoreGap} điểm nữa`}
                 </span>
               </div>
-              <p className="mt-2 text-[11px] text-slate-400 truncate" title={targetGoal.focusNote}>
-                {targetGoal.focusNote}
-              </p>
+              {targetGoal?.focusNote && (
+                <p className="mt-2 text-[11px] text-slate-400 truncate" title={targetGoal.focusNote}>
+                  {targetGoal.focusNote}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -474,7 +477,7 @@ export default function Home() {
               Khu Vực Học Tập &amp; Luyện Thi
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Toàn bộ 5 phân hệ luyện tập cốt lõi đã được kích hoạt. Hãy chọn một phần để bắt đầu học ngay.
+              Chọn học phần để xem nội dung hiện có trên hệ thống.
             </p>
           </div>
         </div>
@@ -500,9 +503,8 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    Sẵn sàng
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
+                    Nội dung
                   </span>
                 </div>
 
@@ -529,10 +531,10 @@ export default function Home() {
               Gợi ý học tập hôm nay
             </span>
             <h4 className="text-sm font-bold text-slate-900">
-              Luyện nghe 1 bài Chép chính tả Part 2 và tra 10 từ vựng ETS 2024 Test 1
+              Chọn học phần phù hợp với mục tiêu của bạn
             </h4>
             <p className="text-xs text-slate-600">
-              Phương pháp nghe chép chính tả kết hợp tra nghĩa tại chỗ giúp não bộ ghi nhớ phát âm và cấu trúc câu tự nhiên hơn gấp 3 lần.
+              Danh sách bài học và đề luyện tập được tải từ dữ liệu của hệ thống.
             </p>
           </div>
 
@@ -598,9 +600,13 @@ export default function Home() {
                 <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3 text-center">
                   <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Bài hoàn thành</span>
                   <div className="text-lg font-black text-slate-900 font-mono mt-1">
-                    {trackerData.totalCompletedLessons} / {trackerData.totalAvailableLessons}
+                    {progressPercent === null
+                      ? trackerData.totalCompletedLessons
+                      : `${trackerData.totalCompletedLessons} / ${trackerData.totalAvailableLessons}`}
                   </div>
-                  <span className="text-[10px] text-slate-400">Đạt {progressPercent}%</span>
+                  <span className="text-[10px] text-slate-400">
+                    {progressPercent === null ? "Chưa có tổng số bài" : `Đạt ${progressPercent}%`}
+                  </span>
                 </div>
               </div>
 
@@ -635,31 +641,11 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Tiến độ phân chia theo phân hệ */}
               <div>
-                <h4 className="text-xs font-bold text-slate-800 mb-2.5">Phân bổ bài tập qua 5 phân hệ:</h4>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="font-medium text-slate-700">📖 Từ vựng (Vocabulary):</span>
-                    <span className="font-bold font-mono text-blue-600">12 / 30 bộ từ</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="font-medium text-slate-700">🧠 Ngữ pháp (Grammar):</span>
-                    <span className="font-bold font-mono text-emerald-600">6 / 12 chuyên đề</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="font-medium text-slate-700">🎧 Listening &amp; Chép chính tả:</span>
-                    <span className="font-bold font-mono text-purple-600">8 bài nghe</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="font-medium text-slate-700">📋 Reading (Part 5, 6, 7):</span>
-                    <span className="font-bold font-mono text-amber-600">7 bài đọc</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="font-medium text-slate-700">📝 Thi thử (Full Mock Tests):</span>
-                    <span className="font-bold font-mono text-rose-600">3 / 20 đề thi</span>
-                  </div>
-                </div>
+                <h4 className="text-xs font-bold text-slate-800 mb-2.5">Tiến độ cá nhân</h4>
+                <p className="text-xs text-slate-600">
+                  Đã hoàn thành {trackerData.totalCompletedLessons} bài rèn luyện và ghi nhận {trackerData.totalMinutesOverall} phút học.
+                </p>
               </div>
 
               {/* Close Button */}
@@ -880,7 +866,7 @@ export default function Home() {
                   type="text"
                   value={editTestName}
                   onChange={(e) => setEditTestName(e.target.value)}
-                  placeholder="Ví dụ: ETS Crack Vol 1 • Test 1, ETS 2024 Test 2..."
+                  placeholder="Nhập tên bài thi"
                   className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   required
                 />
@@ -982,14 +968,16 @@ export default function Home() {
                 <div>
                   <span className="text-[11px] font-semibold text-purple-800">Khoảng cách cần phấn đấu:</span>
                   <div className="text-base font-bold text-purple-900 font-mono mt-0.5">
-                    {editTargetBand - latestScore.total <= 0
-                      ? "Đã đạt mục tiêu! 🎯"
-                      : `+${editTargetBand - latestScore.total} điểm nữa`}
+                    {latestScore
+                      ? editTargetBand - latestScore.total <= 0
+                        ? "Đã đạt mục tiêu! 🎯"
+                        : `+${editTargetBand - latestScore.total} điểm nữa`
+                      : "Chưa nhập điểm gần nhất"}
                   </div>
                 </div>
                 <div className="text-right text-[11px] text-slate-500">
                   <span>Điểm hiện tại: </span>
-                  <strong className="text-slate-800 font-mono">{latestScore.total}</strong>
+                  <strong className="text-slate-800 font-mono">{latestScore?.total ?? "Chưa có"}</strong>
                 </div>
               </div>
 

@@ -4,12 +4,9 @@ import React, { useState } from "react";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import { Sparkles, Layers } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
-import { INITIAL_CARDS } from "@/app/admin/content/reading/mockData";
-import { getLocalReadingCards, saveLocalReadingCards } from "@/app/admin/content/reading/readingStorage";
 import {
   fetchReadingCardDetails,
   fetchReadingCards,
-  mergeReadingCardsWithBackend,
 } from "@/lib/api/reading";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
@@ -18,7 +15,9 @@ import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBa
 import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentReadingPage() {
-  const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
+  const [cards, setCards] = useState<ExerciseCardData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activePracticeCard, setActivePracticeCard] = useState<ExerciseCardData | null>(null);
   const [readingStartIndex, setReadingStartIndex] = useState<number>(0);
   const [isReadingRedoWrong, setIsReadingRedoWrong] = useState<boolean>(false);
@@ -33,47 +32,31 @@ export default function StudentReadingPage() {
   React.useEffect(() => {
     let active = true;
 
-    const loadAndSync = async () => {
-      const local = getLocalReadingCards();
-      cardsRef.current = local;
-      if (active) setCards(local);
-      const backendCards = await fetchReadingCards();
-      if (!active || backendCards.length === 0) return;
-      const baseline = getLocalReadingCards();
-      const merged = mergeReadingCardsWithBackend(
-        backendCards,
-        baseline.length > 0 ? baseline : cardsRef.current
-      );
-      cardsRef.current = merged;
-      saveLocalReadingCards(merged, false);
-      setCards(merged);
-    };
-
-    void loadAndSync();
-
-    const handleUpdated = (ev: Event) => {
-      const customEv = ev as CustomEvent<{ source?: string }>;
-      if (customEv.detail?.source === "local-storage") {
-        const local = getLocalReadingCards();
-        cardsRef.current = local;
-        setCards(local);
-        return;
+    const loadCards = async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const backendCards = await fetchReadingCards();
+        if (!active) return;
+        cardsRef.current = backendCards;
+        setCards(backendCards);
+      } catch (error) {
+        if (!active) return;
+        cardsRef.current = [];
+        setCards([]);
+        setLoadError(error instanceof Error ? error.message : "Không thể tải nội dung Reading từ máy chủ.");
+      } finally {
+        if (active) setLoading(false);
       }
-      void loadAndSync();
     };
 
-    const handleStorage = () => {
-      const local = getLocalReadingCards();
-      cardsRef.current = local;
-      setCards(local);
-    };
+    void loadCards();
+    const handleUpdated = () => { void loadCards(); };
 
     window.addEventListener("toeic-reading-cards-updated", handleUpdated);
-    window.addEventListener("storage", handleStorage);
     return () => {
       active = false;
       window.removeEventListener("toeic-reading-cards-updated", handleUpdated);
-      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
@@ -86,7 +69,6 @@ export default function StudentReadingPage() {
     const mergedCard: ExerciseCardData = { ...card, ...detailed, detailsLoaded: true };
     const next = cardsRef.current.map((c) => (c.id === mergedCard.id ? mergedCard : c));
     cardsRef.current = next;
-    saveLocalReadingCards(next, false);
     setCards(next);
     return mergedCard;
   };
@@ -148,6 +130,16 @@ export default function StudentReadingPage() {
       </header>
 
       {/* Grid danh sách bài đọc cho học viên */}
+      {loadError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Không thể tải nội dung Reading từ backend: {loadError}
+        </div>
+      ) : null}
+      {!loading && !loadError && cards.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
+          Chưa có nội dung Reading được phát hành.
+        </div>
+      ) : null}
       <StudentReadingCardGrid
         cards={cards}
         onStartPractice={(card, sIdx, isRedo) => { void startReadingPractice(card, sIdx, isRedo); }}
@@ -188,4 +180,3 @@ export default function StudentReadingPage() {
     </div>
   );
 }
-

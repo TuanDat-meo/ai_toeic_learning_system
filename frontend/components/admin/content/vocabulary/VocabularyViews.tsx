@@ -593,71 +593,11 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
 // ==========================================
 // 3. BÁO CÁO TƯƠNG TÁC HỌC VIÊN (ANALYTICS & RETENTION)
 // ==========================================
-export const VocabularyAnalyticsView: React.FC = () => {
-  const mostForgottenWords = [
-    { word: "negotiate", ipa: "/nəˈɡoʊʃieɪt/", failRate: "42%", level: "B2", lookups: 320 },
-    { word: "itinerary", ipa: "/aɪˈtɪnəreri/", failRate: "38%", level: "B1", lookups: 290 },
-    { word: "implement", ipa: "/ˈɪmplɪment/", failRate: "35%", level: "B2", lookups: 265 },
-    { word: "warranty", ipa: "/ˈwɔːrənti/", failRate: "28%", level: "B1", lookups: 210 },
-    { word: "collaborate", ipa: "/kəˈlæbəreɪt/", failRate: "24%", level: "B2", lookups: 195 },
-  ];
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Top Forgotten Words Table */}
-      <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-2xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              Top 5 từ vựng học viên hay quên & trả lời sai nhiều nhất
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Admin có thể bổ sung thêm ví dụ hoặc hình ảnh minh họa để học viên dễ liên tưởng ghi nhớ hơn.
-            </p>
-          </div>
-          <span className="text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-200">
-            Cần cải thiện nội dung
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] whitespace-nowrap">
-              <tr>
-                <th className="py-3.5 px-4 min-w-[200px]">Từ vựng &amp; Phiên âm</th>
-                <th className="py-3.5 px-4 min-w-[100px]">Trình độ</th>
-                <th className="py-3.5 px-4 min-w-[100px]">Tỷ lệ sai</th>
-                <th className="py-3.5 px-4 min-w-[180px]">Số lượt học viên tra cứu lại</th>
-                <th className="py-3.5 px-4 text-right min-w-[180px]">Khuyến nghị Admin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {mostForgottenWords.map((item) => (
-                <tr key={item.word} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                    {item.word} <span className="font-mono font-normal text-slate-400">({item.ipa})</span>
-                  </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold text-[11px] whitespace-nowrap inline-flex items-center">
-                      {item.level}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 font-extrabold text-rose-600 whitespace-nowrap">
-                    {item.failRate}
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-700 font-semibold whitespace-nowrap">
-                    {item.lookups} lượt
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-slate-500 font-medium whitespace-nowrap">
-                    Thêm ảnh &amp; câu ngữ cảnh
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+export const VocabularyAnalyticsView: React.FC = () => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+    <h3 className="text-base font-semibold text-slate-900">Chưa có dữ liệu phân tích</h3>
+    <p className="mt-2 text-sm text-slate-500">
+      Báo cáo sẽ hiển thị khi hệ thống có dữ liệu kết quả học tập được lưu trên máy chủ.
+    </p>
+  </div>
+);

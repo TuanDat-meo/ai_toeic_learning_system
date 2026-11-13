@@ -388,7 +388,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <button
                   type="button"
                   onClick={() => {
-                    const totalW = (flashcardModalTest as any)?.originalTotalWords || flashcardModalTest.wordCount || (flashcardModalTest.words || []).length || 200;
+                    const totalW = (flashcardModalTest as any)?.originalTotalWords || flashcardModalTest.wordCount || (flashcardModalTest.words || []).length || 0;
                     const curWord = (flashcardModalTest.words || [])[flashcardIndex];
                     recordQuestionAnswer(`vocab-${flashcardModalTest.id}`, (curWord as any)?.id || curWord?.word || flashcardIndex + 1, false, totalW);
                     setIsFlipped(false);
@@ -415,7 +415,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <button
                   type="button"
                   onClick={() => {
-                    const totalW = (flashcardModalTest as any)?.originalTotalWords || flashcardModalTest.wordCount || (flashcardModalTest.words || []).length || 200;
+                    const totalW = (flashcardModalTest as any)?.originalTotalWords || flashcardModalTest.wordCount || (flashcardModalTest.words || []).length || 0;
                     const curWord = (flashcardModalTest.words || [])[flashcardIndex];
                     recordQuestionAnswer(`vocab-${flashcardModalTest.id}`, (curWord as any)?.id || curWord?.word || flashcardIndex + 1, true, totalW);
                     setIsFlipped(false);
@@ -613,7 +613,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
 
                 const isCorrect = options[idx] === curMeaning;
                 const wordId = (currentWord as any)?.id || currentWord.word || gameQuestionIndex + 1;
-                const totalW = (gameModalTest as any)?.originalTotalWords || gameModalTest.wordCount || (gameModalTest.words || []).length || 200;
+                const totalW = (gameModalTest as any)?.originalTotalWords || gameModalTest.wordCount || (gameModalTest.words || []).length || 0;
 
                 // Đồng bộ kết quả vào practiceProgress giống Đọc & Nghe
                 recordQuestionAnswer(`vocab-${gameModalTest.id}`, wordId, isCorrect, totalW);

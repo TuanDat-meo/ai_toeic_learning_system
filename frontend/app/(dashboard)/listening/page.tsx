@@ -1,19 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Sparkles, Volume2 } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData } from "@/app/admin/content/listening/types";
-import {
-  INITIAL_DICTATION_CARDS,
-  INITIAL_PART1_LEVELS,
-  INITIAL_PART1_CATEGORIES,
-  INITIAL_PART2_LEVELS,
-  INITIAL_PART2_CATEGORIES,
-  INITIAL_PART3_LEVELS,
-  INITIAL_PART3_CATEGORIES,
-  INITIAL_PART4_LEVELS,
-  INITIAL_PART4_CATEGORIES,
-} from "@/app/admin/content/listening/mockData";
+import { fetchListeningCards, fetchListeningUnits } from "@/lib/api/listening";
 import { StudentListeningDictationTab } from "@/components/student/listening/StudentListeningDictationTab";
 import { StudentListeningPartTab } from "@/components/student/listening/StudentListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
@@ -28,6 +18,7 @@ export default function StudentListeningPage() {
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
   const [selectedYear, setSelectedYear] = useState<"2024" | "2023" | "2022">("2024");
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
 
   async function startActivity(featureKey: string, open: () => void) {
     try {
@@ -39,20 +30,24 @@ export default function StudentListeningPage() {
   }
 
   const openListeningQuiz = (card: LevelCategoryCardData, startIndex = 0, isRedo = false) => {
+    if (!card.questions?.length) {
+      setQuotaMessage("Chủ điểm này chưa có câu hỏi để luyện tập.");
+      return;
+    }
     void startActivity("LISTENING_PART_PRACTICE", () => {
       let cardToUse = card;
       if (isRedo) {
         const filtered = getRedoWrongQuestions(
           card.questions || [],
           `listening-quiz-${card.id}`,
-          card.questions?.length || card.totalQuestions || 10
+          card.questions?.length || card.totalQuestions || 0
         );
         cardToUse = {
           ...card,
           title: `${card.title} · Làm lại ${filtered.length} câu sai`,
           questions: filtered,
           totalQuestions: filtered.length,
-          originalTotalQuestions: card.questions?.length || card.totalQuestions || 10,
+          originalTotalQuestions: card.questions?.length || card.totalQuestions || 0,
         };
       }
       setQuizModalCard(cardToUse);
@@ -63,15 +58,39 @@ export default function StudentListeningPage() {
   };
 
   // Dữ liệu Cards
-  const [dictationCards] = useState<DictationCardData[]>(INITIAL_DICTATION_CARDS);
-  const [part1Levels, setPart1Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART1_LEVELS);
-  const [part1Categories, setPart1Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART1_CATEGORIES);
-  const [part2Levels, setPart2Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART2_LEVELS);
-  const [part2Categories, setPart2Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART2_CATEGORIES);
-  const [part3Levels, setPart3Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART3_LEVELS);
-  const [part3Categories, setPart3Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART3_CATEGORIES);
-  const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART4_LEVELS);
-  const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART4_CATEGORIES);
+  const [dictationCards, setDictationCards] = useState<DictationCardData[]>([]);
+  const [part1Levels, setPart1Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part1Categories, setPart1Categories] = useState<LevelCategoryCardData[]>([]);
+  const [part2Levels, setPart2Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part2Categories, setPart2Categories] = useState<LevelCategoryCardData[]>([]);
+  const [part3Levels, setPart3Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part3Categories, setPart3Categories] = useState<LevelCategoryCardData[]>([]);
+  const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([fetchListeningCards(), fetchListeningUnits()])
+      .then(([cards, units]) => {
+        if (!active) return;
+        setDictationCards(cards);
+        const byPart = (part: LevelCategoryCardData["part"], type: "level" | "category") =>
+          units.filter((unit) => unit.part === part && unit.type === type);
+        setPart1Levels(byPart("Part 1", "level"));
+        setPart1Categories(byPart("Part 1", "category"));
+        setPart2Levels(byPart("Part 2", "level"));
+        setPart2Categories(byPart("Part 2", "category"));
+        setPart3Levels(byPart("Part 3", "level"));
+        setPart3Categories(byPart("Part 3", "category"));
+        setPart4Levels(byPart("Part 4", "level"));
+        setPart4Categories(byPart("Part 4", "category"));
+        setDataLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (active) setDataLoadError(error instanceof Error ? error.message : "Không thể tải dữ liệu nghe.");
+      });
+    return () => { active = false; };
+  }, []);
 
   // Modal 1: Dictation Studio
   const [dictationModalCard, setDictationModalCard] = useState<DictationCardData | null>(null);
@@ -166,6 +185,11 @@ export default function StudentListeningPage() {
           {toastMessage}
         </div>
       )}
+      {dataLoadError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {dataLoadError}
+        </div>
+      ) : null}
 
       {/* Header chuẩn tối giản, thanh lịch như Admin */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
@@ -223,13 +247,13 @@ export default function StudentListeningPage() {
                 const filtered = getRedoWrongQuestions(
                   card.questions || [],
                   `listening-dictation-${card.id}`,
-                  card.questions?.length || card.totalQuestions || 10
+                  card.questions?.length || card.totalQuestions || 0
                 );
                 cardToUse = {
                   ...card,
                   questions: filtered,
                   totalQuestions: filtered.length,
-                  originalTotalQuestions: card.questions?.length || card.totalQuestions || 10,
+                  originalTotalQuestions: card.questions?.length || card.totalQuestions || 0,
                 };
               }
               setDictationModalCard(cardToUse);

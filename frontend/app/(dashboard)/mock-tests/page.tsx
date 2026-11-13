@@ -4,7 +4,6 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Sparkles } from "lucide-react";
 import { MockTest, MockTestQuestion, TestItem, PracticeQuestion, normalizeToeicPart } from "@/app/admin/content/mock-tests/types";
 import { fetchMockTests, fetchMockTestQuestions, submitMockTestAttempt } from "@/lib/api/mockTests";
-import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3 } from "@/app/admin/content/mock-tests/mockData";
 import { StudentMockTestCardGrid } from "@/components/student/mock-tests/StudentMockTestCardGrid";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
@@ -19,57 +18,38 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 
 export default function StudentMockTestsPage() {
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2" | "vol3">("vol1");
-  const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
-  const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
-  const [testsVol3, setTestsVol3] = useState<TestItem[]>(INITIAL_TESTS_VOL3);
-  const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
-  const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
-  const [activeTranscriptQuestions, setActiveTranscriptQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
+  const [testsVol1, setTestsVol1] = useState<TestItem[]>([]);
+  const [testsVol2, setTestsVol2] = useState<TestItem[]>([]);
+  const [testsVol3, setTestsVol3] = useState<TestItem[]>([]);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>([]);
+  const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>([]);
+  const [activeTranscriptQuestions, setActiveTranscriptQuestions] = useState<PracticeQuestion[]>([]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const rawCurrentTests = selectedVol === "vol1" ? testsVol1 : selectedVol === "vol2" ? testsVol2 : testsVol3;
-  // CHỈ HIỂN THỊ CÁC ĐỀ THI ĐÃ XUẤT BẢN / PHÁT HÀNH CHO HỌC VIÊN
   const currentTests = useMemo(() => {
-    return rawCurrentTests.filter((t) => t.status !== "DRAFT" && t.status !== "Bản nháp");
+    return rawCurrentTests.filter((test) =>
+      test.status === "PUBLISHED" || test.status === "Đã phát hành"
+    );
   }, [rawCurrentTests]);
 
   const loadTests = useCallback(async () => {
-    if (typeof window !== "undefined") {
-      try {
-        const r1 = localStorage.getItem("toeic_mock_tests_v1");
-        const r2 = localStorage.getItem("toeic_mock_tests_v2");
-        const r3 = localStorage.getItem("toeic_mock_tests_v3");
-        let foundLocal = false;
-        if (r1) { const p1 = JSON.parse(r1); if (Array.isArray(p1) && p1.length > 0) { setTestsVol1(p1); foundLocal = true; } }
-        if (r2) { const p2 = JSON.parse(r2); if (Array.isArray(p2) && p2.length > 0) { setTestsVol2(p2); foundLocal = true; } }
-        if (r3) { const p3 = JSON.parse(r3); if (Array.isArray(p3) && p3.length > 0) { setTestsVol3(p3); foundLocal = true; } }
-        if (foundLocal) return;
-      } catch {}
-    }
-
     try {
       const data = await fetchMockTests();
-      if (data && data.length > 0) {
-        const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
-        const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
-        const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
-        if (v1.length > 0) setTestsVol1(v1);
-        if (v2.length > 0) setTestsVol2(v2);
-        if (v3.length > 0) setTestsVol3(v3);
-      }
+      const normalizeVol = (volId?: string) =>
+        volId === "ets2024" ? "vol1" : volId === "ets2023" ? "vol2" : volId === "ets2022" ? "vol3" : volId;
+      setTestsVol1(data.filter((test) => normalizeVol(test.volId) === "vol1"));
+      setTestsVol2(data.filter((test) => normalizeVol(test.volId) === "vol2"));
+      setTestsVol3(data.filter((test) => normalizeVol(test.volId) === "vol3"));
+      setCatalogError(null);
     } catch (err) {
       console.warn("Could not load mock tests from API:", err);
+      setCatalogError(err instanceof Error ? err.message : "Không thể tải danh sách đề thi.");
     }
   }, []);
 
   useEffect(() => {
     loadTests();
-    const handleSync = () => { loadTests(); };
-    window.addEventListener("toeic-mock-tests-updated", handleSync);
-    window.addEventListener("storage", handleSync);
-    return () => {
-      window.removeEventListener("toeic-mock-tests-updated", handleSync);
-      window.removeEventListener("storage", handleSync);
-    };
   }, [loadTests]);
 
 
@@ -206,8 +186,12 @@ export default function StudentMockTestsPage() {
   };
 
   const handleSubmitExam = async (effectiveQuestions?: PracticeQuestion[]) => {
+    const questionsToGrade = effectiveQuestions ?? activeExamQuestions;
+    if (questionsToGrade.length === 0) {
+      triggerToast("Đề thi chưa có câu hỏi để chấm.");
+      return;
+    }
     setExamSubmitted(true);
-    const questionsToGrade = effectiveQuestions && effectiveQuestions.length > 0 ? effectiveQuestions : SAMPLE_EXAM_QUESTIONS;
     let correct = 0;
     let correctLC = 0;
     let correctRC = 0;
@@ -235,7 +219,7 @@ export default function StudentMockTestsPage() {
 
     const wrongCount = wrongQuestionIds.length;
     const answeredCount = answeredQuestionIds.length;
-    const totalCount = questionsToGrade.length || 200;
+    const totalCount = questionsToGrade.length;
 
     setExamResultScore({
       total: estTotal,
@@ -267,20 +251,25 @@ export default function StudentMockTestsPage() {
         logStudySession(durationMin, 1);
       } catch {}
 
-      void submitMockTestAttempt({
-        testId: examModalTest.id,
-        testTitle: examModalTest.title,
-        volId: examModalTest.volId,
-        score: estTotal,
-        listeningScore: estLC,
-        readingScore: estRC,
-        correctCount: correct,
-        totalCount: questionsToGrade.length,
-        durationSeconds: durationSec,
-      });
+      try {
+        await submitMockTestAttempt({
+          testId: examModalTest.id,
+          score: estTotal,
+          listeningScore: estLC,
+          readingScore: estRC,
+          correctCount: correct,
+          totalCount: questionsToGrade.length,
+          durationSeconds: durationSec,
+        });
+        triggerToast(`Đã lưu kết quả thi thật vào tài khoản của bạn.`);
+      } catch (error) {
+        triggerToast(error instanceof Error
+          ? `Kết quả chưa được lưu trên máy chủ: ${error.message}`
+          : "Kết quả chưa được lưu trên máy chủ.");
+      }
     }
 
-    triggerToast(`Đã nộp bài! Bạn đạt ${estTotal}/${questionsToGrade.length * 5} điểm (${correct}/${questionsToGrade.length} câu đúng - 5 điểm/câu). Kết quả đã gửi qua Admin!`);
+    triggerToast(`Bạn đạt ${estTotal}/${questionsToGrade.length * 5} điểm (${correct}/${questionsToGrade.length} câu đúng).`);
   };
 
   return (
@@ -303,7 +292,7 @@ export default function StudentMockTestsPage() {
             Phòng Thi Thử TOEIC Trực Tuyến
           </h1>
           <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Trải nghiệm thi thử 200 câu với đồng hồ đếm ngược hoặc luyện tập linh hoạt từng phần theo tiến độ của bạn.
+            Làm các đề thi đã được phát hành, với đồng hồ đếm ngược hoặc luyện tập linh hoạt theo tiến độ của bạn.
           </p>
         </div>
 
@@ -313,43 +302,60 @@ export default function StudentMockTestsPage() {
       </header>
 
       {/* Grid danh sách các đề thi thử */}
+      {catalogError && (
+        <div role="alert" className="flex items-center justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <span>{catalogError}</span>
+          <button type="button" onClick={() => void loadTests()} className="font-bold underline">Thử lại</button>
+        </div>
+      )}
       <StudentMockTestCardGrid
         tests={currentTests}
         selectedVol={selectedVol}
         setSelectedVol={setSelectedVol}
         onOpenExam={async (test) => {
-          setExamModalTest(test);
-          setExamStarted(false);
-          setExamSubmitted(false);
           try {
             const qs = await fetchMockTestQuestions(test.id);
-            if (qs && qs.length > 0) setActiveExamQuestions(qs);
-            else setActiveExamQuestions(SAMPLE_EXAM_QUESTIONS);
-          } catch {
-            setActiveExamQuestions(SAMPLE_EXAM_QUESTIONS);
+            if (qs.length === 0) {
+              triggerToast("Đề thi này hiện chưa có câu hỏi.");
+              return;
+            }
+            setActiveExamQuestions(qs);
+            setExamModalTest(test);
+            setExamStarted(false);
+            setExamSubmitted(false);
+          } catch (error) {
+            triggerToast(error instanceof Error ? error.message : "Không thể tải câu hỏi.");
           }
         }}
         onOpenPractice={async (test, isRedo = false) => {
           try {
             const qs = await fetchMockTestQuestions(test.id);
-            let questionsToUse = qs && qs.length > 0 ? qs : SAMPLE_EXAM_QUESTIONS;
+            if (qs.length === 0) {
+              triggerToast("Đề thi này hiện chưa có câu hỏi.");
+              return;
+            }
+            let questionsToUse = qs;
             if (isRedo) {
-              const filtered = getRedoWrongQuestions(questionsToUse, `mock-test-${test.id}`, 200);
+              const filtered = getRedoWrongQuestions(questionsToUse, `mock-test-${test.id}`, questionsToUse.length);
               if (filtered.length > 0) questionsToUse = filtered;
             }
             setActivePracticeQuestions(questionsToUse);
-          } catch {
-            setActivePracticeQuestions(SAMPLE_EXAM_QUESTIONS);
+            void handleOpenPractice(test);
+          } catch (error) {
+            triggerToast(error instanceof Error ? error.message : "Không thể tải câu hỏi.");
           }
-          void handleOpenPractice(test);
         }}
         onOpenTranscript={async (test) => {
           try {
             const qs = await fetchMockTestQuestions(test.id);
-            if (qs && qs.length > 0) setActiveTranscriptQuestions(qs);
-            else setActiveTranscriptQuestions(SAMPLE_EXAM_QUESTIONS);
-          } catch {
-            setActiveTranscriptQuestions(SAMPLE_EXAM_QUESTIONS);
+            if (qs.length === 0) {
+              triggerToast("Đề thi này hiện chưa có câu hỏi.");
+              return;
+            }
+            setActiveTranscriptQuestions(qs);
+          } catch (error) {
+            triggerToast(error instanceof Error ? error.message : "Không thể tải câu hỏi.");
+            return;
           }
           setTranscriptModalTest(test);
         }}

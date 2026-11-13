@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "./types";
-import { INITIAL_GRAMMAR_TOPICS } from "./mockData";
 import {
   getAdminGrammarTopics,
   createGrammarTopic,
@@ -37,33 +37,48 @@ import {
   GrammarArchiveModal,
   GrammarAddQuestionModal,
 } from "@/components/admin/content/grammar/GrammarModals";
+import { analyzeGrammarTopic } from "@/lib/grammarReview";
 
-const LOCAL_GRAMMAR_TOPICS_KEY = "toeic_grammar_topics";
-
-function getLocalGrammarTopics(): GrammarTopicItem[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(LOCAL_GRAMMAR_TOPICS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+interface RecentGrammarAddition {
+  message: string;
+  topicId?: string;
+  question?: { topicId: string; questionId: string };
 }
 
-function saveLocalGrammarTopics(data: GrammarTopicItem[]) {
+function prioritizeCreatedTopic(
+  topics: GrammarTopicItem[],
+  createdTopic: GrammarTopicItem,
+): GrammarTopicItem[] {
+  const topicById = new Map(topics.map((topic) => [topic.id, topic]));
+  const ancestorIds: string[] = [];
+  let parentId = createdTopic.parentTopicId;
+  const visited = new Set<string>();
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    ancestorIds.push(parentId);
+    parentId = topicById.get(parentId)?.parentTopicId;
+  }
+  ancestorIds.reverse();
+
+  const orderedIds = [...ancestorIds, createdTopic.id];
+  const prioritized = orderedIds
+    .map((id) => topics.find((topic) => topic.id === id))
+    .filter((topic): topic is GrammarTopicItem => !!topic);
+  const prioritizedIds = new Set(prioritized.map((topic) => topic.id));
+  return [...prioritized, ...topics.filter((topic) => !prioritizedIds.has(topic.id))];
+}
+
+function notifyGrammarTopicsUpdated(data: GrammarTopicItem[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(LOCAL_GRAMMAR_TOPICS_KEY, JSON.stringify(data));
     window.dispatchEvent(new CustomEvent("toeic-grammar-topics-updated", { detail: data }));
   } catch (err) {
-    console.warn("Could not save grammar topics to localStorage:", err);
+    console.warn("Could not notify grammar topic updates:", err);
   }
 }
 
 export default function AdminGrammarPage() {
-  const [topics, setTopics] = useState<GrammarTopicItem[]>(INITIAL_GRAMMAR_TOPICS);
+  const [topics, setTopics] = useState<GrammarTopicItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeMainTab, setActiveMainTab] = useState<GrammarAdminTab>("topics");
   const [searchQuery, setSearchQuery] = useState("");
@@ -73,12 +88,30 @@ export default function AdminGrammarPage() {
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
+  const [recentAddition, setRecentAddition] = useState<RecentGrammarAddition | null>(null);
+  const [questionBankVersion, setQuestionBankVersion] = useState(0);
+  const [topicListVersion, setTopicListVersion] = useState(0);
+  const recentAdditionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep the admin cache in sync only after the backend confirms a change.
+  const showRecentAddition = (addition: RecentGrammarAddition) => {
+    if (recentAdditionTimeout.current) clearTimeout(recentAdditionTimeout.current);
+    setRecentAddition(addition);
+    recentAdditionTimeout.current = setTimeout(() => {
+      setRecentAddition(null);
+      recentAdditionTimeout.current = null;
+    }, 30_000);
+  };
+
+  useEffect(() => () => {
+    if (recentAdditionTimeout.current) clearTimeout(recentAdditionTimeout.current);
+  }, []);
+
+  // Notify student views only after the backend confirms a change.
   const updateTopicsState = (updater: (prev: GrammarTopicItem[]) => GrammarTopicItem[]) => {
     setTopics((prev) => {
       const next = updater(prev);
-      saveLocalGrammarTopics(next);
+      notifyGrammarTopicsUpdated(next);
       return next;
     });
   };
@@ -97,30 +130,15 @@ export default function AdminGrammarPage() {
   const [archiveConfirmTopic, setArchiveConfirmTopic] = useState<GrammarTopicItem | null>(null);
 
   const loadTopics = useCallback(async () => {
+    setDataLoadError(null);
     try {
       setLoading(true);
       const data = await getAdminGrammarTopics();
-      if (data !== null) {
-        setTopics(data);
-        saveLocalGrammarTopics(data);
-        return;
-      }
-      const local = getLocalGrammarTopics();
-      if (local !== null) {
-        setTopics(local);
-      } else {
-        setTopics(INITIAL_GRAMMAR_TOPICS);
-        saveLocalGrammarTopics(INITIAL_GRAMMAR_TOPICS);
-      }
+      setTopics(data);
+      notifyGrammarTopicsUpdated(data);
     } catch (err) {
-      console.warn("Could not load grammar topics from API, falling back:", err);
-      const local = getLocalGrammarTopics();
-      if (local !== null) {
-        setTopics(local);
-      } else {
-        setTopics(INITIAL_GRAMMAR_TOPICS);
-        saveLocalGrammarTopics(INITIAL_GRAMMAR_TOPICS);
-      }
+      setTopics([]);
+      setDataLoadError(err instanceof Error ? err.message : "Không thể tải dữ liệu ngữ pháp từ máy chủ.");
     } finally {
       setLoading(false);
     }
@@ -169,6 +187,7 @@ export default function AdminGrammarPage() {
   const handleSaveTopic = async (
     topicData: Partial<GrammarTopicItem>,
     newParent?: { titleVi: string; titleEn: string },
+    childTopicIdsToPublish: string[] = [],
   ) => {
     setActionError(null);
     if (editTopicItem) {
@@ -177,6 +196,21 @@ export default function AdminGrammarPage() {
         updateTopicsState((prev) =>
           prev.map((t) => (t.id === editTopicItem.id ? updated : t))
         );
+        if (topicData.status === "PUBLISHED" && childTopicIdsToPublish.length) {
+          try {
+            await bulkUpdateGrammarStatus(childTopicIdsToPublish, "PUBLISHED");
+          } catch (err) {
+            throw new Error(
+              `Chủ điểm cha đã được lưu, nhưng không thể phát hành chủ điểm con: ${
+                err instanceof Error ? err.message : "Lỗi không xác định."
+              }`,
+            );
+          }
+          const selectedChildren = new Set(childTopicIdsToPublish);
+          updateTopicsState((prev) => prev.map((item) =>
+            selectedChildren.has(item.id) ? { ...item, status: "PUBLISHED" } : item
+          ));
+        }
       } catch (err) {
         console.error("Lỗi khi cập nhật chuyên đề:", err);
         setActionError(err instanceof Error ? `Không thể lưu chuyên đề: ${err.message}` : "Không thể lưu chuyên đề.");
@@ -190,11 +224,29 @@ export default function AdminGrammarPage() {
             newParent.titleEn,
             topicData,
           );
-          updateTopicsState((prev) => [created.child, created.parent, ...prev]);
+          updateTopicsState((prev) => prioritizeCreatedTopic([created.parent, created.child, ...prev], created.child));
+          setTopicListVersion((version) => version + 1);
+          setActiveMainTab("topics");
+          setSearchQuery("");
+          setFilterPart("ALL");
+          setFilterStatus("ALL");
+          showRecentAddition({
+            message: `Đã thêm thành công chủ điểm “${created.child.titleVi || created.child.title}”.`,
+            topicId: created.child.id,
+          });
           return;
         }
         const created = await createGrammarTopic(topicData);
-        updateTopicsState((prev) => [created, ...prev]);
+        updateTopicsState((prev) => prioritizeCreatedTopic([created, ...prev], created));
+        setTopicListVersion((version) => version + 1);
+        setActiveMainTab("topics");
+        setSearchQuery("");
+        setFilterPart("ALL");
+        setFilterStatus("ALL");
+        showRecentAddition({
+          message: `Đã thêm thành công chủ điểm “${created.titleVi || created.title}”.`,
+          topicId: created.id,
+        });
       } catch (err) {
         console.error("Lỗi khi tạo chuyên đề:", err);
         setActionError(err instanceof Error ? `Không thể tạo chuyên đề: ${err.message}` : "Không thể tạo chuyên đề.");
@@ -216,6 +268,21 @@ export default function AdminGrammarPage() {
       updateTopicsState((prev) =>
         prev.map((t) => (t.id === topicId ? updated : t))
       );
+      if (!originalQuestionId) {
+        const addedQuestion = updated.questions.find(
+          (item) => item.id === question.id || item.questionText === question.questionText,
+        ) || updated.questions.at(-1);
+        setQuestionBankVersion((version) => version + 1);
+        setActiveMainTab("questions");
+        if (addedQuestion) {
+          showRecentAddition({
+            message: "Đã thêm thành công câu hỏi. Câu hỏi mới được đưa lên đầu danh sách.",
+            question: { topicId, questionId: String(addedQuestion.id) },
+          });
+        } else {
+          showRecentAddition({ message: "Đã thêm thành công câu hỏi vào ngân hàng ngữ pháp." });
+        }
+      }
     } catch (err) {
       const action = originalQuestionId ? "cập nhật" : "thêm";
       console.error(`Lỗi khi ${action} câu hỏi:`, err);
@@ -239,6 +306,14 @@ export default function AdminGrammarPage() {
 
   const handleReviewStatusChange = async (topic: GrammarTopicItem, status: "DRAFT" | "PUBLISHED") => {
     setActionError(null);
+    if (status === "PUBLISHED") {
+      const errors = analyzeGrammarTopic(topic, topics, status)
+        .filter((finding) => finding.severity === "error");
+      if (errors.length > 0) {
+        setActionError(`Chưa thể phát hành “${topic.titleVi || topic.title}”: ${errors.map((finding) => finding.message).join(" ")}`);
+        return;
+      }
+    }
     try {
       const updated = await updateGrammarTopic(topic.id, { ...topic, status });
       updateTopicsState((prev) => prev.map((item) => (item.id === topic.id ? updated : item)));
@@ -313,6 +388,20 @@ export default function AdminGrammarPage() {
   // Bulk operations
   const handleBulkPublish = async () => {
     setActionError(null);
+    const invalidTopics = topics
+      .filter((topic) => selectedTopicIds.includes(topic.id))
+      .map((topic) => ({
+        topic,
+        errors: analyzeGrammarTopic(topic, topics, "PUBLISHED")
+          .filter((finding) => finding.severity === "error"),
+      }))
+      .filter((item) => item.errors.length > 0);
+    if (invalidTopics.length > 0) {
+      setActionError(`Chưa thể phát hành. Hãy sửa các lỗi sau: ${invalidTopics
+        .map(({ topic, errors }) => `${topic.titleVi || topic.title}: ${errors.map((finding) => finding.message).join(" ")}`)
+        .join(" | ")}`);
+      return;
+    }
     try {
       await bulkUpdateGrammarStatus(selectedTopicIds, "PUBLISHED");
     } catch (err) {
@@ -421,6 +510,20 @@ export default function AdminGrammarPage() {
           {actionNotice}
         </div>
       ) : null}
+      {recentAddition ? (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-xs"
+        >
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+          <div>
+            <p className="font-semibold">{recentAddition.message}</p>
+            <p className="mt-0.5 text-xs text-emerald-800">
+              Mục mới được đưa lên đầu danh sách và đánh dấu trong 30 giây.
+            </p>
+          </div>
+        </div>
+      ) : null}
       {/* Header and Filter Toolbar */}
       <GrammarFilterBar
         activeMainTab={activeMainTab}
@@ -450,12 +553,22 @@ export default function AdminGrammarPage() {
       {loading ? (
         <p role="status" className="text-sm text-slate-500">Đang tải dữ liệu ngữ pháp…</p>
       ) : null}
+      {dataLoadError ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span>Không tải được dữ liệu thật từ backend: {dataLoadError}</span>
+          <button type="button" onClick={loadTopics} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100">
+            Thử tải lại
+          </button>
+        </div>
+      ) : null}
 
       {/* Main Tab Content Switching */}
       {activeMainTab === "topics" && (
         <GrammarTopicList
+          key={topicListVersion}
           topics={filteredTopics}
           allTopics={activeTopics}
+          recentTopicId={recentAddition?.topicId}
           viewMode={viewMode}
           selectedTopicIds={selectedTopicIds}
           onToggleSelectTopic={(id) =>
@@ -492,9 +605,9 @@ export default function AdminGrammarPage() {
           {archivedTopics.length === 0 ? (
             <p className="rounded-2xl bg-slate-50 p-8 text-center text-xs text-slate-500">Chưa có chủ điểm nào được lưu trữ.</p>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="grammar-list-scroll space-y-3 p-2">
               {archivedTopics.map((topic) => (
-                <article key={topic.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <article key={topic.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs transition-colors hover:border-slate-300 hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="rounded-lg bg-slate-100 px-2 py-1 font-mono text-[11px] font-bold text-slate-700">{topic.code}</span>
@@ -520,7 +633,9 @@ export default function AdminGrammarPage() {
       )}
       {activeMainTab === "questions" && (
         <GrammarQuestionBankView
+          key={questionBankVersion}
           topics={topics}
+          recentQuestion={recentAddition?.question}
           onAddQuestion={() => setQuestionModal({ topic: null, question: null })}
           onEditQuestion={(topic, question) => setQuestionModal({ topic, question })}
           onDeleteQuestion={handleDeleteQuestion}
@@ -589,6 +704,7 @@ export default function AdminGrammarPage() {
       <GrammarArchiveModal
         key={archiveConfirmTopic?.id || "no-archive-topic"}
         topic={archiveConfirmTopic}
+        topics={topics}
         onClose={() => setArchiveConfirmTopic(null)}
         onConfirm={confirmArchiveTopic}
       />

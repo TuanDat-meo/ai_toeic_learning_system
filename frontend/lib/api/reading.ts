@@ -5,17 +5,18 @@ import {
   SampleQuestion,
   VocabItem,
 } from '@/app/admin/content/reading/types';
-import { isStaleReadingCardSnapshot } from '@/lib/readingPassageUtils';
 
 function normalizeCategory(raw: Record<string, unknown>): ExerciseCardData['category'] {
-  const source = String(raw.category || raw.part || 'part5')
+  const rawCategory = raw.category || raw.part || '';
+  const source = String(rawCategory)
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
   if (source === 'grammar' || source.includes('nguphap')) return 'grammar';
   if (source.includes('6') || source === 'part6') return 'part6';
   if (source.includes('7') || source === 'part7') return 'part7';
-  return 'part5';
+  if (source.includes('5') || source === 'part5') return 'part5';
+  throw new Error(`Unknown Reading category returned by backend: ${String(rawCategory)}`);
 }
 
 function normalizeVocabItem(raw: unknown): VocabItem | null {
@@ -35,10 +36,10 @@ function normalizeVocabItem(raw: unknown): VocabItem | null {
   }
   return {
     word,
-    pos: String(v.pos || v.partOfSpeech || 'n').trim(),
-    level: String(v.level || 'B1').trim(),
+    pos: String(v.pos || v.partOfSpeech || '').trim(),
+    level: String(v.level || '').trim(),
     ipa: String(v.ipa || v.phonetic || '').trim(),
-    meaning: String(v.meaning || v.meaningVi || '').trim() || 'Từ vựng trọng tâm',
+    meaning: String(v.meaning || v.meaningVi || '').trim(),
     ...(example ? { example } : {}),
     ...(Array.isArray(v.collocations) ? { collocations: v.collocations as VocabItem['collocations'] } : {}),
     ...(Array.isArray(v.synonyms) ? { synonyms: v.synonyms as VocabItem['synonyms'] } : {}),
@@ -84,7 +85,7 @@ function normalizeSampleQuestion(
   if (correctIndex < 0 || correctIndex > 3) {
     const ans = String(q.correctAnswer || '').trim().toUpperCase();
     const letterIdx = ['A', 'B', 'C', 'D'].indexOf(ans);
-    correctIndex = letterIdx >= 0 ? letterIdx : 0;
+    correctIndex = letterIdx;
   }
 
   let bilingual = typeof q.bilingual === 'string' ? q.bilingual : '';
@@ -121,6 +122,11 @@ export function mapReadingCard(
   options?: { detailsLoaded?: boolean }
 ): ExerciseCardData {
   const raw = (rawInput && typeof rawInput === 'object' ? rawInput : {}) as Record<string, unknown>;
+  const id = String(raw.id || '');
+  const title = String(raw.title || '');
+  if (!id || !title) {
+    throw new Error('Backend returned a Reading card without an ID or title.');
+  }
   const category = normalizeCategory(raw);
   const passages = Array.isArray(raw.passages) ? (raw.passages as ReadingSubPassage[]) : undefined;
   const passageTextRaw = String(raw.passageText || raw.content || raw.passage || '').trim();
@@ -164,8 +170,8 @@ export function mapReadingCard(
   ]);
 
   return {
-    id: String(raw.id || `reading-${Date.now()}`),
-    title: String(raw.title || 'Bài đọc TOEIC'),
+    id,
+    title,
     category,
     subCategory:
       subCategoryRaw && validSubCats.has(subCategoryRaw)
@@ -176,7 +182,7 @@ export function mapReadingCard(
     totalQuestions:
       typeof raw.totalQuestions === 'number' && raw.totalQuestions > 0
         ? raw.totalQuestions
-        : sampleQuestions.length || 10,
+        : sampleQuestions.length,
     studiedQuestions: typeof raw.studiedQuestions === 'number' ? raw.studiedQuestions : 0,
     correctAnswers: typeof raw.correctAnswers === 'number' ? raw.correctAnswers : 0,
     wrongAnswers: typeof raw.wrongAnswers === 'number' ? raw.wrongAnswers : 0,
@@ -192,81 +198,16 @@ export function mapReadingCard(
   };
 }
 
-export function mergeReadingCardsWithBackend(
-  backendCards: ExerciseCardData[],
-  currentCards: ExerciseCardData[]
-): ExerciseCardData[] {
-  const existingMap = new Map(currentCards.map((c) => [c.id, c]));
-  const backendIds = new Set<string>();
-
-  const syncedBackend = backendCards.map((bCard) => {
-    backendIds.add(bCard.id);
-    const localMatch = existingMap.get(bCard.id);
-    if (!localMatch) return bCard;
-
-    if (
-      (bCard.detailsLoaded || (bCard.sampleQuestions?.length || 0) > 0) &&
-      isStaleReadingCardSnapshot(localMatch, bCard)
-    ) {
-      return localMatch;
-    }
-
-    const useLocalDetails = !bCard.detailsLoaded && (localMatch.sampleQuestions?.length || 0) > 0;
-    const mergedSampleQuestions = useLocalDetails ? localMatch.sampleQuestions : bCard.sampleQuestions;
-    const mergedPassageText = (bCard.passageText && bCard.passageText.trim()) || localMatch.passageText;
-    const mergedPassageTextVi =
-      (bCard.passageTextVi && bCard.passageTextVi.trim()) || localMatch.passageTextVi;
-    const mergedSubtitle =
-      bCard.subtitle &&
-      !(/chuẩn đề thi ETS 20\d{2}/i.test(bCard.subtitle) &&
-        localMatch.subtitle &&
-        localMatch.subtitle !== bCard.subtitle)
-        ? bCard.subtitle
-        : localMatch.subtitle;
-
-    return {
-      ...localMatch,
-      ...bCard,
-      title: bCard.title || localMatch.title,
-      subtitle: mergedSubtitle,
-      tag: bCard.tag || localMatch.tag,
-      passageText: mergedPassageText,
-      passageTextVi: mergedPassageTextVi,
-      passages: bCard.passages && bCard.passages.length > 0 ? bCard.passages : localMatch.passages,
-      theory:
-        bCard.theory && (bCard.theory.summary || bCard.theory.rules?.length)
-          ? bCard.theory
-          : localMatch.theory,
-      vocabList:
-        bCard.vocabList && bCard.vocabList.length > 0 ? bCard.vocabList : localMatch.vocabList,
-      sampleQuestions: mergedSampleQuestions,
-      detailsLoaded: Boolean(bCard.detailsLoaded || localMatch.detailsLoaded),
-    };
-  });
-
-  const remainingLocal = currentCards.filter((c) => !backendIds.has(c.id));
-  return [...syncedBackend, ...remainingLocal];
-}
-
 export async function fetchReadingCards(category?: string): Promise<ExerciseCardData[]> {
-  try {
-    const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-    const data = await apiRequest<unknown[]>(`/api/reading/cards${query}`);
-    return Array.isArray(data) ? data.map((item) => mapReadingCard(item)) : [];
-  } catch (error) {
-    console.warn('Fallback to local mock reading cards:', error);
-    return [];
-  }
+  const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
+  const data = await apiRequest<unknown[]>(`/api/reading/cards${query}`);
+  if (!Array.isArray(data)) throw new Error('Backend returned an invalid Reading card list.');
+  return data.map((item) => mapReadingCard(item));
 }
 
 export async function fetchReadingCardDetails(cardId: string): Promise<ExerciseCardData | null> {
-  try {
-    const data = await apiRequest<unknown>(`/api/reading/cards/${encodeURIComponent(cardId)}`);
-    return data ? mapReadingCard(data, { detailsLoaded: true }) : null;
-  } catch (error) {
-    console.warn(`Fallback to local mock for reading card ${cardId}:`, error);
-    return null;
-  }
+  const data = await apiRequest<unknown>(`/api/reading/cards/${encodeURIComponent(cardId)}`);
+  return data ? mapReadingCard(data, { detailsLoaded: true }) : null;
 }
 
 export async function createAdminReadingCard(card: ExerciseCardData): Promise<ExerciseCardData> {

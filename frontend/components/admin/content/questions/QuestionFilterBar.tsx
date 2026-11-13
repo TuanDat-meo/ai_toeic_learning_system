@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { QuestionPart } from "@/app/admin/content/questions/types";
-import { DEFAULT_PARTS, DEFAULT_SKILLS } from "@/app/admin/content/questions/mockData";
+import { DEFAULT_PARTS, DEFAULT_SKILLS } from "@/app/admin/content/questions/constants";
 
 interface QuestionFilterBarProps {
   selectedPartTab: QuestionPart | "ALL";

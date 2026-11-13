@@ -70,6 +70,7 @@ public class GrammarService {
                        ), '[]'::jsonb)::text AS word_family_words,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
                        COALESCE(jsonb_array_length(g.questions), 0) AS total_questions,
+                       (SELECT COUNT(*) FROM grammar_topic_questions linked WHERE linked.topic_id = g.id) AS linked_toeic_question_count,
                        COALESCE(p.status, 'Chưa học') AS user_status,
                        g.created_at, g.updated_at, g.archived_at
                 FROM grammar_topics g
@@ -104,6 +105,7 @@ public class GrammarService {
                        ), '[]'::jsonb)::text AS word_family_words,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
                        COALESCE(jsonb_array_length(g.questions), 0) AS total_questions,
+                       (SELECT COUNT(*) FROM grammar_topic_questions linked WHERE linked.topic_id = g.id) AS linked_toeic_question_count,
                        COALESCE(p.status, 'Chưa học') AS user_status,
                        g.created_at, g.updated_at, g.archived_at
                 FROM grammar_topics g
@@ -202,6 +204,7 @@ public class GrammarService {
         }
         String summary = req.summary() != null ? req.summary() : "";
         String formula = req.formula() != null ? req.formula() : "";
+        String id = "g-" + UUID.randomUUID();
         String sourceUrl = normalizeBritishCouncilUrl(req.sourceUrl());
         String grammarGroup = req.grammarGroup() != null && !req.grammarGroup().isBlank()
                 ? req.grammarGroup().trim() : "other";
@@ -213,12 +216,12 @@ public class GrammarService {
         validateSourceNotes(req.sourceNotes());
         validateTopic(title, englishTitle, part, targetScore, status, summary, formula, grammarGroup,
                 parentTopicId, difficulty, toeicParts, theory, metadata, req.examples(), req.wordFamilyWords());
+        validatePublishableTopic(status, req.questions(), id);
         String signalWords = toJsonString(req.signalWords() != null ? req.signalWords() : List.of());
         String traps = toJsonString(req.traps() != null ? req.traps() : List.of());
         String examples = toJsonString(req.examples() != null ? req.examples() : List.of());
         String questions = toJsonString(req.questions() != null ? req.questions() : List.of());
 
-        String id = "g-" + UUID.randomUUID();
         Integer maxOrder = jdbc.queryForObject("SELECT COALESCE(MAX(order_index) + 1, 0) FROM grammar_topics", Integer.class);
         int orderIndex = req.orderIndex() != null ? req.orderIndex() : (maxOrder != null ? maxOrder : 0);
 
@@ -309,8 +312,10 @@ public class GrammarService {
         Map<String, String> theory = req.theory() != null ? req.theory() : existing.theory();
         Map<String, Object> metadata = req.metadata() != null ? req.metadata() : existing.metadata();
         List<Map<String, Object>> topicExamples = req.examples() != null ? req.examples() : existing.examples();
+        List<Map<String, Object>> topicQuestions = req.questions() != null ? req.questions() : existing.questions();
         validateTopic(title, englishTitle, part, targetScore, status, summary, formula, grammarGroup,
                 parentTopicId, difficulty, toeicParts, theory, metadata, topicExamples, req.wordFamilyWords());
+        validatePublishableTopic(status, topicQuestions, id);
         validateNoParentCycle(id, parentTopicId);
         String signalWords = toJsonString(req.signalWords() != null ? req.signalWords() : existing.signalWords());
         String traps = toJsonString(req.traps() != null ? req.traps() : existing.traps());
@@ -337,12 +342,14 @@ public class GrammarService {
                     signal_words = ?::jsonb,
                     traps = ?::jsonb,
                     examples = ?::jsonb,
+                    questions = ?::jsonb,
                     updated_at = now()
                 WHERE id = ?
                 """;
         int rows = jdbc.update(updateSql, title, englishTitle, code, part, targetScore, status, summary, formula,
                 sourceUrl, sourceNotes, grammarGroup, parentTopicId, toJsonString(toeicParts), difficulty,
-                toJsonString(theory), toJsonString(metadata), signalWords, traps, examples, id);
+                toJsonString(theory), toJsonString(metadata), signalWords, traps, examples,
+                toJsonString(topicQuestions), id);
         if (rows == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm: " + id);
         }
@@ -501,6 +508,11 @@ public class GrammarService {
     public GrammarTopic deleteQuestion(String topicId, String questionId) {
         GrammarTopic topic = getTopic(topicId, null);
         List<Map<String, Object>> currentQuestions = new ArrayList<>(topic.questions());
+        if ("PUBLISHED".equals(topic.status()) && currentQuestions.size() == 1
+                && !hasChildTopics(topicId) && !hasLinkedToeicQuestions(topicId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Không thể xóa câu hỏi cuối cùng của chủ điểm đang phát hành. Hãy chuyển chủ điểm về bản nháp trước.");
+        }
         boolean removed = currentQuestions.removeIf(question ->
                 questionId.equals(String.valueOf(question.get("id"))));
         if (!removed) {
@@ -564,9 +576,43 @@ public class GrammarService {
         if (!List.of("DRAFT", "PUBLISHED").contains(status)) {
             throw badRequest("Trạng thái chỉ có thể là bản nháp hoặc đã phát hành.");
         }
+        if ("PUBLISHED".equals(status)) {
+            for (String id : ids) {
+                String existingStatus = findTopicStatus(id);
+                if (existingStatus == null) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm: " + id);
+                }
+                if ("ARCHIVED".equals(existingStatus)) continue;
+                GrammarTopic topic = getTopic(id, null);
+                validatePublishableTopic(status, topic.questions(), id);
+            }
+        }
         for (String id : ids) {
             jdbc.update("UPDATE grammar_topics SET status = ?, updated_at = now() WHERE id = ? AND status <> 'ARCHIVED'", status, id);
         }
+    }
+
+    private void validatePublishableTopic(String status, List<Map<String, Object>> questions, String topicId) {
+        if (!"PUBLISHED".equals(status)) return;
+        if ((questions == null || questions.isEmpty())
+                && !hasChildTopics(topicId) && !hasLinkedToeicQuestions(topicId)) {
+            throw badRequest("Chủ điểm chưa có câu hỏi. Hãy thêm ít nhất một câu hỏi trước khi phát hành.");
+        }
+        if (questions != null) {
+            for (Map<String, Object> question : questions) validateQuestion(question);
+        }
+    }
+
+    private boolean hasChildTopics(String topicId) {
+        return Boolean.TRUE.equals(jdbc.query(
+                "SELECT EXISTS(SELECT 1 FROM grammar_topics WHERE parent_topic_id = ?)",
+                rs -> rs.next() && rs.getBoolean(1), topicId));
+    }
+
+    private boolean hasLinkedToeicQuestions(String topicId) {
+        return Boolean.TRUE.equals(jdbc.query(
+                "SELECT EXISTS(SELECT 1 FROM grammar_topic_questions WHERE topic_id = ?)",
+                rs -> rs.next() && rs.getBoolean(1), topicId));
     }
 
     @Transactional
@@ -911,6 +957,7 @@ public class GrammarService {
                 parseMapList(rs.getString("questions")),
                 rs.getInt("completed_questions"),
                 rs.getInt("total_questions"),
+                rs.getInt("linked_toeic_question_count"),
                 rs.getString("user_status"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant(),
@@ -920,6 +967,43 @@ public class GrammarService {
 
     private TopicLifecycleImpact loadTopicLifecycleImpact(String id) {
         TopicLifecycleImpact impact = jdbc.query("""
+                WITH RECURSIVE target AS (
+                    SELECT *
+                    FROM grammar_topics
+                    WHERE id = ?
+                ),
+                topic_tree(id, questions, examples, theory, metadata, grammar_group, path) AS (
+                    SELECT target.id, target.questions, target.examples, target.theory,
+                           target.metadata, target.grammar_group,
+                           ARRAY[target.id]::varchar[]
+                    FROM target
+                    UNION ALL
+                    SELECT child.id, child.questions, child.examples, child.theory,
+                           child.metadata, child.grammar_group,
+                           topic_tree.path || child.id
+                    FROM grammar_topics child
+                    JOIN topic_tree ON child.parent_topic_id = topic_tree.id
+                    WHERE NOT child.id = ANY(topic_tree.path)
+                ),
+                subtree_counts AS (
+                    SELECT
+                        COALESCE(SUM(CASE WHEN jsonb_typeof(questions) = 'array'
+                                          THEN jsonb_array_length(questions) ELSE 0 END), 0) AS question_count,
+                        COALESCE(SUM(CASE WHEN jsonb_typeof(examples) = 'array'
+                                          THEN jsonb_array_length(examples) ELSE 0 END), 0) AS example_count,
+                        COALESCE(SUM(
+                            (SELECT COUNT(*) FROM jsonb_each_text(
+                                CASE WHEN jsonb_typeof(theory) = 'object'
+                                     THEN theory ELSE '{}'::jsonb END) field
+                             WHERE btrim(field.value) <> '')
+                            +
+                            (SELECT COUNT(*) FROM jsonb_each_text(
+                                CASE WHEN jsonb_typeof(metadata->'groupValues'->grammar_group) = 'object'
+                                     THEN metadata->'groupValues'->grammar_group ELSE '{}'::jsonb END) field
+                             WHERE btrim(field.value) <> '')
+                        ), 0) AS theory_field_count
+                    FROM topic_tree
+                )
                 SELECT g.id, g.title, g.status,
                        (SELECT COUNT(*) FROM grammar_topics child WHERE child.parent_topic_id = g.id) AS child_count,
                        CASE WHEN jsonb_typeof(g.questions) = 'array'
@@ -929,13 +1013,28 @@ public class GrammarService {
                        (SELECT COUNT(*) FROM jsonb_each_text(
                             CASE WHEN jsonb_typeof(g.theory) = 'object'
                                  THEN g.theory ELSE '{}'::jsonb END) field
+                        WHERE btrim(field.value) <> '')
+                       +
+                       (SELECT COUNT(*) FROM jsonb_each_text(
+                            CASE WHEN jsonb_typeof(g.metadata->'groupValues'->g.grammar_group) = 'object'
+                                 THEN g.metadata->'groupValues'->g.grammar_group ELSE '{}'::jsonb END) field
                         WHERE btrim(field.value) <> '') AS theory_field_count,
                        (SELECT COUNT(*) FROM grammar_topic_vocabulary_words link WHERE link.topic_id = g.id) AS word_family_link_count,
                        (SELECT COUNT(*) FROM grammar_topic_questions link WHERE link.topic_id = g.id) AS toeic_question_link_count,
                        (SELECT COUNT(*) FROM user_grammar_progress progress WHERE progress.topic_id = g.id) AS user_progress_count,
-                       0 AS learning_path_link_count
-                FROM grammar_topics g
-                WHERE g.id = ?
+                       0 AS learning_path_link_count,
+                       subtree_counts.question_count AS subtree_question_count,
+                       subtree_counts.example_count AS subtree_example_count,
+                       subtree_counts.theory_field_count AS subtree_theory_field_count,
+                       (SELECT COUNT(*) FROM grammar_topic_vocabulary_words link
+                        JOIN topic_tree ON topic_tree.id = link.topic_id) AS subtree_word_family_link_count,
+                       (SELECT COUNT(*) FROM grammar_topic_questions link
+                        JOIN topic_tree ON topic_tree.id = link.topic_id) AS subtree_toeic_question_link_count,
+                       (SELECT COUNT(*) FROM user_grammar_progress progress
+                        JOIN topic_tree ON topic_tree.id = progress.topic_id) AS subtree_user_progress_count,
+                       0 AS subtree_learning_path_link_count
+                FROM target g
+                CROSS JOIN subtree_counts
                 """, rs -> {
             if (!rs.next()) return null;
             return new TopicLifecycleImpact(
@@ -950,6 +1049,13 @@ public class GrammarService {
                     rs.getInt("toeic_question_link_count"),
                     rs.getInt("user_progress_count"),
                     rs.getInt("learning_path_link_count"),
+                    rs.getInt("subtree_question_count"),
+                    rs.getInt("subtree_example_count"),
+                    rs.getInt("subtree_theory_field_count"),
+                    rs.getInt("subtree_word_family_link_count"),
+                    rs.getInt("subtree_toeic_question_link_count"),
+                    rs.getInt("subtree_user_progress_count"),
+                    rs.getInt("subtree_learning_path_link_count"),
                     List.of());
         }, id);
         if (impact == null) {
@@ -966,7 +1072,10 @@ public class GrammarService {
                 impact.topicId(), impact.title(), impact.status(), impact.childCount(),
                 impact.questionCount(), impact.exampleCount(), impact.theoryFieldCount(),
                 impact.wordFamilyLinkCount(), impact.toeicQuestionLinkCount(),
-                impact.userProgressCount(), impact.learningPathLinkCount(), children);
+                impact.userProgressCount(), impact.learningPathLinkCount(),
+                impact.subtreeQuestionCount(), impact.subtreeExampleCount(), impact.subtreeTheoryFieldCount(),
+                impact.subtreeWordFamilyLinkCount(), impact.subtreeToeicQuestionLinkCount(),
+                impact.subtreeUserProgressCount(), impact.subtreeLearningPathLinkCount(), children);
     }
 
     private void lockGrammarHierarchy() {
@@ -1398,6 +1507,7 @@ public class GrammarService {
             List<Map<String, Object>> questions,
             int completedQuestions,
             int totalQuestions,
+            int linkedToeicQuestionCount,
             String userStatus,
             java.time.Instant createdAt,
             java.time.Instant updatedAt,
@@ -1418,6 +1528,13 @@ public class GrammarService {
             int toeicQuestionLinkCount,
             int userProgressCount,
             int learningPathLinkCount,
+            int subtreeQuestionCount,
+            int subtreeExampleCount,
+            int subtreeTheoryFieldCount,
+            int subtreeWordFamilyLinkCount,
+            int subtreeToeicQuestionLinkCount,
+            int subtreeUserProgressCount,
+            int subtreeLearningPathLinkCount,
             List<ChildTopicSummary> children
     ) {}
 

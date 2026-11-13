@@ -8,6 +8,9 @@ public record MockTestItem(
         String volId,
         String title,
         String difficulty,
+        String description,
+        Integer durationMinutes,
+        Integer totalQuestions,
         Integer score,
         Integer listeningScore,
         Integer readingScore,
@@ -23,6 +26,9 @@ public record MockTestItem(
             String volId,
             String title,
             String difficulty,
+            String description,
+            Integer durationMinutes,
+            Integer totalQuestions,
             Integer score,
             Integer listeningScore,
             Integer readingScore,
@@ -31,6 +37,7 @@ public record MockTestItem(
             List<Map<String, Object>> keyVocab,
             List<MockTestAttempt> historyAttempts
     ) {
-        this(id, volId, title, difficulty, score, listeningScore, readingScore, status, completedAt, keyVocab, historyAttempts, null, 0);
+        this(id, volId, title, difficulty, description, durationMinutes, totalQuestions, score, listeningScore,
+                readingScore, status, completedAt, keyVocab, historyAttempts, null, 0);
     }
 }

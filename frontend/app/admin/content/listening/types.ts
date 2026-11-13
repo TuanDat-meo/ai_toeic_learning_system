@@ -67,13 +67,13 @@ export type ListeningYearFilter = 'ALL' | number;
 export type ListeningStatusFilter = 'ALL' | ContentStatus;
 
 // ============================================================
-// Legacy types (giữ backward compat với mockData.ts hiện tại)
-// Sẽ xóa sau khi API thực được kết nối.
+// Legacy dictation-card types used by the existing listening screens and API.
 // ============================================================
 
 /** @deprecated — dùng ListeningStimulus thay thế */
 export interface DictationCardData {
   id: string;
+  title?: string;
   testNumber: number;
   part: 'Part 1' | 'Part 2' | 'Part 3' | 'Part 4';
   year: '2026' | '2024' | '2023' | '2022';

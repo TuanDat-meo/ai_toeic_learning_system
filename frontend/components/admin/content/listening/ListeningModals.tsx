@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { ShoppingBag, Bookmark, FileText, Trash2, X } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
-import { SAMPLE_DICTATION_QUESTIONS } from "@/app/admin/content/listening/mockData";
 
 // --- 1. MODAL GIỎ TỪ VỰNG ---
 interface VocabBagModalProps {
@@ -221,6 +220,7 @@ interface ReviewQuestionsModalProps {
   showReviewQuestionsModal: boolean;
   setShowReviewQuestionsModal: (show: boolean) => void;
   flaggedReviewIds: number[];
+  questions: DictationQuestion[];
   handleToggleFlagReview: (qId: number) => void;
 }
 
@@ -228,9 +228,11 @@ export const ReviewQuestionsModal: React.FC<ReviewQuestionsModalProps> = ({
   showReviewQuestionsModal,
   setShowReviewQuestionsModal,
   flaggedReviewIds,
+  questions,
   handleToggleFlagReview,
 }) => {
   if (!showReviewQuestionsModal) return null;
+  const flaggedQuestions = questions.filter((question) => flaggedReviewIds.includes(question.id));
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -255,12 +257,12 @@ export const ReviewQuestionsModal: React.FC<ReviewQuestionsModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
-          {flaggedReviewIds.length === 0 ? (
+          {flaggedQuestions.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-6">
-              Hiện không có câu nào được đánh dấu cần luyện lại.
+              Hiện không có câu hỏi thực tế nào được đánh dấu cần luyện lại.
             </p>
           ) : (
-            SAMPLE_DICTATION_QUESTIONS.filter((q) => flaggedReviewIds.includes(q.id)).map((q) => (
+            flaggedQuestions.map((q) => (
               <div key={q.id} className="bg-slate-50 rounded-2xl p-4 border border-slate-200/90 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
@@ -588,6 +590,8 @@ interface LevelFormModalProps {
   setLevelFormTheory: (theory: string) => void;
   levelFormRules: string;
   setLevelFormRules: (rules: string) => void;
+  levelFormQuestion: DictationQuestion;
+  setLevelFormQuestion: React.Dispatch<React.SetStateAction<DictationQuestion>>;
   handleSaveLevel: (e: React.FormEvent) => void;
 }
 
@@ -605,6 +609,8 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
   setLevelFormTheory,
   levelFormRules,
   setLevelFormRules,
+  levelFormQuestion,
+  setLevelFormQuestion,
   handleSaveLevel,
 }) => {
   if (!showLevelModal) return null;
@@ -687,6 +693,92 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
               onChange={(e) => setLevelFormRules(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 resize-none"
             />
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+            <h4 className="text-xs font-bold text-slate-800">Câu hỏi luyện tập</h4>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Audio URL *</label>
+              <input
+                type="text"
+                required
+                value={levelFormQuestion.audioUrl}
+                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, audioUrl: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Transcript *</label>
+              <textarea
+                rows={2}
+                required
+                value={levelFormQuestion.fullTranscript}
+                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, fullTranscript: e.target.value }))}
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Câu dẫn (không bắt buộc)</label>
+              <input
+                type="text"
+                value={levelFormQuestion.question || ""}
+                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, question: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["A", "B", "C", "D"] as const).map((key) => (
+                <div key={key}>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">Lựa chọn {key} *</label>
+                  <input
+                    type="text"
+                    required
+                    value={levelFormQuestion.options?.[key] || ""}
+                    onChange={(e) => setLevelFormQuestion((current) => ({
+                      ...current,
+                      options: { ...current.options, [key]: e.target.value },
+                    }))}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Đáp án đúng *</label>
+                <select
+                  value={levelFormQuestion.correctAnswer || "A"}
+                  onChange={(e) => setLevelFormQuestion((current) => ({
+                    ...current,
+                    correctAnswer: e.target.value as DictationQuestion["correctAnswer"],
+                  }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                >
+                  {["A", "B", "C", "D"].map((answer) => <option key={answer}>{answer}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Dịch nghĩa</label>
+                <input
+                  type="text"
+                  value={levelFormQuestion.vietnameseTranslation || ""}
+                  onChange={(e) => setLevelFormQuestion((current) => ({
+                    ...current,
+                    vietnameseTranslation: e.target.value,
+                  }))}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Giải thích</label>
+              <textarea
+                rows={2}
+                value={levelFormQuestion.explanation || ""}
+                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, explanation: e.target.value }))}
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">

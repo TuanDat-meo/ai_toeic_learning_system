@@ -8,23 +8,15 @@ import {
   Pencil,
   Search,
   ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
 import type { GrammarTopicItem } from "@/app/admin/content/grammar/types";
+import { analyzeGrammarTopic } from "@/lib/grammarReview";
 
 interface GrammarContentReviewViewProps {
   topics: GrammarTopicItem[];
   onEditTopic: (topic: GrammarTopicItem) => void;
   onChangeStatus: (topic: GrammarTopicItem, status: "DRAFT" | "PUBLISHED") => void;
-}
-
-function getMissingRequiredContent(topic: GrammarTopicItem): string[] {
-  const missing: string[] = [];
-  if (!(topic.titleVi || topic.title)?.trim()) missing.push("Tên chuyên đề tiếng Việt");
-  if (!(topic.titleEn || topic.englishTitle)?.trim()) missing.push("Tên chuyên đề tiếng Anh");
-  if (!topic.summary?.trim()) missing.push("Tóm tắt");
-  if (!topic.formula?.trim()) missing.push("Công thức / lý thuyết");
-  if (!topic.questions?.length) missing.push("Ít nhất một câu hỏi");
-  return missing;
 }
 
 export const GrammarContentReviewView: React.FC<GrammarContentReviewViewProps> = ({
@@ -34,11 +26,13 @@ export const GrammarContentReviewView: React.FC<GrammarContentReviewViewProps> =
 }) => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"ALL" | "INCOMPLETE" | "READY" | "DRAFT" | "PUBLISHED">("ALL");
-  const reviewItems = useMemo(
-    () => topics.map((topic) => ({ topic, missing: getMissingRequiredContent(topic) })),
-    [topics],
-  );
-  const filteredItems = useMemo(() => reviewItems.filter(({ topic, missing }) => {
+  const reviewItems = useMemo(() => topics.map((topic) => {
+    const findings = analyzeGrammarTopic(topic, topics);
+    const publishErrors = analyzeGrammarTopic(topic, topics, "PUBLISHED")
+      .filter((finding) => finding.severity === "error");
+    return { topic, findings, publishErrors };
+  }), [topics]);
+  const filteredItems = useMemo(() => reviewItems.filter(({ topic, findings, publishErrors }) => {
     const query = search.trim().toLocaleLowerCase();
     const matchesSearch = !query || [
       topic.code,
@@ -49,14 +43,14 @@ export const GrammarContentReviewView: React.FC<GrammarContentReviewViewProps> =
     ].some((value) => value?.toLocaleLowerCase().includes(query));
     const matchesFilter =
       filter === "ALL" ||
-      (filter === "INCOMPLETE" && missing.length > 0) ||
-      (filter === "READY" && missing.length === 0) ||
+      (filter === "INCOMPLETE" && findings.length > 0) ||
+      (filter === "READY" && publishErrors.length === 0) ||
       (filter === "DRAFT" && topic.status !== "PUBLISHED") ||
       (filter === "PUBLISHED" && topic.status === "PUBLISHED");
     return matchesSearch && matchesFilter;
   }), [reviewItems, search, filter]);
-  const incompleteCount = reviewItems.filter(({ missing }) => missing.length > 0).length;
-  const readyCount = reviewItems.length - incompleteCount;
+  const incompleteCount = reviewItems.filter(({ findings }) => findings.length > 0).length;
+  const readyCount = reviewItems.filter(({ publishErrors }) => publishErrors.length === 0).length;
   const publishedCount = topics.filter((topic) => topic.status === "PUBLISHED").length;
   const draftCount = topics.length - publishedCount;
 
@@ -67,8 +61,8 @@ export const GrammarContentReviewView: React.FC<GrammarContentReviewViewProps> =
           Kiểm tra chất lượng và trạng thái phát hành
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Hoàn thiện các trường bắt buộc, kiểm tra câu hỏi và quản lý trạng thái trước khi đưa chuyên đề lên cho học viên.
-          Ví dụ, dấu hiệu và bẫy đề là nội dung bổ sung, không chặn phát hành.
+          Tự động rà soát nội dung bắt buộc, câu hỏi, đáp án, dữ liệu trùng và nội dung bổ sung. Bản nháp nhận cảnh báo;
+          lỗi chặn phát hành được đánh dấu riêng trước khi đưa nội dung đến học viên.
         </p>
       </div>
 
@@ -123,14 +117,16 @@ export const GrammarContentReviewView: React.FC<GrammarContentReviewViewProps> =
             {reviewItems.length === 0 ? "Chưa có chuyên đề để rà soát." : "Không có chuyên đề phù hợp với bộ lọc."}
           </p>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {filteredItems.map(({ topic, missing }) => {
+          <div className="grammar-list-scroll space-y-3 p-3">
+            {filteredItems.map(({ topic, findings, publishErrors }) => {
               const isPublished = topic.status === "PUBLISHED";
-              const isReady = missing.length === 0;
+              const isReady = publishErrors.length === 0;
+              const errors = findings.filter((finding) => finding.severity === "error");
+              const warnings = findings.filter((finding) => finding.severity === "warning");
               return (
                 <article
                   key={topic.id}
-                  className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
+                  className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs transition-colors hover:border-slate-300 hover:bg-slate-50/70 lg:flex-row lg:items-center lg:justify-between"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -145,19 +141,29 @@ export const GrammarContentReviewView: React.FC<GrammarContentReviewViewProps> =
                     <h4 className="mt-1 font-semibold text-slate-900">
                       {topic.titleVi || topic.title || "Chưa đặt tên"}
                     </h4>
-                    {missing.length > 0 ? (
-                      <div className="mt-2 flex items-start gap-2 text-xs text-rose-700">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>Thiếu nội dung bắt buộc: {missing.join(", ")}</span>
-                      </div>
-                    ) : (
+                    {isReady ? (
                       <div className="mt-2 flex items-center gap-2 text-xs text-emerald-700">
                         <CheckCircle2 className="h-4 w-4" />
-                        <span>Đủ điều kiện phát hành</span>
+                        <span>Không có lỗi chặn phát hành</span>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-start gap-2 text-xs text-rose-700">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>{publishErrors.length} lỗi cần sửa trước khi phát hành</span>
                       </div>
                     )}
-                    {!topic.examples?.some((example) => example.sentence?.trim()) ? (
-                      <p className="mt-1 text-[11px] text-slate-500">Gợi ý bổ sung ví dụ minh họa để nội dung dễ học hơn.</p>
+                    {errors.length > 0 ? (
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] text-rose-700">
+                        {errors.map((finding) => <li key={finding.id}>{finding.message}</li>)}
+                      </ul>
+                    ) : null}
+                    {warnings.length > 0 ? (
+                      <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-800">
+                        <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <ul className="list-inside list-disc space-y-1">
+                          {warnings.map((finding) => <li key={finding.id}>{finding.message}</li>)}
+                        </ul>
+                      </div>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">

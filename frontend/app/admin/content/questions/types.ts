@@ -40,6 +40,7 @@ export interface QuestionItem {
   part: QuestionPart;
   questionText: string;
   passage?: string;
+  bilingualPassage?: string;
   imageUrl?: string;
   audioUrl?: string;
   options: QuestionOption[];
@@ -49,6 +50,10 @@ export interface QuestionItem {
   explanation: string;
   status: "PUBLISHED" | "DRAFT";
   createdAt?: string;
+  translation?: string;
+  questionTranslation?: string;
+  transcript?: string;
+  trapNote?: string;
   vocabList?: VocabItem[];
   steps?: ExplanationStep[];
 }

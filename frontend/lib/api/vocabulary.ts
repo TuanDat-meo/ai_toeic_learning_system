@@ -1,7 +1,6 @@
 import { apiRequest, writeAuthRequest } from './client';
 import { normalizeVocabularyLevel, type VocabularyRelatedForm, type VocabularySense, type VocabularyTestSet, type WordItem } from '@/app/admin/content/vocabulary/types';
 import type { ContentStatus } from '@/lib/types/domain';
-import { INITIAL_TESTS, VOCAB_AUDIO_MAP } from '@/app/admin/content/vocabulary/mockData';
 import { normalizeVocabularyPartOfSpeech } from '@/lib/vocabulary-part-of-speech';
 
 interface RawWordItem {
@@ -38,8 +37,7 @@ interface RawVocabularyTestSet {
 }
 
 function mapWord(w: RawWordItem): WordItem {
-  const cleanWord = (w.word || '').trim().toLowerCase();
-  const audio = w.audioUrl || w.audio || (cleanWord ? VOCAB_AUDIO_MAP[cleanWord] : '') || '';
+  const audio = w.audioUrl || w.audio || '';
   return {
     id: w.id,
     word: w.word,
@@ -75,23 +73,20 @@ function mapWord(w: RawWordItem): WordItem {
 }
 
 function mapSet(s: RawVocabularyTestSet): VocabularyTestSet {
-  const local = INITIAL_TESTS.find((it) => it.id === s.id || it.code === s.id);
-  const words = (Array.isArray(s.words) && s.words.length > 0)
-    ? s.words.map(mapWord)
-    : (local?.words || []);
-  const count = words.length > 0 ? words.length : (typeof s.wordCount === 'number' && s.wordCount > 0 ? s.wordCount : (local?.wordCount || 200));
+  const words = Array.isArray(s.words) ? s.words.map(mapWord) : [];
+  const count = typeof s.wordCount === 'number' ? s.wordCount : words.length;
 
   return {
     id: s.id,
     code: s.id,
-    title: s.title || local?.title || '',
-    nameVi: s.title || local?.nameVi || '',
-    nameEn: local?.nameEn || s.title || '',
-    name: s.title || local?.name || '',
-    year: s.year ? String(s.year) : '2024',
-    category: s.category || local?.category || '2024',
+    title: s.title || '',
+    nameVi: s.title || '',
+    nameEn: s.title || '',
+    name: s.title || '',
+    year: s.year == null ? '' : String(s.year),
+    category: s.category || '',
     wordCount: count,
-    status: s.status || 'PUBLISHED',
+    status: s.status || '',
     releaseAt: s.releaseAt ?? null,
     words,
   };
@@ -110,22 +105,8 @@ export async function getVocabularySets(category?: string): Promise<VocabularyTe
 
 export async function getAdminVocabularySets(category?: string): Promise<VocabularyTestSet[]> {
   const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-  try {
-    const list = await apiRequest<RawVocabularyTestSet[]>(`/api/admin/vocabulary/sets${query}`);
-    if (Array.isArray(list) && list.length > 0) {
-      return list.map(mapSet);
-    }
-  } catch {
-    try {
-      const publicList = await apiRequest<RawVocabularyTestSet[]>(`/api/vocabulary/sets${query}`);
-      if (Array.isArray(publicList) && publicList.length > 0) {
-        return publicList.map(mapSet);
-      }
-    } catch {
-      // Return empty so callers use fallback gracefully
-    }
-  }
-  return [];
+  const list = await apiRequest<RawVocabularyTestSet[]>(`/api/admin/vocabulary/sets${query}`);
+  return Array.isArray(list) ? list.map(mapSet) : [];
 }
 
 export async function getVocabularySet(setId: string): Promise<VocabularyTestSet> {

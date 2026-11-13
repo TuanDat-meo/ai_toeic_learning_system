@@ -199,17 +199,13 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                 </h3>
                 <div className="mt-2 space-y-1 text-xs text-slate-500">
                   <p className="font-semibold text-slate-700">
-                    Quy mô: <span className="text-blue-600 font-bold">{t.words?.length || t.wordCount || 200} từ vựng</span>
+                    Quy mô: <span className="text-blue-600 font-bold">{t.words?.length || t.wordCount || 0} từ vựng</span>
                   </p>
                   {t.releaseAt ? (
                     <p className="text-[11px] text-slate-500">
                       Phát hành: {new Date(t.releaseAt).toLocaleString("vi-VN")}
                     </p>
                   ) : null}
-                  <p className="flex items-center gap-1 text-[11px] text-slate-400">
-                    <Clock className="w-3 h-3" />
-                    Cập nhật: Hệ thống chuẩn hóa
-                  </p>
                 </div>
               </div>
 
@@ -222,7 +218,7 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                   title="Mở danh sách từ để quản lý, sửa nghĩa và thêm từ"
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
-                  Quản lý từ ({t.words?.length || t.wordCount || 200})
+                  Quản lý từ ({t.words?.length || t.wordCount || 0})
                 </button>
 
                 <button
@@ -267,10 +263,10 @@ export const VocabularyTestGrid: React.FC<VocabularyTestGridProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-blue-600">
-                      {t.words?.length || t.wordCount || 200} từ
+                      {t.words?.length || t.wordCount || 0} từ
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">
-                      {t.releaseAt ? new Date(t.releaseAt).toLocaleString("vi-VN") : "Ngay sau khi xuất bản"}
+                      {t.releaseAt ? new Date(t.releaseAt).toLocaleString("vi-VN") : "—"}
                     </td>
                     <td className="py-3.5 px-4">
                       <button

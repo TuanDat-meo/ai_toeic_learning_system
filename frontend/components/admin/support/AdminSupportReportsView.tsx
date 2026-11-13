@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle,
   CheckCircle2,
   Clock,
   Download,
-  Filter,
   MessageSquare,
   MessageSquareWarning,
   RefreshCw,
   Search,
   Send,
   Trash2,
-  UserCheck,
   X,
 } from "lucide-react";
 import { AdminPageFrame, type AdminMetric } from "@/components/admin/AdminPageFrame";
@@ -125,20 +122,13 @@ export function AdminSupportReportsView() {
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
 
-  useEffect(() => {
-    loadData();
-    const handleUpdate = () => {
-      loadData();
-    };
-    window.addEventListener("toeic-support-report-updated", handleUpdate);
-    window.addEventListener("storage", handleUpdate);
-    return () => {
-      window.removeEventListener("toeic-support-report-updated", handleUpdate);
-      window.removeEventListener("storage", handleUpdate);
-    };
+  const showFeedback = useCallback((msg: string, isErr = false) => {
+    setFeedbackMsg(msg);
+    setFeedbackIsError(isErr);
+    setTimeout(() => setFeedbackMsg(""), 4000);
   }, []);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getReports();
@@ -148,13 +138,11 @@ export function AdminSupportReportsView() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [showFeedback]);
 
-  function showFeedback(msg: string, isErr = false) {
-    setFeedbackMsg(msg);
-    setFeedbackIsError(isErr);
-    setTimeout(() => setFeedbackMsg(""), 4000);
-  }
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, [loadData]);
 
   const filtered = reports.filter((r) => {
     const q = search.trim().toLowerCase();

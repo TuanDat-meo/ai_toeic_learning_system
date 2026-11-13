@@ -63,7 +63,7 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
             Quản lý ngân hàng đề thi thử TOEIC
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
-            Hệ thống kiểm duyệt 200 câu hỏi Listening &amp; Reading, quản lý audio bài thi, thống kê nộp bài và thang điểm quy đổi.
+            Quản lý đề thi, câu hỏi đã liên kết và kết quả nộp bài được lưu trên máy chủ.
           </p>
         </div>
 
@@ -112,7 +112,7 @@ export const MockTestHeader: React.FC<MockTestHeaderProps> = ({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Nhật ký nộp bài học viên (1,842 bài)</span>
+          <span>Nhật ký nộp bài học viên</span>
         </button>
 
         <button
