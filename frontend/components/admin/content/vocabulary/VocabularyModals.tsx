@@ -251,8 +251,9 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   onConfirmDeleteWord,
 }) => {
   // Error states
-  const [testFormError, setTestFormError] = useState<string | null>(null);
   const [wordFormError, setWordFormError] = useState<string | null>(null);
+  const [testFieldErrors, setTestFieldErrors] = useState<Record<string, string>>({});
+  const [wordFieldErrors, setWordFieldErrors] = useState<Record<string, string>>({});
   const [wordQualityFilter, setWordQualityFilter] = useState<"all" | "needs-attention">("all");
   const [duplicateAction, setDuplicateAction] = useState<
     "add-current-sense" | "update-missing-audio" | "add-separately" | "merge-other-senses" | ""
@@ -299,9 +300,33 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   const [dictionaryError, setDictionaryError] = useState<string | null>(null);
   const [testReleaseAt, setTestReleaseAt] = useState("");
 
+  const clearTestFieldError = (field: string) => {
+    setTestFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const clearWordFieldError = (field: string) => {
+    setWordFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const clearWordSenseErrors = () => {
+    setWordFieldErrors((current) => Object.fromEntries(
+      Object.entries(current).filter(([field]) => !field.startsWith("sense-")),
+    ));
+  };
+
   React.useEffect(() => {
+    setTestFieldErrors({});
     if (editingTest) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTestTitle(editingTest.title || editingTest.nameVi || "");
       setTestYear(String(editingTest.year || "2024"));
       setTestStatus(editingTest.status || "PUBLISHED");
@@ -329,8 +354,9 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   }, [editingTest, showCreateTestModal, existingCategories]);
 
   React.useEffect(() => {
+    setWordFieldErrors({});
+    setWordFormError(null);
     if (editingWord) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWordText(editingWord.word || "");
       setDictionaryLoading(false);
       setWordIpa(editingWord.ipa || "");
@@ -422,20 +448,24 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
   async function uploadWordAudio(file: File) {
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (!["mp3", "wav"].includes(extension || "")) {
-      setWordFormError("Audio từ vựng chỉ hỗ trợ file .mp3 hoặc .wav.");
+      setWordFieldErrors((current) => ({ ...current, audioFile: "Chỉ hỗ trợ file audio .mp3 hoặc .wav." }));
       return;
     }
     if (file.size > 256 * 1024 * 1024) {
-      setWordFormError("File audio không được vượt quá 256 MB.");
+      setWordFieldErrors((current) => ({ ...current, audioFile: "File audio không được vượt quá 256 MB." }));
       return;
     }
     setAudioUploading(true);
+    clearWordFieldError("audioFile");
     setWordFormError(null);
     try {
       const asset = await uploadContentImportAsset("VOCABULARY", file);
       setWordAudioUrl(asset.url);
     } catch (error) {
-      setWordFormError(error instanceof Error ? error.message : "Không thể tải audio lên.");
+      setWordFieldErrors((current) => ({
+        ...current,
+        audioFile: error instanceof Error ? error.message : "Không thể tải audio lên.",
+      }));
     } finally {
       setAudioUploading(false);
     }
@@ -1175,38 +1205,43 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 {editingTest ? "Sửa bộ từ vựng" : "Thêm bộ từ vựng mới"}
               </h3>
             </div>
-            {testFormError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
-                ⚠️ {testFormError}
-              </div>
-            )}
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                const errors: Record<string, string> = {};
                 if (!testTitle.trim()) {
-                  setTestFormError("Vui lòng nhập tên bộ từ vựng (không được để trống).");
-                  return;
+                  errors.title = "Vui lòng nhập tên bộ từ vựng.";
                 }
                 if (isCustomCategory && !customCategoryInput.trim()) {
-                  setTestFormError("Vui lòng nhập tên phân loại tùy chỉnh mới.");
+                  errors.category = "Vui lòng nhập tên phân loại tùy chỉnh.";
+                } else if (!isCustomCategory && !testCategory.trim()) {
+                  errors.category = "Vui lòng chọn phân loại.";
+                }
+                setTestFieldErrors(errors);
+                if (Object.keys(errors).length > 0) {
                   return;
                 }
-                setTestFormError(null);
-                const finalCategory = isCustomCategory ? (customCategoryInput.trim() || "Khác") : testCategory;
+                const finalCategory = isCustomCategory ? customCategoryInput.trim() : testCategory;
                 onSaveTestForm(testTitle.trim(), testYear, finalCategory, testStatus, testReleaseAt);
               }}
+              noValidate
               className="space-y-4 text-xs"
             >
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Tên bộ từ vựng *</label>
                 <input
                   type="text"
-                  required
                   placeholder="Ví dụ: Test 5 (ETS 2026) hoặc Hackers TOEIC"
                   value={testTitle}
-                  onChange={(e) => setTestTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  onChange={(e) => {
+                    setTestTitle(e.target.value);
+                    clearTestFieldError("title");
+                  }}
+                  aria-invalid={Boolean(testFieldErrors.title)}
+                  aria-describedby={testFieldErrors.title ? "vocabulary-set-title-error" : undefined}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all ${testFieldErrors.title ? "border-red-400" : "border-slate-200"}`}
                 />
+                {testFieldErrors.title ? <p id="vocabulary-set-title-error" role="alert" className="mt-1 text-[11px] text-red-700">{testFieldErrors.title}</p> : null}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1244,6 +1279,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   <select
                     value={testCategory}
                     onChange={(e) => {
+                      clearTestFieldError("category");
                       if (e.target.value === "__CUSTOM__") {
                         setIsCustomCategory(true);
                         setCustomCategoryInput("");
@@ -1251,7 +1287,9 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                         setTestCategory(e.target.value);
                       }
                     }}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+                    aria-invalid={Boolean(testFieldErrors.category)}
+                    aria-describedby={testFieldErrors.category ? "vocabulary-set-category-error" : undefined}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white ${testFieldErrors.category ? "border-red-400" : "border-slate-200"}`}
                   >
                     <optgroup label="Danh mục phổ biến">
                       <option value="2024">ETS 2024</option>
@@ -1284,17 +1322,23 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   <div className="space-y-1.5">
                     <input
                       type="text"
-                      required
                       placeholder="Ví dụ: YBM 2024, Từ vựng Part 7, Kinh tế..."
                       value={customCategoryInput}
-                      onChange={(e) => setCustomCategoryInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-blue-400 bg-blue-50/20 text-xs font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all"
+                      onChange={(e) => {
+                        setCustomCategoryInput(e.target.value);
+                        clearTestFieldError("category");
+                      }}
+                      aria-invalid={Boolean(testFieldErrors.category)}
+                      aria-describedby={testFieldErrors.category ? "vocabulary-set-category-error" : undefined}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border bg-blue-50/20 text-xs font-medium focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all ${testFieldErrors.category ? "border-red-400" : "border-blue-400"}`}
                     />
+                    {testFieldErrors.category ? <p id="vocabulary-set-category-error" role="alert" className="text-[11px] text-red-700">{testFieldErrors.category}</p> : null}
                     <p className="text-[11px] text-slate-400">
                       💡 Phân loại này sẽ tự động xuất hiện thành một tab lọc ngoài màn hình chính.
                     </p>
                   </div>
                 )}
+                {!isCustomCategory && testFieldErrors.category ? <p id="vocabulary-set-category-error" role="alert" className="mt-1 text-[11px] text-red-700">{testFieldErrors.category}</p> : null}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Trạng thái phát hành</label>
@@ -1430,41 +1474,43 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                const errors: Record<string, string> = {};
                 if (!wordText.trim()) {
-                  setWordFormError("Vui lòng nhập từ tiếng Anh.");
-                  return;
-                }
-                const normalizedWord = wordText.trim().replace(/\s+/g, " ");
-                if (normalizedWord.length > 128 || !/^[a-zA-Z][a-zA-Z' -]*$/.test(normalizedWord)) {
-                  setWordFormError("Từ hoặc cụm từ chỉ gồm chữ cái tiếng Anh, dấu nháy, dấu gạch nối và khoảng trắng (tối đa 128 ký tự).");
-                  return;
+                  errors.word = "Vui lòng nhập từ tiếng Anh.";
+                } else {
+                  const normalizedWord = wordText.trim().replace(/\s+/g, " ");
+                  if (normalizedWord.length > 128 || !/^[a-zA-Z][a-zA-Z' -]*$/.test(normalizedWord)) {
+                    errors.word = "Chỉ nhập chữ cái tiếng Anh, dấu nháy, dấu gạch nối và khoảng trắng (tối đa 128 ký tự).";
+                  }
                 }
                 if (!wordListModalTest && !editingWord && !selectedTargetSetId) {
-                  setWordFormError("Chọn bộ từ vựng để lưu mục từ mới.");
-                  return;
+                  errors.targetSet = "Vui lòng chọn bộ từ vựng để lưu mục từ mới.";
                 }
                 if (!wordMeaning.trim() && duplicateAction !== "update-missing-audio") {
-                  setWordFormError("Vui lòng nhập định nghĩa tiếng Việt.");
-                  return;
+                  errors.meaning = "Vui lòng nhập nghĩa tiếng Việt.";
                 }
-                if (additionalWordSenses.some((sense) => !sense.meaning.trim())) {
-                  setWordFormError("Vui lòng nhập nghĩa cho từng từ loại bổ sung.");
-                  return;
-                }
+                visibleAdditionalWordSenses.forEach((sense, index) => {
+                  if (!sense.meaning.trim()) {
+                    errors[`sense-${index}`] = "Vui lòng nhập nghĩa tiếng Việt cho từ loại bổ sung này.";
+                  }
+                });
                 const audioValidationError = getWordAudioValidationError(wordAudioUrl);
                 if (audioValidationError) {
-                  setWordFormError(audioValidationError);
-                  return;
+                  errors.audioUrl = audioValidationError;
                 }
                 if (existingWordMatch && !["add-current-sense", "update-missing-audio"].includes(duplicateAction)) {
-                  setWordFormError("Hãy chọn cách xử lý từ đã có trong bộ hiện tại.");
-                  return;
+                  errors.duplicateAction = "Vui lòng chọn cách xử lý từ đã có trong bộ hiện tại.";
                 }
                 if (!existingWordMatch && otherSetWordMatches.length > 0
                   && !["add-separately", "merge-other-senses"].includes(duplicateAction)) {
-                  setWordFormError("Hãy chọn có thêm từ này vào bộ hiện tại hay không.");
+                  errors.duplicateAction = "Vui lòng chọn cách thêm từ đã có ở bộ khác.";
+                }
+                setWordFieldErrors(errors);
+                if (Object.keys(errors).length > 0) {
                   return;
                 }
+                const normalizedWord = wordText.trim().replace(/\s+/g, " ");
+                setWordFormError(null);
                 setExampleTranslationError(null);
                 setExampleTranslationLoading(true);
                 let translatedPrimaryExample = wordExampleMeaning.trim();
@@ -1529,6 +1575,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   duplicateSenses: otherSetWordMatches.flatMap(({ word }) => getVocabularyWordSenses(word)),
                 });
               }}
+              noValidate
               aria-labelledby="vocabulary-word-form-title"
               className="grid min-h-0 flex-1 grid-cols-1 content-start gap-4 overflow-y-auto p-5 text-xs custom-scrollbar md:grid-cols-2 md:gap-x-5 md:gap-y-4 md:p-7"
             >
@@ -1537,12 +1584,12 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    required={duplicateAction !== "update-missing-audio"}
                     placeholder="Ví dụ: allocate hoặc abide by"
                     maxLength={128}
                     value={wordText}
                     onChange={(event) => {
                       setWordText(event.target.value);
+                      clearWordFieldError("word");
                       if (dictionarySuggestion) {
                         setWordIpa("");
                         setWordPos("Verb");
@@ -1563,25 +1610,33 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       setDictionaryMeaningFilter("all");
                       setDictionaryError(null);
                       setDuplicateAction("");
-                      setWordFormError(null);
+                      clearWordFieldError("duplicateAction");
                     }}
-                    className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-medium transition-all focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
+                    aria-invalid={Boolean(wordFieldErrors.word)}
+                    aria-describedby={wordFieldErrors.word ? "vocabulary-word-error" : undefined}
+                    className={`min-w-0 flex-1 rounded-xl border px-3.5 py-2.5 text-xs font-medium transition-all focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100 ${wordFieldErrors.word ? "border-red-400" : "border-slate-200"}`}
                   />
                 </div>
+                {wordFieldErrors.word ? <p id="vocabulary-word-error" role="alert" className="mt-1 text-[11px] text-red-700">{wordFieldErrors.word}</p> : null}
                 {!wordListModalTest && !editingWord && (
                   <div className="mt-3">
                     <label className="mb-1 block text-xs font-bold text-slate-700">Lưu vào bộ từ vựng *</label>
                     <select
-                      required
                       value={selectedTargetSetId}
-                      onChange={(event) => setTargetSetId(event.target.value)}
-                      className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                      onChange={(event) => {
+                        setTargetSetId(event.target.value);
+                        clearWordFieldError("targetSet");
+                      }}
+                      aria-invalid={Boolean(wordFieldErrors.targetSet)}
+                      aria-describedby={wordFieldErrors.targetSet ? "vocabulary-target-set-error" : undefined}
+                      className={`min-h-10 w-full rounded-xl border bg-white px-3 py-2 text-xs font-medium text-slate-700 ${wordFieldErrors.targetSet ? "border-red-400" : "border-slate-200"}`}
                     >
                       <option value="">Chọn bộ từ vựng</option>
                       {vocabularySets.map((set) => (
                         <option key={set.id} value={set.id}>{set.title || set.nameVi || set.id}</option>
                       ))}
                     </select>
+                    {wordFieldErrors.targetSet ? <p id="vocabulary-target-set-error" role="alert" className="mt-1 text-[11px] text-red-700">{wordFieldErrors.targetSet}</p> : null}
                   </div>
                 )}
                 <p className="mt-1 text-[10px] text-slate-400">
@@ -1602,7 +1657,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       <button
                         type="button"
                         aria-pressed={duplicateAction === "add-current-sense"}
-                        onClick={() => setDuplicateAction("add-current-sense")}
+                        onClick={() => {
+                          setDuplicateAction("add-current-sense");
+                          clearWordFieldError("duplicateAction");
+                        }}
                         className={`rounded-lg border px-2.5 py-1.5 font-semibold ${
                           duplicateAction === "add-current-sense"
                             ? "border-blue-600 bg-blue-600 text-white"
@@ -1614,7 +1672,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       <button
                         type="button"
                         aria-pressed={duplicateAction === "update-missing-audio"}
-                        onClick={() => setDuplicateAction("update-missing-audio")}
+                        onClick={() => {
+                          setDuplicateAction("update-missing-audio");
+                          clearWordFieldError("duplicateAction");
+                        }}
                         className={`rounded-lg border px-2.5 py-1.5 font-semibold ${
                           duplicateAction === "update-missing-audio"
                             ? "border-blue-600 bg-blue-600 text-white"
@@ -1624,6 +1685,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                         Chỉ cập nhật IPA/audio còn thiếu
                       </button>
                     </div>
+                    {wordFieldErrors.duplicateAction ? <p role="alert" className="mt-1 text-[11px] text-red-700">{wordFieldErrors.duplicateAction}</p> : null}
                   </div>
                 ) : null}
                 {!existingWordMatch && otherSetWordMatches.length > 0 ? (
@@ -1645,7 +1707,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       <button
                         type="button"
                         aria-pressed={duplicateAction === "add-separately"}
-                        onClick={() => setDuplicateAction("add-separately")}
+                        onClick={() => {
+                          setDuplicateAction("add-separately");
+                          clearWordFieldError("duplicateAction");
+                        }}
                         className={`rounded-lg border px-2.5 py-1.5 font-semibold ${
                           duplicateAction === "add-separately"
                             ? "border-blue-600 bg-blue-600 text-white"
@@ -1657,7 +1722,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       <button
                         type="button"
                         aria-pressed={duplicateAction === "merge-other-senses"}
-                        onClick={() => setDuplicateAction("merge-other-senses")}
+                        onClick={() => {
+                          setDuplicateAction("merge-other-senses");
+                          clearWordFieldError("duplicateAction");
+                        }}
                         className={`rounded-lg border px-2.5 py-1.5 font-semibold ${
                           duplicateAction === "merge-other-senses"
                             ? "border-blue-600 bg-blue-600 text-white"
@@ -1667,6 +1735,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                         Thêm và ghép nghĩa/từ loại từ bộ khác
                       </button>
                     </div>
+                    {wordFieldErrors.duplicateAction ? <p role="alert" className="mt-1 text-[11px] text-red-700">{wordFieldErrors.duplicateAction}</p> : null}
                   </div>
                 ) : null}
                 {dictionaryLoading ? (
@@ -1938,12 +2007,17 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                 <label className="block text-xs font-bold text-slate-700 mb-1">Nghĩa tiếng Việt *</label>
                 <input
                   type="text"
-                  required
-                  placeholder="Phân bổ, chỉ định ngân sách hoặc nguồn lực"
-                  value={wordMeaning}
-                  onChange={(e) => setWordMeaning(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                placeholder="Phân bổ, chỉ định ngân sách hoặc nguồn lực"
+                value={wordMeaning}
+                onChange={(e) => {
+                  setWordMeaning(e.target.value);
+                  clearWordFieldError("meaning");
+                }}
+                aria-invalid={Boolean(wordFieldErrors.meaning)}
+                aria-describedby={wordFieldErrors.meaning ? "vocabulary-meaning-error" : undefined}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all ${wordFieldErrors.meaning ? "border-red-400" : "border-slate-200"}`}
                 />
+                {wordFieldErrors.meaning ? <p id="vocabulary-meaning-error" role="alert" className="mt-1 text-[11px] text-red-700">{wordFieldErrors.meaning}</p> : null}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Ví dụ ngữ cảnh TOEIC</label>
@@ -2012,10 +2086,13 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setAdditionalWordSenses((current) => [
-                      ...current,
-                    { partOfSpeech: "Noun", subCategory: "", meaning: "", example: "", exampleMeaning: "", synonyms: "", antonyms: "" },
-                    ])}
+                    onClick={() => {
+                      clearWordSenseErrors();
+                      setAdditionalWordSenses((current) => [
+                        ...current,
+                        { partOfSpeech: "Noun", subCategory: "", meaning: "", example: "", exampleMeaning: "", synonyms: "", antonyms: "" },
+                      ]);
+                    }}
                     className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
                   >
                     <Plus className="h-3.5 w-3.5" />Thêm nghĩa / từ loại
@@ -2030,7 +2107,10 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       <button
                         type="button"
                         aria-label={`Xóa nghĩa bổ sung ${index + 1}`}
-                        onClick={() => setAdditionalWordSenses((current) => current.filter((item) => getSenseIdentity(item) !== senseIdentity))}
+                        onClick={() => {
+                          clearWordSenseErrors();
+                          setAdditionalWordSenses((current) => current.filter((item) => getSenseIdentity(item) !== senseIdentity));
+                        }}
                         className="rounded-md p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -2064,15 +2144,20 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                       ))}
                     </select>
                     <input
-                      required
                       aria-label={`Nghĩa tiếng Việt bổ sung ${index + 1}`}
                       value={sense.meaning}
-                      onChange={(event) => setAdditionalWordSenses((current) => current.map((item) =>
-                        getSenseIdentity(item) === senseIdentity ? { ...item, meaning: event.target.value } : item,
-                      ))}
+                      onChange={(event) => {
+                        setAdditionalWordSenses((current) => current.map((item) =>
+                          getSenseIdentity(item) === senseIdentity ? { ...item, meaning: event.target.value } : item,
+                        ));
+                        clearWordFieldError(`sense-${index}`);
+                      }}
+                      aria-invalid={Boolean(wordFieldErrors[`sense-${index}`])}
+                      aria-describedby={wordFieldErrors[`sense-${index}`] ? `vocabulary-sense-${index}-error` : undefined}
                       placeholder="Nghĩa tiếng Việt"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs md:col-span-2"
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-xs md:col-span-2 ${wordFieldErrors[`sense-${index}`] ? "border-red-400" : "border-slate-200"}`}
                     />
+                    {wordFieldErrors[`sense-${index}`] ? <p id={`vocabulary-sense-${index}-error`} role="alert" className="text-[11px] text-red-700 md:col-span-2">{wordFieldErrors[`sense-${index}`]}</p> : null}
                     <input
                       aria-label={`Ví dụ bổ sung ${index + 1}`}
                       value={sense.example}
@@ -2177,6 +2262,7 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   }}
                   className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
                 />
+                {wordFieldErrors.audioFile ? <p role="alert" className="mt-1 text-[11px] text-red-700">{wordFieldErrors.audioFile}</p> : null}
                 {audioUploading ? (
                   <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                     <LoaderCircle size={13} className="animate-spin" />Đang tải audio lên…
@@ -2186,13 +2272,20 @@ export const VocabularyModals: React.FC<VocabularyModalsProps> = ({
                   type="text"
                   inputMode="url"
                   value={wordAudioUrl}
-                  onChange={(event) => setWordAudioUrl(event.target.value)}
+                  onChange={(event) => {
+                    setWordAudioUrl(event.target.value);
+                    clearWordFieldError("audioUrl");
+                  }}
                   placeholder="https://... hoặc /api/media/..."
                   aria-label="URL audio phát âm"
-                  className="mt-2.5 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  aria-invalid={Boolean(wordFieldErrors.audioUrl)}
+                  aria-describedby={wordFieldErrors.audioUrl ? "vocabulary-audio-url-error" : undefined}
+                  className={`mt-2.5 w-full rounded-xl border px-3.5 py-2.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 ${wordFieldErrors.audioUrl ? "border-red-400" : "border-slate-200"}`}
                 />
-                {wordAudioUrl && getWordAudioValidationError(wordAudioUrl) ? (
-                  <p className="mt-1 text-[10px] text-rose-700">{getWordAudioValidationError(wordAudioUrl)}</p>
+                {(wordFieldErrors.audioUrl || (wordAudioUrl ? getWordAudioValidationError(wordAudioUrl) : null)) ? (
+                  <p id="vocabulary-audio-url-error" role="alert" className="mt-1 text-[10px] text-rose-700">
+                    {wordFieldErrors.audioUrl || getWordAudioValidationError(wordAudioUrl)}
+                  </p>
                 ) : null}
                 {wordAudioUrl ? (
                   <audio className="mt-2 h-8 w-full" controls preload="none" src={wordAudioUrl}>
