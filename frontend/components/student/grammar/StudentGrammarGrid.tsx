@@ -72,7 +72,7 @@ function StudentGrammarCardItem({
         <div className="pt-2">
           <StudentCardProgressAction
             progressKey={`grammar-${topic.id}`}
-            totalQuestions={totalQ || 10}
+            totalQuestions={totalQ}
             savedCount={trapsCount || 1}
             actionLabel="Luyện tập"
             onStart={(nextIdx) => onStartQuiz(topic, nextIdx, false)}

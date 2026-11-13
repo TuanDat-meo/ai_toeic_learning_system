@@ -120,7 +120,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
     correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
     explanation: questionCorrection.explanation || baseQuestion.explanation,
   } : baseQuestion;
-  const resolvedAudioUrl = q?.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3";
+  const resolvedAudioUrl = q?.audioUrl || "";
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
@@ -216,24 +216,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
     triggerToast("Đã đặt lại để bạn luyện tập chép lại từ đầu!");
   };
 
-  const vocabItems = q.vocabList || [
-    {
-      word: "climb",
-      pos: "v",
-      level: "B1",
-      ipa: "/klaɪm/",
-      meaning: "leo, trèo",
-      example: { en: "He's climbing a ladder.", vi: "Anh ấy đang leo lên một chiếc thang." },
-    },
-    {
-      word: "ladder",
-      pos: "n",
-      level: "B1",
-      ipa: "/ˈlædər/",
-      meaning: "chiếc thang",
-      example: { en: "The ladder is leaning against the wall.", vi: "Chiếc thang đang tựa vào tường." },
-    },
-  ];
+  const vocabItems = q.vocabList || [];
 
   return (
     <div className="fixed inset-0 z-50 bg-[#f8fafc] flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans text-slate-800">

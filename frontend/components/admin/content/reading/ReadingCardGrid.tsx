@@ -35,7 +35,6 @@ function ReadingTableRow({
   onOpenEditCard: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
 }) {
-  const fallbackTotal = card.totalQuestions || 10;
 
   return (
     <tr className="hover:bg-slate-50/70 transition">
@@ -55,13 +54,13 @@ function ReadingTableRow({
       </td>
 
       <td className="py-3.5 px-4 text-center font-bold text-slate-900 font-mono whitespace-nowrap">
-        {fallbackTotal} câu
+        {card.totalQuestions} câu
       </td>
 
       <td className="py-3.5 px-4 whitespace-nowrap">
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-          <span>Đã phát hành</span>
+          <span>Trong hệ thống</span>
         </span>
       </td>
 
@@ -118,7 +117,6 @@ function ReadingGridItem({
   onOpenEditCard: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
 }) {
-  const fallbackTotal = card.totalQuestions || 10;
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
@@ -145,7 +143,7 @@ function ReadingGridItem({
         <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
           <div className="flex justify-between items-center gap-2 text-slate-600">
             <span className="font-medium">Tổng số câu hỏi:</span>
-            <strong className="text-blue-700 font-mono font-bold whitespace-nowrap">{fallbackTotal} câu</strong>
+            <strong className="text-blue-700 font-mono font-bold whitespace-nowrap">{card.totalQuestions} câu</strong>
           </div>
           <div className="flex justify-between items-center gap-2 text-slate-600">
             <span className="font-medium">Phần thi:</span>
@@ -295,7 +293,7 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
 
   return (
     <div className="@container w-full space-y-8">
-      {/* NHÓM 1: 10 BỘ ĐỀ ETS 2024 */}
+      {/* Nhóm bộ đề đọc */}
       {testCards.length > 0 && (
         <section className="space-y-3">
           {renderCardGrid(testCards)}

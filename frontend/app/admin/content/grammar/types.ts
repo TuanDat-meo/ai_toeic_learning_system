@@ -67,6 +67,7 @@ export interface GrammarTopicItem {
   orderIndex?: number;
 
   totalQuestions?: number;
+  linkedToeicQuestionCount?: number;
   completedQuestions?: number;
   userStatus?: string;
 

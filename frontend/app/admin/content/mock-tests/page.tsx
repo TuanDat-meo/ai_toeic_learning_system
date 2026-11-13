@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { playUnifiedAnswerSound } from "@/lib/sound";
-import { TestItem, PracticeQuestion } from "./types";
-import { SAMPLE_EXAM_QUESTIONS, INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3 } from "./mockData";
-import { fetchMockTests, fetchMockTestQuestions } from "@/lib/api/mockTests";
+import { TestItem, PracticeQuestion, normalizeToeicPart } from "./types";
+import {
+  createMockTest,
+  deleteMockTest,
+  fetchMockTests,
+  fetchMockTestQuestions,
+  MockTestInput,
+  updateMockTest,
+} from "@/lib/api/mockTests";
 
 import {
   MockTestHeader,
@@ -24,37 +30,10 @@ import { MockTestVocabModal } from "@/components/admin/content/mock-tests/MockTe
 import { MockTestDeleteModal } from "@/components/admin/content/mock-tests/MockTestDeleteModal";
 import { MockTestCreateModal } from "@/components/admin/content/mock-tests/MockTestCreateModal";
 
-const LOCAL_MOCK_TESTS_V1 = "toeic_mock_tests_v1";
-const LOCAL_MOCK_TESTS_V2 = "toeic_mock_tests_v2";
-const LOCAL_MOCK_TESTS_V3 = "toeic_mock_tests_v3";
-const LOCAL_MOCK_TESTS_VERSION_KEY = "toeic_mock_tests_sync_ver";
-const CURRENT_TESTS_VERSION = "2026_10_22_real_data_v3";
-
-function getLocalMockTests(key: string): TestItem[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const ver = localStorage.getItem(LOCAL_MOCK_TESTS_VERSION_KEY);
-    if (ver !== CURRENT_TESTS_VERSION) return null;
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalMockTests(v1: TestItem[], v2: TestItem[], v3: TestItem[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LOCAL_MOCK_TESTS_VERSION_KEY, CURRENT_TESTS_VERSION);
-    localStorage.setItem(LOCAL_MOCK_TESTS_V1, JSON.stringify(v1));
-    localStorage.setItem(LOCAL_MOCK_TESTS_V2, JSON.stringify(v2));
-    localStorage.setItem(LOCAL_MOCK_TESTS_V3, JSON.stringify(v3));
-    window.dispatchEvent(new CustomEvent("toeic-mock-tests-updated"));
-  } catch (err) {
-    console.warn("Could not save mock tests to localStorage:", err);
-  }
+function normalizeVolumeId(volId?: string): "vol1" | "vol2" | "vol3" {
+  if (volId === "vol2" || volId === "ets2023") return "vol2";
+  if (volId === "vol3" || volId === "ets2022") return "vol3";
+  return "vol1";
 }
 
 export default function AdminMockTestsPage() {
@@ -65,69 +44,44 @@ export default function AdminMockTestsPage() {
   const [filterDifficulty, setFilterDifficulty] = useState("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
-  const [testsVol1, setTestsVol1] = useState<TestItem[]>(INITIAL_TESTS_VOL1);
-  const [testsVol2, setTestsVol2] = useState<TestItem[]>(INITIAL_TESTS_VOL2);
-  const [testsVol3, setTestsVol3] = useState<TestItem[]>(INITIAL_TESTS_VOL3);
-  const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
-  const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
-  const [activeTranscriptQuestions, setActiveTranscriptQuestions] = useState<PracticeQuestion[]>(SAMPLE_EXAM_QUESTIONS);
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [testsVol1, setTestsVol1] = useState<TestItem[]>([]);
+  const [testsVol2, setTestsVol2] = useState<TestItem[]>([]);
+  const [testsVol3, setTestsVol3] = useState<TestItem[]>([]);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<PracticeQuestion[]>([]);
+  const [activePracticeQuestions, setActivePracticeQuestions] = useState<PracticeQuestion[]>([]);
+  const [activeTranscriptQuestions, setActiveTranscriptQuestions] = useState<PracticeQuestion[]>([]);
+  const [isLoadingTests, setIsLoadingTests] = useState(true);
+  const [testLoadError, setTestLoadError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Asynchronously fetch 200 questions for any chosen test
-  const loadQuestionsForTest = async (testId: number): Promise<PracticeQuestion[]> => {
-    setIsLoadingQuestions(true);
+  const refreshTests = useCallback(async () => {
+    setIsLoadingTests(true);
     try {
-      const qs = await fetchMockTestQuestions(testId);
-      if (qs && qs.length > 0) {
-        return qs;
-      }
+      const data = await fetchMockTests();
+      setTestsVol1(data.filter((test) => normalizeVolumeId(test.volId) === "vol1"));
+      setTestsVol2(data.filter((test) => normalizeVolumeId(test.volId) === "vol2"));
+      setTestsVol3(data.filter((test) => normalizeVolumeId(test.volId) === "vol3"));
+      setTestLoadError(null);
+    } catch (error) {
+      setTestLoadError(error instanceof Error ? error.message : "Không thể tải danh sách đề thi.");
+    } finally {
+      setIsLoadingTests(false);
+    }
+  }, []);
+
+  const loadQuestionsForTest = async (testId: number): Promise<PracticeQuestion[]> => {
+    try {
+      return await fetchMockTestQuestions(testId);
     } catch (err) {
       console.warn("Could not load questions for test:", testId, err);
-    } finally {
-      setIsLoadingQuestions(false);
+      triggerToast("Không thể tải câu hỏi từ máy chủ.");
+      return [];
     }
-    return SAMPLE_EXAM_QUESTIONS;
   };
 
-  // Auto-fetch tests from localStorage or API
   useEffect(() => {
-    let active = true;
-    async function loadTests() {
-      const l1 = getLocalMockTests(LOCAL_MOCK_TESTS_V1);
-      const l2 = getLocalMockTests(LOCAL_MOCK_TESTS_V2);
-      const l3 = getLocalMockTests(LOCAL_MOCK_TESTS_V3);
-      if (l1 || l2 || l3) {
-        if (l1) setTestsVol1(l1);
-        if (l2) setTestsVol2(l2);
-        if (l3) setTestsVol3(l3);
-        return;
-      }
-
-      try {
-        const data = await fetchMockTests();
-        if (data && data.length > 0 && active) {
-          const v1 = data.filter((t) => t.volId === "ets2024" || t.volId === "vol1");
-          const v2 = data.filter((t) => t.volId === "ets2023" || t.volId === "vol2");
-          const v3 = data.filter((t) => t.volId === "ets2022" || t.volId === "vol3");
-          const nextV1 = v1.length > 0 ? v1 : INITIAL_TESTS_VOL1;
-          const nextV2 = v2.length > 0 ? v2 : INITIAL_TESTS_VOL2;
-          const nextV3 = v3.length > 0 ? v3 : INITIAL_TESTS_VOL3;
-          setTestsVol1(nextV1);
-          setTestsVol2(nextV2);
-          setTestsVol3(nextV3);
-          saveLocalMockTests(nextV1, nextV2, nextV3);
-        } else {
-          saveLocalMockTests(INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3);
-        }
-      } catch (err) {
-        console.warn("Could not load mock tests for admin from API:", err);
-        saveLocalMockTests(INITIAL_TESTS_VOL1, INITIAL_TESTS_VOL2, INITIAL_TESTS_VOL3);
-      }
-    }
-    loadTests();
-    return () => { active = false; };
-  }, []);
+    void refreshTests();
+  }, [refreshTests]);
 
 
   // Toast notification
@@ -188,11 +142,9 @@ export default function AdminMockTestsPage() {
   const [editingTest, setEditingTest] = useState<TestItem | null>(null);
   const [testFormTitle, setTestFormTitle] = useState("");
   const [testFormVolId, setTestFormVolId] = useState<"vol1" | "vol2" | "vol3">("vol1");
-  const [testFormDifficulty, setTestFormDifficulty] = useState<"Khó" | "Trung bình" | "Vừa sức">("Trung bình");
+  const [testFormDifficulty, setTestFormDifficulty] = useState<"Dễ" | "Khó" | "Trung bình" | "Vừa sức">("Trung bình");
   const [testFormDescription, setTestFormDescription] = useState("");
-  const [testFormYear, setTestFormYear] = useState<number>(2024);
   const [testFormDuration, setTestFormDuration] = useState<number>(120);
-  const [testFormTotalQuestions, setTestFormTotalQuestions] = useState<number>(200);
   const [testFormStatus, setTestFormStatus] = useState<string>("PUBLISHED");
   const [deleteConfirmTest, setDeleteConfirmTest] = useState<TestItem | null>(null);
 
@@ -240,9 +192,7 @@ export default function AdminMockTestsPage() {
     setTestFormVolId(selectedVol === "all" ? "vol1" : selectedVol);
     setTestFormDifficulty("Trung bình");
     setTestFormDescription("");
-    setTestFormYear(selectedVol === "vol3" ? 2022 : selectedVol === "vol2" ? 2023 : 2024);
     setTestFormDuration(120);
-    setTestFormTotalQuestions(200);
     setTestFormStatus("PUBLISHED");
     setShowCreateTestModal(true);
   };
@@ -251,146 +201,87 @@ export default function AdminMockTestsPage() {
     if (e) e.stopPropagation();
     setEditingTest(test);
     setTestFormTitle(test.title);
-    setTestFormVolId((test.volId as "vol1" | "vol2" | "vol3") || "vol1");
-    setTestFormDifficulty((test.difficulty as "Khó" | "Trung bình" | "Vừa sức") || "Trung bình");
-    setTestFormDescription(test.description || "Đề thi thử TOEIC chuẩn ETS quốc tế đầy đủ 200 câu hỏi.");
-    setTestFormYear(test.year || 2024);
+    setTestFormVolId(normalizeVolumeId(test.volId));
+    setTestFormDifficulty((test.difficulty as "Dễ" | "Khó" | "Trung bình" | "Vừa sức") || "Trung bình");
+    setTestFormDescription(test.description || "");
     setTestFormDuration(test.durationMinutes || 120);
-    setTestFormTotalQuestions(test.totalQuestions || 200);
     setTestFormStatus(test.status === "DRAFT" || test.status === "Bản nháp" ? "DRAFT" : "PUBLISHED");
     setShowCreateTestModal(true);
   };
 
-  const handleToggleTestStatus = (test: TestItem, e?: React.MouseEvent) => {
+  const toTestInput = (): MockTestInput => ({
+    volId: testFormVolId,
+    title: testFormTitle.trim(),
+    difficulty: testFormDifficulty,
+    description: testFormDescription.trim(),
+    durationMinutes: testFormDuration,
+    status: testFormStatus === "DRAFT" ? "DRAFT" : "PUBLISHED",
+  });
+
+  const handleToggleTestStatus = async (test: TestItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const isCurrentlyDraft = test.status === "DRAFT" || test.status === "Bản nháp";
-    const newStatus = isCurrentlyDraft ? "Đã phát hành" : "DRAFT";
-    const updateFn = (list: TestItem[]) =>
-      list.map((t) => (t.id === test.id ? { ...t, status: newStatus } : t));
-
-    let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
-    if (test.volId === "vol1" || test.volId === "ets2024") {
-      nextV1 = updateFn(testsVol1);
-      setTestsVol1(nextV1);
-    } else if (test.volId === "vol2" || test.volId === "ets2023") {
-      nextV2 = updateFn(testsVol2);
-      setTestsVol2(nextV2);
-    } else {
-      nextV3 = updateFn(testsVol3);
-      setTestsVol3(nextV3);
+    const newStatus = isCurrentlyDraft ? "PUBLISHED" : "DRAFT";
+    try {
+      await updateMockTest(test.id, {
+        volId: normalizeVolumeId(test.volId),
+        title: test.title,
+        difficulty: test.difficulty || "Trung bình",
+        description: test.description || "",
+        durationMinutes: test.durationMinutes || 120,
+        status: newStatus,
+        keyVocab: test.keyVocab || [],
+      });
+      await refreshTests();
+      triggerToast(newStatus === "PUBLISHED"
+        ? `Đã xuất bản đề "${test.title}" cho học viên.`
+        : `Đã chuyển đề "${test.title}" về bản nháp.`);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể cập nhật trạng thái đề thi.");
     }
-    saveLocalMockTests(nextV1, nextV2, nextV3);
-    triggerToast(
-      newStatus === "Đã phát hành"
-        ? `Đã xuất bản đề "${test.title}" cho học viên! 🚀`
-        : `Đã chuyển đề "${test.title}" về bản nháp. Học viên sẽ không thấy đề này. 📝`
-    );
   };
 
-  const handleSaveTest = (e: React.FormEvent) => {
+  const handleSaveTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testFormTitle.trim()) {
-      triggerToast("Vui lòng nhập tên đề thi thử! ⚠️");
+      triggerToast("Vui lòng nhập tên đề thi thử.");
       return;
     }
     if (!testFormDescription.trim()) {
-      triggerToast("Vui lòng nhập mô tả / hướng dẫn cho đề thi! ⚠️");
+      triggerToast("Vui lòng nhập mô tả / hướng dẫn cho đề thi.");
       return;
     }
-
-    const finalStatus = testFormStatus === "DRAFT" ? "DRAFT" : "Đã phát hành";
-
-    if (editingTest) {
-      const updateFn = (list: TestItem[]) =>
-        list.map((t) =>
-          t.id === editingTest.id
-            ? {
-              ...t,
-              title: testFormTitle.trim(),
-              volId: testFormVolId,
-              difficulty: testFormDifficulty,
-              description: testFormDescription.trim(),
-              year: testFormYear,
-              durationMinutes: testFormDuration,
-              totalQuestions: testFormTotalQuestions,
-              status: finalStatus,
-            }
-            : t
-        );
-      let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
-      if (editingTest.volId === "vol1" || editingTest.volId === "ets2024") {
-        nextV1 = updateFn(testsVol1);
-        setTestsVol1(nextV1);
-      } else if (editingTest.volId === "vol2" || editingTest.volId === "ets2023") {
-        nextV2 = updateFn(testsVol2);
-        setTestsVol2(nextV2);
-      } else {
-        nextV3 = updateFn(testsVol3);
-        setTestsVol3(nextV3);
-      }
-      saveLocalMockTests(nextV1, nextV2, nextV3);
-      triggerToast(`Đã cập nhật thông tin đề thi "${testFormTitle}" (${finalStatus === "DRAFT" ? "Bản nháp" : "Đã xuất bản"})! 💾`);
-    } else {
-      let targetList = testsVol1;
-      if (testFormVolId === "vol2") targetList = testsVol2;
-      else if (testFormVolId === "vol3") targetList = testsVol3;
-      const nextId = targetList.reduce((max, t) => Math.max(max, t.id), 0) + 1;
-      const newTest: TestItem = {
-        id: nextId,
-        volId: testFormVolId,
-        title: testFormTitle.trim(),
-        difficulty: testFormDifficulty,
-        description: testFormDescription.trim(),
-        year: testFormYear,
-        durationMinutes: testFormDuration,
-        totalQuestions: testFormTotalQuestions,
-        score: null,
-        listeningScore: null,
-        readingScore: null,
-        status: finalStatus,
-        completedAt: null,
-        historyAttempts: [],
-        keyVocab: [],
-      };
-      let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
-      if (testFormVolId === "vol1") {
-        nextV1 = [...testsVol1, newTest];
-        setTestsVol1(nextV1);
-      } else if (testFormVolId === "vol2") {
-        nextV2 = [...testsVol2, newTest];
-        setTestsVol2(nextV2);
-      } else {
-        nextV3 = [...testsVol3, newTest];
-        setTestsVol3(nextV3);
-      }
-      saveLocalMockTests(nextV1, nextV2, nextV3);
-      triggerToast(`Đã thêm mới đề "${testFormTitle}" (${finalStatus === "DRAFT" ? "Bản nháp" : "Đã xuất bản"})! ✨`);
+    try {
+      const input = toTestInput();
+      if (editingTest) await updateMockTest(editingTest.id, input);
+      else await createMockTest(input);
+      await refreshTests();
+      triggerToast(editingTest ? "Đã cập nhật đề thi." : "Đã tạo đề thi.");
+      setShowCreateTestModal(false);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể lưu đề thi.");
     }
-    setShowCreateTestModal(false);
   };
 
-  const handleConfirmDeleteTest = () => {
+  const handleConfirmDeleteTest = async () => {
     if (!deleteConfirmTest) return;
-    const deleteFn = (list: TestItem[]) => list.filter((t) => t.id !== deleteConfirmTest.id);
-    let nextV1 = testsVol1, nextV2 = testsVol2, nextV3 = testsVol3;
-    if (deleteConfirmTest.volId === "vol1" || deleteConfirmTest.volId === "ets2024") {
-      nextV1 = deleteFn(testsVol1);
-      setTestsVol1(nextV1);
-    } else if (deleteConfirmTest.volId === "vol2" || deleteConfirmTest.volId === "ets2023") {
-      nextV2 = deleteFn(testsVol2);
-      setTestsVol2(nextV2);
-    } else {
-      nextV3 = deleteFn(testsVol3);
-      setTestsVol3(nextV3);
+    try {
+      await deleteMockTest(deleteConfirmTest.id);
+      await refreshTests();
+      triggerToast(`Đã xóa đề thi "${deleteConfirmTest.title}".`);
+      setDeleteConfirmTest(null);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể xóa đề thi.");
     }
-    saveLocalMockTests(nextV1, nextV2, nextV3);
-    triggerToast(`Đã xóa đề thi "${deleteConfirmTest.title}"`);
-    setDeleteConfirmTest(null);
   };
 
   const handleSelectMode = async (test: TestItem, mode: "exam" | "practice") => {
-    triggerToast(`Đang tải dữ liệu 200 câu hỏi đề ${test.title}... ⏳`);
+    triggerToast(`Đang tải câu hỏi đề ${test.title}...`);
     const qs = await loadQuestionsForTest(test.id);
+    if (qs.length === 0) {
+      triggerToast("Đề thi này hiện chưa có câu hỏi.");
+      return;
+    }
     if (mode === "exam") {
       setActiveExamQuestions(qs);
       setExamModalTest(test);
@@ -412,8 +303,12 @@ export default function AdminMockTestsPage() {
   };
 
   const handleOpenTranscript = async (test: TestItem) => {
-    triggerToast(`Đang tải lời giải chi tiết đề ${test.title}... ⏳`);
+    triggerToast(`Đang tải lời giải chi tiết đề ${test.title}...`);
     const qs = await loadQuestionsForTest(test.id);
+    if (qs.length === 0) {
+      triggerToast("Đề thi này hiện chưa có câu hỏi.");
+      return;
+    }
     setActiveTranscriptQuestions(qs);
     setTranscriptModalTest(test);
   };
@@ -436,15 +331,19 @@ export default function AdminMockTestsPage() {
   };
 
   const handleSubmitExam = (effectiveQuestions?: PracticeQuestion[]) => {
+    const questionsToGrade = effectiveQuestions ?? activeExamQuestions;
+    if (questionsToGrade.length === 0) {
+      triggerToast("Đề thi chưa có câu hỏi để chấm.");
+      return;
+    }
     setExamSubmitted(true);
-    const questionsToGrade = effectiveQuestions && effectiveQuestions.length > 0 ? effectiveQuestions : SAMPLE_EXAM_QUESTIONS;
     let correct = 0;
     let correctLC = 0;
     let correctRC = 0;
     questionsToGrade.forEach((q) => {
       if (examAnswers[q.id] === q.correctAnswer) {
         correct++;
-        const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(q.part);
+        const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(normalizeToeicPart(q.part));
         if (isListening) correctLC++;
         else correctRC++;
       }
@@ -464,24 +363,6 @@ export default function AdminMockTestsPage() {
     setExamResultScore(result);
     playSfx("correct");
 
-    if (examModalTest) {
-      const maxTotal = questionsToGrade.length * 5;
-      const updateFn = (list: TestItem[]) =>
-        list.map((t) =>
-          t.id === examModalTest.id
-            ? {
-              ...t,
-              score: totalScore,
-              listeningScore: scaledListening,
-              readingScore: scaledReading,
-              status: `Đã hoàn thành (${totalScore}/${maxTotal})`,
-              completedAt: "Vừa xong",
-            }
-            : t
-        );
-      if (examModalTest.volId === "vol1") setTestsVol1(updateFn);
-      else setTestsVol2(updateFn);
-    }
     triggerToast("Đã nộp bài và hoàn thành chấm điểm! 🎉");
   };
 
@@ -537,16 +418,28 @@ export default function AdminMockTestsPage() {
 
       {/* Main Tab Content Switching */}
       {activeMainTab === "tests" && (
-        <MockTestCardGrid
-          tests={filteredCurrentTests}
-          viewMode={viewMode}
-          onEditTest={handleOpenEditTest}
-          onConfirmDeleteTest={setDeleteConfirmTest}
-          onOpenTranscript={handleOpenTranscript}
-          onOpenVocab={setVocabModalTest}
-          onSelectMode={handleSelectMode}
-          onToggleStatus={handleToggleTestStatus}
-        />
+        <>
+          {testLoadError && (
+            <div role="alert" className="flex items-center justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <span>{testLoadError}</span>
+              <button type="button" onClick={() => void refreshTests()} className="font-bold underline">Thử lại</button>
+            </div>
+          )}
+          {isLoadingTests && currentTests.length === 0 ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Đang tải danh sách đề thi...</div>
+          ) : (
+            <MockTestCardGrid
+              tests={filteredCurrentTests}
+              viewMode={viewMode}
+              onEditTest={handleOpenEditTest}
+              onConfirmDeleteTest={setDeleteConfirmTest}
+              onOpenTranscript={handleOpenTranscript}
+              onOpenVocab={setVocabModalTest}
+              onSelectMode={handleSelectMode}
+              onToggleStatus={handleToggleTestStatus}
+            />
+          )}
+        </>
       )}
 
       {activeMainTab === "submissions" && (
@@ -719,12 +612,8 @@ export default function AdminMockTestsPage() {
           setTestFormDifficulty={setTestFormDifficulty}
           testFormDescription={testFormDescription}
           setTestFormDescription={setTestFormDescription}
-          testFormYear={testFormYear}
-          setTestFormYear={setTestFormYear}
           testFormDuration={testFormDuration}
           setTestFormDuration={setTestFormDuration}
-          testFormTotalQuestions={testFormTotalQuestions}
-          setTestFormTotalQuestions={setTestFormTotalQuestions}
           testFormStatus={testFormStatus}
           setTestFormStatus={setTestFormStatus}
           onSaveTest={handleSaveTest}

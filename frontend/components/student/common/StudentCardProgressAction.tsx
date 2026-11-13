@@ -44,7 +44,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
 
   const progress: ItemProgress = useItemProgress(progressKey, totalQuestions);
 
-  const total = totalQuestions || progress.totalQuestions || 10;
+  const total = totalQuestions || progress.totalQuestions || 0;
   const wrong = progress.wrongAnswers !== undefined ? progress.wrongAnswers : (progress.wrongQuestionIds?.length || 0);
   const correct = progress.correctAnswers !== undefined ? progress.correctAnswers : 0;
   let completed = progress.completedQuestions || 0;

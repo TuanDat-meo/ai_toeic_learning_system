@@ -20,95 +20,14 @@ export interface ItemProgress {
 const STORAGE_KEY = "toeic_practice_progress_map";
 export const PROGRESS_UPDATED_EVENT = "toeic-practice-progress-updated";
 
-// Dữ liệu mẫu ban đầu cho học viên thấy ngay thống kê chuẩn Ảnh 2
-const DEFAULT_PROGRESS: Record<
-  string,
-  {
-    completed: number;
-    total: number;
-    score?: number;
-    correct?: number;
-    wrong?: number;
-    wrongQuestionIds?: (number | string)[];
-    savedCount?: number;
-  }
-> = {
-  // Mock Tests
-  "mock-test-1": { completed: 200, total: 200, score: 785, correct: 185, wrong: 15, wrongQuestionIds: [101, 102, 105], savedCount: 3 },
-  "mock-test-2": { completed: 145, total: 200, score: 690, correct: 130, wrong: 15, wrongQuestionIds: [103, 104], savedCount: 2 },
-  "mock-test-3": { completed: 60, total: 200, correct: 50, wrong: 10, wrongQuestionIds: [101], savedCount: 1 },
-  "mock-test-11": { completed: 180, total: 200, score: 810, correct: 170, wrong: 10, wrongQuestionIds: [102], savedCount: 4 },
-
-  // Reading exercises
-  "reading-test-1": { completed: 100, total: 100, correct: 95, wrong: 5, wrongQuestionIds: [201, 202], savedCount: 2 },
-  "reading-test-2": { completed: 65, total: 100, correct: 60, wrong: 5, wrongQuestionIds: [203], savedCount: 1 },
-  "reading-level-1": { completed: 20, total: 20, correct: 19, wrong: 1, wrongQuestionIds: [1], savedCount: 3 },
-  "reading-level-2": { completed: 14, total: 20, correct: 13, wrong: 1, wrongQuestionIds: [2], savedCount: 1 },
-  "reading-noun-clause": { completed: 10, total: 10, correct: 9, wrong: 1, wrongQuestionIds: [1], savedCount: 2 },
-  "reading-verb-tense": { completed: 8, total: 10, correct: 7, wrong: 1, wrongQuestionIds: [2], savedCount: 1 },
-
-  // Listening exercises
-  "listening-quiz-lvl-p1-1": { completed: 10, total: 10, correct: 9, wrong: 1, wrongQuestionIds: [1], savedCount: 2 },
-  "listening-quiz-lvl-p1-2": { completed: 7, total: 10, correct: 6, wrong: 1, wrongQuestionIds: [2], savedCount: 1 },
-  "listening-dictation-d1": { completed: 10, total: 10, correct: 9, wrong: 1, wrongQuestionIds: [1], savedCount: 3 },
-  "listening-dictation-d2": { completed: 6, total: 10, correct: 5, wrong: 1, wrongQuestionIds: [2], savedCount: 1 },
-
-  // Grammar topics
-  "grammar-g1": { completed: 3, total: 3, correct: 2, wrong: 1, wrongQuestionIds: [1], savedCount: 2 },
-  "grammar-g2": { completed: 3, total: 3, correct: 3, wrong: 0, wrongQuestionIds: [], savedCount: 1 },
-  "grammar-g3": { completed: 1, total: 3, correct: 1, wrong: 0, wrongQuestionIds: [], savedCount: 0 },
-  "grammar-g7": { completed: 2, total: 3, correct: 1, wrong: 1, wrongQuestionIds: [2], savedCount: 1 },
-
-  // Vocabulary sets
-  "vocab-test-1": { completed: 25, total: 25, correct: 24, wrong: 1, wrongQuestionIds: [1], savedCount: 3 },
-  "vocab-test-2": { completed: 18, total: 25, correct: 17, wrong: 1, wrongQuestionIds: [2], savedCount: 2 },
-  "vocab-test-3": { completed: 5, total: 25, correct: 5, wrong: 0, wrongQuestionIds: [], savedCount: 1 },
-};
-
 function getRawStorageMap(): Record<string, ItemProgress> {
-  if (typeof window === "undefined") {
-    const fallback: Record<string, ItemProgress> = {};
-    for (const [k, v] of Object.entries(DEFAULT_PROGRESS)) {
-      const pct = v.total > 0 ? Math.min(100, Math.round((v.completed / v.total) * 100)) : 0;
-      fallback[k] = {
-        completedQuestions: v.completed,
-        totalQuestions: v.total,
-        percent: pct,
-        status: pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "not_started",
-        lastScore: v.score,
-        correctAnswers: v.correct !== undefined ? v.correct : 0,
-        wrongAnswers: v.wrong !== undefined ? v.wrong : 0,
-        wrongQuestionIds: v.wrongQuestionIds || [],
-        savedCount: v.savedCount || 0,
-      };
-    }
-    return fallback;
-  }
+  if (typeof window === "undefined") return {};
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const initial: Record<string, ItemProgress> = {};
-      for (const [k, v] of Object.entries(DEFAULT_PROGRESS)) {
-        const pct = v.total > 0 ? Math.min(100, Math.round((v.completed / v.total) * 100)) : 0;
-        initial[k] = {
-          completedQuestions: v.completed,
-          totalQuestions: v.total,
-          percent: pct,
-          status: pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "not_started",
-          lastScore: v.score,
-          correctAnswers: v.correct !== undefined ? v.correct : 0,
-          wrongAnswers: v.wrong !== undefined ? v.wrong : 0,
-          wrongQuestionIds: v.wrongQuestionIds || [],
-          savedCount: v.savedCount || 0,
-          updatedAt: new Date().toISOString(),
-        };
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      return initial;
-    }
-    return JSON.parse(raw);
-  } catch {
+    return raw ? JSON.parse(raw) as Record<string, ItemProgress> : {};
+  } catch (error) {
+    console.error("Could not read saved practice progress:", error);
     return {};
   }
 }
@@ -201,7 +120,7 @@ export function saveItemProgress(
 
   const map = getRawStorageMap();
   const prev = map[key];
-  const total = totalQuestions > 0 ? totalQuestions : (prev?.totalQuestions || 10);
+  const total = totalQuestions > 0 ? totalQuestions : (prev?.totalQuestions || 0);
   
   const wrong = wrongAnswers !== undefined ? wrongAnswers : (prev?.wrongAnswers ?? 0);
   const correct = correctAnswers !== undefined ? correctAnswers : (prev?.correctAnswers ?? 0);
@@ -270,7 +189,7 @@ export function recordQuestionAnswer(
   totalQuestions?: number
 ): ItemProgress {
   const current = getItemProgress(key, totalQuestions || 0);
-  const total = totalQuestions || current.totalQuestions || 10;
+  const total = totalQuestions || current.totalQuestions || 0;
   
   const wrongList = Array.isArray(current.wrongQuestionIds) ? [...current.wrongQuestionIds] : [];
   const answeredList = Array.isArray(current.answeredQuestionIds) ? [...current.answeredQuestionIds] : [];
@@ -397,19 +316,7 @@ export function getRedoWrongQuestions<T extends { id?: number | string | null; q
     }
   }
 
-  // 2. Nếu số câu tìm được vẫn ít hơn targetCount (do danh sách ID cũ bị thiếu hoặc chưa lưu đầy đủ),
-  // Bổ sung thêm các câu hỏi khác từ allQuestions để đảm bảo ĐỦ ĐÚNG số câu sai
-  if (selected.length < targetCount) {
-    for (let idx = 0; idx < allQuestions.length; idx++) {
-      const q = allQuestions[idx];
-      if (!selected.includes(q)) {
-        selected.push(q);
-        if (selected.length >= targetCount) break;
-      }
-    }
-  }
-
-  // 3. Đồng bộ lại wrongQuestionIds và wrongAnswers trong storage
+  // Keep the retry list limited to questions whose IDs were actually recorded.
   try {
     const newWrongIds = selected.map((q, idx) => {
       if (q.questionNum !== undefined) return String(q.questionNum);

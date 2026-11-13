@@ -1,6 +1,5 @@
 import { apiRequest, writeAuthRequest } from './client';
 import type { GrammarTopicItem, GrammarQuestionItem, GrammarCategory } from '@/app/admin/content/grammar/types';
-import { INITIAL_GRAMMAR_TOPICS } from '@/app/admin/content/grammar/mockData';
 
 interface RawGrammarTopic {
   id: string;
@@ -30,26 +29,19 @@ interface RawGrammarTopic {
   questions?: any[];
   orderIndex?: number;
   totalQuestions?: number;
+  linkedToeicQuestionCount?: number;
   completedQuestions?: number;
   userStatus?: string;
 }
 
 function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
   const titleVi = t.title || t.titleVi || '';
-  const titleEn = t.englishTitle || t.titleEn || titleVi;
+  const titleEn = t.englishTitle || t.titleEn || '';
 
-  const mockFallback = INITIAL_GRAMMAR_TOPICS.find(
-    (m) =>
-      m.id === t.id ||
-      m.code === t.code ||
-      (m.titleVi && titleVi && m.titleVi.toLowerCase().includes(titleVi.toLowerCase())) ||
-      (m.title && titleVi && m.title.toLowerCase().includes(titleVi.toLowerCase()))
-  );
-
-  const rawExamples = Array.isArray(t.examples) ? t.examples : (mockFallback?.examples || []);
-  let mappedExamples: GrammarTopicItem['examples'] = rawExamples
+  const rawExamples = Array.isArray(t.examples) ? t.examples : [];
+  const mappedExamples: GrammarTopicItem['examples'] = rawExamples
     .map((ex: any) => ({
-      sentence: String(ex.sentence || ex.en || ex.theory || ''),
+      sentence: String(ex.sentence || ex.en || ''),
       translation: String(ex.translation || ex.vi || ''),
       analysis: ex.analysis || ex.explanation ? String(ex.analysis || ex.explanation) : undefined,
       focusWord: ex.focusWord ? String(ex.focusWord) : undefined,
@@ -57,50 +49,42 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     }))
     .filter((ex) => ex.sentence && ex.sentence.trim().length > 0);
 
-  if (!Array.isArray(t.examples) && mappedExamples.length === 0 && mockFallback?.examples) {
-    mappedExamples = mockFallback.examples;
-  }
-
-  const rawQuestions = Array.isArray(t.questions) ? t.questions : (mockFallback?.questions || []);
-  let mappedQuestions: GrammarQuestionItem[] = rawQuestions.map((q: any) => ({
-    id: String(q.id || Math.random()),
-    part: q.part || t.part || mockFallback?.part || 'PART_5',
+  const rawQuestions = Array.isArray(t.questions) ? t.questions : [];
+  const mappedQuestions: GrammarQuestionItem[] = rawQuestions.map((q: any, index: number) => ({
+    id: String(q.id ?? `${t.id}-question-${index + 1}`),
+    part: q.part || '',
     questionText: q.questionText || q.question || '',
     options: q.options || {},
-    correctAnswer: q.correctAnswer || 'A',
+    correctAnswer: q.correctAnswer ? String(q.correctAnswer) : '',
     explanation: q.explanation || q.solutionMethod || '',
     trapNote: q.trapNote || '',
     translation: typeof q.translation === 'string' ? q.translation : (q.translation?.questionVi || ''),
-    difficulty: q.difficulty || q.levelShort || 'MEDIUM',
+    difficulty: q.difficulty || q.levelShort || '',
   }));
 
-  if (!Array.isArray(t.questions) && mappedQuestions.length === 0 && mockFallback?.questions) {
-    mappedQuestions = mockFallback.questions;
-  }
-
-  const formula = t.formula ?? mockFallback?.formula ?? '';
-  const signalWords = Array.isArray(t.signalWords) ? t.signalWords : (mockFallback?.signalWords || []);
-  const traps = Array.isArray(t.traps) ? t.traps : (mockFallback?.traps || []);
+  const formula = t.formula ?? '';
+  const signalWords = Array.isArray(t.signalWords) ? t.signalWords : [];
+  const traps = Array.isArray(t.traps) ? t.traps : [];
 
   return {
     id: t.id,
-    code: t.code || mockFallback?.code || 'GT-000',
+    code: t.code || '',
     titleVi,
     titleEn,
     title: titleVi,
     englishTitle: titleEn,
-    part: t.part || mockFallback?.part || 'Part 5',
-    targetScore: t.targetScore || mockFallback?.targetScore || '350_500',
-    status: t.status || 'PUBLISHED',
+    part: t.part || '',
+    targetScore: t.targetScore || '',
+    status: t.status || '',
     archivedAt: t.archivedAt,
-    summary: t.summary ?? mockFallback?.summary ?? '',
+    summary: t.summary ?? '',
     formula,
     sourceUrl: t.sourceUrl,
     sourceNotes: t.sourceNotes || '',
-    grammarGroup: t.grammarGroup || 'other',
+    grammarGroup: t.grammarGroup || '',
     parentTopicId: t.parentTopicId,
     toeicParts: Array.isArray(t.toeicParts) ? t.toeicParts : [],
-    difficulty: t.difficulty || 'MEDIUM',
+    difficulty: t.difficulty || '',
     theory: t.theory || {},
     metadata: t.metadata || {},
     wordFamilyWords: Array.isArray(t.wordFamilyWords) ? t.wordFamilyWords : [],
@@ -108,42 +92,23 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     traps,
     examples: mappedExamples,
     questions: mappedQuestions,
-    orderIndex: t.orderIndex ?? (mockFallback as any)?.orderIndex ?? 0,
+    orderIndex: t.orderIndex ?? 0,
     totalQuestions: t.totalQuestions ?? mappedQuestions.length,
+    linkedToeicQuestionCount: t.linkedToeicQuestionCount ?? 0,
     completedQuestions: t.completedQuestions ?? 0,
     userStatus: t.userStatus ?? 'Chưa học',
   };
 }
 
-export async function getGrammarTopics(): Promise<GrammarTopicItem[] | null> {
-  try {
-    const list = await apiRequest<RawGrammarTopic[]>('/api/grammar/topics');
-    if (Array.isArray(list)) {
-      return list.map(mapGrammarTopic);
-    }
-  } catch {
-    return null;
-  }
-  return null;
+export async function getGrammarTopics(): Promise<GrammarTopicItem[]> {
+  const list = await apiRequest<RawGrammarTopic[]>('/api/grammar/topics');
+  return Array.isArray(list) ? list.map(mapGrammarTopic) : [];
 }
 
-export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[] | null> {
-  try {
-    const list = await apiRequest<RawGrammarTopic[]>('/api/admin/grammar/topics');
-    if (Array.isArray(list)) {
-      return list.map(mapGrammarTopic);
-    }
-  } catch {
-    try {
-      const publicList = await apiRequest<RawGrammarTopic[]>('/api/grammar/topics');
-      if (Array.isArray(publicList)) {
-        return publicList.map(mapGrammarTopic);
-      }
-    } catch {
-      return null;
-    }
-  }
-  return null;
+export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[]> {
+  const list = await apiRequest<RawGrammarTopic[]>('/api/admin/grammar/topics');
+  if (!Array.isArray(list)) throw new Error('Dữ liệu chủ điểm ngữ pháp từ máy chủ không hợp lệ.');
+  return list.map(mapGrammarTopic);
 }
 
 export async function getGrammarTopic(id: string): Promise<GrammarTopicItem> {
@@ -231,6 +196,13 @@ export interface GrammarTopicLifecycleImpact {
   toeicQuestionLinkCount: number;
   userProgressCount: number;
   learningPathLinkCount: number;
+  subtreeQuestionCount?: number;
+  subtreeExampleCount?: number;
+  subtreeTheoryFieldCount?: number;
+  subtreeWordFamilyLinkCount?: number;
+  subtreeToeicQuestionLinkCount?: number;
+  subtreeUserProgressCount?: number;
+  subtreeLearningPathLinkCount?: number;
   children: Array<{ id: string; code: string; title: string; status: string }>;
 }
 
@@ -240,7 +212,17 @@ export interface DeleteGrammarTopicRequest {
 }
 
 export async function getGrammarTopicLifecycleImpact(id: string): Promise<GrammarTopicLifecycleImpact> {
-  return apiRequest<GrammarTopicLifecycleImpact>(`/api/admin/grammar/topics/${id}/lifecycle-impact`);
+  const impact = await apiRequest<GrammarTopicLifecycleImpact>(`/api/admin/grammar/topics/${id}/lifecycle-impact`);
+  return {
+    ...impact,
+    subtreeQuestionCount: impact.subtreeQuestionCount ?? impact.questionCount,
+    subtreeExampleCount: impact.subtreeExampleCount ?? impact.exampleCount,
+    subtreeTheoryFieldCount: impact.subtreeTheoryFieldCount ?? impact.theoryFieldCount,
+    subtreeWordFamilyLinkCount: impact.subtreeWordFamilyLinkCount ?? impact.wordFamilyLinkCount,
+    subtreeToeicQuestionLinkCount: impact.subtreeToeicQuestionLinkCount ?? impact.toeicQuestionLinkCount,
+    subtreeUserProgressCount: impact.subtreeUserProgressCount ?? impact.userProgressCount,
+    subtreeLearningPathLinkCount: impact.subtreeLearningPathLinkCount ?? impact.learningPathLinkCount,
+  };
 }
 
 export async function deleteGrammarTopicWithChildren(

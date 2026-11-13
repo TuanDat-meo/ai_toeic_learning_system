@@ -43,8 +43,6 @@ export interface ReadingCreateCardModalProps {
   setCardFormSubCategory: (val: "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types") => void;
   cardFormTag: string;
   setCardFormTag: (val: string) => void;
-  cardFormTotalQuestions: number;
-  setCardFormTotalQuestions: (val: number) => void;
   cardFormTheorySummary: string;
   setCardFormTheorySummary: (val: string) => void;
   cardFormTheoryRules: string;
@@ -63,100 +61,12 @@ export interface ReadingCreateCardModalProps {
   onClose: () => void;
 }
 
-interface PartPreset {
-  category: "part5" | "part6" | "part7";
-  label: string;
-  subCategory: "word_types" | "text_types" | "levels";
-  tag: string;
-  defaultQuestions: number;
-  startQuestionNum: string;
-  titleSuggestion: string;
-  directionsEn: string;
-  directionsVi: string;
-  rules: string[];
-  example: string;
-  defaultPassage?: string;
-  defaultPassageVi?: string;
-}
-
-const PART_PRESETS: Record<"part5" | "part6" | "part7", PartPreset> = {
-  part5: {
-    category: "part5",
-    label: "Part 5: Incomplete Sentences",
-    subCategory: "word_types",
-    tag: "Part 5 - Điền câu đơn",
-    defaultQuestions: 30,
-    startQuestionNum: "101",
-    titleSuggestion: "ETS TOEIC Reading - Part 5 (Câu 101 - 130)",
-    directionsEn:
-      "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
-    directionsVi:
-      "Hướng dẫn: Mỗi câu dưới đây bị khuyết một từ hoặc cụm từ. Bốn phương án trả lời được cung cấp bên dưới mỗi câu. Chọn đáp án thích hợp nhất để hoàn thành câu và đánh dấu vào phiếu trả lời.",
-    rules: [
-      "Quy tắc 1: Xác định cấu trúc câu S + V + O trước khi chọn từ loại.",
-      "Quy tắc 2: Phân biệt nhanh dạng câu từ vựng (dịch nghĩa) và dạng câu ngữ pháp (nhìn trước sau chỗ trống).",
-      "Quy tắc 3: Tốc độ chuẩn ETS là tối đa 30 giây/câu để dành thời gian cho Part 7.",
-    ],
-    example: "Ms. Reynolds requested that all department managers submit their quarterly budget estimates by Friday.",
-  },
-  part6: {
-    category: "part6",
-    label: "Part 6: Text Completion",
-    subCategory: "text_types",
-    tag: "Part 6 - Điền đoạn văn",
-    defaultQuestions: 4,
-    startQuestionNum: "131",
-    titleSuggestion: "ETS TOEIC Reading - Part 6 (Điền đoạn 131 - 134)",
-    directionsEn:
-      "Directions: Read the texts that follow. A word, phrase, or sentence is missing in parts of each text. Four answer choices for each question are given below the text. Select the best answer to complete the text. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
-    directionsVi:
-      "Hướng dẫn: Đọc các đoạn văn sau. Một số vị trí trong đoạn văn bị khuyết từ, cụm từ hoặc câu ([131], [132], [133], [134]). Chọn phương án trả lời thích hợp nhất để điền vào chỗ trống.",
-    rules: [
-      "Quy tắc 1: Đoạn văn gồm 4 câu khuyết ([131]-[134]). Luôn đọc câu trước và câu sau chỗ trống.",
-      "Quy tắc 2: Đối với câu điền nguyên câu văn (Sentence insertion), đọc lướt cả đoạn để nắm mạch logic.",
-      "Quy tắc 3: Chú ý liên từ chuyển ý (However, Therefore, In addition) và thì của toàn đoạn văn.",
-    ],
-    example: "The technicians will need to enter each bathroom to inspect the water pipes.",
-    defaultPassage: "To: All Residents <residents@parkview.com>\nFrom: Building Management\nDate: March 15\nSubject: Scheduled Plumbing Maintenance\n\nPlease be advised that our maintenance team will conduct routine inspections of the water heating system on Thursday, March 18. Work will begin promptly at 9:00 A.M. and is expected to finish by 3:00 P.M.\n\nDuring this period, water service will be temporarily [131]------ throughout the building. We recommend storing sufficient water for your morning needs. In addition, technicians [132]------ access to utility closets located on each floor. [133]------. We apologize for any inconvenience this essential maintenance work may cause. Please contact the front desk if you have any urgent [134]------.",
-    defaultPassageVi: "Gửi: Toàn thể cư dân <residents@parkview.com>\nTừ: Ban quản lý tòa nhà\nNgày: 15 tháng 3\nTiêu đề: Bảo trì hệ thống ống nước theo lịch\n\nXin lưu ý rằng đội bảo trì của chúng tôi sẽ tiến hành kiểm tra định kỳ hệ thống đun nước nóng vào thứ Năm, ngày 18 tháng 3. Công việc sẽ bắt đầu đúng 9:00 sáng và dự kiến hoàn tất trước 3:00 chiều.\n\nTrong thời gian này, dịch vụ cấp nước sẽ tạm thời bị [131] gián đoạn trên toàn bộ tòa nhà. Chúng tôi khuyến nghị quý cư dân dự trữ đủ nước cho nhu cầu buổi sáng. Ngoài ra, kỹ thuật viên sẽ [132] yêu cầu quyền tiếp cận các tủ kỹ thuật ở mỗi tầng. [133] Chúng tôi rất tiếc vì sự bất tiện mà công việc bảo trì thiết yếu này có thể gây ra. Vui lòng liên hệ quầy lễ tân nếu bạn có bất kỳ [134] thắc mắc khẩn cấp nào.",
-  },
-  part7: {
-    category: "part7",
-    label: "Part 7: Reading Comprehension",
-    subCategory: "levels",
-    tag: "Part 7 - Đọc hiểu văn bản",
-    defaultQuestions: 2,
-    startQuestionNum: "147",
-    titleSuggestion: "ETS TOEIC Reading - Part 7 (Đọc hiểu 147 - 148)",
-    directionsEn:
-      "Directions: In this part you will read a selection of texts, such as magazine and newspaper articles, letters, and advertisements. Each text is followed by several questions. Select the best answer for each question and mark the letter (A), (B), (C), or (D) on your answer sheet.",
-    directionsVi:
-      "Hướng dẫn: Trong phần này bạn sẽ đọc tuyển tập các văn bản (bài báo, thư từ, quảng cáo, email, tin nhắn). Mỗi bài đọc có một số câu hỏi đi kèm. Chọn phương án trả lời chính xác nhất.",
-    rules: [
-      "Quy tắc 1: Đọc lướt tiêu đề văn bản, người gửi/người nhận và mục đích trước khi đọc chi tiết.",
-      "Quy tắc 2: Với bài đọc đôi/ba (Double & Triple Passages), câu hỏi số 4 & 5 thường yêu cầu liên kết thông tin giữa 2 văn bản.",
-      "Quy tắc 3: Cảnh giác bẫy từ đồng nghĩa (paraphrasing) - từ trong đáp án đúng thường diễn đạt lại từ trong bài.",
-    ],
-    example: "According to the email, what discount will customers receive if they book before June 1st?",
-    defaultPassage: "SILVERLINE LOGISTICS\nClient Update - Policy Changes\nEffective: October 1\n\nSilverline Logistics is pleased to announce the opening of our new distribution center in Chicago. With this expansion, standard ground delivery times to Midwestern destinations will be reduced from three business days to just 24 hours.\n\nFurthermore, all corporate clients registered under our Gold Tier program are now eligible for complimentary shipment tracking and priority weekend processing at no extra charge. If your account details need updating, please log in to your portal before October 15.",
-    defaultPassageVi: "HÃNG VẬN TẢI SILVERLINE\nThông báo cập nhật khách hàng - Thay đổi chính sách\nHiệu lực: Ngày 1 tháng 10\n\nSilverline Logistics hân hạnh thông báo việc khai trương trung tâm phân phối mới tại Chicago. Với sự mở rộng này, thời gian giao hàng đường bộ tiêu chuẩn tới các điểm đến ở vùng Trung Tây sẽ được rút ngắn từ ba ngày làm việc xuống chỉ còn 24 giờ.\n\nHơn nữa, tất cả khách hàng doanh nghiệp thuộc chương trình Hạng Vàng hiện đủ điều kiện nhận dịch vụ theo dõi đơn hàng miễn phí và xử lý ưu tiên cuối tuần mà không phải trả thêm phí. Nếu thông tin tài khoản của bạn cần cập nhật, vui lòng đăng nhập vào cổng thông tin trước ngày 15 tháng 10.",
-  },
+const PART_SUBCATEGORIES: Record<"part5" | "part6" | "part7", "word_types" | "text_types" | "levels"> = {
+  part5: "word_types",
+  part6: "text_types",
+  part7: "levels",
 };
-
 const COMMON_TOEIC_OPTION_TRANSLATIONS: Record<string, string> = {
-  // Question 147 sample options
-  "to confirm an order and notify about shipping": "Xác nhận đơn hàng và thông báo về việc giao hàng",
-  "to request updated billing information": "Yêu cầu cập nhật thông tin thanh toán",
-  "to apologize for a delay in production": "Xin lỗi vì sự chậm trễ trong sản xuất",
-  "to advertise a new line of office furniture": "Quảng cáo dòng sản phẩm nội thất văn phòng mới",
-
-  // Question 148 sample options
-  "the order will be permanently canceled": "Đơn hàng sẽ bị hủy vĩnh viễn",
-  "the courier will leave redelivery instructions": "Nhân viên giao hàng sẽ để lại hướng dẫn giao lại",
-  "the package will be left at the front door": "Kiện hàng sẽ được để lại ở cửa trước",
-  "an extra delivery charge will be billed": "Phí giao hàng bổ sung sẽ được tính",
-
-  // Frequent Part 7 business purposes
   "to confirm an order": "Xác nhận một đơn hàng",
   "to confirm a reservation": "Xác nhận đặt chỗ",
   "to confirm an appointment": "Xác nhận một cuộc hẹn",
@@ -236,8 +146,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   setCardFormSubCategory,
   cardFormTag,
   setCardFormTag,
-  cardFormTotalQuestions,
-  setCardFormTotalQuestions,
   cardFormTheorySummary,
   setCardFormTheorySummary,
   cardFormTheoryRules,
@@ -406,12 +314,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           bilingual: "",
           options: ["", "", "", ""],
           optionMeanings: ["", "", "", ""],
-          correctIndex: 0,
+          correctIndex: -1,
           explanation: "",
-          steps: [
-            { title: "Bước 1: Phân tích ngữ cảnh", desc: "Xác định từ loại hoặc ý nghĩa cần điền." },
-            { title: "Bước 2: Đối chiếu & chọn đáp án", desc: "So sánh các phương án để chọn đáp án chuẩn xác nhất." },
-          ],
+          steps: [],
           vocabList: [],
         },
       ];
@@ -495,45 +400,18 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     });
   };
 
-  // Apply a Preset
+  // Select a TOEIC part without inserting sample content.
   const handleApplyPreset = (presetKey: "part5" | "part6" | "part7") => {
-    const preset = PART_PRESETS[presetKey];
     const prevCategory = cardFormCategory;
-    setCardFormCategory(preset.category);
-    setCardFormSubCategory(preset.subCategory);
-    setCardFormTag(preset.tag);
-    setCardFormTotalQuestions(preset.defaultQuestions);
-    if (!cardFormTitle.trim() || cardFormTitle.includes("Part") || cardFormTitle.includes("Reading")) {
-      setCardFormTitle(preset.titleSuggestion);
-    }
-    setCardFormTheorySummary(preset.directionsVi);
-    setCardFormTheoryRules(preset.rules.join("\n"));
-    setCardFormTheoryExample(preset.example);
+    setCardFormCategory(presetKey);
+    setCardFormSubCategory(PART_SUBCATEGORIES[presetKey]);
 
     // Nếu đổi sang Part 5 mà đang đứng ở tab đoạn văn thì chuyển ngay về tab câu hỏi
-    if (preset.category === "part5" && activeTab === "passage") {
+    if (presetKey === "part5" && activeTab === "passage") {
       setActiveTab("questions");
     }
 
-    if (questions.length > 0 && !questions[0].question.trim()) {
-      setCardFormSampleQuestions([
-        {
-          questionNum: preset.startQuestionNum,
-          question: "",
-          bilingual: "",
-          options: ["", "", "", ""],
-          optionMeanings: ["", "", "", ""],
-          correctIndex: 0,
-          explanation: "",
-          steps: [
-            { title: "Bước 1: Phân tích ngữ cảnh", desc: "Xác định từ loại hoặc ý nghĩa cần điền." },
-            { title: "Bước 2: Đối chiếu & chọn đáp án", desc: "So sánh các phương án để chọn đáp án chuẩn xác nhất." },
-          ],
-          vocabList: [],
-        },
-      ]);
-      setPartTransitionNotice(null);
-    } else if (prevCategory !== presetKey && questions.some((q) => q.question.trim().length > 0)) {
+    if (prevCategory !== presetKey && questions.some((q) => q.question.trim().length > 0)) {
       setPartTransitionNotice({
         fromPart: prevCategory,
         toPart: presetKey,
@@ -609,17 +487,13 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
       bilingual: "",
       options: ["", "", "", ""],
       optionMeanings: ["", "", "", ""],
-      correctIndex: 0,
+      correctIndex: -1,
       explanation: "",
-      steps: [
-        { title: "Bước 1: Phân tích cú pháp / ngữ cảnh", desc: "Xác định từ loại hoặc ý cần tìm trong đoạn văn." },
-        { title: "Bước 2: Đối chiếu phương án", desc: "Loại trừ các phương án sai và chọn đáp án chính xác." },
-      ],
+      steps: [],
       vocabList: [],
     };
     setCardFormSampleQuestions((prev) => [...prev, newQ]);
     setSelectedQuestionIndex(questions.length);
-    setCardFormTotalQuestions(Math.max(cardFormTotalQuestions, questions.length + 1));
   };
 
   const handleDeleteQuestion = (idx: number) => {
@@ -629,7 +503,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     }
     setCardFormSampleQuestions((prev) => prev.filter((_, i) => i !== idx));
     setSelectedQuestionIndex((prev) => Math.max(0, Math.min(prev, questions.length - 2)));
-    setCardFormTotalQuestions(Math.max(1, questions.length - 1));
   };
 
   // Add Vocabulary Item into active question (Matching "Thêm từ vựng mới" form)
@@ -871,7 +744,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
           question: qMatch[2].trim(),
           options: ["", "", "", ""],
           optionMeanings: ["", "", "", ""],
-          correctIndex: 0,
+          correctIndex: -1,
         };
         continue;
       }
@@ -1048,7 +921,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     }
     if (parsedQuestions.length > 0) {
       setCardFormSampleQuestions(parsedQuestions);
-      setCardFormTotalQuestions(parsedQuestions.length);
       setSelectedQuestionIndex(0);
     }
 
@@ -1067,16 +939,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         ? "part7"
         : "part5";
 
-    const preset = PART_PRESETS[detectedCategory];
     setCardFormCategory(detectedCategory);
     onDetectedCategory?.(detectedCategory);
-    setCardFormSubCategory(preset.subCategory);
-
-    // Question number range
-    const qNums = parsedQuestions.map((q) => Number(q.questionNum)).filter((n) => !isNaN(n) && n > 0);
-    const minQ = qNums.length > 0 ? Math.min(...qNums) : (detectedCategory === "part7" ? 147 : detectedCategory === "part6" ? 131 : 101);
-    const maxQ = qNums.length > 0 ? Math.max(...qNums) : (minQ + Math.max(1, parsedQuestions.length) - 1);
-    const titleRange = minQ === maxQ ? `Câu ${minQ}` : `${minQ} - ${maxQ}`;
+    setCardFormSubCategory(PART_SUBCATEGORIES[detectedCategory]);
 
     // 1. Tên chủ điểm / Bài đọc
     let passageHeader = "";
@@ -1088,31 +953,14 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
       }
     }
 
-    const generatedTitle = passageHeader
-      ? `${passageHeader} - Part ${detectedCategory === "part7" ? "7" : detectedCategory === "part6" ? "6" : "5"} (${titleRange})`
-      : detectedCategory === "part7"
-      ? `ETS TOEIC Reading - Part 7 (Đọc hiểu ${titleRange})`
-      : detectedCategory === "part6"
-      ? `ETS TOEIC Reading - Part 6 (Điền đoạn ${titleRange})`
-      : `ETS TOEIC Reading - Part 5 (Câu ${titleRange})`;
+    setCardFormTitle(customTitle || passageHeader);
 
-    setCardFormTitle(customTitle || generatedTitle);
-
-    // 2. Thẻ ghi chú
-    const generatedTag =
-      detectedCategory === "part7"
-        ? `Part 7 - Email doanh nghiệp · Đọc hiểu ${titleRange}`
-        : detectedCategory === "part6"
-        ? `Part 6 - Thông báo nội bộ · Điền đoạn ${titleRange}`
-        : `Part 5 - Câu đơn · Ngữ pháp & Từ vựng`;
-    setCardFormTag(customTag || generatedTag);
+    setCardFormTag(customTag || `Part ${detectedCategory.slice(-1)}`);
 
     // 3. Hướng dẫn làm bài chuẩn ETS (Directions)
-    setCardFormTheorySummary(customDirections || preset.directionsVi);
-
-    // 4. Theory Rules & Example
-    setCardFormTheoryRules(preset.rules.join("\n"));
-    setCardFormTheoryExample(preset.example);
+    setCardFormTheorySummary(customDirections);
+    setCardFormTheoryRules("");
+    setCardFormTheoryExample("");
 
     // Reset vocab filter to "all" so user sees all extracted words immediately
     setVocabFilterScope("all");
@@ -1529,18 +1377,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="h-6 flex items-center justify-between text-xs font-bold text-slate-700 mb-1">
-                    <span className="truncate">Số câu hỏi bài tập *</span>
-                    <span className="text-[10px] text-slate-400 font-normal shrink-0 ml-1">(Trắc nghiệm)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={cardFormTotalQuestions}
-                    onChange={(e) => setCardFormTotalQuestions(Math.max(1, Number(e.target.value)))}
-                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
-                  />
+                  <div className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3.5 flex items-center text-xs text-slate-600">
+                    {questions.filter((question) => question.question.trim()).length} câu có nội dung
+                  </div>
                 </div>
               </div>
 
@@ -1608,7 +1447,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   {cardFormPassageText.trim() ? "Đã có nội dung bài đọc" : "Chưa có bài đọc (hãy dán bài đọc của bạn vào bên dưới)"}
                 </span>
                 <div className="flex items-center gap-2">
-                  {cardFormPassageText.trim() ? (
+                  {cardFormPassageText.trim() && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1619,19 +1458,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     >
                       <Trash2 className="w-3 h-3" />
                       <span>Xóa trắng bài đọc</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const preset = PART_PRESETS[cardFormCategory === "part6" ? "part6" : cardFormCategory === "part7" ? "part7" : "part5"];
-                        if (preset.defaultPassage) setCardFormPassageText(preset.defaultPassage);
-                        if (preset.defaultPassageVi) setCardFormPassageTextVi(preset.defaultPassageVi);
-                      }}
-                      className="text-[11px] font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1 cursor-pointer bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200"
-                    >
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      <span>Nạp bài đọc mẫu ({cardFormCategory === "part6" ? "Part 6" : "Part 7"}) để tham khảo</span>
                     </button>
                   )}
                 </div>
@@ -1646,7 +1472,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </label>
                 <textarea
                   rows={7}
-                  placeholder={`Dán nội dung bài đọc tiếng Anh vào đây...\nVí dụ:\nSILVERLINE LOGISTICS\nClient Update - Policy Changes\nEffective: October 1...`}
+                  placeholder="Dán nội dung bài đọc tiếng Anh vào đây..."
                   value={cardFormPassageText}
                   onChange={(e) => setCardFormPassageText(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-mono leading-relaxed focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100 bg-white"
@@ -1660,7 +1486,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </label>
                 <textarea
                   rows={5}
-                  placeholder={`Dán bản dịch tiếng Việt của bài đọc vào đây...\nVí dụ:\nHÃNG VẬN TẢI SILVERLINE\nThông báo cập nhật khách hàng - Thay đổi chính sách...`}
+                  placeholder="Dán bản dịch tiếng Việt của bài đọc vào đây..."
                   value={cardFormPassageTextVi}
                   onChange={(e) => setCardFormPassageTextVi(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs leading-relaxed focus:border-emerald-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-100 bg-white"
@@ -2369,7 +2195,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </label>
                 <textarea
                   rows={10}
-                  placeholder={`[Đoạn văn]\nSILVERLINE LOGISTICS\nClient Update - Policy Changes...\n\n[Dịch đoạn văn]\nHÃNG VẬN TẢI SILVERLINE\nThông báo cập nhật khách hàng...\n\n147. What is indicated about the package delivery?\n(A) It requires an extra fee (Yêu cầu trả thêm phụ phí)\n(B) It will be completed within 24 hours (Sẽ hoàn tất trong vòng 24 giờ)\n(C) It is available only on weekends (Chỉ có vào cuối tuần)\n(D) It must be booked two weeks in advance (Phải đặt trước hai tuần)\nĐáp án: B\nDịch: Điều gì được chỉ ra về việc giao kiện hàng?\nGiải thích: Trong bài có nêu rõ 'reduced to just 24 hours'.\nTừ vựng:\n- logistics (/ləˈdʒɪstɪks/) (n): hậu cần\n- destination (/ˌdestɪˈneɪʃn/) (n): điểm đến`}
+                  placeholder="Dán nội dung đoạn văn, câu hỏi, đáp án và giải thích theo định dạng nhập được hỗ trợ."
                   value={rawPasteText}
                   onChange={(e) => setRawPasteText(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-mono leading-relaxed focus:outline-hidden focus:border-amber-500 focus:ring-2 focus:ring-amber-100 bg-white"

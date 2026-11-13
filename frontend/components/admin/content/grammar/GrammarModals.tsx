@@ -1,6 +1,5 @@
 "use client";
 
-import { expandGrammarQuestions } from "@/lib/toeicQuestionExpander";
 import { recordQuestionAnswer, getItemProgress } from "@/lib/practiceProgress";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -33,7 +32,6 @@ import {
   GrammarQuestionsViewer,
   FormattedText,
 } from "./GrammarFormulaViewer";
-import { INITIAL_GRAMMAR_TOPICS } from "@/app/admin/content/grammar/mockData";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import {
   generateGrammarContentSuggestion,
@@ -50,6 +48,9 @@ import { getAdminVocabularySets } from "@/lib/api/vocabulary";
 import type { WordItem } from "@/app/admin/content/vocabulary/types";
 import { GrammarExampleAnnotations } from "./GrammarExampleAnnotations";
 import { translateVietnameseToEnglish } from "@/lib/api/example-translation";
+import { analyzeGrammarTopic } from "@/lib/grammarReview";
+import { validateEnglishFields } from "@/lib/englishTextValidation";
+import { getGrammarTopicDisplayStats } from "@/lib/grammarDisplayStats";
 
 const GRAMMAR_TAB_LABELS = {
   info: "Thông tin chung",
@@ -58,6 +59,14 @@ const GRAMMAR_TAB_LABELS = {
   examples: "Ví dụ minh họa",
   questions: "Câu hỏi",
 } as const;
+
+function countTheoryFields(topic: GrammarTopicItem): number {
+  const theoryFields = Object.values(topic.theory || {}).filter((value) => typeof value === "string" && value.trim());
+  const groupFields = Object.values(
+    topic.metadata?.groupValues?.[topic.grammarGroup || "other"] || {},
+  ).filter((value) => typeof value === "string" && value.trim());
+  return theoryFields.length + groupFields.length;
+}
 
 // ==========================================
 // 1. MODAL XEM CHI TIẾT CHỦ ĐIỂM NGỮ PHÁP
@@ -87,33 +96,13 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
     }
     setActiveTab("info");
 
-    const mock = audience === "student" ? INITIAL_GRAMMAR_TOPICS.find(
-      (m) =>
-        m.id === topicProp.id ||
-        m.code === topicProp.code ||
-        (m.titleVi && topicProp.titleVi && m.titleVi.toLowerCase().includes(topicProp.titleVi.toLowerCase())) ||
-        (m.title && topicProp.title && m.title.toLowerCase().includes(topicProp.title.toLowerCase()))
-    ) : undefined;
-
     const merged: GrammarTopicItem = {
       ...topicProp,
-      examples:
-        topicProp.examples && topicProp.examples.length > 0 && topicProp.examples.some((e) => e.sentence)
-          ? topicProp.examples
-          : mock?.examples || [],
-      questions:
-        topicProp.questions && topicProp.questions.length > 0
-          ? topicProp.questions
-          : mock?.questions || [],
-      signalWords:
-        topicProp.signalWords && topicProp.signalWords.length > 0
-          ? topicProp.signalWords
-          : mock?.signalWords || [],
-      traps:
-        topicProp.traps && topicProp.traps.length > 0
-          ? topicProp.traps
-          : mock?.traps || [],
-      formula: topicProp.formula || mock?.formula || "",
+      examples: topicProp.examples || [],
+      questions: topicProp.questions || [],
+      signalWords: topicProp.signalWords || [],
+      traps: topicProp.traps || [],
+      formula: topicProp.formula || "",
     };
 
     setDetailTopic(merged);
@@ -136,7 +125,9 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
             }));
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          console.error("Could not load grammar topic details:", error);
+        });
     }
   }, [topicProp, audience]);
 
@@ -144,12 +135,9 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
   if (!topic) return null;
   const childTopics = topics.filter((item) => item.parentTopicId === topic.id);
   const isParentTopic = childTopics.length > 0;
-  const examplesCount = isParentTopic
-    ? childTopics.reduce((sum, child) => sum + (child.examples?.length || 0), 0)
-    : topic.examples?.length || 0;
-  const questionsCount = isParentTopic
-    ? childTopics.reduce((sum, child) => sum + (child.questions?.length || 0), 0)
-    : topic.questions?.length || 0;
+  const displayStats = getGrammarTopicDisplayStats(topic, topics);
+  const examplesCount = displayStats.exampleCount;
+  const questionsCount = displayStats.questionCount;
   const theoryEntries = Object.entries(topic.theory || {}).filter(([, value]) => typeof value === "string" && value.trim());
   const groupEntries = Object.entries(topic.metadata?.groupValues?.[topic.grammarGroup || "other"] || {})
     .filter(([, value]) => typeof value === "string" && value.trim()) as Array<[string, string]>;
@@ -399,7 +387,7 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
         <div className="flex justify-between items-center pt-4 border-t border-slate-100 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-500 font-bold">
-              Số câu hỏi: <strong className="text-slate-900">{topic.questions.length} câu</strong>
+              Số câu hỏi: <strong className="text-slate-900">{questionsCount} câu</strong>
             </span>
             {audience === "student" ? (
               <QuestionErrorReportButton
@@ -459,6 +447,7 @@ interface GrammarTopicEditModalProps {
   onSave: (
     topicData: Partial<GrammarTopicItem>,
     newParent?: { titleVi: string; titleEn: string },
+    childTopicIdsToPublish?: string[],
   ) => Promise<void> | void;
 }
 
@@ -487,7 +476,9 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
   }
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [reviewWarnings, setReviewWarnings] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCheckingEnglish, setIsCheckingEnglish] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
   const [hasGeneratedSuggestion, setHasGeneratedSuggestion] = useState(false);
@@ -501,6 +492,16 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [selectedGroup, setSelectedGroup] = useState(currentTopic?.grammarGroup || "other");
+  const [isPublishChildrenDialogOpen, setIsPublishChildrenDialogOpen] = useState(false);
+  const [selectedChildTopicIds, setSelectedChildTopicIds] = useState<string[]>([]);
+  const [childPublishErrors, setChildPublishErrors] = useState<Record<string, string>>({});
+  const [pendingPublishSave, setPendingPublishSave] = useState<{
+    topicData: Partial<GrammarTopicItem>;
+    newParent?: { titleVi: string; titleEn: string };
+  } | null>(null);
+  const draftChildren = currentTopic
+    ? availableTopics.filter((item) => item.parentTopicId === currentTopic.id && item.status === "DRAFT")
+    : [];
   const [theory, setTheory] = useState<Record<string, string>>({ ...(currentTopic?.theory || {}) });
   const [metadata, setMetadata] = useState<NonNullable<GrammarTopicItem["metadata"]>>(currentTopic?.metadata || {});
   const [toeicParts, setToeicParts] = useState<string[]>(currentTopic?.toeicParts?.length
@@ -517,6 +518,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
   const [categoryCode, setCategoryCode] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [categoryFieldsText, setCategoryFieldsText] = useState("");
+  const [categoryFieldErrors, setCategoryFieldErrors] = useState<{ code?: string; name?: string; fields?: string }>({});
   const [formDirty, setFormDirty] = useState(false);
   const [activeFormTab, setActiveFormTab] = useState<"info" | "theory" | "formula" | "examples" | "questions">("info");
   const [titleViLength, setTitleViLength] = useState((currentTopic?.titleVi || currentTopic?.title || "").length);
@@ -572,6 +574,27 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
   const inputErrorClass = (field: string) => fieldErrors[field]
     ? "border-rose-400 bg-rose-50/40 focus:border-rose-500"
     : "border-slate-200";
+  const persistTopic = async (
+    topicData: Partial<GrammarTopicItem>,
+    newParent: { titleVi: string; titleEn: string } | undefined,
+    childTopicIdsToPublish: string[],
+  ) => {
+    setSaveError(null);
+    setIsSaving(true);
+    setIsPublishChildrenDialogOpen(false);
+    try {
+      await onSave(topicData, newParent, childTopicIdsToPublish);
+      setFormDirty(false);
+      onClose();
+      return true;
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Không thể lưu chủ điểm.");
+      return false;
+    } finally {
+      setIsSaving(false);
+      setPendingPublishSave(null);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -685,12 +708,25 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
     setCategoryName(category.name);
     setCategoryFieldsText(category.fieldDefinitions.map((field) =>
       `${field.key}|${field.label}|${field.options?.join(",") || ""}`).join("\n"));
+    setCategoryFieldErrors({});
     setCategoryEditorOpen(true);
   };
   const saveCategory = async () => {
     const fields = parseCategoryFields();
-    if (!categoryName.trim() || fields.some((field) => !field.key || !field.label)) {
-      setCategoryError("Nhập tên nhóm và khai báo trường theo định dạng key|Nhãn.");
+    const errors: typeof categoryFieldErrors = {};
+    if (!editingCategory && !/^[a-z][a-z0-9_]{1,63}$/.test(categoryCode.trim())) {
+      errors.code = "Mã nhóm cần bắt đầu bằng chữ thường, chỉ gồm chữ thường, số, gạch dưới và dài 2–64 ký tự.";
+    }
+    if (!categoryName.trim()) errors.name = "Nhập tên nhóm.";
+    else if (categoryName.trim().length > 120) errors.name = "Tên nhóm tối đa 120 ký tự.";
+    if (fields.some((field) => !/^[a-z][a-zA-Z0-9_]{0,63}$/.test(field.key) || !field.label)) {
+      errors.fields = "Mỗi dòng phải đúng định dạng key|Nhãn; key bắt đầu bằng chữ và nhãn không được để trống.";
+    } else if (new Set(fields.map((field) => field.key)).size !== fields.length) {
+      errors.fields = "Mã trường không được trùng lặp.";
+    }
+    setCategoryFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      setCategoryError(null);
       return;
     }
     try {
@@ -707,6 +743,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
       setCategoryEditorOpen(false);
       setEditingCategory(null);
       setCategoryError(null);
+      setCategoryFieldErrors({});
     } catch (error) {
       setCategoryError(error instanceof Error ? error.message : "Không thể lưu nhóm ngữ pháp.");
     }
@@ -987,6 +1024,40 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
             if (statusVal === "PUBLISHED" && hasGeneratedSuggestion && !suggestionReviewed) {
               setError("suggestionReviewed", "Cần xác nhận đã kiểm tra nội dung AI trước khi phát hành.");
             }
+            setReviewWarnings([]);
+            if (statusVal === "PUBLISHED") {
+              const reviewCandidate: GrammarTopicItem = {
+                id: currentTopic?.id || "__new_grammar_topic__",
+                code: currentTopic?.code || "__new_grammar_topic__",
+                titleVi: titleViVal,
+                titleEn: titleEnVal,
+                title: titleViVal,
+                englishTitle: titleEnVal,
+                part: partVal,
+                targetScore: targetScoreVal,
+                status: statusVal,
+                summary: summaryVal,
+                formula: formulaVal,
+                grammarGroup: grammarGroupVal,
+                parentTopicId: parentTopicIdVal,
+                toeicParts: partsVal,
+                difficulty: difficultyVal,
+                theory,
+                metadata: metadataToSave,
+                wordFamilyWords,
+                signalWords: signalWordsVal,
+                traps: trapsVal,
+                examples: examplesVal,
+                questions: currentTopic?.questions || [],
+              };
+              const findings = analyzeGrammarTopic(reviewCandidate, availableTopics, "PUBLISHED");
+              setReviewWarnings(findings
+                .filter((finding) => finding.severity === "warning")
+                .map((finding) => finding.message));
+              findings
+                .filter((finding) => finding.severity === "error")
+                .forEach((finding) => setError("publishReview", finding.message));
+            }
 
             if (Object.keys(theory).length > 30) setError("theory", "Số trường lý thuyết vượt giới hạn cho phép.");
             Object.entries(theory).forEach(([key, value]) => {
@@ -1032,6 +1103,29 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               });
             });
 
+            const englishFields: Record<string, string> = {
+              englishTitle: titleEnVal,
+              ...Object.fromEntries(exampleRows.flatMap((example, index) => [
+                [`examples.${index}.sentence`, example.sentence],
+                [`examples.${index}.focusWord`, example.focusWord],
+              ])),
+            };
+            if (shouldCreateNewParent) englishFields.newParentTitleEn = newParentTitleEn;
+            setIsCheckingEnglish(true);
+            try {
+              Object.entries(await validateEnglishFields(englishFields))
+                .forEach(([field, message]) => setError(field, message));
+            } catch (error) {
+              const message = error instanceof Error
+                ? error.message
+                : "Không thể xác minh nội dung tiếng Anh bằng từ điển.";
+              Object.entries(englishFields).forEach(([field, value]) => {
+                if (value.trim()) setError(field, message);
+              });
+            } finally {
+              setIsCheckingEnglish(false);
+            }
+
             setFieldErrors(nextFieldErrors);
             if (Object.keys(nextFieldErrors).length) {
               setSaveError(`Có ${Object.keys(nextFieldErrors).length} lỗi cần kiểm tra. Các trường sai được đánh dấu bên dưới.`);
@@ -1046,13 +1140,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               setActiveFormTab(invalidTab);
               return;
             }
-            if (statusVal === "PUBLISHED" && currentTopic?.status !== "PUBLISHED"
-              && !window.confirm("Phát hành chủ điểm này để học viên có thể xem?")) return;
-
-            setSaveError(null);
-            setIsSaving(true);
-            try {
-              await onSave({
+            const topicData: Partial<GrammarTopicItem> = {
                 titleVi: titleViVal,
                 titleEn: titleEnVal,
                 title: titleViVal,
@@ -1074,14 +1162,24 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
                 signalWords: signalWordsVal,
                 traps: trapsVal,
                 examples: examplesVal,
-              }, shouldCreateNewParent ? { titleVi: newParentTitleVi, titleEn: newParentTitleEn } : undefined);
-              setFormDirty(false);
-              onClose();
-            } catch (error) {
-              setSaveError(error instanceof Error ? error.message : "Không thể lưu chuyên đề.");
-            } finally {
-              setIsSaving(false);
+            };
+            const newParent = shouldCreateNewParent
+              ? { titleVi: newParentTitleVi, titleEn: newParentTitleEn }
+              : undefined;
+            const shouldAskAboutChildren = statusVal === "PUBLISHED"
+              && currentTopic
+              && currentTopic.status !== "PUBLISHED"
+              && draftChildren.length > 0;
+            if (shouldAskAboutChildren) {
+              setPendingPublishSave({ topicData, newParent });
+              setSelectedChildTopicIds([]);
+              setChildPublishErrors({});
+              setIsPublishChildrenDialogOpen(true);
+              return;
             }
+            if (statusVal === "PUBLISHED" && currentTopic?.status !== "PUBLISHED"
+              && !window.confirm("Phát hành chủ điểm này để học viên có thể xem?")) return;
+            await persistTopic(topicData, newParent, []);
           }}
           onChange={(event) => {
             setFormDirty(true);
@@ -1180,6 +1278,14 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
                     <li key={field}>{message}</li>
                   ))}
                 </ul>
+              ) : null}
+              {reviewWarnings.length > 0 ? (
+                <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                  <p className="font-bold">Gợi ý rà soát trước khi phát hành:</p>
+                  <ul className="mt-1 list-inside list-disc space-y-0.5 text-[11px]">
+                    {reviewWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+                  </ul>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -1379,21 +1485,41 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
                     ))}
                     <button type="button" onClick={() => {
                       setEditingCategory(null); setCategoryCode(""); setCategoryName(""); setCategoryFieldsText("");
+                      setCategoryFieldErrors({});
                       setCategoryEditorOpen(true);
                     }} className="rounded-lg border border-blue-200 px-2 py-1 font-bold text-blue-700">+ Thêm nhóm</button>
                   </div>
                   {categoryEditorOpen ? (
                     <div className="grid gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
                       <div className="grid gap-2 sm:grid-cols-2">
-                        <input value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)}
-                          disabled={Boolean(editingCategory)} placeholder="Mã, ví dụ: business_grammar"
-                          className="rounded-lg border border-slate-200 p-2 disabled:bg-slate-100" />
-                        <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)}
-                          maxLength={120} placeholder="Tên nhóm" className="rounded-lg border border-slate-200 p-2" />
+                        <div>
+                          <input value={categoryCode} onChange={(event) => {
+                            setCategoryCode(event.target.value);
+                            setCategoryFieldErrors((previous) => ({ ...previous, code: undefined }));
+                          }}
+                            disabled={Boolean(editingCategory)} placeholder="Mã, ví dụ: business_grammar"
+                            aria-invalid={Boolean(categoryFieldErrors.code)}
+                            className={`w-full rounded-lg border p-2 disabled:bg-slate-100 ${categoryFieldErrors.code ? "border-rose-400 bg-rose-50/40" : "border-slate-200"}`} />
+                          {categoryFieldErrors.code ? <p role="alert" className="mt-1 text-[11px] font-semibold text-rose-700">{categoryFieldErrors.code}</p> : null}
+                        </div>
+                        <div>
+                          <input value={categoryName} onChange={(event) => {
+                            setCategoryName(event.target.value);
+                            setCategoryFieldErrors((previous) => ({ ...previous, name: undefined }));
+                          }}
+                            maxLength={120} placeholder="Tên nhóm" aria-invalid={Boolean(categoryFieldErrors.name)}
+                            className={`w-full rounded-lg border p-2 ${categoryFieldErrors.name ? "border-rose-400 bg-rose-50/40" : "border-slate-200"}`} />
+                          {categoryFieldErrors.name ? <p role="alert" className="mt-1 text-[11px] font-semibold text-rose-700">{categoryFieldErrors.name}</p> : null}
+                        </div>
                       </div>
-                      <textarea value={categoryFieldsText} onChange={(event) => setCategoryFieldsText(event.target.value)}
+                      <textarea value={categoryFieldsText} onChange={(event) => {
+                        setCategoryFieldsText(event.target.value);
+                        setCategoryFieldErrors((previous) => ({ ...previous, fields: undefined }));
+                      }}
                         rows={4} placeholder={"Mỗi dòng: key|Nhãn trường|Lựa chọn 1,Lựa chọn 2\nstructureType|Loại cấu trúc|Passive Voice,Causative Form"}
-                        className="rounded-lg border border-slate-200 p-2 font-mono" />
+                        aria-invalid={Boolean(categoryFieldErrors.fields)}
+                        className={`rounded-lg border p-2 font-mono ${categoryFieldErrors.fields ? "border-rose-400 bg-rose-50/40" : "border-slate-200"}`} />
+                      {categoryFieldErrors.fields ? <p role="alert" className="text-[11px] font-semibold text-rose-700">{categoryFieldErrors.fields}</p> : null}
                       <p className="text-[10px] text-slate-500">Các giá trị nhập vào được lưu theo mã trường; chỉ hiển thị trường của nhóm đang chọn.</p>
                       <div className="flex flex-wrap justify-end gap-2">
                         <button type="button" onClick={saveCategory} className="rounded-lg bg-blue-700 px-3 py-2 font-bold text-white">Lưu nhóm</button>
@@ -1581,6 +1707,9 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
           <details open hidden={activeFormTab !== "theory"} id="grammar-topic-panel-theory" role="tabpanel" aria-labelledby="grammar-topic-tab-theory" className="rounded-2xl border border-slate-200 p-4">
             <summary className="cursor-pointer font-bold text-slate-900">3. Lý thuyết và ghi chú chung</summary>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <p className="text-[11px] leading-relaxed text-slate-500 sm:col-span-2">
+                Lý thuyết, công thức, ghi chú, phân tích ví dụ, giải thích và bẫy có thể viết bằng tiếng Việt, tiếng Anh hoặc xen lẫn hai ngôn ngữ.
+              </p>
               {[
                 ["definition", "Khái niệm / định nghĩa"],
                 ["usage", "Cách sử dụng"],
@@ -1698,7 +1827,7 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-slate-800">Ví dụ minh họa <span className="font-normal text-slate-400">(không bắt buộc)</span></h3>
-                <p className="mt-1 text-[11px] text-slate-500">Không bắt buộc · Nếu nhập ví dụ, cần có câu tiếng Anh và bản dịch; phân tích là tùy chọn.</p>
+                <p className="mt-1 text-[11px] text-slate-500">Không bắt buộc · Nếu nhập ví dụ, cần có câu tiếng Anh và bản dịch; phân tích có thể viết bằng tiếng Việt, tiếng Anh hoặc xen lẫn.</p>
                 {fieldError("examples")}
               </div>
               <button
@@ -1841,10 +1970,10 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingEnglish}
                 className="rounded-xl bg-blue-600 px-4 py-2 font-bold text-white shadow-xs hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
+                {isCheckingEnglish ? "Đang kiểm tra tiếng Anh..." : isSaving ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
               {activeFormTab !== "questions" ? (
                 <button
@@ -1859,7 +1988,123 @@ export const GrammarTopicEditModal: React.FC<GrammarTopicEditModalProps> = ({
           </div>
         </form>
       </div>
-          </div>
+      {isPublishChildrenDialogOpen && pendingPublishSave ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" role="presentation">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="publish-children-dialog-title"
+            className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+          >
+            <div>
+              <h3 id="publish-children-dialog-title" className="text-base font-bold text-slate-900">
+                Bạn có muốn phát hành chủ điểm con cùng không?
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                Chủ điểm cha sẽ được phát hành khi xác nhận. Chọn các chủ điểm con bản nháp muốn phát hành cùng; nếu không chọn chủ điểm con nào, chỉ phát hành chủ điểm cha.
+              </p>
+            </div>
+            <div className="flex gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedChildTopicIds(draftChildren.map((child) => child.id));
+                  setChildPublishErrors({});
+                }}
+                className="font-semibold text-blue-700 hover:underline"
+              >
+                Chọn tất cả
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedChildTopicIds([]);
+                  setChildPublishErrors({});
+                }}
+                className="font-semibold text-slate-600 hover:underline"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+            <ul className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2 custom-scrollbar">
+              {draftChildren.map((child) => (
+                <li key={child.id}>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-2 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedChildTopicIds.includes(child.id)}
+                      onChange={(event) => {
+                        setSelectedChildTopicIds((previous) => event.target.checked
+                          ? [...previous, child.id]
+                          : previous.filter((id) => id !== child.id));
+                        setChildPublishErrors((previous) => {
+                          const next = { ...previous };
+                          delete next[child.id];
+                          return next;
+                        });
+                      }}
+                      className="mt-0.5 accent-blue-700"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-slate-800">{child.titleVi || child.title}</span>
+                      <span className="block text-[10px] text-slate-500">{child.code} · Bản nháp</span>
+                      {childPublishErrors[child.id] ? (
+                        <span role="alert" className="mt-1 block text-[11px] font-semibold text-rose-700">
+                          {childPublishErrors[child.id]}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPublishChildrenDialogOpen(false);
+                  setPendingPublishSave(null);
+                  setSelectedChildTopicIds([]);
+                  setChildPublishErrors({});
+                }}
+                className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  const invalidChildren = draftChildren
+                    .filter((child) => selectedChildTopicIds.includes(child.id))
+                    .map((child) => ({
+                      child,
+                      errors: analyzeGrammarTopic(child, availableTopics, "PUBLISHED")
+                        .filter((finding) => finding.severity === "error"),
+                    }))
+                    .filter((item) => item.errors.length > 0);
+                  if (invalidChildren.length) {
+                    setChildPublishErrors(Object.fromEntries(invalidChildren.map(({ child, errors }) => [
+                      child.id,
+                      errors.map((finding) => finding.message).join(" "),
+                    ])));
+                    return;
+                  }
+                  void persistTopic(
+                    pendingPublishSave.topicData,
+                    pendingPublishSave.newParent,
+                    selectedChildTopicIds,
+                  );
+                }}
+                className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSaving ? "Đang xử lý..." : "Xác nhận"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </div>
   );
 };
 
@@ -1914,6 +2159,41 @@ export const GrammarDeleteModal: React.FC<GrammarDeleteModalProps> = ({
   const impactError = impactLoad?.topicId === currentTopic.id ? impactLoad.error || null : null;
   const isLoading = !impact && !impactError;
   const topicById = new Map(topics.map((item) => [item.id, item]));
+  const subtreeTopics: GrammarTopicItem[] = [];
+  const visitedTopicIds = new Set<string>();
+  const collectSubtreeTopics = (topic: GrammarTopicItem) => {
+    if (visitedTopicIds.has(topic.id)) return;
+    visitedTopicIds.add(topic.id);
+    subtreeTopics.push(topic);
+    topics
+      .filter((item) => item.parentTopicId === topic.id)
+      .forEach(collectSubtreeTopics);
+  };
+  collectSubtreeTopics(currentTopic);
+  const displayedCounts = impact ? {
+    questionCount: Math.max(
+      impact.subtreeQuestionCount ?? impact.questionCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.questions?.length || 0), 0),
+    ),
+    exampleCount: Math.max(
+      impact.subtreeExampleCount ?? impact.exampleCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.examples?.length || 0), 0),
+    ),
+    theoryFieldCount: Math.max(
+      impact.subtreeTheoryFieldCount ?? impact.theoryFieldCount,
+      subtreeTopics.reduce((sum, item) => sum + countTheoryFields(item), 0),
+    ),
+    wordFamilyLinkCount: Math.max(
+      impact.subtreeWordFamilyLinkCount ?? impact.wordFamilyLinkCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.wordFamilyWords?.length || 0), 0),
+    ),
+    toeicQuestionLinkCount: Math.max(
+      impact.subtreeToeicQuestionLinkCount ?? impact.toeicQuestionLinkCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.linkedToeicQuestionCount || 0), 0),
+    ),
+    userProgressCount: impact.subtreeUserProgressCount ?? impact.userProgressCount,
+    learningPathLinkCount: impact.subtreeLearningPathLinkCount ?? impact.learningPathLinkCount,
+  } : null;
   const isDescendantOfCurrent = (candidate: GrammarTopicItem) => {
     const visited = new Set<string>();
     let parentId = candidate.parentTopicId;
@@ -1955,16 +2235,16 @@ export const GrammarDeleteModal: React.FC<GrammarDeleteModalProps> = ({
         {impact ? (
           <>
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <h4 className="text-xs font-bold text-slate-800">Dữ liệu hiện có sẽ được rà soát</h4>
+              <h4 className="text-xs font-bold text-slate-800">Dữ liệu trong chủ điểm và toàn bộ chủ điểm con</h4>
               <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
-                <span>{impact.childCount} chủ điểm con</span>
-                <span>{impact.questionCount} câu hỏi</span>
-                <span>{impact.exampleCount} ví dụ</span>
-                <span>{impact.theoryFieldCount} mục lý thuyết</span>
-                <span>{impact.wordFamilyLinkCount} liên kết Word Family</span>
-                <span>{impact.toeicQuestionLinkCount} câu hỏi TOEIC liên kết</span>
-                <span>{impact.userProgressCount} bản ghi tiến độ học</span>
-                <span>{impact.learningPathLinkCount} liên kết lộ trình/bài học</span>
+                <span>{impact.childCount} chủ điểm con trực tiếp</span>
+                <span>{displayedCounts?.questionCount ?? 0} câu hỏi</span>
+                <span>{displayedCounts?.exampleCount ?? 0} ví dụ</span>
+                <span>{displayedCounts?.theoryFieldCount ?? 0} mục lý thuyết</span>
+                <span>{displayedCounts?.wordFamilyLinkCount ?? 0} liên kết Word Family</span>
+                <span>{displayedCounts?.toeicQuestionLinkCount ?? 0} câu hỏi TOEIC liên kết</span>
+                <span>{displayedCounts?.userProgressCount ?? 0} bản ghi tiến độ học</span>
+                <span>{displayedCounts?.learningPathLinkCount ?? 0} liên kết lộ trình/bài học</span>
               </div>
             </section>
             {childCount > 0 ? (
@@ -2055,11 +2335,12 @@ export const GrammarDeleteModal: React.FC<GrammarDeleteModalProps> = ({
 
 interface GrammarArchiveModalProps {
   topic: GrammarTopicItem | null;
+  topics: GrammarTopicItem[];
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
 
-export const GrammarArchiveModal: React.FC<GrammarArchiveModalProps> = ({ topic, onClose, onConfirm }) => {
+export const GrammarArchiveModal: React.FC<GrammarArchiveModalProps> = ({ topic, topics, onClose, onConfirm }) => {
   const [impactLoad, setImpactLoad] = useState<{
     topicId: string;
     impact?: GrammarTopicLifecycleImpact;
@@ -2086,6 +2367,41 @@ export const GrammarArchiveModal: React.FC<GrammarArchiveModalProps> = ({ topic,
   const impact = impactLoad?.topicId === topic.id ? impactLoad.impact || null : null;
   const error = impactLoad?.topicId === topic.id ? impactLoad.error || null : null;
   const isLoading = !impact && !error;
+  const subtreeTopics: GrammarTopicItem[] = [];
+  const visitedTopicIds = new Set<string>();
+  const collectSubtreeTopics = (current: GrammarTopicItem) => {
+    if (visitedTopicIds.has(current.id)) return;
+    visitedTopicIds.add(current.id);
+    subtreeTopics.push(current);
+    topics
+      .filter((item) => item.parentTopicId === current.id)
+      .forEach(collectSubtreeTopics);
+  };
+  collectSubtreeTopics(topic);
+  const displayedCounts = impact ? {
+    questionCount: Math.max(
+      impact.subtreeQuestionCount ?? impact.questionCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.questions?.length || 0), 0),
+    ),
+    exampleCount: Math.max(
+      impact.subtreeExampleCount ?? impact.exampleCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.examples?.length || 0), 0),
+    ),
+    theoryFieldCount: Math.max(
+      impact.subtreeTheoryFieldCount ?? impact.theoryFieldCount,
+      subtreeTopics.reduce((sum, item) => sum + countTheoryFields(item), 0),
+    ),
+    wordFamilyLinkCount: Math.max(
+      impact.subtreeWordFamilyLinkCount ?? impact.wordFamilyLinkCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.wordFamilyWords?.length || 0), 0),
+    ),
+    toeicQuestionLinkCount: Math.max(
+      impact.subtreeToeicQuestionLinkCount ?? impact.toeicQuestionLinkCount,
+      subtreeTopics.reduce((sum, item) => sum + (item.linkedToeicQuestionCount || 0), 0),
+    ),
+    userProgressCount: impact.subtreeUserProgressCount ?? impact.userProgressCount,
+    learningPathLinkCount: impact.subtreeLearningPathLinkCount ?? impact.learningPathLinkCount,
+  } : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
       <div className="w-full max-w-lg space-y-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
@@ -2100,15 +2416,18 @@ export const GrammarArchiveModal: React.FC<GrammarArchiveModalProps> = ({ topic,
         {error ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs text-rose-800">{error}</p> : null}
         {impact ? (
           <>
-            <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600 sm:grid-cols-3">
-              <span>{impact.childCount} chủ điểm con</span>
-              <span>{impact.questionCount} câu hỏi</span>
-              <span>{impact.exampleCount} ví dụ</span>
-              <span>{impact.theoryFieldCount} mục lý thuyết</span>
-              <span>{impact.wordFamilyLinkCount} liên kết Word Family</span>
-              <span>{impact.toeicQuestionLinkCount} liên kết câu hỏi TOEIC</span>
-              <span>{impact.userProgressCount} bản ghi tiến độ</span>
-              <span>{impact.learningPathLinkCount} liên kết lộ trình/bài học</span>
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <h4 className="text-xs font-bold text-slate-800">Dữ liệu trong chủ điểm và toàn bộ chủ điểm con</h4>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
+                <span>{impact.childCount} chủ điểm con trực tiếp</span>
+                <span>{displayedCounts?.questionCount ?? 0} câu hỏi</span>
+                <span>{displayedCounts?.exampleCount ?? 0} ví dụ</span>
+                <span>{displayedCounts?.theoryFieldCount ?? 0} mục lý thuyết</span>
+                <span>{displayedCounts?.wordFamilyLinkCount ?? 0} liên kết Word Family</span>
+                <span>{displayedCounts?.toeicQuestionLinkCount ?? 0} liên kết câu hỏi TOEIC</span>
+                <span>{displayedCounts?.userProgressCount ?? 0} bản ghi tiến độ</span>
+                <span>{displayedCounts?.learningPathLinkCount ?? 0} liên kết lộ trình/bài học</span>
+              </div>
             </div>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-950">
               Chủ điểm sẽ được ẩn khỏi danh sách đang hoạt động nhưng vẫn tồn tại trong database. {impact.childCount
@@ -2173,7 +2492,14 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
   onSaveQuestion,
 }) => {
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const questionFieldError = (field: string) => fieldErrors[field]
+    ? <p id={`${field}-error`} role="alert" className="mt-1 text-[11px] font-semibold text-rose-700">{fieldErrors[field]}</p>
+    : null;
+  const questionInputErrorClass = (field: string) => fieldErrors[field]
+    ? "border-rose-400 bg-rose-50/40"
+    : "border-slate-200";
   const normalizePart = (value?: string) => value?.toUpperCase().replace(/[\s_]+/g, "_");
   const questionPart = normalizePart(question?.part) || normalizePart(topic?.part) || "PART_5";
   const questionDifficulty = question?.difficulty?.toUpperCase().replace("_", "-");
@@ -2204,7 +2530,8 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
         </div>
 
         <form
-          onSubmit={async (e) => {
+        noValidate
+        onSubmit={async (e) => {
             e.preventDefault();
             const form = e.target as HTMLFormElement;
             const formData = new FormData(form);
@@ -2216,23 +2543,28 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
             const expl = (formData.get("explanation") as string || "").trim();
             const selectedTopicId = topic?.id || String(formData.get("topicId") || "");
             const selectedTopic = topics.find((item) => item.id === selectedTopicId);
+            const nextFieldErrors: Record<string, string> = {};
             if (!selectedTopic) {
-              setSaveError("Chọn chuyên đề liên kết cho câu hỏi.");
+              nextFieldErrors.topicId = "Chọn chuyên đề liên kết cho câu hỏi.";
+            }
+            if (!qText) nextFieldErrors.questionText = "Nhập nội dung câu hỏi.";
+            else if (qText.length > 1000) nextFieldErrors.questionText = "Nội dung câu hỏi tối đa 1.000 ký tự.";
+            for (const [field, value] of [["optA", optA], ["optB", optB], ["optC", optC], ["optD", optD]]) {
+              if (!value) nextFieldErrors[field] = "Phương án này là bắt buộc.";
+              else if (value.length > 250) nextFieldErrors[field] = "Mỗi phương án tối đa 250 ký tự.";
+            }
+            if (!expl) nextFieldErrors.explanation = "Nhập phần giải thích.";
+            else if (expl.length > 2000) nextFieldErrors.explanation = "Giải thích tối đa 2.000 ký tự.";
+            const translation = String(formData.get("translation") || "").trim();
+            const trapNote = String(formData.get("trapNote") || "").trim();
+            if (translation.length > 1000) nextFieldErrors.translation = "Bản dịch tối đa 1.000 ký tự.";
+            if (trapNote.length > 1000) nextFieldErrors.trapNote = "Bẫy/lỗi thường gặp tối đa 1.000 ký tự.";
+            if (Object.keys(nextFieldErrors).length) {
+              setFieldErrors(nextFieldErrors);
+              setSaveError("Vui lòng sửa các trường được đánh dấu bên dưới.");
               return;
             }
-            const missingOption = [optA, optB, optC, optD].some((option) => !option);
-            if (!qText || !optA || !optB || !optC || !optD || !expl) {
-              setSaveError("Nhập nội dung câu hỏi, đủ 4 phương án và phần giải thích.");
-              return;
-            }
-            if (qText.length > 1000 || [optA, optB, optC, optD].some((option) => option.length > 250) || expl.length > 2000) {
-              setSaveError("Nội dung câu hỏi tối đa 1.000 ký tự, mỗi phương án 250 ký tự và giải thích 2.000 ký tự.");
-              return;
-            }
-            if (missingOption) {
-              setSaveError("Cả bốn phương án A, B, C, D đều bắt buộc.");
-              return;
-            }
+            if (!selectedTopic) return;
 
             const questionPayload: GrammarQuestionItem = {
               id: question?.id || "",
@@ -2241,23 +2573,63 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
               options: { A: optA, B: optB, C: optC, D: optD },
               correctAnswer: String(formData.get("correctAnswer") || "A") as "A" | "B" | "C" | "D",
               explanation: expl,
-              translation: String(formData.get("translation") || "").trim(),
-              trapNote: String(formData.get("trapNote") || "").trim(),
+              translation,
+              trapNote,
               difficulty: String(formData.get("difficulty") || "MEDIUM"),
             };
             setSaveError(null);
+            setFieldErrors({});
             setIsSaving(true);
             try {
+              const englishErrors = await validateEnglishFields({
+                questionText: qText,
+                optA,
+                optB,
+                optC,
+                optD,
+              });
+              if (Object.keys(englishErrors).length) {
+                setFieldErrors(englishErrors);
+                setSaveError("Một số từ chưa được xác nhận trong từ điển tiếng Anh. Hãy kiểm tra các ô được đánh dấu.");
+                return;
+              }
               await onSaveQuestion(selectedTopic.id, questionPayload, question?.id ? String(question.id) : undefined);
               onClose();
             } catch (error) {
-              setSaveError(error instanceof Error ? error.message : "Không thể lưu câu hỏi.");
+              const message = error instanceof Error ? error.message : "Không thể lưu câu hỏi.";
+              if (message.includes("từ điển") || message.includes("xác minh")) {
+                setFieldErrors({
+                  questionText: message,
+                  optA: message,
+                  optB: message,
+                  optC: message,
+                  optD: message,
+                  explanation: message,
+                  translation: message,
+                  trapNote: message,
+                });
+                setSaveError("Không thể xác minh nội dung tiếng Anh. Vui lòng thử lại.");
+              } else {
+                setSaveError(message);
+              }
             } finally {
               setIsSaving(false);
             }
           }}
-          onChange={() => {
+          onChange={(event) => {
             if (saveError) setSaveError(null);
+            const field = event.target instanceof HTMLInputElement
+              || event.target instanceof HTMLTextAreaElement
+              || event.target instanceof HTMLSelectElement
+              ? event.target.name
+              : "";
+            if (field && fieldErrors[field]) {
+              setFieldErrors((previous) => {
+                const next = { ...previous };
+                delete next[field];
+                return next;
+              });
+            }
           }}
           className="space-y-3.5 text-xs font-medium"
         >
@@ -2269,14 +2641,18 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
           {!topic ? (
             <div>
               <label className="block text-slate-700 font-bold mb-1">Chuyên đề liên kết <span className="text-rose-600">*</span></label>
-              <select name="topicId" required defaultValue="" className="w-full p-2.5 rounded-xl border border-slate-200 bg-white">
+              <select name="topicId" required defaultValue="" aria-invalid={Boolean(fieldErrors.topicId)} className={`w-full p-2.5 rounded-xl border bg-white ${fieldErrors.topicId ? "border-rose-400" : "border-slate-200"}`}>
                 <option value="" disabled>Chọn chuyên đề</option>
                 {topics.map((item) => (
                   <option key={item.id} value={item.id}>{item.titleVi || item.title} ({item.code})</option>
                 ))}
               </select>
+              {fieldErrors.topicId ? <p role="alert" className="mt-1 text-[11px] font-semibold text-rose-700">{fieldErrors.topicId}</p> : null}
             </div>
           ) : null}
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            Từ điển kiểm tra nội dung câu hỏi và các phương án (tiếng Anh). Phần giải thích, bản dịch và bẫy có thể viết bằng tiếng Việt, tiếng Anh hoặc xen lẫn.
+          </p>
           <div>
             <label className="block text-slate-700 font-bold mb-1">Nội dung câu hỏi <span className="text-rose-600">*</span></label>
             <input
@@ -2286,8 +2662,11 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
               maxLength={1000}
               defaultValue={question?.questionText || ""}
               placeholder="Ví dụ: Mr. Kim _____ the quarterly sales report yesterday."
-              className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500"
+              aria-invalid={Boolean(fieldErrors.questionText)}
+              aria-describedby={fieldErrors.questionText ? "questionText-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border focus:outline-hidden focus:border-blue-500 ${fieldErrors.questionText ? "border-rose-400 bg-rose-50/40" : "border-slate-200"}`}
             />
+            {questionFieldError("questionText")}
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
@@ -2299,8 +2678,11 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
                 required
                 maxLength={250}
                 defaultValue={question?.options.A || ""}
-                className="w-full p-2 rounded-xl border border-slate-200"
+                aria-invalid={Boolean(fieldErrors.optA)}
+                aria-describedby={fieldErrors.optA ? "optA-error" : undefined}
+                className={`w-full p-2 rounded-xl border ${questionInputErrorClass("optA")}`}
               />
+              {questionFieldError("optA")}
             </div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Đáp án B <span className="text-rose-600">*</span></label>
@@ -2310,8 +2692,11 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
                 required
                 maxLength={250}
                 defaultValue={question?.options.B || ""}
-                className="w-full p-2 rounded-xl border border-slate-200"
+                aria-invalid={Boolean(fieldErrors.optB)}
+                aria-describedby={fieldErrors.optB ? "optB-error" : undefined}
+                className={`w-full p-2 rounded-xl border ${questionInputErrorClass("optB")}`}
               />
+              {questionFieldError("optB")}
             </div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Đáp án C <span className="text-rose-600">*</span></label>
@@ -2321,8 +2706,11 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
                 required
                 maxLength={250}
                 defaultValue={question?.options.C || ""}
-                className="w-full p-2 rounded-xl border border-slate-200"
+                aria-invalid={Boolean(fieldErrors.optC)}
+                aria-describedby={fieldErrors.optC ? "optC-error" : undefined}
+                className={`w-full p-2 rounded-xl border ${questionInputErrorClass("optC")}`}
               />
+              {questionFieldError("optC")}
             </div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Đáp án D <span className="text-rose-600">*</span></label>
@@ -2332,8 +2720,11 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
                 required
                 maxLength={250}
                 defaultValue={question?.options.D || ""}
-                className="w-full p-2 rounded-xl border border-slate-200"
+                aria-invalid={Boolean(fieldErrors.optD)}
+                aria-describedby={fieldErrors.optD ? "optD-error" : undefined}
+                className={`w-full p-2 rounded-xl border ${questionInputErrorClass("optD")}`}
               />
+              {questionFieldError("optD")}
             </div>
           </div>
 
@@ -2371,7 +2762,11 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
             </div>
             <div>
               <label className="block text-slate-700 font-bold mb-1">Bản dịch <span className="font-normal text-slate-400">(không bắt buộc)</span></label>
-              <input name="translation" maxLength={1000} defaultValue={question?.translation || ""} className="w-full p-2.5 rounded-xl border border-slate-200" />
+              <input name="translation" maxLength={1000} defaultValue={question?.translation || ""}
+                aria-invalid={Boolean(fieldErrors.translation)}
+                aria-describedby={fieldErrors.translation ? "translation-error" : undefined}
+                className={`w-full p-2.5 rounded-xl border ${questionInputErrorClass("translation")}`} />
+              {questionFieldError("translation")}
             </div>
           </div>
 
@@ -2384,13 +2779,20 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
               maxLength={2000}
               defaultValue={question?.explanation || ""}
               placeholder="Giải thích lý do chọn đáp án đúng..."
-              className="w-full p-2.5 rounded-xl border border-slate-200 resize-none"
+              aria-invalid={Boolean(fieldErrors.explanation)}
+              aria-describedby={fieldErrors.explanation ? "explanation-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border resize-none ${questionInputErrorClass("explanation")}`}
             />
+            {questionFieldError("explanation")}
           </div>
 
           <div>
             <label className="block text-slate-700 font-bold mb-1">Bẫy / lỗi thường gặp <span className="font-normal text-slate-400">(không bắt buộc)</span></label>
-            <textarea name="trapNote" rows={2} maxLength={1000} defaultValue={question?.trapNote || ""} className="w-full p-2.5 rounded-xl border border-slate-200 resize-y" />
+            <textarea name="trapNote" rows={2} maxLength={1000} defaultValue={question?.trapNote || ""}
+              aria-invalid={Boolean(fieldErrors.trapNote)}
+              aria-describedby={fieldErrors.trapNote ? "trapNote-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border resize-y ${questionInputErrorClass("trapNote")}`} />
+            {questionFieldError("trapNote")}
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -2406,7 +2808,7 @@ export const GrammarAddQuestionModal: React.FC<GrammarAddQuestionModalProps> = (
               disabled={isSaving}
               className="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "Đang lưu..." : question ? "Lưu câu hỏi" : "Thêm câu hỏi"}
+              {isSaving ? "Đang kiểm tra và lưu..." : question ? "Lưu câu hỏi" : "Thêm câu hỏi"}
             </button>
           </div>
         </form>
@@ -2535,10 +2937,8 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     } catch {}
   }, [isOpen]);
 
-  // Đảm bảo bài luôn có đủ 30 câu hỏi thực tế chuẩn TOEIC Part 5
   const fullQuestions = useMemo(() => {
-    const topicTitle = activeTopic?.titleVi || activeTopic?.title || "Ngữ pháp";
-    let list = expandGrammarQuestions(rawQuestions, topicTitle, 30);
+    let list = rawQuestions;
     // Nếu cấu hình bật xáo trộn câu hỏi và không phải chế độ redo câu sai
     if (grammarConfig.shuffleQuestions && !isRedoWrongOnly && list.length > 1) {
       list = [...list].sort((a, b) => {
@@ -2548,7 +2948,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
       });
     }
     return list;
-  }, [rawQuestions, activeTopic, grammarConfig.shuffleQuestions, isRedoWrongOnly]);
+  }, [rawQuestions, grammarConfig.shuffleQuestions, isRedoWrongOnly]);
 
   // Nếu là chế độ redo câu sai, lọc các câu bị sai
   const questions = useMemo(() => {
@@ -2556,10 +2956,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     const prog = getItemProgress(`grammar-${activeTopic.id}`, fullQuestions.length);
     const wrongList = prog.wrongQuestionIds || [];
     const wrongIds = wrongList.map((id) => String(id));
-    if (wrongIds.length === 0) {
-      const fallbackCount = Math.max(1, prog.wrongAnswers || 2);
-      return fullQuestions.slice(0, fallbackCount);
-    }
+    if (wrongIds.length === 0) return [];
     const filtered = fullQuestions.filter((q, idx) => {
       const qIdStr = String(q.id || "");
       const idxStr = String(idx + 1);
@@ -2568,7 +2965,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
         (wid) => wid === qIdStr || wid === idxStr || wid === idx0Str || qIdStr.endsWith(`-${wid}`) || qIdStr.endsWith(`_${wid}`)
       );
     });
-    return filtered.length > 0 ? filtered : fullQuestions.slice(0, Math.max(1, prog.wrongAnswers || 2));
+    return filtered;
   }, [fullQuestions, isRedoWrongOnly, activeTopic]);
 
   const [currentIndex, setCurrentIndex] = useState(0);

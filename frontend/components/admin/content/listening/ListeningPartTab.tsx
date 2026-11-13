@@ -33,7 +33,7 @@ function AdminListeningCardItem({
   onTheory: () => void;
   onPractice: () => void;
 }) {
-  const totalQ = card.questions?.length || card.totalQuestions || 10;
+  const totalQ = card.questions?.length || card.totalQuestions || 0;
 
   return (
     <div className="bg-white rounded-2xl border-t-[3.5px] border-t-blue-600 border-x border-b border-slate-200/90 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between">
@@ -143,8 +143,13 @@ export const ListeningPartTab: React.FC<ListeningPartTabProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4">
-        {levels.map((lvl) => (
+      {levels.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">
+          Chưa có cấp độ luyện nghe nào trong cơ sở dữ liệu.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4">
+          {levels.map((lvl) => (
           <AdminListeningCardItem
             key={lvl.id}
             card={lvl}
@@ -165,8 +170,9 @@ export const ListeningPartTab: React.FC<ListeningPartTabProps> = ({
             }
             onPractice={() => handleOpenQuizPractice(lvl)}
           />
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* SECTION 2: THEO DẠNG TRANH / CÂU HỎI / CHỦ ĐỀ / BÀI NÓI */}
       <div className="space-y-3 pt-3 border-t border-slate-200">
@@ -185,8 +191,13 @@ export const ListeningPartTab: React.FC<ListeningPartTabProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4">
-          {categories.map((cat) => (
+        {categories.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">
+            Chưa có chuyên đề luyện nghe nào trong cơ sở dữ liệu.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4">
+            {categories.map((cat) => (
             <AdminListeningCardItem
               key={cat.id}
               card={cat}
@@ -207,8 +218,9 @@ export const ListeningPartTab: React.FC<ListeningPartTabProps> = ({
               }
               onPractice={() => handleOpenQuizPractice(cat)}
             />
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

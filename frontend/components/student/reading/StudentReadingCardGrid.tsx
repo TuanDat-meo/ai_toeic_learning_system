@@ -27,8 +27,7 @@ function StudentReadingCardItem({
   onStartPractice: (card: ExerciseCardData, startIndex?: number, isRedoWrong?: boolean) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
 }) {
-  const fallbackTotal = card.totalQuestions || 10;
-  const progress = useItemProgress(`reading-${card.id}`, fallbackTotal);
+  const progress = useItemProgress(`reading-${card.id}`, card.totalQuestions);
   const completed = Math.max(progress.completedQuestions, card.studiedQuestions || 0);
   const computedVocabCount = React.useMemo(() => {
     const seen = new Set<string>();
@@ -71,7 +70,7 @@ function StudentReadingCardItem({
         <div className="pt-2">
           <StudentCardProgressAction
             progressKey={`reading-${card.id}`}
-            totalQuestions={card.totalQuestions || 30}
+            totalQuestions={card.totalQuestions || 0}
             savedCount={computedVocabCount}
             actionLabel="Học ngay"
             onStart={(nextIdx) => onStartPractice(card, nextIdx, false)}

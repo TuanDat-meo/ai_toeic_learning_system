@@ -41,42 +41,25 @@ function broadcastTrackerUpdate(data: StudyTrackerData): void {
   }
 }
 
-// Generate sample/seed history for the current week so the student has realistic data out of the box
 function createDefaultTrackerData(): StudyTrackerData {
   const todayStr = getTodayDateString();
-  const now = new Date();
-  const history: Record<string, StudyDayRecord> = {};
-
-  // Seed previous consecutive 4 days
-  for (let i = 4; i >= 1; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    history[dateStr] = {
-      date: dateStr,
-      minutesSpent: 20 + (i * 5),
-      secondsSpent: (20 + (i * 5)) * 60,
-      completedLessons: 3 + i,
-    };
-  }
-
-  // Today begins at 0 unless active
-  history[todayStr] = {
-    date: todayStr,
-    minutesSpent: 0,
-    secondsSpent: 0,
-    completedLessons: 0,
-  };
 
   return {
     dailyTargetMinutes: 15,
-    currentStreak: 4,
-    bestStreak: 7,
-    lastActiveDate: todayStr,
-    history,
-    totalMinutesOverall: 220,
-    totalCompletedLessons: 36,
-    totalAvailableLessons: 200,
+    currentStreak: 0,
+    bestStreak: 0,
+    lastActiveDate: "",
+    history: {
+      [todayStr]: {
+        date: todayStr,
+        minutesSpent: 0,
+        secondsSpent: 0,
+        completedLessons: 0,
+      },
+    },
+    totalMinutesOverall: 0,
+    totalCompletedLessons: 0,
+    totalAvailableLessons: 0,
     todayMinutes: 0,
     todaySeconds: 0,
   };

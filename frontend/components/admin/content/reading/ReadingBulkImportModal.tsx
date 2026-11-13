@@ -133,12 +133,12 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
   const [activeTab, setActiveTab] = useState<"paste" | "file">("paste");
 
   // Form Metadata
-  const [title, setTitle] = useState("ETS 2024 Test 5 - Part 5 Mini Test");
+  const [title, setTitle] = useState("");
   const [category, setCategory] = useState<"part5" | "part6" | "part7" | "grammar">("part5");
   const [subCategory] = useState<
     "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types"
   >("word_types");
-  const [tag, setTag] = useState("Thương mại & Hợp đồng");
+  const [tag, setTag] = useState("");
 
   // Passage Data (optional for Part 6/7)
   const [passageText, setPassageText] = useState("");
@@ -231,140 +231,6 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Mẫu template có sẵn để admin click test ngay
-  const SAMPLE_PART5 = `[Tiêu đề] ETS 2024 Test 5 - Part 5 Cấu trúc Từ loại
-[Phần thi] Part 5
-[Thẻ] Từ loại & Ngữ pháp trọng tâm
-
-101. When she held her last meeting, Ms. Toba ------- her sales staff to perform even better next quarter.
-(A) encourage
-(B) is encouraging
-(C) encouraged
-(D) was encouraged
-Đáp án: C
-Dịch: Khi cô ấy tổ chức cuộc họp trước, bà Toba đã khuyến khích đội ngũ bán hàng của mình làm việc tốt hơn nữa trong quý tới.
-Giải thích: Cần động từ chia ở thì quá khứ đơn vì mệnh đề trước có "held" (quá khứ của hold) và diễn tả một sự việc đã xảy ra trong quá khứ.
-Từ vựng: encourage (v): khuyến khích, quarterly (adv): hàng quý, staff (n): đội ngũ nhân viên
-
-102. All visitors are required to show photo identification ------- entering the research laboratory.
-(A) before
-(B) while
-(C) during
-(D) until
-Đáp án: A
-Dịch: Tất cả khách tham quan được yêu cầu xuất trình giấy tờ tùy thân có ảnh trước khi vào phòng thí nghiệm nghiên cứu.
-Giải thích: "Before + V-ing" diễn tả hành động xảy ra trước một hành động khác. "During" chỉ đi với danh từ, không đi với V-ing.
-Từ vựng: laboratory (n): phòng thí nghiệm, identification (n): giấy tờ tùy thân
-
-103. The marketing team proposed an ------- strategy that significantly boosted our online customer retention rate.
-(A) innovate
-(B) innovation
-(C) innovative
-(D) innovatively
-Đáp án: C
-Dịch: Đội ngũ tiếp thị đã đề xuất một chiến lược mang tính đổi mới, giúp gia tăng đáng kể tỷ lệ giữ chân khách hàng trực tuyến.
-Giải thích: Chỗ trống đứng trước danh từ "strategy" và sau mạo từ "an", do đó cần một tính từ (innovative) để bổ nghĩa cho danh từ.
-Từ vựng: innovative (adj): có tính sáng tạo đổi mới, retention (n): sự giữ chân duy trì`;
-
-  const SAMPLE_PART6 = `[Tiêu đề] Thông báo nội bộ công ty NexaCorp
-[Phần thi] Part 6
-[Thẻ] Điền đoạn văn Part 6
-
-[Đoạn văn]
-To: All Staff Members
-From: Human Resources Department
-Date: October 14
-Subject: Office Renovation Schedule
-
-Please be advised that the main office on the 4th floor will undergo extensive renovations beginning next Monday. Construction crews will be working daily from 6:00 PM to 10:00 PM to minimize disruptions to your regular workday.
-
-During this period, access to the eastern wing will be ------- restricted. Only authorized maintenance staff will be allowed in that section. If you currently work in the eastern wing, please pack your essential files by Friday afternoon. You will be assigned a temporary workstation on the 3rd floor.
-
-We appreciate your patience and cooperation as we work to ------- our workplace facilities. Should you have any special requirements, please contact HR at extension 402.
-
-[Bản dịch đoạn văn]
-Kính gửi: Toàn thể nhân viên
-Từ: Phòng Nhân sự
-Ngày: 14 tháng 10
-Chủ đề: Lịch trình nâng cấp văn phòng
-
-Xin lưu ý rằng văn phòng chính tại tầng 4 sẽ trải qua đợt nâng cấp toàn diện bắt đầu từ thứ Hai tuần tới. Đội ngũ thi công sẽ làm việc hàng ngày từ 18:00 đến 22:00 để giảm thiểu gián đoạn cho ngày làm việc của bạn.
-
-Trong giai đoạn này, việc tiếp cận cánh phía Đông sẽ bị hạn chế nghiêm ngặt. Chỉ có nhân viên bảo trì được ủy quyền mới được vào khu vực đó. Nếu bạn đang làm việc tại cánh phía Đông, vui lòng đóng gói tài liệu cần thiết trước chiều thứ Sáu. Bạn sẽ được bố trí chỗ làm việc tạm thời tại tầng 3.
-
-Chúng tôi rất cảm kích sự kiên nhẫn và hợp tác của các bạn khi chúng tôi nỗ lực nâng cấp cơ sở vật chất nơi làm việc. Nếu bạn có yêu cầu đặc biệt, vui lòng liên hệ HR tại máy lẻ 402.
-
-131. During this period, access to the eastern wing will be ------- restricted.
-(A) strict
-(B) strictly
-(C) strictness
-(D) strictly speaking
-Đáp án: B
-Dịch: Trong giai đoạn này, việc tiếp cận cánh phía đông sẽ bị hạn chế nghiêm ngặt.
-Giải thích: Chỗ trống đứng giữa trợ động từ "will be" và quá khứ phân từ "restricted" (bị động), do đó cần một trạng từ (strictly) để bổ nghĩa cho động từ.
-Từ vựng: restrict (v): hạn chế, strictly (adv): một cách nghiêm ngặt
-
-132. We appreciate your patience and cooperation as we work to ------- our workplace facilities.
-(A) improve
-(B) improves
-(C) improved
-(D) improving
-Đáp án: A
-Dịch: Chúng tôi đánh giá cao sự kiên nhẫn và hợp tác khi chúng tôi nỗ lực cải thiện cơ sở vật chất nơi làm việc.
-Giải thích: Cấu trúc "work to + V nguyên mẫu" chỉ mục đích hành động (nỗ lực để làm gì). Do đó chọn đáp án (A) improve.
-Từ vựng: facilities (n): cơ sở vật chất tiện nghi, cooperation (n): sự hợp tác`;
-
-  const SAMPLE_PART7 = `[Tiêu đề] Email đặt phòng hội nghị khách sạn Grand Palace
-[Phần thi] Part 7
-[Thẻ] Đọc hiểu đoạn đơn
-
-[Đoạn văn]
-Dear Mr. Ramirez,
-
-Thank you for contacting the Grand Palace Hotel regarding your upcoming conference booking on November 20. We are pleased to confirm that the Sapphire Ballroom has been reserved for your organization from 8:00 AM to 5:00 PM.
-
-As requested in your initial inquiry, audiovisual equipment including two digital projectors, wireless microphones, and high-speed Wi-Fi access will be set up prior to your arrival. Our catering team will serve coffee and pastries at 10:00 AM, followed by a buffet lunch at 12:30 PM.
-
-Please review the attached invoice and return a signed copy along with the 30% deposit by November 5 to secure your reservation.
-
-Warm regards,
-Elena Rostova
-Events Coordinator, Grand Palace Hotel
-
-[Bản dịch đoạn văn]
-Kính gửi ông Ramirez,
-
-Cảm ơn ông đã liên hệ với Khách sạn Grand Palace về việc đặt phòng hội nghị vào ngày 20 tháng 11 sắp tới. Chúng tôi hân hạnh xác nhận rằng Phòng đại tiệc Sapphire đã được đặt chỗ cho tổ chức của ông từ 8:00 sáng đến 5:00 chiều.
-
-Theo yêu cầu trong thư hỏi ban đầu của ông, các thiết bị nghe nhìn bao gồm hai máy chiếu kỹ thuật số, micrô không dây và truy cập Wi-Fi tốc độ cao sẽ được thiết lập trước khi ông đến. Đội ngũ phục vụ ẩm thực sẽ phục vụ cà phê và bánh ngọt lúc 10:00 sáng, tiếp theo là bữa trưa tự chọn lúc 12:30 trưa.
-
-Vui lòng xem lại hóa đơn đính kèm và gửi lại bản sao đã ký cùng với khoản đặt cọc 30% trước ngày 5 tháng 11 để đảm bảo việc đặt phòng của ông.
-
-Trân trọng,
-Elena Rostova
-Điều phối viên sự kiện, Khách sạn Grand Palace
-
-147. What is the main purpose of the email?
-(A) To request payment for an overdue bill
-(B) To confirm details of an event reservation
-(C) To advertise discounts on hotel accommodations
-(D) To cancel a scheduled catering order
-Đáp án: B
-Dịch: Mục đích chính của bức thư điện tử là gì?
-Giải thích: Đoạn đầu tiên nêu rõ: "We are pleased to confirm that the Sapphire Ballroom has been reserved...", chứng tỏ thư để xác nhận chi tiết đặt chỗ sự kiện.
-Từ vựng: reservation (n): sự đặt chỗ trước, ballroom (n): phòng khiêu vũ hội trường lớn
-
-148. What is Mr. Ramirez asked to do by November 5?
-(A) Submit a list of conference speakers
-(B) Choose the menu for the buffet lunch
-(C) Send a signed document and a deposit
-(D) Test the audiovisual equipment
-Đáp án: C
-Dịch: Ông Ramirez được yêu cầu làm gì trước ngày 5 tháng 11?
-Giải thích: Câu cuối cùng: "return a signed copy along with the 30% deposit by November 5". Do đó chọn (C).
-Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
-
-  // Hàm Parser thông minh
   const handleParseText = (inputText?: string) => {
     const text = (typeof inputText === "string" ? inputText : rawText).trim();
     if (!text) {
@@ -776,9 +642,7 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
   // Tải file mẫu CSV
   const handleDownloadCsvTemplate = () => {
     const csvContent =
-      "Câu số,Đề bài tiếng Anh,Bản dịch tiếng Việt,Đáp án A,Đáp án B,Đáp án C,Đáp án D,Đáp án đúng (A/B/C/D),Giải thích chi tiết,Từ vựng\n" +
-      '101,"When she held her last meeting, Ms. Toba ------- her sales staff to perform even better next quarter.","Khi cô ấy tổ chức cuộc họp trước, bà Toba đã khuyến khích nhân viên...","encourage","is encouraging","encouraged","was encouraged","C","Cần động từ chia ở thì quá khứ đơn vì mệnh đề trước có held.","encourage (v): khuyến khích; staff (n): nhân viên"\n' +
-      '102,"All visitors are required to show photo identification ------- entering the research laboratory.","Tất cả khách tham quan được yêu cầu xuất trình giấy tờ tùy thân trước khi vào...","before","while","during","until","A","Before + V-ing chỉ hành động xảy ra trước.","laboratory (n): phòng thí nghiệm; identification (n): giấy tờ tùy thân"\n';
+      "Câu số,Đề bài tiếng Anh,Bản dịch tiếng Việt,Đáp án A,Đáp án B,Đáp án C,Đáp án D,Đáp án đúng (A/B/C/D),Giải thích chi tiết,Từ vựng\n";
 
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -791,6 +655,11 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
 
   // Lưu chuyên đề vào kho
   const handleSaveToBank = () => {
+    if (!title.trim()) {
+      setErrorMsg("Vui lòng nhập tên bài đọc hoặc chuyên đề.");
+      return;
+    }
+
     if (parsedQuestions.length === 0) {
       setErrorMsg("Chưa có câu hỏi nào được bóc tách! Vui lòng bấm 'Phân tích văn bản đề thi' trước.");
       return;
@@ -816,10 +685,10 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
     const newId = `reading-import-${Date.now().toString().slice(-6)}`;
     const finalCard: ExerciseCardData = {
       id: newId,
-      title: title.trim() || `Chuyên đề Reading TOEIC ${parsedQuestions.length} câu`,
+      title: title.trim(),
       category,
       subCategory,
-      tag: tag.trim() || "Chuyên đề tổng hợp",
+      tag: tag.trim() || undefined,
       totalQuestions: parsedQuestions.length,
       studiedQuestions: 0,
       correctAnswers: 0,
@@ -827,11 +696,6 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
       passageText: passageText.trim() || undefined,
       passageTextVi: passageTextVi.trim() || undefined,
       ...(cardVocabList.length > 0 ? { vocabList: cardVocabList } : {}),
-      theory: {
-        summary: `Chuyên đề ${category.toUpperCase()} gồm ${parsedQuestions.length} câu hỏi chọn lọc có đáp án và giải thích chi tiết.`,
-        rules: ["Nắm chắc dấu hiệu nhận biết ngữ pháp và từ vựng trọng tâm.", "Đọc kỹ đề và loại trừ phương án sai."],
-        example: parsedQuestions[0]?.question || "Example sentence for reading practice.",
-      },
       sampleQuestions: parsedQuestions,
     };
 
@@ -937,45 +801,6 @@ Từ vựng: deposit (n): tiền đặt cọc, invoice (n): hóa đơn`;
                 <span>2. Tải Lên File (Excel / CSV / JSON)</span>
               </button>
             </div>
-
-            {/* Quick Sample Presets */}
-            {activeTab === "paste" && (
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-slate-400 font-medium">Dán nhanh mẫu:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRawText(SAMPLE_PART5);
-                    handleParseText(SAMPLE_PART5);
-                  }}
-                  className="font-bold text-slate-700 hover:text-blue-600 hover:underline transition cursor-pointer"
-                >
-                  Mẫu Part 5
-                </button>
-                <span className="text-slate-300">•</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRawText(SAMPLE_PART6);
-                    handleParseText(SAMPLE_PART6);
-                  }}
-                  className="font-bold text-slate-700 hover:text-blue-600 hover:underline transition cursor-pointer"
-                >
-                  Mẫu Part 6
-                </button>
-                <span className="text-slate-300">•</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRawText(SAMPLE_PART7);
-                    handleParseText(SAMPLE_PART7);
-                  }}
-                  className="font-bold text-slate-700 hover:text-blue-600 hover:underline transition cursor-pointer"
-                >
-                  Mẫu Part 7
-                </button>
-              </div>
-            )}
           </div>
 
           {/* TAB 1: COPY-PASTE */}

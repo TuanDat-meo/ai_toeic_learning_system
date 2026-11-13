@@ -98,6 +98,9 @@ function AdminDictationCardItem({
           </div>
         </div>
 
+        <h3 className="mb-1 text-sm font-bold text-slate-900">
+          {card.title || `Test ${card.testNumber} - ${card.part}`}
+        </h3>
         <div className="flex items-center gap-2 my-2">
           <Headphones className="w-5 h-5 text-blue-600" />
           <span className="text-base font-extrabold text-slate-900">
@@ -193,7 +196,11 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
       </div>
 
       {/* Danh sách các phần Test: Test 1 đến Test 10 */}
-      {Object.keys(testsGrouped).map(Number).sort((a, b) => a - b).map((testNum) => {
+      {Object.keys(testsGrouped).length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-xs text-slate-500">
+          Chưa có bài nghe chép chính tả cho năm {selectedYear}.
+        </p>
+      ) : Object.keys(testsGrouped).map(Number).sort((a, b) => a - b).map((testNum) => {
         const cardsInTest = testsGrouped[testNum] || [];
         if (cardsInTest.length === 0) return null;
 

@@ -36,7 +36,7 @@ function ListeningCardItem({
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
   handleOpenQuizPractice: (card: LevelCategoryCardData, startIndex?: number, isRedoWrong?: boolean) => void;
 }) {
-  const totalQ = card.questions?.length || card.totalQuestions || 10;
+  const totalQ = card.questions?.length || card.totalQuestions || 0;
   const progress = useItemProgress(`listening-quiz-${card.id}`, totalQ);
 
   return (
@@ -109,8 +109,13 @@ export const StudentListeningPartTab: React.FC<StudentListeningPartTabProps> = (
           <p className="text-xs text-slate-500">Phân cấp độ chuẩn xác từ cơ bản đến nâng cao cho {part}.</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {levels.map((lvl) => (
+        {levels.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">
+            Chưa có chủ điểm nghe nào được đăng cho {part}.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {levels.map((lvl) => (
             <ListeningCardItem
               key={lvl.id}
               card={lvl}
@@ -122,8 +127,9 @@ export const StudentListeningPartTab: React.FC<StudentListeningPartTabProps> = (
               setTheoryModalData={setTheoryModalData}
               handleOpenQuizPractice={handleOpenQuizPractice}
             />
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* SECTION 2: THEO CHỦ ĐỀ / TÌNH HUỐNG THỰC TẾ */}
@@ -133,8 +139,13 @@ export const StudentListeningPartTab: React.FC<StudentListeningPartTabProps> = (
           <p className="text-xs text-slate-500">{categorySectionSubtitle}</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {categories.map((cat) => (
+        {categories.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-500">
+            Chưa có chuyên đề nghe nào được đăng cho {part}.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {categories.map((cat) => (
             <ListeningCardItem
               key={cat.id}
               card={cat}
@@ -146,8 +157,9 @@ export const StudentListeningPartTab: React.FC<StudentListeningPartTabProps> = (
               setTheoryModalData={setTheoryModalData}
               handleOpenQuizPractice={handleOpenQuizPractice}
             />
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

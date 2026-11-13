@@ -5,7 +5,6 @@ import { Sparkles } from "lucide-react";
 import { WordItem, VocabularyTestSet, TestItem, type VocabularyRelatedForm, type VocabularySense } from "./types";
 import { CONTENT_STATUS_LABEL } from "@/lib/types/domain";
 import { exportToExcel } from "@/lib/exportExcel";
-import { SAMPLE_WORDS, INITIAL_TESTS, VOCAB_AUDIO_MAP } from "./mockData";
 import {
   getAdminVocabularySets,
   createVocabularySet,
@@ -26,46 +25,18 @@ import { VocabularyModals } from "@/components/admin/content/vocabulary/Vocabula
 import { deduplicateVocabularySenses } from "@/lib/vocabulary-part-of-speech";
 import { playVocabularyAudio } from "@/lib/vocabulary-pronunciation";
 
-const LOCAL_VOCAB_TESTS_KEY = "toeic_vocab_tests";
-const LOCAL_VOCAB_VERSION_KEY = "toeic_vocab_sync_ver";
-const CURRENT_VOCAB_VERSION = "2026_10_22_real_data_v2";
-
-function getLocalVocabTests(): VocabularyTestSet[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const ver = localStorage.getItem(LOCAL_VOCAB_VERSION_KEY);
-    if (ver !== CURRENT_VOCAB_VERSION) return null;
-    const raw = localStorage.getItem(LOCAL_VOCAB_TESTS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalVocabTests(data: VocabularyTestSet[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LOCAL_VOCAB_VERSION_KEY, CURRENT_VOCAB_VERSION);
-    localStorage.setItem(LOCAL_VOCAB_TESTS_KEY, JSON.stringify(data));
-    window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated", { detail: data }));
-  } catch (e) {
-    console.warn("Could not save vocab tests to localStorage:", e);
-  }
-}
-
 export default function VocabularyLearningPage() {
   const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "algorithm" | "analytics">("topics");
   const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
-  const [tests, setTests] = useState<VocabularyTestSet[]>(INITIAL_TESTS);
+  const [tests, setTests] = useState<VocabularyTestSet[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Helper cập nhật tests và lưu vào localStorage để đồng bộ với học viên
+  // Notify student views after the backend confirms a change.
   const updateTestsState = (updater: (prev: VocabularyTestSet[]) => VocabularyTestSet[]) => {
     setTests((prev) => {
       const next = updater(prev);
-      saveLocalVocabTests(next);
+      window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated", { detail: next }));
       return next;
     });
   };
@@ -91,34 +62,12 @@ export default function VocabularyLearningPage() {
   const loadSets = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await getAdminVocabularySets();
-      if (data && data.length > 0) {
-        const merged = data.map((d) => {
-          const l = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
-          const words = (d.words && d.words.length > 0) ? d.words : (l?.words || []);
-          return {
-            ...d,
-            words,
-            wordCount: words.length > 0 ? words.length : (d.wordCount || l?.wordCount || 200),
-          };
-        });
-        setTests(merged);
-        saveLocalVocabTests(merged);
-      } else {
-        const local = getLocalVocabTests();
-        const fallback = local && local.length > 0 ? local : INITIAL_TESTS;
-        setTests(fallback);
-        saveLocalVocabTests(fallback);
-      }
+      setTests(data);
     } catch (err) {
-      console.warn("Could not load vocabulary sets from server, using fallback:", err);
-      const local = getLocalVocabTests();
-      if (local && local.length > 0) {
-        setTests(local);
-      } else {
-        setTests(INITIAL_TESTS);
-        saveLocalVocabTests(INITIAL_TESTS);
-      }
+      setTests([]);
+      setLoadError(err instanceof Error ? err.message : "Không thể tải dữ liệu từ vựng từ máy chủ.");
     } finally {
       setLoading(false);
     }
@@ -130,8 +79,7 @@ export default function VocabularyLearningPage() {
 
   // Audio synthesis & native MP3 playback
   const playAudio = (audioUrl: string, word: string) => {
-    const mapped = VOCAB_AUDIO_MAP[word.toLowerCase().trim()];
-    playVocabularyAudio(audioUrl || mapped || "", word, showToast);
+    playVocabularyAudio(audioUrl, word, showToast);
   };
 
   const allWordsCombined = React.useMemo(() => {
@@ -572,6 +520,16 @@ export default function VocabularyLearningPage() {
         onOpenCreateTest={() => setShowCreateTestModal(true)}
         onExportCsv={handleExportCsv}
       />
+      {loadError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Không thể tải dữ liệu từ vựng từ backend: {loadError}
+        </div>
+      ) : null}
+      {!loading && !loadError && tests.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
+          Chưa có bộ từ vựng trong hệ thống.
+        </div>
+      ) : null}
 
       {/* Tab 1: Danh sách bộ từ vựng */}
       {activeMainTab === "topics" && (

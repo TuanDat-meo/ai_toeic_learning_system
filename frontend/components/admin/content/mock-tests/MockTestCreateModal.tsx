@@ -10,16 +10,12 @@ interface MockTestCreateModalProps {
   setTestFormTitle: (val: string) => void;
   testFormVolId: "vol1" | "vol2" | "vol3";
   setTestFormVolId: (val: "vol1" | "vol2" | "vol3") => void;
-  testFormDifficulty: "Khó" | "Trung bình" | "Vừa sức";
-  setTestFormDifficulty: (val: "Khó" | "Trung bình" | "Vừa sức") => void;
+  testFormDifficulty: "Dễ" | "Khó" | "Trung bình" | "Vừa sức";
+  setTestFormDifficulty: (val: "Dễ" | "Khó" | "Trung bình" | "Vừa sức") => void;
   testFormDescription: string;
   setTestFormDescription: (val: string) => void;
-  testFormYear: number;
-  setTestFormYear: (val: number) => void;
   testFormDuration: number;
   setTestFormDuration: (val: number) => void;
-  testFormTotalQuestions: number;
-  setTestFormTotalQuestions: (val: number) => void;
   testFormStatus?: string;
   setTestFormStatus?: (val: string) => void;
   onSaveTest: (e: React.FormEvent) => void;
@@ -36,12 +32,8 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
   setTestFormDifficulty,
   testFormDescription,
   setTestFormDescription,
-  testFormYear,
-  setTestFormYear,
   testFormDuration,
   setTestFormDuration,
-  testFormTotalQuestions,
-  setTestFormTotalQuestions,
   testFormStatus = "PUBLISHED",
   setTestFormStatus,
   onSaveTest,
@@ -131,7 +123,7 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-slate-700 font-bold mb-1">Bộ đề (Volume)</label>
                 <select
@@ -146,27 +138,14 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">Năm đề thi</label>
-                <select
-                  value={testFormYear}
-                  onChange={(e) => setTestFormYear(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
-                >
-                  <option value={2026}>Năm 2026 (Mới nhất)</option>
-                  <option value={2024}>Năm 2024</option>
-                  <option value={2023}>Năm 2023</option>
-                  <option value={2022}>Năm 2022</option>
-                </select>
-              </div>
-
-              <div>
                 <label className="block text-slate-700 font-bold mb-1">Mức độ khó</label>
                 <select
                   value={testFormDifficulty}
-                  onChange={(e) => setTestFormDifficulty(e.target.value as "Khó" | "Trung bình" | "Vừa sức")}
+                  onChange={(e) => setTestFormDifficulty(e.target.value as "Dễ" | "Khó" | "Trung bình" | "Vừa sức")}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
                 >
                   <option value="Vừa sức">Vừa sức (Mục tiêu 450 - 600)</option>
+                  <option value="Dễ">Dễ</option>
                   <option value="Trung bình">Trung bình (Mục tiêu 600 - 750)</option>
                   <option value="Khó">Khó (Mục tiêu 750 - 990)</option>
                 </select>
@@ -214,35 +193,20 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
               <span>2. Thời gian &amp; Quy mô câu hỏi</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div>
               <div>
                 <label className="block text-slate-700 font-bold mb-1">
                   Thời gian làm bài (Phút) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
-                  min={15}
-                  max={180}
+                  min={1}
+                  max={600}
                   value={testFormDuration}
                   onChange={(e) => setTestFormDuration(Number(e.target.value))}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
                 />
-                <span className="text-[10px] text-slate-400">Chuẩn thi TOEIC quốc tế: 120 phút</span>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Tổng số câu hỏi <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  max={200}
-                  value={testFormTotalQuestions}
-                  onChange={(e) => setTestFormTotalQuestions(Number(e.target.value))}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
-                />
-                <span className="text-[10px] text-slate-400">Đầy đủ 7 Part: 200 câu hỏi</span>
+                <span className="text-[10px] text-slate-400">Số câu hỏi được đếm từ dữ liệu thực đã liên kết.</span>
               </div>
             </div>
 
@@ -252,7 +216,7 @@ export const MockTestCreateModal: React.FC<MockTestCreateModalProps> = ({
               </label>
               <textarea
                 rows={3}
-                placeholder="Ví dụ: Đề thi thử đầy đủ 200 câu hỏi gồm 100 câu Listening (Part 1-4: 45 phút) và 100 câu Reading (Part 5-7: 75 phút). Thí sinh không được tạm dừng khi vào phòng thi."
+                placeholder="Nhập mô tả và hướng dẫn thực tế cho đề thi này."
                 value={testFormDescription}
                 onChange={(e) => {
                   setTestFormDescription(e.target.value);
