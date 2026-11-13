@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 class QuestionBankServiceTest {
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final QuestionBankService questionBankService = new QuestionBankService(jdbc, new ObjectMapper());
+    private final QuestionBankService questionBankService = new QuestionBankService(jdbc);
 
     @Test
     void rejectsQuestionWhenCorrectAnswerDoesNotMatchAnOption() {

@@ -22,11 +22,10 @@ public class QuestionBankService {
     private static final Set<String> STATUSES = Set.of("DRAFT", "PUBLISHED");
 
     private final JdbcTemplate jdbc;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public QuestionBankService(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public QuestionBankService(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        this.objectMapper = objectMapper;
     }
 
     public List<QuestionBankQuestion> listQuestions() {
