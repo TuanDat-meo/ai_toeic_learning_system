@@ -1046,7 +1046,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     const filledCount = questions.filter((q) => q.question.trim().length > 0).length || questions.length;
 
     // Chuẩn hóa và cập nhật tiêu đề thông minh theo Part mới
-    let updatedTitle = cardFormTitle.trim();
+    const updatedTitle = cardFormTitle.trim();
     const cleanBase = updatedTitle
       .replace(/\s*\((?:bản chi tiết đầy đủ\s*)?200\s*câu\)/gi, "")
       .replace(/\s*-\s*full\s*reading\s*(?:\([^\)]*\))?/gi, "")
@@ -2524,7 +2524,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                         <p className="text-xs font-bold text-amber-950 leading-snug">
                           Phát hiện bài đọc tương tự đã có sẵn:{" "}
                           <span className="font-extrabold text-blue-800 underline">
-                            "{existingDuplicate.title}"
+                            &quot;{existingDuplicate.title}&quot;
                           </span>{" "}
                           ({existingDuplicate.category.toUpperCase()} • {existingDuplicate.totalQuestions} câu)
                         </p>
