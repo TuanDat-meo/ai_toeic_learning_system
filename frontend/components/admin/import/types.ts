@@ -58,6 +58,11 @@ export interface GrammarNormalizedData {
   tipsAndTricks?: string;
   commonTraps?: string;
   traps?: string[];
+  examples?: {
+    sentence?: string;
+    translation?: string;
+    analysis?: string;
+  }[];
   summaryTable?: string;
   reference?: string;
   questions?: GradedQuestionItem[];

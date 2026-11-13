@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Search,
   CheckCircle2,
@@ -9,6 +9,9 @@ import {
   Eye,
   Sliders,
   Layers,
+  Plus,
+  Pencil,
+  Trash2,
   Download,
   RotateCcw,
   Info,
@@ -20,7 +23,6 @@ import {
   FileCode,
   FileSpreadsheet,
 } from "lucide-react";
-import { useEffect } from "react";
 import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/grammar/types";
 
 // ==========================================
@@ -28,14 +30,28 @@ import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/gramm
 // ==========================================
 interface QuestionBankViewProps {
   topics: GrammarTopicItem[];
+  onAddQuestion: () => void;
+  onEditQuestion: (topic: GrammarTopicItem, question: GrammarQuestionItem) => void;
+  onDeleteQuestion: (topic: GrammarTopicItem, question: GrammarQuestionItem) => void;
+}
+
+function getQuestionDifficulty(value?: string): "EASY" | "MEDIUM" | "HARD" {
+  const normalized = value?.toUpperCase().replace("_", "-");
+  if (normalized === "EASY" || normalized === "350-500") return "EASY";
+  if (normalized === "HARD" || normalized === "750+") return "HARD";
+  return "MEDIUM";
 }
 
 export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
   topics,
+  onAddQuestion,
+  onEditQuestion,
+  onDeleteQuestion,
 }) => {
   const [search, setSearch] = useState("");
   const [selectedPart, setSelectedPart] = useState<string>("ALL");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("ALL");
+  const [selectedTopicId, setSelectedTopicId] = useState<string>("ALL");
   const [previewQ, setPreviewQ] = useState<{ q: GrammarQuestionItem; topicTitle: string } | null>(null);
 
   // Flatten all questions with topic context
@@ -58,12 +74,14 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
         (topic.title || topic.titleVi || "").toLowerCase().includes(search.toLowerCase()) ||
         topic.code.toLowerCase().includes(search.toLowerCase());
 
-      const matchPart = selectedPart === "ALL" || q.part === selectedPart;
-      const matchDiff = selectedDifficulty === "ALL" || q.difficulty === selectedDifficulty;
+      const questionPart = q.part.toUpperCase().replace("_", " ");
+      const matchPart = selectedPart === "ALL" || questionPart === selectedPart.toUpperCase();
+      const matchDiff = selectedDifficulty === "ALL" || getQuestionDifficulty(q.difficulty) === selectedDifficulty;
+      const matchTopic = selectedTopicId === "ALL" || topic.id === selectedTopicId;
 
-      return matchSearch && matchPart && matchDiff;
+      return matchSearch && matchPart && matchDiff && matchTopic;
     });
-  }, [allQuestions, search, selectedPart, selectedDifficulty]);
+  }, [allQuestions, search, selectedPart, selectedDifficulty, selectedTopicId]);
 
   return (
     <div className="space-y-4">
@@ -82,13 +100,25 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
 
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
           <select
+            value={selectedTopicId}
+            onChange={(e) => setSelectedTopicId(e.target.value)}
+            className="max-w-56 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50"
+            aria-label="Lọc theo chuyên đề"
+          >
+            <option value="ALL">Tất cả chuyên đề</option>
+            {topics.map((topic) => (
+              <option key={topic.id} value={topic.id}>{topic.titleVi || topic.title}</option>
+            ))}
+          </select>
+          <select
             value={selectedPart}
             onChange={(e) => setSelectedPart(e.target.value)}
             className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
           >
             <option value="ALL">Tất cả phần thi</option>
-            <option value="Part 5">Part 5 (Incomplete Sentences)</option>
-            <option value="Part 6">Part 6 (Text Completion)</option>
+            <option value="PART 5">Part 5 (Incomplete Sentences)</option>
+            <option value="PART 6">Part 6 (Text Completion)</option>
+            <option value="PART 7">Part 7 (Reading Comprehension)</option>
           </select>
 
           <select
@@ -97,14 +127,25 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
             className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
           >
             <option value="ALL">Tất cả độ khó</option>
-            <option value="350-500">Cơ bản (350 - 500)</option>
-            <option value="500-750">Trung cấp (500 - 750)</option>
-            <option value="750+">Nâng cao (750+)</option>
+            <option value="EASY">Cơ bản</option>
+            <option value="MEDIUM">Trung cấp</option>
+            <option value="HARD">Nâng cao</option>
           </select>
 
-          <span className="text-xs font-bold text-slate-500 px-2">
-            Tổng: <strong>{filtered.length}</strong> / {allQuestions.length} câu
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500 px-2">
+              Hiển thị: <strong>{filtered.length}</strong> / {allQuestions.length} câu
+            </span>
+            <button
+              type="button"
+              onClick={onAddQuestion}
+              disabled={topics.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Thêm câu hỏi
+            </button>
+          </div>
         </div>
       </div>
 
@@ -169,14 +210,18 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span
                         className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold whitespace-nowrap inline-flex items-center ${
-                          q.difficulty === "750+"
+                          getQuestionDifficulty(q.difficulty) === "HARD"
                             ? "bg-purple-100 text-purple-800"
-                            : q.difficulty === "500-750"
+                            : getQuestionDifficulty(q.difficulty) === "MEDIUM"
                             ? "bg-blue-100 text-blue-800"
                             : "bg-emerald-100 text-emerald-800"
                         }`}
                       >
-                        {q.difficulty || "500-750"}
+                        {getQuestionDifficulty(q.difficulty) === "EASY"
+                          ? "Cơ bản"
+                          : getQuestionDifficulty(q.difficulty) === "HARD"
+                            ? "Nâng cao"
+                            : "Trung cấp"}
                       </span>
                     </td>
                     <td className="py-3 px-4 max-w-[200px]">
@@ -190,6 +235,7 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
                       <button
                         type="button"
                         onClick={() => setPreviewQ({ q, topicTitle: topic.title || topic.titleVi || "" })}
@@ -198,6 +244,25 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => onEditQuestion(topic, q)}
+                        className="p-1.5 rounded-xl border border-slate-200 hover:bg-amber-50 text-amber-700 transition"
+                        title="Chỉnh sửa câu hỏi"
+                        aria-label={`Chỉnh sửa câu hỏi ${q.id}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteQuestion(topic, q)}
+                        className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-600 transition"
+                        title="Xóa câu hỏi"
+                        aria-label={`Xóa câu hỏi ${q.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -214,7 +279,9 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-                  {previewQ.q.part} • {previewQ.q.difficulty || "500-750"}
+                  {previewQ.q.part} • {getQuestionDifficulty(previewQ.q.difficulty) === "EASY"
+                    ? "Cơ bản"
+                    : getQuestionDifficulty(previewQ.q.difficulty) === "HARD" ? "Nâng cao" : "Trung cấp"}
                 </span>
                 <h3 className="text-sm font-black text-slate-900 mt-1">
                   Thuộc chuyên đề: {previewQ.topicTitle}

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -24,13 +25,13 @@ class SubscriptionPlanAvailabilityTest {
     @Test
     void availablePlansAreOrderedByCategoryAndLimitedToFour() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any())).thenReturn(List.of());
         SubscriptionService service = new SubscriptionService(jdbc);
 
         service.listAvailablePlans();
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc).query(sql.capture(), any(RowMapper.class));
+        verify(jdbc).query(sql.capture(), ArgumentMatchers.<RowMapper<Object>>any());
         assertThat(sql.getValue())
                 .contains("WHEN 'FREE' THEN 1", "WHEN 'PRO' THEN 2", "WHEN 'PREMIUM' THEN 3",
                         "WHEN 'PROMOTION' THEN 4", "LIMIT 4");

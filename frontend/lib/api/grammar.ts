@@ -1,5 +1,5 @@
 import { apiRequest, writeAuthRequest } from './client';
-import type { GrammarTopicItem, GrammarQuestionItem } from '@/app/admin/content/grammar/types';
+import type { GrammarTopicItem, GrammarQuestionItem, GrammarCategory } from '@/app/admin/content/grammar/types';
 import { INITIAL_GRAMMAR_TOPICS } from '@/app/admin/content/grammar/mockData';
 
 interface RawGrammarTopic {
@@ -12,11 +12,21 @@ interface RawGrammarTopic {
   part?: string;
   targetScore?: string;
   status?: string;
+  archivedAt?: string;
   summary?: string;
   formula?: string;
+  sourceUrl?: string;
+  sourceNotes?: string;
+  grammarGroup?: string;
+  parentTopicId?: string;
+  toeicParts?: string[];
+  difficulty?: string;
+  theory?: Record<string, string>;
+  metadata?: GrammarTopicItem['metadata'];
+  wordFamilyWords?: GrammarTopicItem['wordFamilyWords'];
   signalWords?: string[];
   traps?: string[];
-  examples?: Array<{ sentence?: string; translation?: string; analysis?: string; en?: string; vi?: string; theory?: string; explanation?: string }>;
+  examples?: Array<{ sentence?: string; translation?: string; analysis?: string; focusWord?: string; difficulty?: string; en?: string; vi?: string; theory?: string; explanation?: string }>;
   questions?: any[];
   orderIndex?: number;
   totalQuestions?: number;
@@ -36,20 +46,22 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
       (m.title && titleVi && m.title.toLowerCase().includes(titleVi.toLowerCase()))
   );
 
-  const rawExamples = Array.isArray(t.examples) && t.examples.length > 0 ? t.examples : (mockFallback?.examples || []);
+  const rawExamples = Array.isArray(t.examples) ? t.examples : (mockFallback?.examples || []);
   let mappedExamples: GrammarTopicItem['examples'] = rawExamples
     .map((ex: any) => ({
       sentence: String(ex.sentence || ex.en || ex.theory || ''),
       translation: String(ex.translation || ex.vi || ''),
       analysis: ex.analysis || ex.explanation ? String(ex.analysis || ex.explanation) : undefined,
+      focusWord: ex.focusWord ? String(ex.focusWord) : undefined,
+      difficulty: ex.difficulty ? String(ex.difficulty) : undefined,
     }))
     .filter((ex) => ex.sentence && ex.sentence.trim().length > 0);
 
-  if (mappedExamples.length === 0 && mockFallback?.examples) {
+  if (!Array.isArray(t.examples) && mappedExamples.length === 0 && mockFallback?.examples) {
     mappedExamples = mockFallback.examples;
   }
 
-  const rawQuestions = Array.isArray(t.questions) && t.questions.length > 0 ? t.questions : (mockFallback?.questions || []);
+  const rawQuestions = Array.isArray(t.questions) ? t.questions : (mockFallback?.questions || []);
   let mappedQuestions: GrammarQuestionItem[] = rawQuestions.map((q: any) => ({
     id: String(q.id || Math.random()),
     part: q.part || t.part || mockFallback?.part || 'PART_5',
@@ -62,13 +74,13 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     difficulty: q.difficulty || q.levelShort || 'MEDIUM',
   }));
 
-  if (mappedQuestions.length === 0 && mockFallback?.questions) {
+  if (!Array.isArray(t.questions) && mappedQuestions.length === 0 && mockFallback?.questions) {
     mappedQuestions = mockFallback.questions;
   }
 
-  const formula = t.formula && t.formula.trim().length > 0 ? t.formula : (mockFallback?.formula || '');
-  const signalWords = Array.isArray(t.signalWords) && t.signalWords.length > 0 ? t.signalWords : (mockFallback?.signalWords || []);
-  const traps = Array.isArray(t.traps) && t.traps.length > 0 ? t.traps : (mockFallback?.traps || []);
+  const formula = t.formula ?? mockFallback?.formula ?? '';
+  const signalWords = Array.isArray(t.signalWords) ? t.signalWords : (mockFallback?.signalWords || []);
+  const traps = Array.isArray(t.traps) ? t.traps : (mockFallback?.traps || []);
 
   return {
     id: t.id,
@@ -78,48 +90,60 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     title: titleVi,
     englishTitle: titleEn,
     part: t.part || mockFallback?.part || 'Part 5',
-    targetScore: t.targetScore || mockFallback?.targetScore || '350-500',
+    targetScore: t.targetScore || mockFallback?.targetScore || '350_500',
     status: t.status || 'PUBLISHED',
-    summary: t.summary || mockFallback?.summary || '',
+    archivedAt: t.archivedAt,
+    summary: t.summary ?? mockFallback?.summary ?? '',
     formula,
+    sourceUrl: t.sourceUrl,
+    sourceNotes: t.sourceNotes || '',
+    grammarGroup: t.grammarGroup || 'other',
+    parentTopicId: t.parentTopicId,
+    toeicParts: Array.isArray(t.toeicParts) ? t.toeicParts : [],
+    difficulty: t.difficulty || 'MEDIUM',
+    theory: t.theory || {},
+    metadata: t.metadata || {},
+    wordFamilyWords: Array.isArray(t.wordFamilyWords) ? t.wordFamilyWords : [],
     signalWords,
     traps,
     examples: mappedExamples,
     questions: mappedQuestions,
     orderIndex: t.orderIndex ?? (mockFallback as any)?.orderIndex ?? 0,
-    totalQuestions: mappedQuestions.length || t.totalQuestions || 10,
+    totalQuestions: t.totalQuestions ?? mappedQuestions.length,
     completedQuestions: t.completedQuestions ?? 0,
     userStatus: t.userStatus ?? 'Chưa học',
   };
 }
 
-export async function getGrammarTopics(): Promise<GrammarTopicItem[]> {
+export async function getGrammarTopics(): Promise<GrammarTopicItem[] | null> {
   try {
     const list = await apiRequest<RawGrammarTopic[]>('/api/grammar/topics');
-    if (Array.isArray(list) && list.length > 0) {
+    if (Array.isArray(list)) {
       return list.map(mapGrammarTopic);
     }
   } catch {
-    // Return empty so caller uses mock data gracefully
+    return null;
   }
-  return [];
+  return null;
 }
 
-export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[]> {
+export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[] | null> {
   try {
     const list = await apiRequest<RawGrammarTopic[]>('/api/admin/grammar/topics');
-    if (Array.isArray(list) && list.length > 0) {
+    if (Array.isArray(list)) {
       return list.map(mapGrammarTopic);
     }
   } catch {
     try {
       const publicList = await apiRequest<RawGrammarTopic[]>('/api/grammar/topics');
-      if (Array.isArray(publicList) && publicList.length > 0) {
+      if (Array.isArray(publicList)) {
         return publicList.map(mapGrammarTopic);
       }
-    } catch {}
+    } catch {
+      return null;
+    }
   }
-  return [];
+  return null;
 }
 
 export async function getGrammarTopic(id: string): Promise<GrammarTopicItem> {
@@ -127,30 +151,8 @@ export async function getGrammarTopic(id: string): Promise<GrammarTopicItem> {
   return mapGrammarTopic(data);
 }
 
-export async function createGrammarTopic(topicData: Partial<GrammarTopicItem>): Promise<GrammarTopicItem> {
-  const payload = {
-    code: topicData.code,
-    titleVi: topicData.titleVi || topicData.title,
-    titleEn: topicData.titleEn || topicData.englishTitle,
-    title: topicData.titleVi || topicData.title,
-    englishTitle: topicData.titleEn || topicData.englishTitle,
-    part: topicData.part,
-    targetScore: topicData.targetScore,
-    status: topicData.status || 'DRAFT',
-    summary: topicData.summary,
-    formula: topicData.formula,
-    signalWords: topicData.signalWords,
-    traps: topicData.traps,
-    examples: topicData.examples,
-    questions: topicData.questions,
-    orderIndex: topicData.orderIndex,
-  };
-  const res = await writeAuthRequest<RawGrammarTopic>('POST', '/api/admin/grammar/topics', payload);
-  return mapGrammarTopic(res);
-}
-
-export async function updateGrammarTopic(id: string, topicData: Partial<GrammarTopicItem>): Promise<GrammarTopicItem> {
-  const payload = {
+function grammarTopicPayload(topicData: Partial<GrammarTopicItem>) {
+  return {
     code: topicData.code,
     titleVi: topicData.titleVi || topicData.title,
     titleEn: topicData.titleEn || topicData.englishTitle,
@@ -161,22 +163,207 @@ export async function updateGrammarTopic(id: string, topicData: Partial<GrammarT
     status: topicData.status,
     summary: topicData.summary,
     formula: topicData.formula,
+    sourceUrl: topicData.sourceUrl,
+    sourceNotes: topicData.sourceNotes,
+    grammarGroup: topicData.grammarGroup,
+    parentTopicId: topicData.parentTopicId,
+    toeicParts: topicData.toeicParts,
+    difficulty: topicData.difficulty,
+    theory: topicData.theory,
+    metadata: topicData.metadata,
+    wordFamilyWords: topicData.wordFamilyWords,
     signalWords: topicData.signalWords,
     traps: topicData.traps,
     examples: topicData.examples,
     questions: topicData.questions,
     orderIndex: topicData.orderIndex,
   };
+}
+
+export async function createGrammarTopic(topicData: Partial<GrammarTopicItem>): Promise<GrammarTopicItem> {
+  const payload = { ...grammarTopicPayload(topicData), status: topicData.status || 'DRAFT' };
+  const res = await writeAuthRequest<RawGrammarTopic>('POST', '/api/admin/grammar/topics', payload);
+  return mapGrammarTopic(res);
+}
+
+export async function createGrammarTopicWithNewParent(
+  parentTitleVi: string,
+  parentTitleEn: string,
+  childData: Partial<GrammarTopicItem>,
+): Promise<{ parent: GrammarTopicItem; child: GrammarTopicItem }> {
+  const response = await writeAuthRequest<{ parent: RawGrammarTopic; child: RawGrammarTopic }>(
+    'POST',
+    '/api/admin/grammar/topics/with-new-parent',
+    {
+      parentTitleVi,
+      parentTitleEn,
+      child: grammarTopicPayload(childData),
+    },
+  );
+  return {
+    parent: mapGrammarTopic(response.parent),
+    child: mapGrammarTopic(response.child),
+  };
+}
+
+export async function updateGrammarTopic(id: string, topicData: Partial<GrammarTopicItem>): Promise<GrammarTopicItem> {
+  const payload = grammarTopicPayload(topicData);
   const res = await writeAuthRequest<RawGrammarTopic>('PUT', `/api/admin/grammar/topics/${id}`, payload);
   return mapGrammarTopic(res);
 }
 
 export async function deleteGrammarTopic(id: string): Promise<void> {
-  await writeAuthRequest<void>('DELETE', `/api/admin/grammar/topics/${id}`);
+  await writeAuthRequest<void>('POST', `/api/admin/grammar/topics/${id}/delete`, {
+    childAction: 'NONE',
+    targetParentId: null,
+  });
+}
+
+export interface GrammarTopicLifecycleImpact {
+  topicId: string;
+  title: string;
+  status: string;
+  childCount: number;
+  questionCount: number;
+  exampleCount: number;
+  theoryFieldCount: number;
+  wordFamilyLinkCount: number;
+  toeicQuestionLinkCount: number;
+  userProgressCount: number;
+  learningPathLinkCount: number;
+  children: Array<{ id: string; code: string; title: string; status: string }>;
+}
+
+export interface DeleteGrammarTopicRequest {
+  childAction: 'NONE' | 'ROOTS' | 'MOVE';
+  targetParentId?: string | null;
+}
+
+export async function getGrammarTopicLifecycleImpact(id: string): Promise<GrammarTopicLifecycleImpact> {
+  return apiRequest<GrammarTopicLifecycleImpact>(`/api/admin/grammar/topics/${id}/lifecycle-impact`);
+}
+
+export async function deleteGrammarTopicWithChildren(
+  id: string,
+  request: DeleteGrammarTopicRequest,
+): Promise<void> {
+  await writeAuthRequest<void>('POST', `/api/admin/grammar/topics/${id}/delete`, request);
+}
+
+export async function archiveGrammarTopic(id: string): Promise<void> {
+  await writeAuthRequest<void>('POST', `/api/admin/grammar/topics/${id}/archive`);
+}
+
+export async function restoreGrammarTopic(id: string): Promise<GrammarTopicItem> {
+  const topic = await writeAuthRequest<RawGrammarTopic>('POST', `/api/admin/grammar/topics/${id}/restore`);
+  return mapGrammarTopic(topic);
 }
 
 export async function addGrammarQuestion(topicId: string, question: GrammarQuestionItem): Promise<GrammarTopicItem> {
   const res = await writeAuthRequest<RawGrammarTopic>('POST', `/api/admin/grammar/topics/${topicId}/questions`, question);
+  return mapGrammarTopic(res);
+}
+
+export interface GrammarContentSuggestion {
+  formula: string;
+  summary: string;
+  signalWords: string[];
+  traps: string[];
+  examples: GrammarTopicItem["examples"];
+  sourceUrl: string;
+  theory?: Record<string, string>;
+  groupValues?: Record<string, string>;
+}
+
+export async function generateGrammarContentSuggestion(input: {
+  titleVi: string;
+  titleEn: string;
+  part: string;
+  targetScore: string;
+  sourceUrl: string;
+  sourceNotes: string;
+  grammarGroup: string;
+  difficulty: string;
+  fieldDefinitions: GrammarCategory['fieldDefinitions'];
+  metadata: GrammarTopicItem['metadata'];
+}): Promise<GrammarContentSuggestion> {
+  return writeAuthRequest<GrammarContentSuggestion>('POST', '/api/admin/grammar/suggestions', input);
+}
+
+export async function getGrammarCategories(): Promise<GrammarCategory[]> {
+  const categories = await apiRequest<Array<{
+    code: string;
+    name: string;
+    fieldDefinitions?: GrammarCategory['fieldDefinitions'];
+    system?: boolean;
+  }>>('/api/admin/grammar/categories');
+  return categories.map((category) => ({
+    code: category.code,
+    name: category.name,
+    fieldDefinitions: category.fieldDefinitions || [],
+    system: category.system ?? false,
+  }));
+}
+
+export async function saveGrammarCategory(category: {
+  code: string;
+  name: string;
+  fieldDefinitions: GrammarCategory['fieldDefinitions'];
+}): Promise<GrammarCategory> {
+  const result = await writeAuthRequest<{
+    code: string;
+    name: string;
+    fieldDefinitions?: GrammarCategory['fieldDefinitions'];
+    system?: boolean;
+  }>('POST', '/api/admin/grammar/categories', category);
+  return {
+    code: result.code,
+    name: result.name,
+    fieldDefinitions: result.fieldDefinitions || [],
+    system: result.system ?? false,
+  };
+}
+
+export async function updateGrammarCategory(
+  code: string,
+  category: { name: string; fieldDefinitions: GrammarCategory['fieldDefinitions'] },
+): Promise<GrammarCategory> {
+  const result = await writeAuthRequest<{
+    code: string;
+    name: string;
+    fieldDefinitions?: GrammarCategory['fieldDefinitions'];
+    system?: boolean;
+  }>('PUT', `/api/admin/grammar/categories/${encodeURIComponent(code)}`, category);
+  return {
+    code: result.code,
+    name: result.name,
+    fieldDefinitions: result.fieldDefinitions || [],
+    system: result.system ?? false,
+  };
+}
+
+export async function deleteGrammarCategory(code: string): Promise<void> {
+  await writeAuthRequest<void>('DELETE', `/api/admin/grammar/categories/${encodeURIComponent(code)}`);
+}
+
+export async function updateGrammarQuestion(
+  topicId: string,
+  questionId: string,
+  question: GrammarQuestionItem
+): Promise<GrammarTopicItem> {
+  const res = await writeAuthRequest<RawGrammarTopic>(
+    'PUT',
+    `/api/admin/grammar/topics/${topicId}/questions/${encodeURIComponent(questionId)}`,
+    question
+  );
+  return mapGrammarTopic(res);
+}
+
+export async function deleteGrammarQuestion(topicId: string, questionId: string): Promise<GrammarTopicItem> {
+  const res = await writeAuthRequest<RawGrammarTopic>(
+    'DELETE',
+    `/api/admin/grammar/topics/${topicId}/questions/${encodeURIComponent(questionId)}`
+  );
   return mapGrammarTopic(res);
 }
 

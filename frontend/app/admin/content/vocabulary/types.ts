@@ -41,6 +41,7 @@ export interface VocabularySense {
   subCategory?: string;
   meaning: string;
   example?: string;
+  exampleMeaning?: string;
   synonyms?: string;
   antonyms?: string;
 }

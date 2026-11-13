@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -31,7 +32,8 @@ class EntitlementServiceTest {
                  "READING_PRACTICE":{"enabled":true,"limit":5,"unit":"sessions","period":"WEEK","config":{}}}
                 """;
 
-        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenAnswer(invocation -> {
             String sql = invocation.getArgument(0);
             RowMapper<?> mapper = invocation.getArgument(1);
             ResultSet row = mock(ResultSet.class);
@@ -50,7 +52,7 @@ class EntitlementServiceTest {
             }
             return List.of(mapper.mapRow(row, 0));
         });
-        when(jdbc.query(anyString(), any(RowMapper.class))).thenAnswer(invocation -> {
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any())).thenAnswer(invocation -> {
             RowMapper<?> mapper = invocation.getArgument(1);
             ResultSet listening = mock(ResultSet.class);
             when(listening.getString("feature_key")).thenReturn("LISTENING");
@@ -62,16 +64,17 @@ class EntitlementServiceTest {
             when(reading.getString("parent_feature_key")).thenReturn("READING");
             return List.of(mapper.mapRow(listening, 0), mapper.mapRow(reading, 1));
         });
-        when(jdbc.query(anyString(), any(ResultSetExtractor.class), any(Object[].class))).thenReturn(2L);
+        when(jdbc.query(anyString(), ArgumentMatchers.<ResultSetExtractor<Long>>any(), any(Object[].class)))
+                .thenReturn(2L);
 
         List<EntitlementService.FeatureQuotaUsage> usage =
                 new EntitlementService(jdbc).listUsage(UUID.randomUUID());
 
-        assertThat(usage).extracting(EntitlementService.FeatureQuotaUsage::featureKey)
+        assertThat(usage).extracting(usageEntry -> java.util.Objects.requireNonNull(usageEntry).featureKey())
                 .containsExactly("LISTENING", "READING_PRACTICE");
-        assertThat(usage).extracting(EntitlementService.FeatureQuotaUsage::used)
+        assertThat(usage).extracting(usageEntry -> java.util.Objects.requireNonNull(usageEntry).used())
                 .containsExactly(2L, 2L);
-        assertThat(usage).extracting(EntitlementService.FeatureQuotaUsage::limit)
+        assertThat(usage).extracting(usageEntry -> java.util.Objects.requireNonNull(usageEntry).limit())
                 .containsExactly(10L, 5L);
     }
 
@@ -79,7 +82,8 @@ class EntitlementServiceTest {
     void refusesFeaturesThatAreNotAvailableEvenWhenThePlanEntitlesThem() throws Exception {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         UUID subscriptionId = UUID.randomUUID();
-        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenAnswer(invocation -> {
             String sql = invocation.getArgument(0);
             RowMapper<?> mapper = invocation.getArgument(1);
             ResultSet row = mock(ResultSet.class);
@@ -106,7 +110,8 @@ class EntitlementServiceTest {
     void childFeatureRequiresItsParentEntitlement() throws Exception {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         UUID subscriptionId = UUID.randomUUID();
-        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenAnswer(invocation -> {
             String sql = invocation.getArgument(0);
             String requestedKey = sql.contains("FROM learning_feature_catalog")
                     ? invocation.getArgument(2).toString() : "";
@@ -136,7 +141,8 @@ class EntitlementServiceTest {
     void childToggleConsumesItsMeteredParentQuota() throws Exception {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         UUID subscriptionId = UUID.randomUUID();
-        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+        when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any(), any(Object[].class)))
+                .thenAnswer(invocation -> {
             String sql = invocation.getArgument(0);
             RowMapper<?> mapper = invocation.getArgument(1);
             ResultSet row = mock(ResultSet.class);

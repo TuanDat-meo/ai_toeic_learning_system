@@ -44,8 +44,6 @@ import {
   normalizeReadingCardTitle,
 } from "./readingStorage";
 
-export { LOCAL_READING_CARDS_KEY };
-
 export default function ReadingLearningPage() {
   const [cards, setCards] = useState<ExerciseCardData[]>(INITIAL_CARDS);
   const [activeMainTab, setActiveMainTab] = useState<ReadingAdminTab>("reading_units");

@@ -138,6 +138,17 @@ public class ContentImportController {
         return result;
     }
 
+    @PostMapping("/batches/{batchId}/revalidate")
+    ContentImportService.BatchDetails revalidateBatch(@PathVariable UUID batchId, Authentication authentication,
+            HttpServletRequest servletRequest) {
+        ManagedUser actor = userAccountService.findManagedUser(authentication.getName());
+        ContentImportService.BatchDetails result = importService.revalidateBatch(batchId);
+        auditLogService.record(actor.id(), "REVALIDATE_IMPORT", "IMPORT_BATCH", batchId,
+                "Kiểm tra lại lô import " + result.batch().fileName() + ".",
+                servletRequest.getRemoteAddr());
+        return result;
+    }
+
     @PutMapping("/batches/{batchId}/items/{itemId}/duplicate-resolution")
     ContentImportService.BatchDetails resolveVocabularyDuplicate(@PathVariable UUID batchId,
             @PathVariable UUID itemId, @RequestBody Map<String, String> payload,

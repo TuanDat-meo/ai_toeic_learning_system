@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import com.toeic.ai.toeic_api.billing.SubscriptionService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -45,7 +46,7 @@ class UserAccountServiceGoogleSignupTest {
                 "STUDENT", "ACTIVE", Instant.now());
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq("student@example.com"))).thenReturn(0);
         when(jdbcTemplate.queryForObject(contains("SELECT id, email, full_name, role, status"),
-                any(RowMapper.class), eq("student@example.com"))).thenReturn(user);
+                ArgumentMatchers.<RowMapper<Object>>any(), eq("student@example.com"))).thenReturn(user);
         when(passwordEncoder.encode("password")).thenReturn("hashed-password");
         when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
         UserAccountService service = new UserAccountService(jdbcTemplate, passwordEncoder, subscriptionService);
