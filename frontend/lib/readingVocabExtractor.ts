@@ -757,3 +757,125 @@ export function enrichInlineParsedVocab(raw: VocabItem): VocabItem {
     wordFamily: raw.wordFamily || curated?.wordFamily,
   };
 }
+
+export function normalizeVocabItem(raw: unknown): VocabItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const v = raw as Record<string, unknown>;
+  const word = String(v.word || v.term || "").trim();
+  if (!word) return null;
+
+  const rawPos = String(v.pos || v.partOfSpeech || v.type || "n");
+  const pos = normalizeReadingPos(rawPos);
+
+  let example: { en: string; vi: string } | undefined = undefined;
+  if (v.example && typeof v.example === "object") {
+    const ex = v.example as Record<string, unknown>;
+    example = {
+      en: String(ex.en || ex.exampleEn || "").trim(),
+      vi: String(ex.vi || ex.exampleVi || "").trim(),
+    };
+  } else if (v.exampleEn || v.exampleVi) {
+    example = {
+      en: String(v.exampleEn || "").trim(),
+      vi: String(v.exampleVi || "").trim(),
+    };
+  } else if (typeof v.example === "string" && v.example.trim()) {
+    example = { en: v.example.trim(), vi: "" };
+  }
+
+  const normalizePairs = (arr: unknown): { en: string; vi: string }[] | undefined => {
+    if (!Array.isArray(arr)) return undefined;
+    const res = arr
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const i = item as Record<string, unknown>;
+        const en = String(i.en || i.phrase || i.word || "").trim();
+        const vi = String(i.vi || i.meaning || "").trim();
+        return en ? { en, vi } : null;
+      })
+      .filter(Boolean) as { en: string; vi: string }[];
+    return res.length > 0 ? res : undefined;
+  };
+
+  const normalizeWordFamily = (arr: unknown): { word: string; pos: string; meaning: string }[] | undefined => {
+    if (!Array.isArray(arr)) return undefined;
+    const res = arr
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const i = item as Record<string, unknown>;
+        const w = String(i.word || "").trim();
+        if (!w) return null;
+        return {
+          word: w,
+          pos: String(i.pos || "n").trim(),
+          meaning: String(i.meaning || "").trim(),
+        };
+      })
+      .filter(Boolean) as { word: string; pos: string; meaning: string }[];
+    return res.length > 0 ? res : undefined;
+  };
+
+  const curated = lookupCuratedSync(word);
+  const rawIpa = String(v.ipa || v.phonetic || v.pronunciation || "").trim();
+  const rawMeaning = String(v.meaning || v.definition || v.meaningVi || v.translation || "").trim();
+
+  return {
+    word,
+    pos,
+    level: String(v.level || curated?.level || "B2"),
+    ipa: rawIpa || curated?.ipa || "",
+    meaning: rawMeaning || curated?.meaning || "Từ vựng trọng tâm TOEIC",
+    example: example?.en ? example : curated?.example,
+    collocations: normalizePairs(v.collocations) || curated?.collocations,
+    synonyms: normalizePairs(v.synonyms) || curated?.synonyms,
+    antonyms: normalizePairs(v.antonyms),
+    wordFamily: normalizeWordFamily(v.wordFamily) || curated?.wordFamily,
+  };
+}
+
+export function buildVocabItemFromCandidate(cand: ReadingVocabCandidate): VocabItem {
+  const detail = lookupWordDetail(cand.word, {
+    pos: cand.previewPos,
+    meaning: cand.previewMeaning,
+    ipa: cand.previewIpa,
+    exampleEn: cand.contextSentence,
+  });
+
+  return {
+    word: detail.word || cand.word,
+    pos: normalizeReadingPos(detail.pos || cand.previewPos || "n"),
+    level: detail.tag || "B2",
+    ipa: detail.usIpa || detail.ukIpa || cand.previewIpa || "",
+    meaning: detail.contextMeaning || cand.previewMeaning || "Từ vựng trọng tâm bài đọc",
+    example: detail.exampleEn
+      ? { en: detail.exampleEn, vi: detail.exampleVi || "" }
+      : cand.contextSentence
+      ? { en: cand.contextSentence, vi: "" }
+      : undefined,
+    collocations: detail.collocations?.length
+      ? detail.collocations.map((c) => ({ en: c.phrase, vi: c.meaning }))
+      : undefined,
+    synonyms: detail.synonyms?.length
+      ? detail.synonyms.map((s) => ({ en: s.word, vi: s.meaning }))
+      : undefined,
+    antonyms: detail.antonyms?.length
+      ? detail.antonyms.map((a) => ({ en: a.word, vi: a.meaning }))
+      : undefined,
+    wordFamily: detail.wordFamily,
+  };
+}
+
+export function autoExtractVocabListForReading(input: {
+  passageText?: string;
+  passages?: ReadingSubPassageLike[];
+  questions?: ReadingQuestionLike[];
+  maxCandidates?: number;
+}): VocabItem[] {
+  const candidates = extractReadingVocabCandidates({
+    passageText: input.passageText,
+    passages: input.passages,
+    questions: input.questions,
+    maxCandidates: input.maxCandidates || 40,
+  });
+  return candidates.map(buildVocabItemFromCandidate);
+}

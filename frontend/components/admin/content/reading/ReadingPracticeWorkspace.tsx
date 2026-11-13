@@ -6,6 +6,7 @@ import { getPassageFingerprint, isPlaceholderPassageText } from "@/lib/readingPa
 
 import React, { useState, useMemo, useEffect } from "react";
 import { ExerciseCardData, ReadingSubPassage, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
+import { normalizeOptions } from "@/lib/api/reading";
 import {
   ArrowLeft,
   Languages,
@@ -1616,26 +1617,28 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                   {/* QUESTION TITLE (Bỏ đoạn hướng dẫn câu hỏi đối với Part 6) */}
                   {card.category !== "part6" &&
                     !card.tag?.toLowerCase().includes("part 6") &&
-                    !q.question.includes("điền vào vị trí") && (
+                    !(q.question || (q as any).questionEn || "").includes("điền vào vị trí") && (
                       <div className="text-base font-extrabold text-slate-900 leading-relaxed select-text">
-                        {q.question}
+                        {q.question || (q as any).questionEn || (q as any).questionText || ""}
                       </div>
                     )}
 
                   {/* BILINGUAL SENTENCE TRANSLATION (Chỉ cho Part 5 không có bài đọc) */}
-                  {!currentGroup.passageText && !card.passageText && (isCardChecked || isBilingual) && q.bilingual && (
+                  {!currentGroup.passageText && !card.passageText && (isCardChecked || isBilingual) && (q.bilingual || (q as any).questionVi) && (
                     <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 shadow-xs space-y-1.5">
                       <div className="font-bold text-blue-700 flex items-center gap-1.5 text-xs sm:text-sm">
                         <Languages className="w-4 h-4 text-blue-600" />
                         <span>Bản dịch câu hỏi:</span>
                       </div>
-                      <p className="text-blue-950 font-medium text-sm sm:text-base leading-relaxed">{q.bilingual}</p>
+                      <p className="text-blue-950 font-medium text-sm sm:text-base leading-relaxed">
+                        {q.bilingual || (q as any).questionVi || (typeof (q as any).translation === "string" ? (q as any).translation : (q as any).translation?.questionVi)}
+                      </p>
                     </div>
                   )}
 
                   {/* OPTIONS LIST */}
                   <div className="space-y-3">
-                    {q.options.map((optVal, optIdx) => {
+                    {normalizeOptions(q.options).map((optVal, optIdx) => {
                       const optLetter = String.fromCharCode(65 + optIdx);
                       const isChosen = userChosen === optIdx;
                       const isCorrectOpt = optIdx === q.correctIndex;
