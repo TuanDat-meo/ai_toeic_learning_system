@@ -5,6 +5,7 @@ import java.util.List;
 
 public record ListeningDictationCard(
         String id,
+        String title,
         int testNumber,
         String part,
         String year,

@@ -9,8 +9,6 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -29,7 +27,7 @@ public class ListeningService {
 
     public List<ListeningDictationCard> listCards(UUID userId) {
         String sql = """
-                SELECT c.id, c.test_number, c.part, c.year, c.total_questions,
+                SELECT c.id, c.title, c.test_number, c.part, c.year, c.total_questions,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
                        COALESCE(p.status, c.status) AS status,
                        c.created_at, c.updated_at
@@ -38,24 +36,26 @@ public class ListeningService {
                 ORDER BY c.test_number ASC, c.part ASC
                 """;
 
-        return jdbc.query(sql, (rs, rowNum) -> new ListeningDictationCard(
+        List<ListeningDictationCard> cards = jdbc.query(sql, (rs, rowNum) -> new ListeningDictationCard(
                 rs.getString("id"),
+                rs.getString("title"),
                 rs.getInt("test_number"),
                 rs.getString("part"),
                 rs.getString("year"),
                 rs.getInt("total_questions"),
                 rs.getInt("completed_questions"),
-                rs.getString("status"),
+                displayProgressStatus(rs.getString("status")),
                 0,
                 Collections.emptyList(),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()
         ), userId);
+        return cards.stream().map(card -> withQuestions(card, getQuestionsForCard(card.id()))).toList();
     }
 
     public ListeningDictationCard getCard(String cardId, UUID userId) {
         String sql = """
-                SELECT c.id, c.test_number, c.part, c.year, c.total_questions,
+                SELECT c.id, c.title, c.test_number, c.part, c.year, c.total_questions,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
                        COALESCE(p.status, c.status) AS status,
                        c.created_at, c.updated_at
@@ -66,12 +66,13 @@ public class ListeningService {
 
         List<ListeningDictationCard> cards = jdbc.query(sql, (rs, rowNum) -> new ListeningDictationCard(
                 rs.getString("id"),
+                rs.getString("title"),
                 rs.getInt("test_number"),
                 rs.getString("part"),
                 rs.getString("year"),
                 rs.getInt("total_questions"),
                 rs.getInt("completed_questions"),
-                rs.getString("status"),
+                displayProgressStatus(rs.getString("status")),
                 0,
                 Collections.emptyList(),
                 rs.getTimestamp("created_at").toInstant(),
@@ -85,19 +86,206 @@ public class ListeningService {
         ListeningDictationCard card = cards.get(0);
         List<ListeningDictationQuestion> questions = getQuestionsForCard(cardId);
 
-        return new ListeningDictationCard(
-                card.id(),
-                card.testNumber(),
-                card.part(),
-                card.year(),
-                card.totalQuestions(),
-                card.completedQuestions(),
-                card.status(),
+        return withQuestions(card, questions);
+    }
+
+    @Transactional
+    public ListeningDictationCard createCard(ListeningCardRequest request) {
+        validateCardRequest(request);
+        String id = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO listening_dictation_cards (id, title, test_number, part, year, total_questions, status)
+                VALUES (?, ?, ?, ?, ?, ?, 'NOT_STARTED')
+                """, id, request.title().trim(), request.testNumber(), request.part(), request.year(),
+                request.totalQuestions());
+        savePrimaryQuestion(id, request);
+        return getCard(id, null);
+    }
+
+    @Transactional
+    public ListeningDictationCard updateCard(String id, ListeningCardRequest request) {
+        validateCardRequest(request);
+        int updated = jdbc.update("""
+                UPDATE listening_dictation_cards
+                SET title = ?, test_number = ?, part = ?, year = ?, total_questions = ?, updated_at = now()
+                WHERE id = ?
+                """, request.title().trim(), request.testNumber(), request.part(), request.year(),
+                request.totalQuestions(), id);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bài nghe: " + id);
+        }
+        savePrimaryQuestion(id, request);
+        return getCard(id, null);
+    }
+
+    @Transactional
+    public void deleteCard(String id) {
+        if (jdbc.update("DELETE FROM listening_dictation_cards WHERE id = ?", id) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bài nghe: " + id);
+        }
+    }
+
+    private void savePrimaryQuestion(String cardId, ListeningCardRequest request) {
+        List<Long> questionIds = jdbc.query(
+                "SELECT id FROM listening_dictation_questions WHERE card_id = ? ORDER BY question_index ASC",
+                (rs, rowNum) -> rs.getLong(1), cardId);
+        if (questionIds.isEmpty()) {
+            jdbc.update("""
+                    INSERT INTO listening_dictation_questions
+                        (card_id, question_index, part, audio_url, full_transcript, vietnamese_translation)
+                    VALUES (?, 0, ?, ?, ?, ?)
+                    """, cardId, request.part(), request.audioUrl(), request.fullTranscript(),
+                    request.vietnameseTranslation());
+        } else {
+            jdbc.update("""
+                    UPDATE listening_dictation_questions
+                    SET part = ?, audio_url = ?, full_transcript = ?, vietnamese_translation = ?, updated_at = now()
+                    WHERE id = ?
+                    """, request.part(), request.audioUrl(), request.fullTranscript(),
+                    request.vietnameseTranslation(), questionIds.get(0));
+        }
+    }
+
+    public List<ListeningUnit> listUnits() {
+        return jdbc.query("""
+                SELECT id, part, unit_type, title, target_level, total_questions, theory_summary,
+                       rules::text AS rules_json, vocab_bag::text AS vocab_bag_json,
+                       questions::text AS questions_json, status
+                FROM listening_part_units
+                ORDER BY part ASC, unit_type ASC, created_at DESC
+                """, this::mapUnit);
+    }
+
+    @Transactional
+    public ListeningUnit createUnit(ListeningUnitRequest request) {
+        validateUnitRequest(request);
+        String id = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO listening_part_units
+                    (id, part, unit_type, title, target_level, total_questions, theory_summary, rules, vocab_bag, questions, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, 'PUBLISHED')
+                """, id, request.part(), request.type(), request.title().trim(), request.targetLevel(),
+                request.totalQuestions(), valueOrEmpty(request.theorySummary()), toJson(request.rules()),
+                toJson(request.vocabBag()), toJson(request.questions()));
+        return getUnit(id);
+    }
+
+    @Transactional
+    public ListeningUnit updateUnit(String id, ListeningUnitRequest request) {
+        validateUnitRequest(request);
+        int updated = jdbc.update("""
+                UPDATE listening_part_units
+                SET part = ?, unit_type = ?, title = ?, target_level = ?, total_questions = ?,
+                    theory_summary = ?, rules = ?::jsonb, vocab_bag = ?::jsonb,
+                    questions = ?::jsonb, updated_at = now()
+                WHERE id = ?
+                """, request.part(), request.type(), request.title().trim(), request.targetLevel(),
+                request.totalQuestions(), valueOrEmpty(request.theorySummary()), toJson(request.rules()),
+                toJson(request.vocabBag()), toJson(request.questions()), id);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm nghe: " + id);
+        }
+        return getUnit(id);
+    }
+
+    @Transactional
+    public void deleteUnit(String id) {
+        if (jdbc.update("DELETE FROM listening_part_units WHERE id = ?", id) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm nghe: " + id);
+        }
+    }
+
+    private ListeningUnit getUnit(String id) {
+        List<ListeningUnit> units = jdbc.query("""
+                SELECT id, part, unit_type, title, target_level, total_questions, theory_summary,
+                       rules::text AS rules_json, vocab_bag::text AS vocab_bag_json,
+                       questions::text AS questions_json, status
+                FROM listening_part_units WHERE id = ?
+                """, this::mapUnit, id);
+        if (units.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm nghe: " + id);
+        }
+        return units.get(0);
+    }
+
+    private ListeningUnit mapUnit(ResultSet rs, int rowNum) throws SQLException {
+        return new ListeningUnit(
+                rs.getString("id"),
+                rs.getString("part"),
+                rs.getString("unit_type"),
+                rs.getString("title"),
+                rs.getString("target_level"),
+                rs.getInt("total_questions"),
                 0,
-                questions,
-                card.createdAt(),
-                card.updatedAt()
-        );
+                0,
+                0,
+                "Chưa luyện tập",
+                rs.getString("theory_summary"),
+                parseStringList(rs.getString("rules_json")),
+                parseList(rs.getString("vocab_bag_json")),
+                parseList(rs.getString("questions_json")),
+                rs.getString("status"));
+    }
+
+    private void validateCardRequest(ListeningCardRequest request) {
+        if (request == null || request.testNumber() < 1 || request.totalQuestions() < 1
+                || !isListeningPart(request.part()) || isBlank(request.year()) || isBlank(request.title())
+                || isBlank(request.audioUrl()) || isBlank(request.fullTranscript())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thông tin bài nghe chưa hợp lệ.");
+        }
+    }
+
+    private void validateUnitRequest(ListeningUnitRequest request) {
+        if (request == null || !isListeningPart(request.part())
+                || !List.of("level", "category").contains(request.type())
+                || isBlank(request.title()) || request.totalQuestions() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thông tin chủ điểm nghe chưa hợp lệ.");
+        }
+    }
+
+    private boolean isListeningPart(String part) {
+        return List.of("Part 1", "Part 2", "Part 3", "Part 4").contains(part);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String valueOrEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value == null ? Collections.emptyList() : value);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Nội dung chủ điểm nghe không hợp lệ.", e);
+        }
+    }
+
+    private List<String> parseStringList(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyList();
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private String displayProgressStatus(String status) {
+        return switch (status == null ? "" : status) {
+            case "IN_PROGRESS" -> "Đang luyện tập";
+            case "COMPLETED" -> "Đã hoàn thành";
+            case "NOT_STARTED" -> "Chưa bắt đầu";
+            default -> status;
+        };
+    }
+
+    private ListeningDictationCard withQuestions(ListeningDictationCard card,
+            List<ListeningDictationQuestion> questions) {
+        return new ListeningDictationCard(card.id(), card.title(), card.testNumber(), card.part(), card.year(),
+                card.totalQuestions(), card.completedQuestions(), card.status(), card.progressPercent(),
+                questions, card.createdAt(), card.updatedAt());
     }
 
     public List<ListeningDictationQuestion> getQuestionsForCard(String cardId) {
@@ -163,58 +351,6 @@ public class ListeningService {
                 status, req.lastQuestionIndex());
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Transactional
-    public void seedInitialDataIfEmpty() {
-        Integer count = jdbc.queryForObject("SELECT count(*) FROM listening_dictation_cards", Integer.class);
-        if (count != null && count > 0) {
-            return;
-        }
-
-        // Tạo thẻ mẫu cho Test 1 Part 1
-        jdbc.update("""
-                INSERT INTO listening_dictation_cards (id, test_number, part, year, total_questions, status)
-                VALUES ('t1-p1', 1, 'Part 1', '2024', 6, 'NOT_STARTED'),
-                       ('t1-p2', 1, 'Part 2', '2024', 25, 'NOT_STARTED'),
-                       ('t1-p3', 1, 'Part 3', '2024', 39, 'NOT_STARTED'),
-                       ('t1-p4', 1, 'Part 4', '2024', 30, 'NOT_STARTED'),
-                       ('t2-p1', 2, 'Part 1', '2024', 6, 'NOT_STARTED')
-                """);
-
-        // Seed các câu hỏi mẫu cho t1-p1
-        String optionsQ1 = "{\"A\":\"He's standing on a rug.\",\"B\":\"He's turning a doorknob.\",\"C\":\"He's climbing a ladder.\",\"D\":\"He's painting a wall.\"}";
-        String optTransQ1 = "{\"A\":\"Anh ấy đang đứng trên một tấm thảm.\",\"B\":\"Anh ấy đang vặn nắm cửa.\",\"C\":\"Anh ấy đang leo lên một chiếc thang.\",\"D\":\"Anh ấy đang sơn một bức tường.\"}";
-        String vocabQ1 = "[{\"word\":\"climb\",\"pos\":\"v\",\"level\":\"B1\",\"ipa\":\"/klaɪm/\",\"meaning\":\"leo, trèo\",\"example\":{\"en\":\"He's climbing a ladder.\",\"vi\":\"Anh ấy đang leo lên chiếc thang.\"}},{\"word\":\"ladder\",\"pos\":\"n\",\"level\":\"B1\",\"ipa\":\"/ˈlædər/\",\"meaning\":\"cái thang\",\"example\":{\"en\":\"The ladder is wooden.\",\"vi\":\"Chiếc thang làm bằng gỗ.\"}},{\"word\":\"rug\",\"pos\":\"n\",\"level\":\"B2\",\"ipa\":\"/rʌɡ/\",\"meaning\":\"tấm thảm\"}]";
-
-        jdbc.update("""
-                INSERT INTO listening_dictation_questions (card_id, question_index, part, audio_url, image_url,
-                    full_transcript, vietnamese_translation, options, option_translations, correct_answer, explanation, trap_note, vocab_list)
-                VALUES ('t1-p1', 0, 'Part 1', '/ets_2024_lc/audio/part1_test1.mp3',
-                    'https://images.unsplash.com/photo-1541888946425-d0fbb186156f?auto=format&fit=crop&w=800&q=80',
-                    'He is climbing a ladder.', 'Anh ấy đang leo lên một chiếc thang.',
-                    ?::jsonb, ?::jsonb, 'C',
-                    'Động từ climbing a ladder mô tả chính xác hành động người đàn ông đang bước lên các bậc thang.',
-                    'Quan sát kỹ: Người đàn ông không cầm chổi sơn tường hay đứng trên thảm.',
-                    ?::jsonb)
-                """, optionsQ1, optTransQ1, vocabQ1);
-
-        String optionsQ2 = "{\"A\":\"Cardboard boxes are stacked neatly in the distribution warehouse.\",\"B\":\"Workers are loading cartons onto a delivery truck.\",\"C\":\"The storage shelves are completely empty.\",\"D\":\"A forklift is moving pallets across the factory.\"}";
-        String optTransQ2 = "{\"A\":\"Các thùng carton đang được xếp ngay ngắn trong kho phân phối.\",\"B\":\"Công nhân đang bốc xếp các thùng lên xe tải chở hàng.\",\"C\":\"Các kệ để đồ trong kho hoàn toàn trống trơn.\",\"D\":\"Xe nâng đang di chuyển các tấm nâng hàng qua nhà máy.\"}";
-        String vocabQ2 = "[{\"word\":\"cardboard\",\"pos\":\"n\",\"level\":\"B1\",\"ipa\":\"/ˈkɑːrdbɔːrd/\",\"meaning\":\"bìa các-tông\"},{\"word\":\"stack\",\"pos\":\"v\",\"level\":\"B2\",\"ipa\":\"/stæk/\",\"meaning\":\"chồng, xếp chồng lên nhau\"},{\"word\":\"warehouse\",\"pos\":\"n\",\"level\":\"B2\",\"ipa\":\"/ˈwerhaʊs/\",\"meaning\":\"kho chứa hàng\"}]";
-
-        jdbc.update("""
-                INSERT INTO listening_dictation_questions (card_id, question_index, part, audio_url, image_url,
-                    full_transcript, vietnamese_translation, options, option_translations, correct_answer, explanation, trap_note, vocab_list)
-                VALUES ('t1-p1', 1, 'Part 1', '/ets_2024_lc/audio/part1_test1.mp3',
-                    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=80',
-                    'Cardboard boxes are stacked neatly in the distribution warehouse.', 'Các thùng carton đang được xếp ngay ngắn trong kho phân phối.',
-                    ?::jsonb, ?::jsonb, 'A',
-                    'Chủ ngữ boxes kết hợp với cụm stacked neatly (xếp ngay ngắn) mô tả đúng thực tế các hộp hàng trong kho.',
-                    'Không có bóng dáng công nhân nào đang bốc vác hay xe nâng hàng hoạt động trong ảnh.',
-                    ?::jsonb)
-                """, optionsQ2, optTransQ2, vocabQ2);
-    }
-
     private Map<String, String> parseMap(String json) {
         if (json == null || json.isBlank()) return Collections.emptyMap();
         try {
@@ -232,4 +368,16 @@ public class ListeningService {
             return Collections.emptyList();
         }
     }
+
+    public record ListeningCardRequest(String title, int testNumber, String part, String year, int totalQuestions,
+            String audioUrl, String fullTranscript, String vietnameseTranslation) {}
+
+    public record ListeningUnitRequest(String part, String type, String title, String targetLevel,
+            int totalQuestions, String theorySummary, List<String> rules,
+            List<Map<String, Object>> vocabBag, List<Map<String, Object>> questions) {}
+
+    public record ListeningUnit(String id, String part, String type, String title, String targetLevel,
+            int totalQuestions, int completedQuestions, int correctCount, int wrongCount, String status,
+            String theorySummary, List<String> rules, List<Map<String, Object>> vocabBag,
+            List<Map<String, Object>> questions, String contentStatus) {}
 }

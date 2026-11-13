@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { BookOpen, Layers } from "lucide-react";
 import { VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
-import { INITIAL_TESTS, VOCAB_AUDIO_MAP } from "@/app/admin/content/vocabulary/mockData";
 import { getVocabularySets } from "@/lib/api/vocabulary";
 import { StudentVocabularyGrid } from "@/components/student/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/student/vocabulary/StudentVocabularyModals";
@@ -13,8 +12,9 @@ import { getItemProgress } from "@/lib/practiceProgress";
 
 export default function StudentVocabularyPage() {
   const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
-  const [tests, setTests] = useState<VocabularyTestSet[]>(INITIAL_TESTS);
+  const [tests, setTests] = useState<VocabularyTestSet[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modal State
   const [wordListModalTest, setWordListModalTest] = useState<VocabularyTestSet | null>(null);
@@ -35,59 +35,11 @@ export default function StudentVocabularyPage() {
   const loadSets = useCallback(async () => {
     try {
       setLoading(true);
-      let rawList: VocabularyTestSet[] = [];
-
-      // 1. Ưu tiên tải dữ liệu mới nhất từ Server (bao gồm các bộ đã import & publish)
-      try {
-        const serverData = await getVocabularySets();
-        if (serverData && serverData.length > 0) {
-          rawList = serverData.map((d) => {
-            const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code || it.code === d.id);
-            const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
-            return {
-              ...d,
-              words,
-              wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
-            };
-          });
-        }
-      } catch (serverErr) {
-        console.warn("Không thể tải từ API server, thử lấy từ localStorage:", serverErr);
-      }
-
-      // 2. Nếu server chưa có, fallback vào localStorage
-      if (rawList.length === 0) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("toeic_vocab_tests") : null;
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              rawList = parsed.map((d: VocabularyTestSet) => {
-                const local = INITIAL_TESTS.find((it) => it.id === d.id || it.code === d.code);
-                const words = (d.words && d.words.length > 0) ? d.words : (local?.words || []);
-                return {
-                  ...d,
-                  words,
-                  wordCount: words.length > 0 ? words.length : (d.wordCount || local?.wordCount || 200),
-                };
-              });
-            }
-          } catch {}
-        }
-      }
-
-      // 3. Fallback cuối cùng vào INITIAL_TESTS
-      if (rawList.length === 0) {
-        rawList = INITIAL_TESTS;
-      }
-
-      // CHỈ HIỂN THỊ CÁC BỘ TỪ ĐÃ XUẤT BẢN CHO HỌC VIÊN
-      const published = rawList.filter((t) => t.status !== "DRAFT" && t.status !== "Bản nháp");
-      setTests(published);
+      setLoadError(null);
+      setTests(await getVocabularySets());
     } catch (err) {
-      console.warn("Could not load vocabulary sets, using fallback:", err);
-      const published = INITIAL_TESTS.filter((t) => t.status !== "DRAFT");
-      setTests(published);
+      setTests([]);
+      setLoadError(err instanceof Error ? err.message : "Không thể tải bộ từ vựng từ máy chủ.");
     } finally {
       setLoading(false);
     }
@@ -97,10 +49,8 @@ export default function StudentVocabularyPage() {
     loadSets();
     const handleSync = () => { loadSets(); };
     window.addEventListener("toeic-vocab-tests-updated", handleSync);
-    window.addEventListener("storage", handleSync);
     return () => {
       window.removeEventListener("toeic-vocab-tests-updated", handleSync);
-      window.removeEventListener("storage", handleSync);
     };
   }, [loadSets]);
 
@@ -109,12 +59,6 @@ export default function StudentVocabularyPage() {
     if (!textOrUrl?.trim()) return;
     if (textOrUrl.startsWith("/") || textOrUrl.startsWith("http://") || textOrUrl.startsWith("https://")) {
       const audio = new Audio(textOrUrl);
-      audio.play().catch(() => {});
-      return;
-    }
-    const mapped = VOCAB_AUDIO_MAP[textOrUrl.toLowerCase().trim()];
-    if (mapped) {
-      const audio = new Audio(mapped);
       audio.play().catch(() => {});
       return;
     }
@@ -146,7 +90,7 @@ export default function StudentVocabularyPage() {
             Kho Từ Vựng TOEIC Trọng Tâm
           </h1>
           <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Hệ thống 20 bộ từ vựng TOEIC trọng tâm (4.000 từ cốt lõi phân theo chủ đề doanh nghiệp, tài chính, sản xuất...) kèm Flashcard phản xạ &amp; Mini-game.
+            Các bộ từ vựng đã được phát hành.
           </p>
         </div>
 
@@ -156,6 +100,16 @@ export default function StudentVocabularyPage() {
       </header>
 
       {/* Grid danh sách bộ từ cho học viên */}
+      {loadError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Không thể tải bộ từ vựng từ backend: {loadError}
+        </div>
+      ) : null}
+      {!loading && !loadError && tests.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
+          Chưa có bộ từ vựng được phát hành.
+        </div>
+      ) : null}
       <StudentVocabularyGrid
         tests={tests}
         activeSubCategory={activeSubCategory}
@@ -210,13 +164,13 @@ export default function StudentVocabularyPage() {
               words: filtered,
               isRedoMode: true,
               allWords: test.words,
-              originalTotalWords: test.words?.length || test.wordCount || 200,
+              originalTotalWords: test.words?.length || test.wordCount || 0,
             } as any;
           } else {
             testToUse = {
               ...test,
               allWords: test.words,
-              originalTotalWords: test.words?.length || test.wordCount || 200,
+              originalTotalWords: test.words?.length || test.wordCount || 0,
             } as any;
           }
           void startVocabularyActivity("VOCABULARY_GAME", () => setGameModalTest(testToUse));

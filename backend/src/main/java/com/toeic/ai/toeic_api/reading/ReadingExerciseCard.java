@@ -11,6 +11,7 @@ public record ReadingExerciseCard(
     String subCategory,
     String subtitle,
     String tag,
+    String status,
     int totalQuestions,
     int studiedQuestions,
     int correctAnswers,

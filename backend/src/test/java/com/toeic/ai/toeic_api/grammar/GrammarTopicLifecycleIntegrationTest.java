@@ -49,6 +49,51 @@ class GrammarTopicLifecycleIntegrationTest {
     }
 
     @Test
+    void refusesToPublishLeafTopicWithoutQuestions() {
+        String topicId = createTopic("Incomplete topic");
+        jdbc.update("UPDATE grammar_topics SET status = 'DRAFT', questions = '[]'::jsonb WHERE id = ?", topicId);
+
+        assertThatThrownBy(() -> grammarService.bulkUpdateStatus(List.of(topicId), "PUBLISHED"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+
+        assertThat(statusOf(topicId)).isEqualTo("DRAFT");
+    }
+
+    @Test
+    void lifecycleImpactCountsContentAcrossAllDescendants() {
+        String parentId = createTopic("Parent");
+        String childId = createTopic("Child", parentId);
+        String grandchildId = createTopic("Grandchild", childId);
+        jdbc.update("""
+                UPDATE grammar_topics
+                SET questions = '[{"questionText":"one"},{"questionText":"two"}]'::jsonb,
+                    examples = '[]'::jsonb,
+                    theory = '{"rule":"one","usage":"two"}'::jsonb,
+                    metadata = '{"groupValues":{"other":{"pattern":"one"}}}'::jsonb
+                WHERE id = ?
+                """, childId);
+        jdbc.update("""
+                UPDATE grammar_topics
+                SET questions = '[]'::jsonb,
+                    examples = '[{"sentence":"one"},{"sentence":"two"}]'::jsonb,
+                    theory = '{}'::jsonb
+                WHERE id = ?
+                """, grandchildId);
+
+        GrammarService.TopicLifecycleImpact impact = grammarService.getTopicLifecycleImpact(parentId);
+
+        assertThat(impact.childCount()).isEqualTo(1);
+        assertThat(impact.questionCount()).isEqualTo(1);
+        assertThat(impact.exampleCount()).isEqualTo(1);
+        assertThat(impact.theoryFieldCount()).isEqualTo(1);
+        assertThat(impact.subtreeQuestionCount()).isEqualTo(3);
+        assertThat(impact.subtreeExampleCount()).isEqualTo(3);
+        assertThat(impact.subtreeTheoryFieldCount()).isEqualTo(4);
+    }
+
+    @Test
     void refusesToDeleteParentUntilChildHandlingIsSelected() {
         String parentId = createTopic("Parent");
         String childId = createTopic("Child", parentId);
@@ -198,7 +243,7 @@ class GrammarTopicLifecycleIntegrationTest {
                 INSERT INTO grammar_topics
                     (id, code, title, status, questions, examples, theory, parent_topic_id)
                 VALUES (?, ?, ?, 'PUBLISHED',
-                        '[{"questionText":"preserved question"}]'::jsonb,
+                        '[{"id":"preserved-question","part":"Part 5","questionText":"preserved question","options":{"A":"one","B":"two","C":"three","D":"four"},"correctAnswer":"A","explanation":"preserved explanation"}]'::jsonb,
                         '[{"sentence":"preserved example"}]'::jsonb,
                         '{"rule":"preserved theory"}'::jsonb,
                         ?)

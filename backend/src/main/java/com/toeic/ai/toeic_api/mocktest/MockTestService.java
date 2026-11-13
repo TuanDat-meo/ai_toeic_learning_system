@@ -9,8 +9,6 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -29,10 +27,11 @@ public class MockTestService {
 
     public List<MockTestItem> listTests(String volId, UUID userId) {
         String sql = """
-                SELECT t.id, t.vol_id, t.title, t.difficulty,
+                SELECT t.id, t.vol_id, t.title, t.difficulty, t.description,
+                       t.duration_minutes, t.status,
+                       (SELECT COUNT(*) FROM mock_test_question_links ql WHERE ql.test_id = t.id) AS total_questions,
                        t.key_vocab::text AS key_vocab,
                        latest.score, latest.listening_score, latest.reading_score,
-                       CASE WHEN latest.score IS NOT NULL THEN 'Đã làm' ELSE 'Chưa làm' END AS status,
                        latest.completed_at::text AS completed_at,
                        stats.avg_score, stats.attempt_count
                 FROM mock_test_items t
@@ -62,14 +61,15 @@ public class MockTestService {
 
     public List<MockTestQuestion> getTestQuestions(int testId) {
         String sql = """
-                SELECT id, test_id, question_num, part, question_text,
-                       passage, bilingual_passage, audio_url, image_url,
-                       options::text AS options_json,
-                       correct_answer, explanation, transcript, translation,
-                       vocab_list::text AS vocab_json
-                FROM mock_test_questions
-                WHERE test_id = ?
-                ORDER BY question_num ASC
+                SELECT b.id, l.test_id, l.question_num, b.part, b.question_text,
+                       b.passage, b.bilingual_passage, b.audio_url, b.image_url,
+                       b.options::text AS options_json,
+                       b.correct_answer, b.explanation, b.transcript, b.translation,
+                       b.vocab_list::text AS vocab_json
+                FROM mock_test_question_links l
+                JOIN toeic_question_bank b ON b.id = l.question_id
+                WHERE l.test_id = ?
+                ORDER BY l.question_num ASC
                 """;
 
         return jdbc.query(sql, (rs, rowNum) -> new MockTestQuestion(
@@ -92,15 +92,97 @@ public class MockTestService {
     }
 
     @Transactional
+    public MockTestItem createTest(MockTestUpsertRequest request) {
+        validateTestRequest(request);
+        String keyVocab = toJson(request.keyVocab() == null ? List.of() : request.keyVocab());
+        Integer testId = jdbc.queryForObject("""
+                INSERT INTO mock_test_items
+                    (vol_id, title, difficulty, description, duration_minutes, status, key_vocab)
+                VALUES (?, ?, ?, ?, ?, ?, ?::jsonb)
+                RETURNING id
+                """, Integer.class, request.volId().trim(), request.title().trim(), toDatabaseDifficulty(request.difficulty()),
+                request.description(), request.durationMinutes(), request.status(), keyVocab);
+        return findTest(testId);
+    }
+
+    @Transactional
+    public MockTestItem updateTest(int testId, MockTestUpsertRequest request) {
+        validateTestRequest(request);
+        String keyVocab = toJson(request.keyVocab() == null ? List.of() : request.keyVocab());
+        int updated = jdbc.update("""
+                UPDATE mock_test_items
+                SET vol_id = ?, title = ?, difficulty = ?, description = ?,
+                    duration_minutes = ?, status = ?, key_vocab = ?::jsonb, updated_at = now()
+                WHERE id = ?
+                """, request.volId().trim(), request.title().trim(), toDatabaseDifficulty(request.difficulty()), request.description(),
+                request.durationMinutes(), request.status(), keyVocab, testId);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đề thi.");
+        }
+        return findTest(testId);
+    }
+
+    @Transactional
+    public void deleteTest(int testId) {
+        int deleted = jdbc.update("DELETE FROM mock_test_items WHERE id = ?", testId);
+        if (deleted == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đề thi.");
+        }
+    }
+
+    private MockTestItem findTest(int testId) {
+        return listTests(null, null).stream()
+                .filter(test -> test.id() == testId)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đề thi."));
+    }
+
+    private void validateTestRequest(MockTestUpsertRequest request) {
+        if (request == null || request.volId() == null || request.volId().isBlank()
+                || request.title() == null || request.title().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bộ đề và tên đề thi là bắt buộc.");
+        }
+        toDatabaseDifficulty(request.difficulty());
+        if (request.durationMinutes() == null || request.durationMinutes() < 1 || request.durationMinutes() > 600) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thời lượng phải từ 1 đến 600 phút.");
+        }
+        if (request.status() == null || !List.of("DRAFT", "PUBLISHED", "ARCHIVED").contains(request.status())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trạng thái đề thi không hợp lệ.");
+        }
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu từ vựng không hợp lệ.", e);
+        }
+    }
+
+    private String toDatabaseDifficulty(String difficulty) {
+        if (difficulty == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mức độ đề thi là bắt buộc.");
+        }
+        return switch (difficulty) {
+            case "Dễ", "EASY" -> "EASY";
+            case "Vừa sức", "Trung bình", "MEDIUM" -> "MEDIUM";
+            case "Khó", "HARD" -> "HARD";
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mức độ đề thi không hợp lệ.");
+        };
+    }
+
+    private String displayDifficulty(String difficulty) {
+        return switch (difficulty) {
+            case "EASY" -> "Dễ";
+            case "HARD" -> "Khó";
+            default -> "Trung bình";
+        };
+    }
+
+    @Transactional
     public MockTestAttempt submitAttempt(UUID userId, SubmitMockTestRequest req) {
         if (userId == null) {
-            List<UUID> users = jdbc.query("SELECT id FROM users ORDER BY (role = 'STUDENT') DESC, created_at ASC LIMIT 1",
-                    (rs, rowNum) -> rs.getObject("id", UUID.class));
-            if (!users.isEmpty()) {
-                userId = users.getFirst();
-            } else {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Vui lòng đăng nhập để lưu kết quả thi thử.");
-            }
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Vui lòng đăng nhập để lưu kết quả thi thử.");
         }
 
         UUID attemptId = UUID.randomUUID();
@@ -120,10 +202,10 @@ public class MockTestService {
 
     public List<MockTestSubmissionDto> listAllSubmissions(Integer testId) {
         String sql = """
-                SELECT a.id, a.test_id, COALESCE(t.title, 'Đề thi #' || a.test_id) AS test_title,
-                       COALESCE(t.vol_id, 'vol1') AS vol_id,
-                       a.user_id, COALESCE(u.full_name, 'Học viên') AS student_name,
-                       COALESCE(u.email, 'hocvien@toeic-ai.local') AS student_email,
+                SELECT a.id, a.test_id, t.title AS test_title,
+                       t.vol_id AS vol_id,
+                       a.user_id, u.full_name AS student_name,
+                       u.email AS student_email,
                        a.score, a.listening_score, a.reading_score,
                        a.correct_count, a.total_count, a.duration_seconds, a.completed_at
                 FROM user_mock_test_attempts a
@@ -182,85 +264,6 @@ public class MockTestService {
         ), testId, userId);
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Transactional
-    public void seedInitialDataIfEmpty() {
-        Integer count = jdbc.queryForObject("SELECT count(*) FROM mock_test_items", Integer.class);
-        if (count != null && count > 0) {
-            seedSampleAttemptsIfEmpty();
-            return;
-        }
-
-        // Tạo 10 đề thi ETS 2024
-        for (int i = 1; i <= 10; i++) {
-            String diff = i <= 3 ? "EASY" : (i <= 7 ? "MEDIUM" : "HARD");
-            String keyVocab = "[{\"word\":\"feasible\",\"ipa\":\"/ˈfiːzəbl/\",\"pos\":\"Adj\",\"meaning\":\"Khả thi\",\"example\":\"A feasible solution.\"},{\"word\":\"expedite\",\"ipa\":\"/ˈekspədaɪt/\",\"pos\":\"Verb\",\"meaning\":\"Đẩy nhanh tiến độ\",\"example\":\"Expedite the shipping process.\"}]";
-
-            jdbc.update("""
-                    INSERT INTO mock_test_items (id, vol_id, title, difficulty, key_vocab)
-                    VALUES (?, 'ets2024', ?, ?, ?::jsonb)
-                    """, i, "ETS 2024 - Test " + i, diff, keyVocab);
-        }
-
-        // Tạo một số câu hỏi mẫu cho Test 1
-        String optionsQ1 = "{\"A\":\"He is climbing a ladder.\",\"B\":\"He is painting a fence.\",\"C\":\"He is driving a car.\",\"D\":\"He is reading a book.\"}";
-        jdbc.update("""
-                INSERT INTO mock_test_questions (test_id, question_num, part, question_text, audio_url, image_url, options, correct_answer, explanation)
-                VALUES (1, 1, 'Part 1', 'Look at the picture marked number 1 in your test book.', '/ets_2024_lc/audio/part1_test1.mp3',
-                    'https://images.unsplash.com/photo-1541888946425-d0fbb186156f?auto=format&fit=crop&w=800&q=80',
-                    ?::jsonb, 'A', 'Người đàn ông đang leo lên các bậc thang.')
-                """, optionsQ1);
-
-        String optionsQ101 = "{\"A\":\"they\",\"B\":\"their\",\"C\":\"them\",\"D\":\"themselves\"}";
-        jdbc.update("""
-                INSERT INTO mock_test_questions (test_id, question_num, part, question_text, options, correct_answer, explanation)
-                VALUES (1, 101, 'Part 5', 'Employees must submit _______ weekly timesheets before leaving the office on Friday.',
-                    ?::jsonb, 'B', 'Trước cụm weekly timesheets cần một tính từ sở hữu their.')
-                """, optionsQ101);
-
-        seedSampleAttemptsIfEmpty();
-    }
-
-    private void seedSampleAttemptsIfEmpty() {
-        try {
-            Integer attemptCount = jdbc.queryForObject("SELECT count(*) FROM user_mock_test_attempts", Integer.class);
-            if (attemptCount == null || attemptCount == 0) {
-                List<Integer> availableTestIds = jdbc.query("SELECT id FROM mock_test_items ORDER BY id ASC LIMIT 3",
-                        (rs, rowNum) -> rs.getInt("id"));
-                List<UUID> availableUsers = jdbc.query("SELECT id FROM users ORDER BY created_at ASC LIMIT 3",
-                        (rs, rowNum) -> rs.getObject("id", UUID.class));
-
-                if (!availableTestIds.isEmpty() && !availableUsers.isEmpty()) {
-                    int firstTestId = availableTestIds.getFirst();
-                    UUID u1 = availableUsers.getFirst();
-                    UUID u2 = availableUsers.size() > 1 ? availableUsers.get(1) : u1;
-                    UUID u3 = availableUsers.size() > 2 ? availableUsers.get(2) : u1;
-
-                    // Mỗi câu đúng 5 điểm:
-                    // 152 câu đúng * 5 = 760 điểm (LC: 385, RC: 375)
-                    jdbc.update("""
-                            INSERT INTO user_mock_test_attempts (id, user_id, test_id, score, listening_score, reading_score, correct_count, total_count, duration_seconds, completed_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now() - interval '2 days')
-                            """, UUID.randomUUID(), u1, firstTestId, 760, 385, 375, 152, 200, 6900);
-
-                    // 178 câu đúng * 5 = 890 điểm (LC: 450, RC: 440)
-                    jdbc.update("""
-                            INSERT INTO user_mock_test_attempts (id, user_id, test_id, score, listening_score, reading_score, correct_count, total_count, duration_seconds, completed_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now() - interval '1 day')
-                            """, UUID.randomUUID(), u2, firstTestId, 890, 450, 440, 178, 200, 7080);
-
-                    // 130 câu đúng * 5 = 650 điểm (LC: 330, RC: 320)
-                    jdbc.update("""
-                            INSERT INTO user_mock_test_attempts (id, user_id, test_id, score, listening_score, reading_score, correct_count, total_count, duration_seconds, completed_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now() - interval '4 hours')
-                            """, UUID.randomUUID(), u3, firstTestId, 650, 330, 320, 130, 200, 6600);
-                }
-            }
-        } catch (Exception e) {
-            // Không ngắt tiến trình nếu bảng chưa có hoặc ngoại lệ
-        }
-    }
-
     private MockTestItem mapTestSummary(ResultSet rs, UUID userId) throws SQLException {
         int testId = rs.getInt("id");
         List<MockTestAttempt> attempts = userId != null ? getHistoryAttempts(testId, userId) : Collections.emptyList();
@@ -274,7 +277,10 @@ public class MockTestService {
                 testId,
                 rs.getString("vol_id"),
                 rs.getString("title"),
-                rs.getString("difficulty"),
+                displayDifficulty(rs.getString("difficulty")),
+                rs.getString("description"),
+                rs.getInt("duration_minutes"),
+                rs.getInt("total_questions"),
                 score,
                 listeningScore,
                 readingScore,

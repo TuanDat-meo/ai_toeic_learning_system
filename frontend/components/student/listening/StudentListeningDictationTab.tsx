@@ -26,7 +26,7 @@ function DictationCardItem({
   setVocabBagModalData: (data: { title: string; items: { word: string; ipa: string; meaning: string; example?: string }[] } | null) => void;
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
 }) {
-  const cardTitle = `Test ${card.testNumber} - ${card.part}`;
+  const cardTitle = card.title || `Test ${card.testNumber} - ${card.part}`;
   const cardDesc = `Luyện nghe chép chính tả ${card.totalQuestions} câu hỏi chuẩn format đề thi TOEIC.`;
   const progress = useItemProgress(`listening-dictation-${card.id}`, card.totalQuestions);
 

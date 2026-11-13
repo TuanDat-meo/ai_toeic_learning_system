@@ -1,20 +1,18 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Sparkles } from "lucide-react";
-import { DictationCardData, LevelCategoryCardData } from "./types";
+import { DictationCardData, DictationQuestion, LevelCategoryCardData } from "./types";
 import {
-  SAMPLE_DICTATION_QUESTIONS,
-  INITIAL_DICTATION_CARDS,
-  INITIAL_PART1_LEVELS,
-  INITIAL_PART1_CATEGORIES,
-  INITIAL_PART2_LEVELS,
-  INITIAL_PART2_CATEGORIES,
-  INITIAL_PART3_LEVELS,
-  INITIAL_PART3_CATEGORIES,
-  INITIAL_PART4_LEVELS,
-  INITIAL_PART4_CATEGORIES,
-} from "./mockData";
+  createListeningCard,
+  createListeningUnit,
+  deleteListeningCard,
+  deleteListeningUnit,
+  fetchAdminListeningCards,
+  fetchAdminListeningUnits,
+  updateListeningCard,
+  updateListeningUnit,
+} from "@/lib/api/listening";
 import { ListeningHeader, ListeningAdminTab } from "@/components/admin/content/listening/ListeningHeader";
 import {
   ListeningAudioAssetsView,
@@ -37,6 +35,17 @@ import {
   DeleteLevelModal,
 } from "@/components/admin/content/listening/ListeningModals";
 
+const EMPTY_LISTENING_QUESTION: DictationQuestion = {
+  id: 0,
+  part: "Part 1",
+  audioUrl: "",
+  fullTranscript: "",
+  vietnameseTranslation: "",
+  options: { A: "", B: "", C: "", D: "" },
+  correctAnswer: "A",
+  explanation: "",
+};
+
 export default function ListeningPage() {
   // --- STATES CHÍNH ---
   const [activeAdminTab, setActiveAdminTab] = useState<ListeningAdminTab>("listening_units");
@@ -44,18 +53,43 @@ export default function ListeningPage() {
   const [selectedYear, setSelectedYear] = useState<"2024" | "2023" | "2022">("2024");
 
   // Dữ liệu cards
-  const [dictationCards, setDictationCards] = useState<DictationCardData[]>(INITIAL_DICTATION_CARDS);
-  const [part1Levels, setPart1Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART1_LEVELS);
-  const [part1Categories, setPart1Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART1_CATEGORIES);
-  const [part2Levels, setPart2Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART2_LEVELS);
-  const [part2Categories, setPart2Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART2_CATEGORIES);
-  const [part3Levels, setPart3Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART3_LEVELS);
-  const [part3Categories, setPart3Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART3_CATEGORIES);
-  const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>(INITIAL_PART4_LEVELS);
-  const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>(INITIAL_PART4_CATEGORIES);
+  const [dictationCards, setDictationCards] = useState<DictationCardData[]>([]);
+  const [part1Levels, setPart1Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part1Categories, setPart1Categories] = useState<LevelCategoryCardData[]>([]);
+  const [part2Levels, setPart2Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part2Categories, setPart2Categories] = useState<LevelCategoryCardData[]>([]);
+  const [part3Levels, setPart3Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part3Categories, setPart3Categories] = useState<LevelCategoryCardData[]>([]);
+  const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>([]);
+  const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>([]);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([fetchAdminListeningCards(), fetchAdminListeningUnits()])
+      .then(([cards, units]) => {
+        if (!active) return;
+        setDictationCards(cards);
+        const byPart = (part: LevelCategoryCardData["part"], type: "level" | "category") =>
+          units.filter((unit) => unit.part === part && unit.type === type);
+        setPart1Levels(byPart("Part 1", "level"));
+        setPart1Categories(byPart("Part 1", "category"));
+        setPart2Levels(byPart("Part 2", "level"));
+        setPart2Categories(byPart("Part 2", "category"));
+        setPart3Levels(byPart("Part 3", "level"));
+        setPart3Categories(byPart("Part 3", "category"));
+        setPart4Levels(byPart("Part 4", "level"));
+        setPart4Categories(byPart("Part 4", "category"));
+        setDataLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (active) setDataLoadError(error instanceof Error ? error.message : "Không thể tải dữ liệu nghe.");
+      });
+    return () => { active = false; };
+  }, []);
 
   const [savedVocabBag, setSavedVocabBag] = useState<string[]>([]);
-  const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>([3]);
+  const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const triggerToast = (msg: string) => {
@@ -150,6 +184,7 @@ export default function ListeningPage() {
   const [levelFormQuestions, setLevelFormQuestions] = useState(30);
   const [levelFormTheory, setLevelFormTheory] = useState("");
   const [levelFormRules, setLevelFormRules] = useState("");
+  const [levelFormQuestion, setLevelFormQuestion] = useState<DictationQuestion>(EMPTY_LISTENING_QUESTION);
   const [deleteLevelConfirm, setDeleteLevelConfirm] = useState<LevelCategoryCardData | null>(null);
 
   // Handlers
@@ -170,7 +205,7 @@ export default function ListeningPage() {
     if (e) e.stopPropagation();
     setEditingDictationCard(card);
     const q1 = card.questions?.[0];
-    setDictationFormTitle(`Test ${card.testNumber} - ${card.part}`);
+    setDictationFormTitle(card.title || `Test ${card.testNumber} - ${card.part}`);
     setDictationFormAudioUrl(q1?.audioUrl || "");
     setDictationFormTranscript(q1?.fullTranscript || "");
     setDictationFormTranslation(q1?.vietnameseTranslation || "");
@@ -181,7 +216,7 @@ export default function ListeningPage() {
     setShowDictationModal(true);
   };
 
-  const handleSaveDictation = (e: React.FormEvent) => {
+  const handleSaveDictation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dictationFormTitle.trim()) {
       triggerToast("Vui lòng nhập tiêu đề bài nghe chép! ⚠️");
@@ -196,64 +231,42 @@ export default function ListeningPage() {
       return;
     }
 
-    if (editingDictationCard) {
-      setDictationCards((prev) =>
-        prev.map((c) =>
-          c.id === editingDictationCard.id
-            ? {
-                ...c,
-                testNumber: dictationFormTestNum,
-                part: dictationFormPart,
-                year: dictationFormYear,
-                totalQuestions: dictationFormQuestions,
-                questions: [
-                  {
-                    id: 1,
-                    part: dictationFormPart,
-                    audioUrl: dictationFormAudioUrl.trim(),
-                    fullTranscript: dictationFormTranscript.trim(),
-                    vietnameseTranslation: dictationFormTranslation.trim(),
-                    explanation: "Luyện nghe chép chính tả và nắm bắt từ khóa trọng tâm.",
-                  },
-                ],
-              }
-            : c
-        )
-      );
-      triggerToast(`Đã cập nhật bài nghe "${dictationFormTitle}"! 💾`);
-    } else {
-      const newCard: DictationCardData = {
-        id: `dict-${Date.now()}`,
+    const request = {
+        title: dictationFormTitle.trim(),
         testNumber: dictationFormTestNum,
         part: dictationFormPart,
         year: dictationFormYear,
         totalQuestions: dictationFormQuestions,
-        completedQuestions: 0,
-        status: "Chưa bắt đầu",
-        notesCount: 0,
-        vocabItems: [],
-        questions: [
-          {
-            id: 1,
-            part: dictationFormPart,
-            audioUrl: dictationFormAudioUrl.trim(),
-            fullTranscript: dictationFormTranscript.trim(),
-            vietnameseTranslation: dictationFormTranslation.trim(),
-            explanation: "Luyện nghe chép chính tả và nắm bắt từ khóa trọng tâm.",
-          },
-        ],
-      };
-      setDictationCards((prev) => [newCard, ...prev]);
-      triggerToast(`Đã thêm bài nghe "${dictationFormTitle}" thành công! 🎉`);
+        audioUrl: dictationFormAudioUrl.trim(),
+        fullTranscript: dictationFormTranscript.trim(),
+        vietnameseTranslation: dictationFormTranslation.trim(),
+    };
+    try {
+      const savedCard = editingDictationCard
+        ? await updateListeningCard(editingDictationCard.id, request)
+        : await createListeningCard(request);
+      setDictationCards((prev) => editingDictationCard
+        ? prev.map((card) => card.id === savedCard.id ? savedCard : card)
+        : [savedCard, ...prev]);
+      triggerToast(editingDictationCard
+        ? `Đã cập nhật bài nghe "${dictationFormTitle}"! 💾`
+        : `Đã thêm bài nghe "${dictationFormTitle}" thành công! 🎉`);
+      setShowDictationModal(false);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể lưu bài nghe.");
     }
-    setShowDictationModal(false);
   };
 
-  const handleConfirmDeleteDictationCard = () => {
+  const handleConfirmDeleteDictationCard = async () => {
     if (!deleteDictationConfirm) return;
-    setDictationCards((prev) => prev.filter((c) => c.id !== deleteDictationConfirm.id));
-    triggerToast(`Đã xóa bài nghe ${deleteDictationConfirm.part} - Test ${deleteDictationConfirm.testNumber}! 🗑️`);
-    setDeleteDictationConfirm(null);
+    try {
+      await deleteListeningCard(deleteDictationConfirm.id);
+      setDictationCards((prev) => prev.filter((c) => c.id !== deleteDictationConfirm.id));
+      triggerToast(`Đã xóa bài nghe ${deleteDictationConfirm.part} - Test ${deleteDictationConfirm.testNumber}! 🗑️`);
+      setDeleteDictationConfirm(null);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể xóa bài nghe.");
+    }
   };
 
   const handleOpenAddLevel = (part: "Part 1" | "Part 2" | "Part 3" | "Part 4", type: "level" | "category" = "level") => {
@@ -264,6 +277,7 @@ export default function ListeningPage() {
     setLevelFormQuestions(30);
     setLevelFormTheory("");
     setLevelFormRules("");
+    setLevelFormQuestion({ ...EMPTY_LISTENING_QUESTION, part });
     setShowLevelModal(true);
   };
 
@@ -276,90 +290,103 @@ export default function ListeningPage() {
     setLevelFormQuestions(card.totalQuestions);
     setLevelFormTheory(card.theorySummary);
     setLevelFormRules(card.rules.join("\n"));
+    setLevelFormQuestion(card.questions[0] || { ...EMPTY_LISTENING_QUESTION, part: card.part });
     setShowLevelModal(true);
   };
 
-  const handleSaveLevel = (e: React.FormEvent) => {
+  const handleSaveLevel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!levelFormTitle.trim()) {
       triggerToast("Vui lòng nhập tên chủ điểm!");
       return;
     }
-    const rulesArray = levelFormRules.split("\n").map((r) => r.trim()).filter(Boolean);
-    const updateInList = (list: LevelCategoryCardData[]) =>
-      list.map((c) =>
-        c.id === editingLevelCard?.id
-          ? { ...c, title: levelFormTitle.trim(), totalQuestions: levelFormQuestions, theorySummary: levelFormTheory.trim(), rules: rulesArray.length > 0 ? rulesArray : c.rules }
-          : c
-      );
-
-    if (editingLevelCard) {
-      if (editingLevelCard.part === "Part 1") {
-        if (editingLevelCard.type === "level") setPart1Levels(updateInList);
-        else setPart1Categories(updateInList);
-      } else if (editingLevelCard.part === "Part 2") {
-        if (editingLevelCard.type === "level") setPart2Levels(updateInList);
-        else setPart2Categories(updateInList);
-      } else if (editingLevelCard.part === "Part 3") {
-        if (editingLevelCard.type === "level") setPart3Levels(updateInList);
-        else setPart3Categories(updateInList);
-      } else if (editingLevelCard.part === "Part 4") {
-        if (editingLevelCard.type === "level") setPart4Levels(updateInList);
-        else setPart4Categories(updateInList);
-      }
-      triggerToast(`Đã cập nhật chủ điểm "${levelFormTitle}"! 💾`);
-    } else {
-      const newCard: LevelCategoryCardData = {
-        id: `lvl-${Date.now()}`,
-        part: levelFormPart,
-        type: levelFormType,
-        title: levelFormTitle.trim(),
-        totalQuestions: levelFormQuestions,
-        completedQuestions: 0,
-        correctCount: 0,
-        wrongCount: 0,
-        status: "Chưa luyện tập",
-        theorySummary: levelFormTheory.trim() || "Chủ điểm luyện nghe chuyên sâu.",
-        rules: rulesArray.length > 0 ? rulesArray : ["Lắng nghe cẩn thận các từ khóa quan trọng."],
-        vocabBag: [],
-        questions: [...SAMPLE_DICTATION_QUESTIONS.slice(0, 1)],
-      };
-      if (levelFormPart === "Part 1") {
-        if (levelFormType === "level") setPart1Levels((prev) => [newCard, ...prev]);
-        else setPart1Categories((prev) => [newCard, ...prev]);
-      } else if (levelFormPart === "Part 2") {
-        if (levelFormType === "level") setPart2Levels((prev) => [newCard, ...prev]);
-        else setPart2Categories((prev) => [newCard, ...prev]);
-      } else if (levelFormPart === "Part 3") {
-        if (levelFormType === "level") setPart3Levels((prev) => [newCard, ...prev]);
-        else setPart3Categories((prev) => [newCard, ...prev]);
-      } else if (levelFormPart === "Part 4") {
-        if (levelFormType === "level") setPart4Levels((prev) => [newCard, ...prev]);
-        else setPart4Categories((prev) => [newCard, ...prev]);
-      }
-      triggerToast(`Đã thêm chủ điểm "${newCard.title}"! 🎉`);
+    const options = levelFormQuestion.options || {};
+    if (!levelFormQuestion.audioUrl.trim() || !levelFormQuestion.fullTranscript.trim()
+      || !["A", "B", "C", "D"].every((key) => options[key]?.trim())
+      || !levelFormQuestion.correctAnswer) {
+      triggerToast("Vui lòng nhập audio, transcript, đủ 4 lựa chọn và đáp án đúng.");
+      return;
     }
-    setShowLevelModal(false);
+    const rulesArray = levelFormRules.split("\n").map((r) => r.trim()).filter(Boolean);
+    const part = editingLevelCard?.part || levelFormPart;
+    const savedQuestion: DictationQuestion = {
+      ...levelFormQuestion,
+      id: editingLevelCard?.questions[0]?.id || Date.now(),
+      part,
+      options: {
+        A: options.A || "",
+        B: options.B || "",
+        C: options.C || "",
+        D: options.D || "",
+      },
+    };
+    const request = {
+      part,
+      type: editingLevelCard?.type || levelFormType,
+      title: levelFormTitle.trim(),
+      targetLevel: editingLevelCard?.targetLevel,
+      totalQuestions: levelFormQuestions,
+      theorySummary: levelFormTheory.trim(),
+      rules: rulesArray.length > 0 ? rulesArray : editingLevelCard?.rules || [],
+      vocabBag: editingLevelCard?.vocabBag || [],
+      questions: editingLevelCard
+        ? [savedQuestion, ...editingLevelCard.questions.slice(1)]
+        : [savedQuestion],
+    };
+    try {
+      const savedUnit = editingLevelCard
+        ? await updateListeningUnit(editingLevelCard.id, request)
+        : await createListeningUnit(request);
+      const setUnitList = (
+        part: LevelCategoryCardData["part"],
+        type: "level" | "category",
+        updater: React.Dispatch<React.SetStateAction<LevelCategoryCardData[]>>
+      ) => {
+        if (savedUnit.part !== part || savedUnit.type !== type) return;
+        updater((prev) => editingLevelCard
+          ? prev.map((unit) => unit.id === savedUnit.id ? savedUnit : unit)
+          : [savedUnit, ...prev]);
+      };
+      setUnitList("Part 1", "level", setPart1Levels);
+      setUnitList("Part 1", "category", setPart1Categories);
+      setUnitList("Part 2", "level", setPart2Levels);
+      setUnitList("Part 2", "category", setPart2Categories);
+      setUnitList("Part 3", "level", setPart3Levels);
+      setUnitList("Part 3", "category", setPart3Categories);
+      setUnitList("Part 4", "level", setPart4Levels);
+      setUnitList("Part 4", "category", setPart4Categories);
+      triggerToast(editingLevelCard
+        ? `Đã cập nhật chủ điểm "${levelFormTitle}"! 💾`
+        : `Đã thêm chủ điểm "${savedUnit.title}"! 🎉`);
+      setShowLevelModal(false);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể lưu chủ điểm nghe.");
+    }
   };
 
-  const handleConfirmDeleteLevelCard = () => {
+  const handleConfirmDeleteLevelCard = async () => {
     if (!deleteLevelConfirm) return;
     const filterOut = (list: LevelCategoryCardData[]) => list.filter((c) => c.id !== deleteLevelConfirm.id);
-    if (deleteLevelConfirm.part === "Part 1") {
-      if (deleteLevelConfirm.type === "level") setPart1Levels(filterOut);
-      else setPart1Categories(filterOut);
-    } else if (deleteLevelConfirm.part === "Part 2") {
-      if (deleteLevelConfirm.type === "level") setPart2Levels(filterOut);
-      else setPart2Categories(filterOut);
-    } else if (deleteLevelConfirm.part === "Part 3") {
-      if (deleteLevelConfirm.type === "level") setPart3Levels(filterOut);
-      else setPart3Categories(filterOut);
-    } else if (deleteLevelConfirm.part === "Part 4") {
-      if (deleteLevelConfirm.type === "level") setPart4Levels(filterOut);
-      else setPart4Categories(filterOut);
+    try {
+      await deleteListeningUnit(deleteLevelConfirm.id);
+      if (deleteLevelConfirm.part === "Part 1") {
+        if (deleteLevelConfirm.type === "level") setPart1Levels(filterOut);
+        else setPart1Categories(filterOut);
+      } else if (deleteLevelConfirm.part === "Part 2") {
+        if (deleteLevelConfirm.type === "level") setPart2Levels(filterOut);
+        else setPart2Categories(filterOut);
+      } else if (deleteLevelConfirm.part === "Part 3") {
+        if (deleteLevelConfirm.type === "level") setPart3Levels(filterOut);
+        else setPart3Categories(filterOut);
+      } else if (deleteLevelConfirm.part === "Part 4") {
+        if (deleteLevelConfirm.type === "level") setPart4Levels(filterOut);
+        else setPart4Categories(filterOut);
+      }
+      triggerToast(`Đã xóa chủ điểm "${deleteLevelConfirm.title}"! 🗑️`);
+      setDeleteLevelConfirm(null);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể xóa chủ điểm nghe.");
     }
-    triggerToast(`Đã xóa chủ điểm "${deleteLevelConfirm.title}"! 🗑️`);
-    setDeleteLevelConfirm(null);
   };
 
   const handleOpenDictationPractice = (card: DictationCardData) => {
@@ -517,6 +544,11 @@ export default function ListeningPage() {
           <span className="font-semibold text-sm">{toastMessage}</span>
         </div>
       )}
+      {dataLoadError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {dataLoadError}
+        </div>
+      ) : null}
 
       {/* HEADER BANNER & MAIN TABS */}
       <ListeningHeader
@@ -724,6 +756,7 @@ export default function ListeningPage() {
         showReviewQuestionsModal={showReviewQuestionsModal}
         setShowReviewQuestionsModal={setShowReviewQuestionsModal}
         flaggedReviewIds={flaggedReviewIds}
+        questions={dictationCards.flatMap((card) => card.questions || [])}
         handleToggleFlagReview={handleToggleFlagReview}
       />
 
@@ -770,6 +803,8 @@ export default function ListeningPage() {
         setLevelFormTheory={setLevelFormTheory}
         levelFormRules={levelFormRules}
         setLevelFormRules={setLevelFormRules}
+        levelFormQuestion={levelFormQuestion}
+        setLevelFormQuestion={setLevelFormQuestion}
         handleSaveLevel={handleSaveLevel}
       />
 

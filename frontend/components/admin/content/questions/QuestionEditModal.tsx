@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { FileQuestion, X, Sparkles } from "lucide-react";
+import { FileQuestion, X } from "lucide-react";
 import { QuestionItem, QuestionPart, QuestionDifficulty } from "@/app/admin/content/questions/types";
-import { DEFAULT_SKILLS } from "@/app/admin/content/questions/mockData";
+import { DEFAULT_SKILLS } from "@/app/admin/content/questions/constants";
 
 interface QuestionEditModalProps {
   isOpen: boolean;
@@ -24,9 +24,8 @@ interface QuestionEditModalProps {
     correctAnswer: string;
     explanation: string;
     status: "PUBLISHED" | "DRAFT";
-  }) => void;
-  aiGenerating: boolean;
-  onGenerateAiHelp: () => void;
+  }) => void | Promise<void>;
+  isSaving: boolean;
 }
 
 export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
@@ -34,8 +33,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
   editingQuestion,
   onClose,
   onSave,
-  aiGenerating,
-  onGenerateAiHelp,
+  isSaving,
 }) => {
   const [formPart, setFormPart] = useState<QuestionPart>("Part 5");
   const [formSkill, setFormSkill] = useState<string>(DEFAULT_SKILLS[0]);
@@ -62,10 +60,10 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       setFormPassage(editingQuestion.passage || "");
       setFormImageUrl(editingQuestion.imageUrl || "");
       setFormAudioUrl(editingQuestion.audioUrl || "");
-      setFormOptA(editingQuestion.options?.[0]?.text || "");
-      setFormOptB(editingQuestion.options?.[1]?.text || "");
-      setFormOptC(editingQuestion.options?.[2]?.text || "");
-      setFormOptD(editingQuestion.options?.[3]?.text || "");
+      setFormOptA(editingQuestion.options?.find((option) => option.id === "A")?.text || "");
+      setFormOptB(editingQuestion.options?.find((option) => option.id === "B")?.text || "");
+      setFormOptC(editingQuestion.options?.find((option) => option.id === "C")?.text || "");
+      setFormOptD(editingQuestion.options?.find((option) => option.id === "D")?.text || "");
       setFormCorrectAnswer(editingQuestion.correctAnswer || "A");
       setFormExplanation(editingQuestion.explanation || "");
       setFormStatus(editingQuestion.status || "PUBLISHED");
@@ -328,15 +326,6 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="font-bold text-slate-700">Lời giải thích chi tiết</label>
-              <button
-                type="button"
-                disabled={aiGenerating}
-                onClick={onGenerateAiHelp}
-                className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {aiGenerating ? "AI đang phân tích..." : "AI Gợi ý giải thích"}
-              </button>
             </div>
             <textarea
               rows={2}
@@ -399,6 +388,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
             </button>
             <button
               type="submit"
+              disabled={isSaving}
               className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs cursor-pointer"
             >
               {editingQuestion ? "Cập nhật câu hỏi" : "Lưu vào ngân hàng"}

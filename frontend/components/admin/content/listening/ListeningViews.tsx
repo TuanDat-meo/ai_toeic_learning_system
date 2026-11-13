@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Headphones,
   Search,
@@ -14,52 +14,94 @@ import {
   Sparkles,
   FileAudio,
 } from "lucide-react";
+import { fetchAdminListeningCards } from "@/lib/api/listening";
+import type { DictationCardData } from "@/app/admin/content/listening/types";
 
 // ==========================================
-// 1. QUẢN LÝ TỆP AUDIO & GIỌNG ĐỌC BẢN XỨ (AUDIO BANK TỪ E:\Data)
+// 1. QUẢN LÝ TỆP AUDIO
 // ==========================================
+interface AudioUnit {
+  unitId: string;
+  year: number;
+  testNumber: number;
+  testCode: string;
+  partNumber: number;
+  partName: string;
+  audioFile: string;
+  audioUrl: string;
+  imageUrl?: string;
+  difficultySummary?: { tier?: string };
+  transcriptEn: string;
+  transcriptVi: string;
+  searchText: string;
+}
+
 export const ListeningAudioAssetsView: React.FC = () => {
   const [search, setSearch] = useState("");
   const [filterYear, setFilterYear] = useState("all");
   const [filterPart, setFilterPart] = useState("all");
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [audioUnits, setAudioUnits] = useState<any[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
+  const [audioUnits, setAudioUnits] = useState<AudioUnit[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const currentAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   React.useEffect(() => {
     let active = true;
-    const fetchUnits = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (search.trim()) params.set("q", search.trim());
-        if (filterYear !== "all") params.set("year", filterYear);
-        if (filterPart !== "all") params.set("part", filterPart);
-        params.set("limit", "150");
-
-        const res = await fetch(`/api/listening/search?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (active) {
-            setAudioUnits(data.items || []);
-            setTotalCount(data.total || 0);
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to fetch listening audio units:", err);
-      } finally {
+    fetchAdminListeningCards()
+      .then((cards) => {
+        if (!active) return;
+        const units = cards.flatMap((card: DictationCardData) =>
+          (card.questions || []).map((question) => {
+            const year = Number(card.year) || 0;
+            const partNumber = Number(card.part.match(/\d+/)?.[0]) || 0;
+            return {
+              unitId: `${card.id}-${question.id}`,
+              year,
+              testNumber: card.testNumber,
+              testCode: card.title || `ETS ${year} Test ${card.testNumber}`,
+              partNumber,
+              partName: card.part,
+              audioFile: question.audioUrl,
+              audioUrl: question.audioUrl,
+              imageUrl: question.imageUrl,
+              transcriptEn: question.fullTranscript,
+              transcriptVi: question.vietnameseTranslation,
+              searchText: [
+                card.id,
+                card.title,
+                card.part,
+                question.fullTranscript,
+                question.vietnameseTranslation,
+                ...Object.values(question.options || {}),
+              ].join(" ").toLowerCase(),
+            };
+          })
+        );
+        setAudioUnits(units);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (active) setLoadError(error instanceof Error ? error.message : "Không thể tải dữ liệu audio.");
+      })
+      .finally(() => {
         if (active) setLoading(false);
-      }
-    };
-
-    const timer = setTimeout(fetchUnits, 300);
+      });
     return () => {
       active = false;
-      clearTimeout(timer);
     };
-  }, [search, filterYear, filterPart]);
+  }, []);
+
+  const filteredUnits = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return audioUnits.filter((unit) =>
+      (filterYear === "all" || String(unit.year) === filterYear)
+      && (filterPart === "all" || unit.partName === filterPart)
+      && (!query || unit.searchText.includes(query))
+    );
+  }, [audioUnits, filterPart, filterYear, search]);
+  const visibleUnits = filteredUnits.slice(0, 150);
+  const totalCount = filteredUnits.length;
 
   const handleTogglePlay = (id: string, audioUrl?: string, textFallback?: string) => {
     if (playingId === id) {
@@ -130,10 +172,10 @@ export const ListeningAudioAssetsView: React.FC = () => {
             onChange={(e) => setFilterYear(e.target.value)}
             className="px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
           >
-            <option value="all">Tất cả các bộ đề (2024, 2023, 2022)</option>
-            <option value="2024">Bộ ETS 2024 (540 audio)</option>
-            <option value="2023">Bộ ETS 2023 (486 audio)</option>
-            <option value="2022">Bộ ETS 2022 (540 audio)</option>
+            <option value="all">Tất cả các bộ đề</option>
+            <option value="2024">Bộ ETS 2024</option>
+            <option value="2023">Bộ ETS 2023</option>
+            <option value="2022">Bộ ETS 2022</option>
           </select>
 
           <select
@@ -170,14 +212,19 @@ export const ListeningAudioAssetsView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {audioUnits.length === 0 && !loading && (
+              {loadError && !loading && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-red-600">{loadError}</td>
+                </tr>
+              )}
+              {filteredUnits.length === 0 && !loading && !loadError && (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
-                    Không tìm thấy tệp audio phù hợp trong kho dữ liệu Data.
+                    Không tìm thấy nội dung audio phù hợp trong cơ sở dữ liệu.
                   </td>
                 </tr>
               )}
-              {audioUnits.map((aud) => (
+              {visibleUnits.map((aud) => (
                 <tr key={aud.unitId} className="hover:bg-slate-50/70 transition">
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -204,7 +251,7 @@ export const ListeningAudioAssetsView: React.FC = () => {
                   </td>
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 whitespace-nowrap inline-flex items-center">
-                      {aud.difficultySummary?.tier || "Tiêu chuẩn ETS"}
+                      {aud.difficultySummary?.tier || "Chưa phân loại"}
                     </span>
                   </td>
                   <td className="py-3.5 px-4 min-w-[320px]">

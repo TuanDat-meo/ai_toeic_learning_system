@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { TestItem } from "@/app/admin/content/mock-tests/types";
 import { PracticeProgressBar } from "@/components/common/PracticeProgressBar";
-import { useItemProgress } from "@/lib/practiceProgress";
 import { StudentCardProgressAction } from "@/components/student/common/StudentCardProgressAction";
 
 interface StudentMockTestCardGridProps {
@@ -41,7 +40,7 @@ function StudentMockTestCardItem({
   onOpenVocab: (test: TestItem) => void;
   onOpenHistory?: (test: TestItem) => void;
 }) {
-  const progress = useItemProgress(`mock-test-${test.id}`, 200);
+  const totalQuestions = test.totalQuestions ?? 0;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
@@ -58,27 +57,32 @@ function StudentMockTestCardItem({
           <h3 className="text-base font-bold text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">
             {test.title}
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">200 câu hỏi • 120 phút • 7 Parts</p>
+          <p className="text-xs text-slate-400 mt-0.5">{totalQuestions} câu hỏi • {test.durationMinutes ?? 0} phút</p>
         </div>
 
         {/* Khung thống kê và các nút điều khiển đúng chuẩn Ảnh 2 */}
         <div className="pt-2">
-          <StudentCardProgressAction
-            progressKey={`mock-test-${test.id}`}
-            totalQuestions={200}
-            savedCount={3}
-            actionLabel="Luyện tập"
-            onStart={() => onOpenPractice(test, false)}
-            onRedoWrong={() => onOpenPractice(test, true)}
-            onOpenTheory={() => onOpenTranscript(test)}
-            onOpenSaved={() => onOpenVocab(test)}
-            secondaryAction={{
-              label: "Thi thử",
-              icon: <Play className="w-3 h-3 fill-current" />,
-              onClick: () => onOpenExam(test),
-              className: "px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1 shrink-0",
-            }}
-          />
+          {totalQuestions > 0 ? (
+            <StudentCardProgressAction
+              progressKey={`mock-test-${test.id}`}
+              totalQuestions={totalQuestions}
+              actionLabel="Luyện tập"
+              onStart={() => onOpenPractice(test, false)}
+              onRedoWrong={() => onOpenPractice(test, true)}
+              onOpenTheory={() => onOpenTranscript(test)}
+              onOpenSaved={() => onOpenVocab(test)}
+              secondaryAction={{
+                label: "Thi thử",
+                icon: <Play className="w-3 h-3 fill-current" />,
+                onClick: () => onOpenExam(test),
+                className: "px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs transition shadow-xs hover:shadow-md cursor-pointer flex items-center justify-center gap-1 shrink-0",
+              }}
+            />
+          ) : (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              Đề thi hiện chưa có câu hỏi.
+            </p>
+          )}
         </div>
       </div>
     </div>

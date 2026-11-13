@@ -30,6 +30,7 @@ import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/gramm
 // ==========================================
 interface QuestionBankViewProps {
   topics: GrammarTopicItem[];
+  recentQuestion?: { topicId: string; questionId: string };
   onAddQuestion: () => void;
   onEditQuestion: (topic: GrammarTopicItem, question: GrammarQuestionItem) => void;
   onDeleteQuestion: (topic: GrammarTopicItem, question: GrammarQuestionItem) => void;
@@ -44,6 +45,7 @@ function getQuestionDifficulty(value?: string): "EASY" | "MEDIUM" | "HARD" {
 
 export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
   topics,
+  recentQuestion,
   onAddQuestion,
   onEditQuestion,
   onDeleteQuestion,
@@ -53,6 +55,15 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("ALL");
   const [selectedTopicId, setSelectedTopicId] = useState<string>("ALL");
   const [previewQ, setPreviewQ] = useState<{ q: GrammarQuestionItem; topicTitle: string } | null>(null);
+  const questionListRef = React.useRef<HTMLDivElement>(null);
+  const recentQuestionKey = recentQuestion
+    ? `${recentQuestion.topicId}:${recentQuestion.questionId}`
+    : null;
+
+  useEffect(() => {
+    if (!recentQuestionKey) return;
+    if (questionListRef.current) questionListRef.current.scrollTop = 0;
+  }, [recentQuestionKey]);
 
   // Flatten all questions with topic context
   const allQuestions = useMemo(() => {
@@ -64,9 +75,14 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
     });
     return list;
   }, [topics]);
+  const linkedQuestionTopics = topics.filter((topic) => (topic.linkedToeicQuestionCount ?? 0) > 0);
+  const linkedQuestionCount = linkedQuestionTopics.reduce(
+    (total, topic) => total + (topic.linkedToeicQuestionCount ?? 0),
+    0,
+  );
 
   const filtered = useMemo(() => {
-    return allQuestions.filter(({ q, topic }) => {
+    const result = allQuestions.filter(({ q, topic }) => {
       const matchSearch =
         q.questionText.toLowerCase().includes(search.toLowerCase()) ||
         q.explanation.toLowerCase().includes(search.toLowerCase()) ||
@@ -81,7 +97,17 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
 
       return matchSearch && matchPart && matchDiff && matchTopic;
     });
-  }, [allQuestions, search, selectedPart, selectedDifficulty, selectedTopicId]);
+    if (recentQuestion) {
+      result.sort((left, right) => {
+        const leftIsRecent = left.topic.id === recentQuestion.topicId
+          && String(left.q.id) === recentQuestion.questionId;
+        const rightIsRecent = right.topic.id === recentQuestion.topicId
+          && String(right.q.id) === recentQuestion.questionId;
+        return Number(rightIsRecent) - Number(leftIsRecent);
+      });
+    }
+    return result;
+  }, [allQuestions, search, selectedPart, selectedDifficulty, selectedTopicId, recentQuestion]);
 
   return (
     <div className="space-y-4">
@@ -148,12 +174,27 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
           </div>
         </div>
       </div>
+      {linkedQuestionCount > 0 ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+          <p>
+            Backend đang ghi nhận {linkedQuestionCount} câu TOEIC liên kết với {linkedQuestionTopics.length} chủ điểm.
+            Các câu này thuộc ngân hàng TOEIC, không nằm trong danh sách câu hỏi ngữ pháp nhúng ở màn hình này.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-blue-800">
+            {linkedQuestionTopics.map((topic) => (
+              <li key={topic.id}>
+                {topic.titleVi || topic.code}: {topic.linkedToeicQuestionCount} câu
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Questions Data Table */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div ref={questionListRef} className="grammar-list-scroll">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
                 <th className="py-3.5 px-4 min-w-[110px]">Mã / Part</th>
                 <th className="py-3.5 px-4 min-w-[300px]">Nội dung câu hỏi TOEIC</th>
@@ -164,7 +205,7 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                 <th className="py-3.5 px-4 text-center min-w-[100px]">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+            <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-slate-400">
@@ -173,7 +214,14 @@ export const GrammarQuestionBankView: React.FC<QuestionBankViewProps> = ({
                 </tr>
               ) : (
                 filtered.map(({ q, topic }) => (
-                  <tr key={q.id} className="hover:bg-slate-50/70 transition">
+                  <tr
+                    key={`${topic.id}:${q.id}`}
+                    className={`odd:bg-slate-50/50 hover:bg-blue-50/50 transition-colors ${
+                      recentQuestion?.topicId === topic.id && String(q.id) === recentQuestion.questionId
+                        ? "bg-emerald-50 ring-2 ring-inset ring-emerald-400"
+                        : ""
+                    }`}
+                  >
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="font-mono font-bold text-slate-900">{q.id}</span>
@@ -364,6 +412,7 @@ interface TrapsMatrixViewProps {
 
 export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics }) => {
   const LOCAL_STORAGE_KEY = "toeic_grammar_curriculum_config";
+  const [configError, setConfigError] = useState<string | null>(null);
   const [config, setConfig] = useState({
     minAccuracyPass: 80,
     srsGrammarInterval: 3,
@@ -378,10 +427,13 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
         const parsed = JSON.parse(raw);
         setConfig((prev) => ({ ...prev, ...parsed }));
       }
-    } catch {}
+    } catch {
+      setConfigError("Không thể đọc cấu hình đã lưu trên trình duyệt; đang dùng giá trị xem trước mặc định.");
+    }
 
-    const handleConfigUpdated = (e: any) => {
-      if (e.detail) setConfig((prev) => ({ ...prev, ...e.detail }));
+    const handleConfigUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<typeof config>>).detail;
+      if (detail) setConfig((prev) => ({ ...prev, ...detail }));
     };
     window.addEventListener("toeic-grammar-config-updated", handleConfigUpdated);
     return () => window.removeEventListener("toeic-grammar-config-updated", handleConfigUpdated);
@@ -394,21 +446,19 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
       topicCode: string;
       topicTitle: string;
       trapTitle: string;
-      frequency: "Cao" | "Rất cao" | "Trung bình";
-      studentFailRate: number;
-      countermeasure: string;
+      questionsWithTrapNotes: number;
+      formula: string;
     }[] = [];
 
-    topics.forEach((t, index) => {
+    topics.forEach((t) => {
       t.traps.forEach((trap, trapIdx) => {
         list.push({
-          id: `trap-${index}-${trapIdx}`,
+          id: `trap-${t.id}-${trapIdx}`,
           topicCode: t.code,
           topicTitle: t.title || t.titleVi || "",
           trapTitle: trap,
-          frequency: trapIdx === 0 ? "Rất cao" : trapIdx === 1 ? "Cao" : "Trung bình",
-          studentFailRate: Math.max(38, Math.min(82, 45 + ((index * 7 + trapIdx * 13) % 36))),
-          countermeasure: `Áp dụng công thức nhận diện nhanh: ${t.formula}`,
+          questionsWithTrapNotes: t.questions.filter((question) => question.trapNote?.trim()).length,
+          formula: t.formula,
         });
       });
     });
@@ -418,22 +468,20 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Banner thông báo tiêu chí đạt & chu kỳ SRS theo cấu hình */}
-      <div className="p-3.5 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs text-xs">
+      {configError ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{configError}</p> : null}
+      <div className="p-3.5 bg-amber-50 text-amber-950 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-amber-200 text-xs">
         <div className="flex items-center gap-2">
-          <span className="p-1.5 rounded-lg bg-blue-500/20 text-blue-300">
+          <span className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
             <Sliders className="w-4 h-4" />
           </span>
           <div>
-            <span className="font-bold text-white">Tiêu chuẩn chuyên đề đang áp dụng:</span>{" "}
-            <span className="text-slate-300 font-mono">
+            <span className="font-bold">Cấu hình xem trước trong trình duyệt:</span>{" "}
+            <span className="text-amber-900 font-mono">
               Chuẩn đầu ra: ≥{config.minAccuracyPass}% đúng • Lặp lại ngắt quãng (SRS): {config.srsGrammarInterval} ngày • Xáo trộn câu hỏi: {config.shuffleQuestions ? "Bật" : "Tắt"}
             </span>
           </div>
         </div>
-        <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-semibold font-mono w-fit">
-          ETS 2026 Ready
-        </span>
+        <span className="max-w-sm text-[11px] font-medium">Chưa đồng bộ backend; chỉ áp dụng trong trình duyệt hiện tại.</span>
       </div>
 
       {/* Traps Table */}
@@ -441,27 +489,27 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
-            Ma Trận Bẫy Ngữ Pháp & Tần Suất Xuất Hiện Trong Đề Thi TOEIC
+            Ma trận bẫy ngữ pháp từ nội dung chủ điểm
           </h3>
           <span className="text-xs font-semibold text-slate-500">
-            Dữ liệu thống kê từ ngân hàng câu hỏi
+            Nội dung lấy từ backend; chưa có dữ liệu phân tích tỷ lệ sai của học viên
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="grammar-list-scroll">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
                 <th className="py-3.5 px-4 min-w-[170px]">Chuyên đề</th>
                 <th className="py-3.5 px-4 min-w-[280px]">Bẫy đề thi TOEIC</th>
-                <th className="py-3.5 px-4 min-w-[140px]">Tần suất xuất hiện</th>
-                <th className="py-3.5 px-4 min-w-[160px]">Tỷ lệ học sinh sai</th>
-                <th className="py-3.5 px-4 min-w-[260px]">Khuyến nghị sư phạm</th>
+                <th className="py-3.5 px-4 min-w-[180px]">Câu hỏi có ghi chú bẫy</th>
+                <th className="py-3.5 px-4 min-w-[160px]">Tỷ lệ học viên sai</th>
+                <th className="py-3.5 px-4 min-w-[260px]">Công thức liên quan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+            <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
               {allTraps.map((trap) => (
-                <tr key={trap.id} className="hover:bg-slate-50/70 transition">
+                <tr key={trap.id} className="odd:bg-slate-50/50 hover:bg-amber-50/60 transition-colors">
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-[11px] block w-fit whitespace-nowrap">
                       {trap.topicCode}
@@ -473,39 +521,11 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
                   <td className="py-3.5 px-4 min-w-[280px]">
                     <p className="font-bold text-slate-900">{trap.trapTitle}</p>
                   </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold whitespace-nowrap inline-flex items-center ${
-                        trap.frequency === "Rất cao"
-                          ? "bg-rose-100 text-rose-800"
-                          : trap.frequency === "Cao"
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-slate-100 text-slate-700"
-                      }`}
-                    >
-                      {trap.frequency}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 min-w-[160px]">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span className={trap.studentFailRate >= 65 ? "text-rose-600" : "text-amber-600"}>
-                          {trap.studentFailRate}% dính bẫy
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className={`h-full ${
-                            trap.studentFailRate >= 65 ? "bg-rose-500" : "bg-amber-500"
-                          }`}
-                          style={{ width: `${trap.studentFailRate}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
+                  <td className="py-3.5 px-4 whitespace-nowrap">{trap.questionsWithTrapNotes}</td>
+                  <td className="py-3.5 px-4 text-slate-500">Chưa có dữ liệu</td>
                   <td className="py-3 px-4 text-slate-600 text-[11px]">
                     <span className="font-mono bg-slate-50 px-2 py-1 rounded border border-slate-200 block text-slate-700">
-                      {trap.countermeasure}
+                      {trap.formula || "Chưa có công thức"}
                     </span>
                   </td>
                 </tr>
@@ -538,6 +558,7 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
   const [showExplanationImmediately, setShowExplanationImmediately] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   // Load cấu hình đã lưu
   useEffect(() => {
@@ -551,7 +572,9 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
         if (typeof parsed.showExplanationImmediately === "boolean")
           setShowExplanationImmediately(parsed.showExplanationImmediately);
       }
-    } catch {}
+    } catch {
+      setConfigError("Không thể đọc cấu hình đã lưu trên trình duyệt.");
+    }
   }, []);
 
   // Áp dụng bộ Preset chiến lược sư phạm 1-click
@@ -585,7 +608,12 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
       window.dispatchEvent(new CustomEvent("toeic-grammar-config-updated", { detail: config }));
-    } catch {}
+      setConfigError(null);
+    } catch {
+      setSavedSuccess(false);
+      setConfigError("Không thể lưu cấu hình vào trình duyệt.");
+      return;
+    }
 
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -595,7 +623,7 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
     try {
       const exportData = {
         title: "TOEIC Grammar Curriculum Data",
-        version: "v2.4 - ETS 2026",
+        schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         config: {
           minAccuracyPass,
@@ -783,19 +811,19 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
               </div>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Sẵn sàng phát hành
+                Dữ liệu backend
               </span>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Toàn bộ <strong className="text-slate-900">{topicsCount} chuyên đề ngữ pháp TOEIC</strong> đã được đồng bộ với hệ thống Mobile App và Web Student. Bạn có thể xuất bản toàn bộ hoặc tải file định dạng chuẩn LMS.
+              Đang hiển thị <strong className="text-slate-900">{topicsCount} chuyên đề ngữ pháp</strong> đã tải từ backend. Có thể xuất dữ liệu hiện có; việc phát hành được quản lý trong mục Rà soát nội dung.
             </p>
 
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/70 space-y-2 text-xs">
               <span className="font-bold text-slate-900 block">Thông số hệ thống:</span>
               <div className="flex justify-between text-slate-600">
-                <span>Phiên bản giáo trình:</span>
-                <strong className="font-mono text-slate-900">v2.4 - ETS 2026</strong>
+                <span>Nguồn dữ liệu:</span>
+                <strong className="font-mono text-slate-900">Backend · grammar_topics</strong>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Tổng số chuyên đề:</span>
@@ -831,6 +859,8 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
             </div>
           </div>
 
+          {configError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{configError}</p> : null}
+          <p className="text-[11px] text-slate-500">Cấu hình được lưu trong trình duyệt hiện tại; chưa đồng bộ với backend hoặc thiết bị khác.</p>
           {/* Nút lưu cấu hình */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
             <button
@@ -839,7 +869,7 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
               className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{savedSuccess ? "Đã lưu thành công!" : "Lưu cấu hình"}</span>
+              <span>{savedSuccess ? "Đã lưu trên trình duyệt" : "Lưu cấu hình trình duyệt"}</span>
             </button>
             {savedSuccess && (
               <span className="text-xs font-semibold text-emerald-600 animate-in fade-in flex items-center gap-1">

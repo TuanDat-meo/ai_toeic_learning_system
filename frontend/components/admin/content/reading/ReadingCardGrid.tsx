@@ -45,7 +45,6 @@ function ReadingTableRow({
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
   onToggleCardStatus?: (card: ExerciseCardData) => void;
 }) {
-  const fallbackTotal = card.totalQuestions || 10;
   const isDraft = card.status === "draft";
 
   return (
@@ -79,7 +78,7 @@ function ReadingTableRow({
       </td>
 
       <td className="py-3.5 px-4 text-center font-bold text-slate-900 font-mono whitespace-nowrap">
-        {fallbackTotal} câu
+        {card.totalQuestions} câu
       </td>
 
       <td className="py-3.5 px-4 whitespace-nowrap">
@@ -163,7 +162,6 @@ function ReadingGridItem({
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
   onToggleCardStatus?: (card: ExerciseCardData) => void;
 }) {
-  const fallbackTotal = card.totalQuestions || 10;
   const isDraft = card.status === "draft";
 
   return (
@@ -227,7 +225,7 @@ function ReadingGridItem({
         <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
           <div className="flex justify-between items-center gap-2 text-slate-600">
             <span className="font-medium">Tổng số câu hỏi:</span>
-            <strong className="text-blue-700 font-mono font-bold whitespace-nowrap">{fallbackTotal} câu</strong>
+            <strong className="text-blue-700 font-mono font-bold whitespace-nowrap">{card.totalQuestions} câu</strong>
           </div>
           <div className="flex justify-between items-center gap-2 text-slate-600">
             <span className="font-medium">Phần thi:</span>
@@ -389,6 +387,7 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
 
   return (
     <div className="@container w-full space-y-8">
+      {/* Nhóm bộ đề đọc */}
       {/* NHÓM 0: BÀI ĐỌC MỚI THÊM & BẢN NHÁP (LUÔN ĐỨNG TRÊN CÙNG ĐỂ ADMIN DỄ THẤY) */}
       {draftAndCustomCards.length > 0 && (
         <section className="space-y-3 p-4 sm:p-5 rounded-3xl bg-amber-50/40 border-2 border-amber-200/80 shadow-xs">

@@ -93,12 +93,13 @@ export function Header() {
       const todayRec = trackerObj?.history?.[todayStr];
       const todayMins = todayRec?.minutesSpent ?? trackerObj?.todayMinutes ?? 0;
       return {
-        streak: trackerObj?.currentStreak || 1,
+        streak: trackerObj?.currentStreak ?? 0,
         minutes: todayMins,
-        score: scoreObj?.total || 685,
+        score: scoreObj?.total ?? null,
       };
-    } catch {
-      return { streak: 1, minutes: 0, score: 685 };
+    } catch (error) {
+      console.error("Could not read dashboard study statistics:", error);
+      return { streak: 0, minutes: 0, score: null };
     }
   }, [studyStatsSnapshot]);
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
@@ -107,14 +108,8 @@ export function Header() {
 
     getCurrentUser()
       .then(setUser)
-      .catch(() => {
-        // Fallback demo user so frontend student pages preview cleanly even when backend is offline
-        setUser({
-          id: 'demo-student',
-          email: 'hocvien@toeic.ai',
-          fullName: 'Vũ Trương Phi',
-          role: 'STUDENT',
-        });
+      .catch((error: unknown) => {
+        console.error("Could not load the current user:", error);
       });
   }, [router]);
 
@@ -235,7 +230,7 @@ export function Header() {
             <div className="my-2 grid grid-cols-3 divide-x divide-outline-variant/50 rounded-xl bg-surface-container-low px-1 py-3 text-center">
               <ProfileStat icon={Flame} value={studyStats.streak.toString()} label="ngày học" iconClassName="text-orange-500" />
               <ProfileStat icon={Clock3} value={studyStats.minutes.toString()} label="phút hôm nay" iconClassName="text-blue-500" />
-              <ProfileStat icon={Snowflake} value={studyStats.score.toString()} label="điểm" iconClassName="text-cyan-600" />
+              <ProfileStat icon={Snowflake} value={studyStats.score?.toString() ?? "—"} label="điểm" iconClassName="text-cyan-600" />
             </div>
 
             <Link href="/notifications" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
@@ -341,4 +336,3 @@ function ProfileStat({
     </div>
   );
 }
-

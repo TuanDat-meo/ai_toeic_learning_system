@@ -12,7 +12,7 @@ import {
   autoExtractVocabListForReading,
 } from "@/lib/readingVocabExtractor";
 import { parseAdminReadingFile, normalizeSampleQuestion, normalizeOptions } from "@/lib/api/reading";
-import { normalizeReadingCardTitle } from "@/app/admin/content/reading/readingStorage";
+import { normalizeReadingCardTitle } from "@/app/admin/content/reading/readingTitleUtils";
 import {
   X,
   Upload,
@@ -152,12 +152,12 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
   const modalBodyRef = useRef<HTMLDivElement>(null);
 
   // Form Metadata
-  const [title, setTitle] = useState("ETS 2024 Test 5 - Part 5 Mini Test");
+  const [title, setTitle] = useState("");
   const [category, setCategory] = useState<"part5" | "part6" | "part7" | "grammar">("part5");
   const [subCategory] = useState<
     "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types"
   >("word_types");
-  const [tag, setTag] = useState("Thương mại & Hợp đồng");
+  const [tag, setTag] = useState("");
   const [importStatus, setImportStatus] = useState<"draft" | "published">("draft");
   const [overwriteExisting, setOverwriteExisting] = useState(true);
 
@@ -878,7 +878,7 @@ Subject: Office Relocation Schedule and Preparation Guidelines
 Dear Colleagues,
 As discussed during last month's board meeting, Nexus Group will officially relocate its regional headquarters to the newly completed Apex Tower on November 15. The new facility offers modern ergonomic workstations, collaborative meeting pods, and energy-efficient environmental systems.
 
-To ensure minimal disruption to our daily operations, the transition will be conducted in three distinct phases over two consecutive weekends. 
+To ensure minimal disruption to our daily operations, the transition will be conducted in three distinct phases over two consecutive weekends.
 
 Phase 1 (Nov 8-9): IT infrastructure, server migrations, and financial accounting archives.
 Phase 2 (Nov 15-16): Marketing, Human Resources, and Executive suites.
@@ -936,7 +936,13 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const lines = textToParse.split(/\r?\n/).map((l) => l.trim());
+    const text = textToParse.trim();
+    if (!text) {
+      setErrorMsg("Vui lòng dán văn bản đề thi vào ô bên dưới!");
+      return;
+    }
+
+    const lines = text.split(/\r?\n/).map((l) => l.trim());
     let extTitle = "";
     let extTag = "";
     let extPassage = "";
@@ -1369,9 +1375,7 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
   // Tải file mẫu CSV
   const handleDownloadCsvTemplate = () => {
     const csvContent =
-      "Câu số,Đề bài tiếng Anh,Bản dịch tiếng Việt,Đáp án A,Đáp án B,Đáp án C,Đáp án D,Đáp án đúng (A/B/C/D),Giải thích chi tiết,Từ vựng\n" +
-      '101,"When she held her last meeting, Ms. Toba ------- her sales staff to perform even better next quarter.","Khi cô ấy tổ chức cuộc họp trước, bà Toba đã khuyến khích nhân viên...","encourage","is encouraging","encouraged","was encouraged","C","Cần động từ chia ở thì quá khứ đơn vì mệnh đề trước có held.","encourage (v): khuyến khích; staff (n): nhân viên"\n' +
-      '102,"All visitors are required to show photo identification ------- entering the research laboratory.","Tất cả khách tham quan được yêu cầu xuất trình giấy tờ tùy thân trước khi vào...","before","while","during","until","A","Before + V-ing chỉ hành động xảy ra trước.","laboratory (n): phòng thí nghiệm; identification (n): giấy tờ tùy thân"\n';
+      "Câu số,Đề bài tiếng Anh,Bản dịch tiếng Việt,Đáp án A,Đáp án B,Đáp án C,Đáp án D,Đáp án đúng (A/B/C/D),Giải thích chi tiết,Từ vựng\n";
 
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1384,6 +1388,11 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
 
   // Lưu chuyên đề vào kho
   const handleSaveToBank = () => {
+    if (!title.trim()) {
+      setErrorMsg("Vui lòng nhập tên bài đọc hoặc chuyên đề.");
+      return;
+    }
+
     if (parsedQuestions.length === 0) {
       triggerError("Chưa có câu hỏi nào được bóc tách! Vui lòng bấm 'Phân tích nội dung bài đọc' trước.");
       return;
@@ -1460,7 +1469,7 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
       }
     }
 
-    let finalVocabs = cardVocabList;
+    let finalVocabs = [...cardVocabList];
     if (finalVocabs.length === 0) {
       const seen = new Set<string>();
       parsedQuestions.forEach((q) => {
@@ -1498,7 +1507,9 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
       subCategory,
       tag: tag.trim() || "Chuyên đề tổng hợp",
       status: importStatus,
-      createdAt: isOverwriting ? (existingDuplicate.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      createdAt: isOverwriting
+        ? (existingDuplicate?.createdAt || new Date().toISOString())
+        : new Date().toISOString(),
       totalQuestions: parsedQuestions.length,
       studiedQuestions: isOverwriting ? (existingDuplicate.studiedQuestions || 0) : 0,
       correctAnswers: isOverwriting ? (existingDuplicate.correctAnswers || 0) : 0,
@@ -1698,7 +1709,6 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
                 <span>Nạp từ File (Excel / CSV / JSON)</span>
               </button>
             </div>
-
             <div className="flex items-center gap-2 text-xs">
               <button
                 type="button"

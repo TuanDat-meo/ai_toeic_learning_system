@@ -134,11 +134,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
     explanation: questionCorrection.explanation || baseQuestion.explanation,
   } : baseQuestion;
-  const resolvedAudioUrl = currentQ.audioUrl || "/ets_2024_lc/audio/part1_test1.mp3";
+  const resolvedAudioUrl = currentQ.audioUrl || "";
 
   const updateCardStats = (q: DictationQuestion, chosen: string) => {
     const isCorrect = chosen === q.correctAnswer;
-    const totalQ = (quizModalCard as any).originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 10;
+    const totalQ = quizModalCard.originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 0;
     const progress = recordQuestionAnswer(`listening-quiz-${quizModalCard.id}`, q.id, isCorrect, totalQ);
     const updateCard = (c: LevelCategoryCardData): LevelCategoryCardData => {
       if (c.id === quizModalCard.id) {
@@ -196,25 +196,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
       }
     >();
     currentGroupQuestions.forEach((q) => {
-      const list = q.vocabList || [
-        {
-          word: "pottery",
-          pos: "n",
-          level: "B2",
-          ipa: "/ˈpɑːtəri/",
-          meaning: "xưởng gốm",
-          example: { en: "They visited a traditional pottery studio.", vi: "Họ đã ghé thăm một xưởng gốm truyền thống." },
-          collocations: [{ en: "pottery class", vi: "lớp học làm gốm" }],
-        },
-        {
-          word: "demonstrate",
-          pos: "v",
-          level: "B2",
-          ipa: "/ˈdemənstreɪt/",
-          meaning: "trình diễn, hướng dẫn",
-          example: { en: "The instructor will demonstrate the procedure.", vi: "Người hướng dẫn sẽ trình diễn quy trình." },
-        },
-      ];
+      const list = q.vocabList || [];
       list.forEach((item) => map.set(item.word, item));
     });
     return Array.from(map.values());
@@ -848,11 +830,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                           ({optKey}) {optVal}
                                         </span>
                                       </div>
-                                      {isChecked && (
+                                      {isChecked && optTrans && (
                                         <div className="flex items-center gap-2 pl-7 pt-0.5">
                                           <span className="text-blue-500 font-bold text-xs">|</span>
                                           <span className="text-xs font-semibold text-blue-700">
-                                            {optTrans || "Dịch nghĩa đáp án."}
+                                            {optTrans}
                                           </span>
                                         </div>
                                       )}
@@ -1149,11 +1131,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                     <span className={`text-sm ${textColor}`}>{labelText}</span>
                                   </div>
 
-                                  {isChecked && (
+                                  {isChecked && optTrans && (
                                     <div className="flex items-center gap-2 pl-4 pt-0.5">
                                       <span className="text-blue-500 font-bold text-xs">|</span>
                                       <span className="text-xs font-semibold text-blue-700">
-                                        {optTrans || "Dịch nghĩa đáp án theo ngữ cảnh."}
+                                        {optTrans}
                                       </span>
                                     </div>
                                   )}
@@ -1175,7 +1157,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                             <span>Giải thích chi tiết & Bẫy cần tránh</span>
                           </div>
                           <p className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
-                            {q.explanation || "Phân tích câu hỏi và đối chiếu nội dung bài nghe."}
+                            {q.explanation || "Chưa có nội dung giải thích."}
                           </p>
                           {q.trapNote && (
                             <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
@@ -1186,23 +1168,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                         {/* VOCABULARY SECTION */}
                         {(() => {
-                          const singleVocabList = (q.vocabList && q.vocabList.length > 0)
-                            ? q.vocabList
-                            : (q.options ? Object.entries(q.options).map(([optKey, optVal]) => {
-                                const clean = optVal.replace(/^[A-D]\.\s*/, "").replace(/[.,!?;:]/g, "").trim();
-                                return {
-                                  word: clean || `Option (${optKey})`,
-                                  pos: "từ vựng",
-                                  level: "TOEIC",
-                                  ipa: `/${(clean || "option").toLowerCase()}/`,
-                                  meaning: (q.optionTranslations && q.optionTranslations[optKey]) || `Đáp án lựa chọn (${optKey})`,
-                                  example: {
-                                    en: `Listen carefully to "${clean || optVal}" in TOEIC audio.`,
-                                    vi: `Luyện nghe kỹ cụm từ "${clean || optVal}" trong bài nghe TOEIC.`,
-                                  },
-                                  collocations: undefined as { en: string; vi: string }[] | undefined,
-                                };
-                              }) : []);
+                          const singleVocabList = q.vocabList || [];
 
                           if (singleVocabList.length === 0) return null;
 

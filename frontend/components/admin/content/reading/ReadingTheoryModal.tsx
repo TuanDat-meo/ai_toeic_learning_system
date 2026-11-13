@@ -18,13 +18,17 @@ import {
   Check,
   Tag,
   Save,
+  AlertCircle,
 } from "lucide-react";
 import {
   normalizeVocabItem,
   buildVocabItemFromCandidate,
   extractReadingVocabCandidates,
 } from "@/lib/readingVocabExtractor";
-import { getLocalReadingCards, saveLocalReadingCards } from "@/app/admin/content/reading/readingStorage";
+import {
+  fetchAdminReadingCardDetails,
+  updateAdminReadingCard,
+} from "@/lib/api/reading";
 
 export interface ReadingTheoryModalProps {
   card: ExerciseCardData;
@@ -48,6 +52,8 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
   const [playingWordKey, setPlayingWordKey] = useState<string | null>(null);
   const [selectedVocabDetail, setSelectedVocabDetail] = useState<WordDetail | null>(null);
   const [isSavedVocab, setIsSavedVocab] = useState(false);
+  const [isSavingVocab, setIsSavingVocab] = useState(false);
+  const [vocabSaveError, setVocabSaveError] = useState<string | null>(null);
 
   const handleOpenVocabDetail = (
     vocab: VocabItem | { word: string; pos?: string; meaning?: string; ipa?: string; example?: string; exampleVi?: string }
@@ -153,50 +159,26 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
     return { allVocabularies: list, isExtracted: autoExtracted };
   }, [card, questions]);
 
-  // Tự động đồng bộ từ vựng đã bóc tách vào localStorage nếu bài đọc trong storage chưa có từ vựng
-  React.useEffect(() => {
-    if (isExtracted && allVocabularies.length > 0 && (!card.vocabList || card.vocabList.length === 0)) {
-      try {
-        const allCards = getLocalReadingCards();
-        let changed = false;
-        const updated = allCards.map((c) => {
-          if (c.id === card.id && (!c.vocabList || c.vocabList.length === 0)) {
-            changed = true;
-            return {
-              ...c,
-              vocabList: allVocabularies.map((v) => v.item),
-            };
-          }
-          return c;
-        });
-        if (changed) {
-          saveLocalReadingCards(updated, false);
-        }
-      } catch (err) {
-        console.warn("Auto-saving extracted vocab to local card:", err);
-      }
-    }
-  }, [isExtracted, allVocabularies, card.id, card.vocabList]);
-
-  // Lưu vĩnh viễn danh sách từ vựng vào bài học trong localStorage khi bấm nút
-  const handleSaveExtractedVocab = () => {
+  const handleSaveExtractedVocab = async () => {
     if (allVocabularies.length === 0) return;
+    setIsSavingVocab(true);
+    setVocabSaveError(null);
     try {
-      const allCards = getLocalReadingCards();
-      const updated = allCards.map((c) => {
-        if (c.id === card.id) {
-          return {
-            ...c,
-            vocabList: allVocabularies.map((v) => v.item),
-          };
-        }
-        return c;
+      const currentCard = await fetchAdminReadingCardDetails(card.id);
+      if (!currentCard) {
+        throw new Error("Không tìm thấy bài Reading cần cập nhật.");
+      }
+      await updateAdminReadingCard(card.id, {
+        ...currentCard,
+        vocabList: allVocabularies.map((v) => v.item),
       });
-      saveLocalReadingCards(updated, true);
       setIsSavedVocab(true);
+      window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
       setTimeout(() => setIsSavedVocab(false), 3000);
     } catch (err) {
-      console.error("Lỗi khi lưu từ vựng:", err);
+      setVocabSaveError(err instanceof Error ? err.message : "Không thể lưu từ vựng vào Reading.");
+    } finally {
+      setIsSavingVocab(false);
     }
   };
 
@@ -713,10 +695,13 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSaveExtractedVocab}
-                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/20"
+                    disabled={isSavingVocab}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/20 disabled:opacity-60 disabled:cursor-wait"
                     title="Lưu danh sách từ vựng này vào bài đọc"
                   >
-                    {isSavedVocab ? (
+                    {isSavingVocab ? (
+                      <span>Đang lưu...</span>
+                    ) : isSavedVocab ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-300" />
                         <span>Đã lưu thành công!</span>
@@ -730,6 +715,13 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                   </button>
                 )}
               </div>
+
+              {vocabSaveError && (
+                <p role="alert" className="flex items-center gap-2 text-xs font-semibold text-rose-700">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{vocabSaveError}</span>
+                </p>
+              )}
 
               {isExtracted && !isSavedVocab && (
                 <div className="p-3 bg-blue-50/80 border border-blue-200/80 rounded-2xl flex items-center gap-2 text-xs text-blue-900">

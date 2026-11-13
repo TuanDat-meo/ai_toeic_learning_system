@@ -38,8 +38,8 @@ export interface StudentSubmission {
   testTitle: string;
   volId?: string;
   userId?: string;
-  studentName: string;
-  studentEmail: string;
+  studentName: string | null;
+  studentEmail: string | null;
   score: number;
   listeningScore: number;
   readingScore: number;

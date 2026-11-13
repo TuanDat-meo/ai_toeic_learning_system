@@ -63,10 +63,23 @@ public class ReadingController {
         return readingService.listCards(category, userId);
     }
 
+    @GetMapping("/api/admin/reading/cards")
+    public List<ReadingExerciseCard> listAdminCards(
+            @RequestParam(required = false) String category, Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return readingService.listAdminCards(category, userId);
+    }
+
     @GetMapping("/api/reading/cards/{cardId}")
     public ReadingExerciseCard getCard(@PathVariable String cardId, Authentication authentication) {
         UUID userId = extractUserId(authentication);
         return readingService.getCard(cardId, userId);
+    }
+
+    @GetMapping("/api/admin/reading/cards/{cardId}")
+    public ReadingExerciseCard getAdminCard(@PathVariable String cardId, Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return readingService.getAdminCard(cardId, userId);
     }
 
     @PostMapping("/api/reading/cards/{cardId}/progress")

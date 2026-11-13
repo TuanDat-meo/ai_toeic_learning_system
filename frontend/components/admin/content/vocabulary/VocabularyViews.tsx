@@ -433,10 +433,40 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
   const [secondInterval, setSecondInterval] = useState(3);
   const [masteryThreshold, setMasteryThreshold] = useState(5);
   const [saved, setSaved] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSave = () => {
+    const errors: Record<string, string> = {};
+    if (!Number.isInteger(initialInterval) || initialInterval < 1 || initialInterval > 7) {
+      errors.initialInterval = "Nhập số nguyên từ 1 đến 7 ngày.";
+    }
+    if (!Number.isInteger(secondInterval) || secondInterval < 2 || secondInterval > 14) {
+      errors.secondInterval = "Nhập số nguyên từ 2 đến 14 ngày.";
+    }
+    if (!Number.isFinite(easeFactor) || easeFactor < 1.3 || easeFactor > 3) {
+      errors.easeFactor = "Nhập hệ số từ 1,3 đến 3,0.";
+    }
+    if (!Number.isInteger(masteryThreshold) || masteryThreshold < 3 || masteryThreshold > 10) {
+      errors.masteryThreshold = "Nhập số nguyên từ 3 đến 10 lần.";
+    }
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setSaved(false);
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const updateNumber = (field: string, value: string, setter: (value: number) => void) => {
+    setter(value === "" ? Number.NaN : Number(value));
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setSaved(false);
   };
 
   return (
@@ -462,12 +492,16 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
             <p className="text-[11px] text-slate-500">Số ngày trước khi từ vựng được nhắc lại lần 1</p>
             <input
               type="number"
+              step={1}
               min={1}
               max={7}
-              value={initialInterval}
-              onChange={(e) => setInitialInterval(Number(e.target.value))}
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
+              value={Number.isFinite(initialInterval) ? initialInterval : ""}
+              onChange={(e) => updateNumber("initialInterval", e.target.value, setInitialInterval)}
+              aria-invalid={Boolean(fieldErrors.initialInterval)}
+              aria-describedby={fieldErrors.initialInterval ? "vocabulary-initial-interval-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border text-xs font-semibold ${fieldErrors.initialInterval ? "border-red-400" : "border-slate-200"}`}
             />
+            {fieldErrors.initialInterval ? <p id="vocabulary-initial-interval-error" role="alert" className="text-[11px] text-red-700">{fieldErrors.initialInterval}</p> : null}
           </div>
 
           <div className="space-y-1.5">
@@ -477,12 +511,16 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
             <p className="text-[11px] text-slate-500">Số ngày trước khi từ vựng được nhắc lại lần 2</p>
             <input
               type="number"
+              step={1}
               min={2}
               max={14}
-              value={secondInterval}
-              onChange={(e) => setSecondInterval(Number(e.target.value))}
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
+              value={Number.isFinite(secondInterval) ? secondInterval : ""}
+              onChange={(e) => updateNumber("secondInterval", e.target.value, setSecondInterval)}
+              aria-invalid={Boolean(fieldErrors.secondInterval)}
+              aria-describedby={fieldErrors.secondInterval ? "vocabulary-second-interval-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border text-xs font-semibold ${fieldErrors.secondInterval ? "border-red-400" : "border-slate-200"}`}
             />
+            {fieldErrors.secondInterval ? <p id="vocabulary-second-interval-error" role="alert" className="text-[11px] text-red-700">{fieldErrors.secondInterval}</p> : null}
           </div>
 
           <div className="space-y-1.5">
@@ -495,10 +533,13 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
               step={0.1}
               min={1.3}
               max={3.0}
-              value={easeFactor}
-              onChange={(e) => setEaseFactor(Number(e.target.value))}
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold font-mono"
+              value={Number.isFinite(easeFactor) ? easeFactor : ""}
+              onChange={(e) => updateNumber("easeFactor", e.target.value, setEaseFactor)}
+              aria-invalid={Boolean(fieldErrors.easeFactor)}
+              aria-describedby={fieldErrors.easeFactor ? "vocabulary-ease-factor-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border text-xs font-semibold font-mono ${fieldErrors.easeFactor ? "border-red-400" : "border-slate-200"}`}
             />
+            {fieldErrors.easeFactor ? <p id="vocabulary-ease-factor-error" role="alert" className="text-[11px] text-red-700">{fieldErrors.easeFactor}</p> : null}
           </div>
 
           <div className="space-y-1.5">
@@ -508,12 +549,16 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
             <p className="text-[11px] text-slate-500">Số lần trả lời chính xác liên tiếp để hoàn thành</p>
             <input
               type="number"
+              step={1}
               min={3}
               max={10}
-              value={masteryThreshold}
-              onChange={(e) => setMasteryThreshold(Number(e.target.value))}
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
+              value={Number.isFinite(masteryThreshold) ? masteryThreshold : ""}
+              onChange={(e) => updateNumber("masteryThreshold", e.target.value, setMasteryThreshold)}
+              aria-invalid={Boolean(fieldErrors.masteryThreshold)}
+              aria-describedby={fieldErrors.masteryThreshold ? "vocabulary-mastery-threshold-error" : undefined}
+              className={`w-full p-2.5 rounded-xl border text-xs font-semibold ${fieldErrors.masteryThreshold ? "border-red-400" : "border-slate-200"}`}
             />
+            {fieldErrors.masteryThreshold ? <p id="vocabulary-mastery-threshold-error" role="alert" className="text-[11px] text-red-700">{fieldErrors.masteryThreshold}</p> : null}
           </div>
         </div>
 
@@ -523,7 +568,7 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
             Mô phỏng chu kỳ ngắt quãng của hệ thống:
           </h4>
           <p className="text-xs font-mono text-blue-700 font-semibold">
-            Lần 1 ({initialInterval} ngày) ➔ Lần 2 ({secondInterval} ngày) ➔ Lần 3 ({Math.round(secondInterval * easeFactor)} ngày) ➔ Lần 4 ({Math.round(secondInterval * easeFactor * easeFactor)} ngày) ➔ Vĩnh viễn ({masteryThreshold} lần)
+            Lần 1 ({Number.isFinite(initialInterval) ? initialInterval : "—"} ngày) ➔ Lần 2 ({Number.isFinite(secondInterval) ? secondInterval : "—"} ngày) ➔ Lần 3 ({Number.isFinite(secondInterval * easeFactor) ? Math.round(secondInterval * easeFactor) : "—"} ngày) ➔ Lần 4 ({Number.isFinite(secondInterval * easeFactor * easeFactor) ? Math.round(secondInterval * easeFactor * easeFactor) : "—"} ngày) ➔ Vĩnh viễn ({Number.isFinite(masteryThreshold) ? masteryThreshold : "—"} lần)
           </p>
         </div>
 
@@ -548,71 +593,11 @@ export const VocabularyAlgorithmConfigView: React.FC = () => {
 // ==========================================
 // 3. BÁO CÁO TƯƠNG TÁC HỌC VIÊN (ANALYTICS & RETENTION)
 // ==========================================
-export const VocabularyAnalyticsView: React.FC = () => {
-  const mostForgottenWords = [
-    { word: "negotiate", ipa: "/nəˈɡoʊʃieɪt/", failRate: "42%", level: "B2", lookups: 320 },
-    { word: "itinerary", ipa: "/aɪˈtɪnəreri/", failRate: "38%", level: "B1", lookups: 290 },
-    { word: "implement", ipa: "/ˈɪmplɪment/", failRate: "35%", level: "B2", lookups: 265 },
-    { word: "warranty", ipa: "/ˈwɔːrənti/", failRate: "28%", level: "B1", lookups: 210 },
-    { word: "collaborate", ipa: "/kəˈlæbəreɪt/", failRate: "24%", level: "B2", lookups: 195 },
-  ];
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Top Forgotten Words Table */}
-      <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-2xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              Top 5 từ vựng học viên hay quên & trả lời sai nhiều nhất
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Admin có thể bổ sung thêm ví dụ hoặc hình ảnh minh họa để học viên dễ liên tưởng ghi nhớ hơn.
-            </p>
-          </div>
-          <span className="text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 font-bold border border-amber-200">
-            Cần cải thiện nội dung
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] whitespace-nowrap">
-              <tr>
-                <th className="py-3.5 px-4 min-w-[200px]">Từ vựng &amp; Phiên âm</th>
-                <th className="py-3.5 px-4 min-w-[100px]">Trình độ</th>
-                <th className="py-3.5 px-4 min-w-[100px]">Tỷ lệ sai</th>
-                <th className="py-3.5 px-4 min-w-[180px]">Số lượt học viên tra cứu lại</th>
-                <th className="py-3.5 px-4 text-right min-w-[180px]">Khuyến nghị Admin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {mostForgottenWords.map((item) => (
-                <tr key={item.word} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                    {item.word} <span className="font-mono font-normal text-slate-400">({item.ipa})</span>
-                  </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold text-[11px] whitespace-nowrap inline-flex items-center">
-                      {item.level}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 font-extrabold text-rose-600 whitespace-nowrap">
-                    {item.failRate}
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-700 font-semibold whitespace-nowrap">
-                    {item.lookups} lượt
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-slate-500 font-medium whitespace-nowrap">
-                    Thêm ảnh &amp; câu ngữ cảnh
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+export const VocabularyAnalyticsView: React.FC = () => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+    <h3 className="text-base font-semibold text-slate-900">Chưa có dữ liệu phân tích</h3>
+    <p className="mt-2 text-sm text-slate-500">
+      Báo cáo sẽ hiển thị khi hệ thống có dữ liệu kết quả học tập được lưu trên máy chủ.
+    </p>
+  </div>
+);

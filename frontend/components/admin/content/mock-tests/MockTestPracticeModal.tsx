@@ -1282,7 +1282,7 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                             saveItemProgress(
                               `mock-test-${test.id}`,
                               answeredIds.length,
-                              totalQuestions || 200,
+                              totalQuestions || 0,
                               undefined,
                               correctCount,
                               wrongIds.length,

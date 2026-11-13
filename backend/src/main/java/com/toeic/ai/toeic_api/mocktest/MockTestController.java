@@ -6,8 +6,10 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -35,6 +37,23 @@ public class MockTestController {
     @GetMapping("/api/mock-tests/{testId}/questions")
     public List<MockTestQuestion> getQuestions(@PathVariable int testId) {
         return mockTestService.getTestQuestions(testId);
+    }
+
+    @PostMapping("/api/admin/mock-tests")
+    @ResponseStatus(HttpStatus.CREATED)
+    public MockTestItem createTest(@RequestBody MockTestUpsertRequest request) {
+        return mockTestService.createTest(request);
+    }
+
+    @PutMapping("/api/admin/mock-tests/{testId}")
+    public MockTestItem updateTest(@PathVariable int testId, @RequestBody MockTestUpsertRequest request) {
+        return mockTestService.updateTest(testId, request);
+    }
+
+    @DeleteMapping("/api/admin/mock-tests/{testId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTest(@PathVariable int testId) {
+        mockTestService.deleteTest(testId);
     }
 
     @PostMapping("/api/mock-tests/submit")

@@ -1,6 +1,5 @@
 "use client";
 
-import { expandReadingQuestions } from "@/lib/toeicQuestionExpander";
 import { recordQuestionAnswer, getItemProgress, getRedoWrongQuestions, saveItemProgress, resetItemProgress } from "@/lib/practiceProgress";
 import { getPassageFingerprint, isPlaceholderPassageText } from "@/lib/readingPassageUtils";
 
@@ -72,12 +71,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   initialQuestionIndex = 0,
   isRedoWrongOnly = false,
 }) => {
-  // Đảm bảo bài đọc luôn có ĐẦY ĐỦ câu hỏi (ví dụ Part 5 đủ 30 câu từ 101-130)
   const fullQuestions = useMemo(() => {
-    return expandReadingQuestions(card);
+    return card.sampleQuestions || [];
   }, [card]);
 
-  // Nếu là chế độ redo câu sai, lấy chính xác danh sách câu bị sai (đảm bảo đủ đúng số lượng ngoài badge)
   const activeQuestions = useMemo(() => {
     if (!isRedoWrongOnly) return fullQuestions;
     return getRedoWrongQuestions(fullQuestions, `reading-${card.id}`, card.totalQuestions || fullQuestions.length);
@@ -159,7 +156,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         savedAnsCount = parsed?.answers ? Object.keys(parsed.answers).length : 0;
         checkedMap = parsed?.checkedGroups || {};
       }
-      const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length || 30);
+      const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length || 0);
       const answeredCount = Math.max(savedAnsCount, prog.completedQuestions || 0);
       const checkedCount = Object.values(checkedMap).filter(Boolean).length;
       const firstUnchecked = passageGroups.findIndex((_, gIdx) => !checkedMap[gIdx]);

@@ -43,7 +43,7 @@ function VocabCardItem({
     setMounted(true);
   }, []);
 
-  const wordCount = t.words?.length || t.wordCount || 200;
+  const wordCount = t.words?.length || t.wordCount || 0;
   const progressKey = `vocab-${t.id}`;
   const progress = useItemProgress(progressKey, wordCount || 25);
   const completed = progress.completedQuestions || 0;

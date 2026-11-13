@@ -62,265 +62,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(15);
 
-  // Unified list of passages derived from real cards + built-in examples
   const passageItems: PassageItem[] = useMemo(() => {
-    // 1. Built-in fallback passages
-    const builtinPassages: PassageItem[] = [
-      {
-        id: "pas-101",
-        title: "Notice of Office System Maintenance & Migration",
-        type: "Part 7 Single",
-        typeLabel: "Part 7 · Đoạn đơn (Single)",
-        format: "Memo / Thông báo nội bộ",
-        wordCount: 145,
-        displayWordCount: "145 từ",
-        questionsCount: 3,
-        vocabCount: 2,
-        topic: "Công nghệ thông tin",
-        text: "Please be informed that the internal cloud server will undergo scheduled maintenance this Saturday, October 15, starting at 10:00 PM. Access to company email, remote shared folders, and ERP tools will be temporarily unavailable for approximately four hours.",
-        translation:
-          "Xin lưu ý rằng máy chủ đám mây nội bộ sẽ được bảo trì định kỳ vào thứ Bảy tuần này, ngày 15 tháng 10, bắt đầu từ 22:00. Quyền truy cập vào email công ty, thư mục chia sẻ từ xa và công cụ ERP sẽ tạm thời bị ngắt trong khoảng 4 giờ.",
-        subPassages: [
-          {
-            label: "Memo / Thông báo nội bộ",
-            text: "Please be informed that the internal cloud server will undergo scheduled maintenance this Saturday, October 15, starting at 10:00 PM. Access to company email, remote shared folders, and ERP tools will be temporarily unavailable for approximately four hours.",
-            textVi:
-              "Xin lưu ý rằng máy chủ đám mây nội bộ sẽ được bảo trì định kỳ vào thứ Bảy tuần này, ngày 15 tháng 10, bắt đầu từ 22:00. Quyền truy cập vào email công ty, thư mục chia sẻ từ xa và công cụ ERP sẽ tạm thời bị ngắt trong khoảng 4 giờ.",
-          },
-        ],
-        hasBilingual: true,
-        card: {
-          id: "pas-101",
-          title: "Notice of Office System Maintenance & Migration",
-          category: "part7",
-          subCategory: "text_types",
-          tag: "Part 7 Single · Memo nội bộ",
-          totalQuestions: 3,
-          studiedQuestions: 0,
-          correctAnswers: 0,
-          wrongAnswers: 0,
-          passageText:
-            "Please be informed that the internal cloud server will undergo scheduled maintenance this Saturday, October 15, starting at 10:00 PM. Access to company email, remote shared folders, and ERP tools will be temporarily unavailable for approximately four hours.",
-          passageTextVi:
-            "Xin lưu ý rằng máy chủ đám mây nội bộ sẽ được bảo trì định kỳ vào thứ Bảy tuần này, ngày 15 tháng 10, bắt đầu từ 22:00. Quyền truy cập vào email công ty, thư mục chia sẻ từ xa và công cụ ERP sẽ tạm thời bị ngắt trong khoảng 4 giờ.",
-          sampleQuestions: [
-            {
-              questionNum: "147",
-              question: "What is the main purpose of the notice?",
-              bilingual: "Mục đích chính của thông báo là gì?",
-              options: [
-                "To announce a scheduled server maintenance",
-                "To introduce a new cloud software",
-                "To warn about an unexpected network outage",
-                "To request password changes from employees",
-              ],
-              optionMeanings: [
-                "Thông báo lịch bảo trì máy chủ định kỳ",
-                "Giới thiệu phần mềm đám mây mới",
-                "Cảnh báo về sự cố mạng bất ngờ",
-                "Yêu cầu nhân viên đổi mật khẩu",
-              ],
-              correctIndex: 0,
-              explanation: "Đoạn đầu nêu rõ 'the internal cloud server will undergo scheduled maintenance...'",
-              vocabList: [
-                { word: "maintenance", pos: "n", level: "B1", ipa: "/ˈmeɪntənəns/", meaning: "sự bảo trì, bảo dưỡng" },
-                { word: "migration", pos: "n", level: "B2", ipa: "/maɪˈɡreɪʃn/", meaning: "sự di chuyển dữ liệu, chuyển đổi hệ thống" },
-              ],
-            },
-          ],
-        },
-      },
-      {
-        id: "pas-102",
-        title: "Customer Order Confirmation & Return Policy",
-        type: "Part 7 Double",
-        typeLabel: "Part 7 · Đoạn đôi (Double)",
-        format: "Email & Invoice / Hóa đơn đôi",
-        wordCount: 280,
-        displayWordCount: "280 từ",
-        questionsCount: 5,
-        vocabCount: 2,
-        topic: "Bán lẻ & Hậu cần",
-        text: "Thank you for shopping with Apex Tech. Below is the confirmation for your order #AP-8842 placed on October 12.\n\nAll items come with a 30-day money-back guarantee. If you are not completely satisfied with your purchase, you may initiate a return using the prepaid shipping label provided in your package.",
-        translation:
-          "Cảm ơn bạn đã mua sắm tại Apex Tech. Dưới đây là xác nhận cho đơn hàng #AP-8842 của bạn được đặt vào ngày 12 tháng 10.\n\nTất cả các mặt hàng đều được bảo đảm hoàn tiền trong 30 ngày. Nếu không hoàn toàn hài lòng với đơn hàng, bạn có thể thực hiện hoàn trả bằng nhãn vận chuyển trả trước được cung cấp trong gói hàng.",
-        subPassages: [
-          {
-            label: "Passage 1: Confirmation Email",
-            text: "Thank you for shopping with Apex Tech. Below is the confirmation for your order #AP-8842 placed on October 12.",
-            textVi: "Cảm ơn bạn đã mua sắm tại Apex Tech. Dưới đây là xác nhận cho đơn hàng #AP-8842 của bạn được đặt vào ngày 12 tháng 10.",
-          },
-          {
-            label: "Passage 2: Return Policy",
-            text: "All items come with a 30-day money-back guarantee. If you are not completely satisfied with your purchase, you may initiate a return using the prepaid shipping label provided in your package.",
-            textVi: "Tất cả các mặt hàng đều được bảo đảm hoàn tiền trong 30 ngày. Nếu không hoàn toàn hài lòng với đơn hàng, bạn có thể thực hiện hoàn trả bằng nhãn vận chuyển trả trước được cung cấp trong gói hàng.",
-          },
-        ],
-        hasBilingual: true,
-        card: {
-          id: "pas-102",
-          title: "Customer Order Confirmation & Return Policy",
-          category: "part7",
-          subCategory: "text_types",
-          tag: "Part 7 Double · Đơn hàng & Đổi trả",
-          totalQuestions: 5,
-          studiedQuestions: 0,
-          correctAnswers: 0,
-          wrongAnswers: 0,
-          passageText:
-            "Thank you for shopping with Apex Tech. Below is the confirmation for your order #AP-8842 placed on October 12.\n\nAll items come with a 30-day money-back guarantee. If you are not completely satisfied with your purchase, you may initiate a return using the prepaid shipping label provided in your package.",
-          passageTextVi:
-            "Cảm ơn bạn đã mua sắm tại Apex Tech. Dưới đây là xác nhận cho đơn hàng #AP-8842 của bạn được đặt vào ngày 12 tháng 10.\n\nTất cả các mặt hàng đều được bảo đảm hoàn tiền trong 30 ngày. Nếu không hoàn toàn hài lòng với đơn hàng, bạn có thể thực hiện hoàn trả bằng nhãn vận chuyển trả trước được cung cấp trong gói hàng.",
-          sampleQuestions: [
-            {
-              questionNum: "153",
-              question: "What is mentioned about the return policy?",
-              bilingual: "Điều gì được đề cập về chính sách hoàn trả?",
-              options: [
-                "Returns are accepted within 30 days",
-                "Customers must pay for return shipping",
-                "Items must be returned to a local store",
-                "Returns take up to 60 days to process",
-              ],
-              optionMeanings: [
-                "Chấp nhận hoàn trả trong vòng 30 ngày",
-                "Khách hàng phải trả phí vận chuyển hoàn trả",
-                "Sản phẩm phải được trả lại tại cửa hàng địa phương",
-                "Việc hoàn trả mất tới 60 ngày để xử lý",
-              ],
-              correctIndex: 0,
-              explanation: "Đoạn 2 nêu rõ: 'All items come with a 30-day money-back guarantee.'",
-              vocabList: [
-                { word: "guarantee", pos: "n", level: "B1", ipa: "/ˌɡærənˈtiː/", meaning: "sự bảo đảm, cam kết" },
-                { word: "prepaid", pos: "adj", level: "B2", ipa: "/ˌpriːˈpeɪd/", meaning: "đã trả trước phí" },
-              ],
-            },
-          ],
-        },
-      },
-      {
-        id: "pas-103",
-        title: "Corporate Annual Conference Schedule & Speaker Biographies",
-        type: "Part 7 Triple",
-        typeLabel: "Part 7 · Đoạn ba (Triple)",
-        format: "Schedule & Profiles / Lịch trình & Tiểu sử",
-        wordCount: 380,
-        displayWordCount: "380 từ",
-        questionsCount: 5,
-        vocabCount: 1,
-        topic: "Sự kiện & Hội nghị",
-        text: "The 14th Global Leadership Summit will commence on November 3 at the Pacific Grand Hotel. Keynote speakers include Dr. Helena Vance, Chief Economist at Apex Financial, and Marcus Sterling, CEO of Sterling Innovations.",
-        translation:
-          "Hội nghị Thượng đỉnh Lãnh đạo Toàn cầu lần thứ 14 sẽ khai mạc vào ngày 3 tháng 11 tại Khách sạn Pacific Grand. Các diễn giả chính bao gồm Tiến sĩ Helena Vance, Chuyên gia kinh tế trưởng tại Apex Financial, và Marcus Sterling, Tổng giám đốc của Sterling Innovations.",
-        subPassages: [
-          {
-            label: "Passage 1: Summit Schedule",
-            text: "The 14th Global Leadership Summit will commence on November 3 at the Pacific Grand Hotel.",
-            textVi: "Hội nghị Thượng đỉnh Lãnh đạo Toàn cầu lần thứ 14 sẽ khai mạc vào ngày 3 tháng 11 tại Khách sạn Pacific Grand.",
-          },
-          {
-            label: "Passage 2: Keynote Speakers",
-            text: "Keynote speakers include Dr. Helena Vance, Chief Economist at Apex Financial, and Marcus Sterling, CEO of Sterling Innovations.",
-            textVi: "Các diễn giả chính bao gồm Tiến sĩ Helena Vance, Chuyên gia kinh tế trưởng tại Apex Financial, và Marcus Sterling, Tổng giám đốc của Sterling Innovations.",
-          },
-        ],
-        hasBilingual: true,
-        card: {
-          id: "pas-103",
-          title: "Corporate Annual Conference Schedule & Speaker Biographies",
-          category: "part7",
-          subCategory: "text_types",
-          tag: "Part 7 Triple · Hội nghị & Diễn giả",
-          totalQuestions: 5,
-          studiedQuestions: 0,
-          correctAnswers: 0,
-          wrongAnswers: 0,
-          passageText:
-            "The 14th Global Leadership Summit will commence on November 3 at the Pacific Grand Hotel. Keynote speakers include Dr. Helena Vance, Chief Economist at Apex Financial, and Marcus Sterling, CEO of Sterling Innovations.",
-          passageTextVi:
-            "Hội nghị Thượng đỉnh Lãnh đạo Toàn cầu lần thứ 14 sẽ khai mạc vào ngày 3 tháng 11 tại Khách sạn Pacific Grand. Các diễn giả chính bao gồm Tiến sĩ Helena Vance, Chuyên gia kinh tế trưởng tại Apex Financial, và Marcus Sterling, Tổng giám đốc của Sterling Innovations.",
-          sampleQuestions: [
-            {
-              questionNum: "160",
-              question: "When will the summit begin?",
-              bilingual: "Hội nghị thượng đỉnh sẽ bắt đầu khi nào?",
-              options: ["On November 3", "On November 14", "On October 15", "On December 1"],
-              optionMeanings: ["Vào ngày 3 tháng 11", "Vào ngày 14 tháng 11", "Vào ngày 15 tháng 10", "Vào ngày 1 tháng 12"],
-              correctIndex: 0,
-              explanation: "Câu đầu tiên: 'The 14th Global Leadership Summit will commence on November 3...'",
-              vocabList: [
-                { word: "commence", pos: "v", level: "B2", ipa: "/kəˈmens/", meaning: "bắt đầu, khởi sự" },
-              ],
-            },
-          ],
-        },
-      },
-      {
-        id: "pas-104",
-        title: "Quarterly Financial Performance & Dividend Announcement",
-        type: "Part 6",
-        typeLabel: "Part 6 · Điền đoạn văn",
-        format: "Press Release / Thông cáo báo chí",
-        wordCount: 160,
-        displayWordCount: "160 từ",
-        questionsCount: 4,
-        vocabCount: 2,
-        topic: "Tài chính doanh nghiệp",
-        text: "Apex Industrial announced record fiscal third-quarter results today, reporting a 22 percent increase in operating revenue compared to the same period last year, driven by expanding international shipments.",
-        translation:
-          "Apex Industrial hôm nay đã công bố kết quả tài chính quý ba kỷ lục, báo cáo mức tăng 22% doanh thu hoạt động so với cùng kỳ năm ngoái, nhờ vào việc mở rộng các lô hàng quốc tế.",
-        subPassages: [
-          {
-            label: "Press Release / Thông cáo tài chính",
-            text: "Apex Industrial announced record fiscal third-quarter results today, reporting a 22 percent increase in operating revenue compared to the same period last year, driven by expanding international shipments.",
-            textVi: "Apex Industrial hôm nay đã công bố kết quả tài chính quý ba kỷ lục, báo cáo mức tăng 22% doanh thu hoạt động so với cùng kỳ năm ngoái, nhờ vào việc mở rộng các lô hàng quốc tế.",
-          },
-        ],
-        hasBilingual: true,
-        card: {
-          id: "pas-104",
-          title: "Quarterly Financial Performance & Dividend Announcement",
-          category: "part6",
-          subCategory: "text_types",
-          tag: "Part 6 · Báo cáo tài chính",
-          totalQuestions: 4,
-          studiedQuestions: 0,
-          correctAnswers: 0,
-          wrongAnswers: 0,
-          passageText:
-            "Apex Industrial announced record fiscal third-quarter results today, reporting a 22 percent increase in operating revenue compared to the same period last year, driven by expanding international shipments.",
-          passageTextVi:
-            "Apex Industrial hôm nay đã công bố kết quả tài chính quý ba kỷ lục, báo cáo mức tăng 22% doanh thu hoạt động so với cùng kỳ năm ngoái, nhờ vào việc mở rộng các lô hàng quốc tế.",
-          sampleQuestions: [
-            {
-              questionNum: "131",
-              question: "What is mentioned about Apex Industrial's revenue?",
-              bilingual: "Điều gì được đề cập về doanh thu của Apex Industrial?",
-              options: [
-                "It grew by 22 percent",
-                "It dropped significantly",
-                "It remained unchanged",
-                "It failed to meet expectations",
-              ],
-              optionMeanings: [
-                "Tăng 22%",
-                "Giảm đáng kể",
-                "Không thay đổi",
-                "Không đạt kỳ vọng",
-              ],
-              correctIndex: 0,
-              explanation: "Đoạn văn nêu rõ 'reporting a 22 percent increase in operating revenue...'",
-              vocabList: [
-                { word: "revenue", pos: "n", level: "B2", ipa: "/ˈrevənuː/", meaning: "doanh thu, lợi tức" },
-                { word: "dividend", pos: "n", level: "C1", ipa: "/ˈdɪvɪdend/", meaning: "cổ tức" },
-              ],
-            },
-          ],
-        },
-      },
-    ];
-
-    // 2. Real cards from user & database that are Part 6 or Part 7 (or have passages)
     const realPartCards = (cards || []).filter(
       (c) =>
         c.category === "part6" ||
@@ -330,11 +72,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
         Boolean(c.sampleQuestions?.some((q) => q.passageText?.trim() || (q.passages && q.passages.length > 0)))
     );
 
-    if (realPartCards.length === 0) {
-      return builtinPassages;
-    }
-
-    const convertedRealCards: PassageItem[] = realPartCards.map((c, idx) => {
+    const convertedRealCards: PassageItem[] = realPartCards.map((c) => {
       let text = c.passageText?.trim() || "";
       let translation = c.passageTextVi?.trim() || "";
       const subPassages: { label: string; text: string; textVi?: string }[] = [];
@@ -397,44 +135,12 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
 
       const isPlaceholder = !text || /^(questions?\s*\d|reading\s+passage)/i.test(text.trim());
       const actualWords = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
-      const questionsCount = c.sampleQuestions?.length || c.totalQuestions || 2;
+      const questionsCount = c.sampleQuestions?.length ?? c.totalQuestions ?? 0;
       const vocabCount = c.sampleQuestions?.reduce((acc, q) => acc + (q.vocabList?.length || 0), 0) || 0;
 
-      // Accurate Word Count Calculation
-      let wordCount = actualWords;
-      let displayWordCount = "";
+      const wordCount = actualWords;
+      const displayWordCount = actualWords > 0 ? `${actualWords.toLocaleString()} từ` : "—";
       const isPart6Card = c.category === "part6" || c.title.toLowerCase().includes("part 6");
-
-      if (!isPlaceholder && actualWords > 25) {
-        wordCount = actualWords;
-        displayWordCount = `${actualWords.toLocaleString()} từ`;
-      } else {
-        // Standard TOEIC ETS Official Benchmarks
-        if (isPart6Card) {
-          if (questionsCount >= 16) {
-            wordCount = 680;
-            displayWordCount = "~680 từ (4 đoạn)";
-          } else {
-            wordCount = Math.max(140, questionsCount * 42);
-            displayWordCount = `~${wordCount} từ`;
-          }
-        } else {
-          // Part 7
-          if (questionsCount >= 50 || c.title.toLowerCase().includes("part 7")) {
-            wordCount = 2850;
-            displayWordCount = "~2,850 từ (14 bài)";
-          } else if (subPassages.length >= 3 || questionsCount >= 5) {
-            wordCount = 450;
-            displayWordCount = "~450 từ (Đoạn ba)";
-          } else if (subPassages.length === 2) {
-            wordCount = 330;
-            displayWordCount = "~330 từ (Đoạn đôi)";
-          } else {
-            wordCount = 180;
-            displayWordCount = "~180 từ (Đoạn đơn)";
-          }
-        }
-      }
 
       // Determine Type (Part 6 / Part 7 Single / Double / Triple / Full Test)
       let type: "Part 6" | "Part 7 Single" | "Part 7 Double" | "Part 7 Triple" | "Part 7 Full" = "Part 7 Single";
@@ -446,9 +152,9 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
         type = "Part 6";
         typeLabel = "Part 6 · Điền đoạn văn";
       } else if (c.category === "part7" || lowerTitle.includes("part 7") || lowerTag.includes("part 7")) {
-        if (questionsCount >= 30 || (lowerTitle.includes("test") && !lowerTitle.includes("single") && !lowerTitle.includes("double"))) {
+        if (questionsCount >= 54) {
           type = "Part 7 Full";
-          typeLabel = "Part 7 · Đề thi hoàn chỉnh (54 câu)";
+          typeLabel = `Part 7 · Đề thi hoàn chỉnh (${questionsCount} câu)`;
         } else if (lowerTitle.includes("triple") || lowerTag.includes("triple") || subPassages.length >= 3) {
           type = "Part 7 Triple";
           typeLabel = "Part 7 · Đoạn ba (Triple)";
@@ -462,7 +168,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
       }
 
       // Determine Format
-      let format = c.tag?.split("·")[0]?.trim() || "Bài đọc chuẩn ETS";
+      let format = c.tag?.split("·")[0]?.trim() || "Chưa phân loại";
       const lowerText = (text + " " + c.title).toLowerCase();
       if (lowerText.includes("to:") && lowerText.includes("from:") && lowerText.includes("subject:")) {
         format = "Email / Thư điện tử";
@@ -481,7 +187,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
       }
 
       // Determine Topic
-      let topic = "Thương mại & Doanh nghiệp";
+      let topic = c.tag?.trim() || "Chưa phân loại";
       if (lowerText.includes("server") || lowerText.includes("software") || lowerText.includes("cloud") || lowerText.includes("network")) {
         topic = "Công nghệ thông tin";
       } else if (lowerText.includes("shipment") || lowerText.includes("courier") || lowerText.includes("delivery") || lowerText.includes("package")) {
@@ -494,7 +200,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
         topic = "Bảo trì & Tòa nhà";
       }
 
-      const displayId = c.id.startsWith("pas-") ? c.id : `pas-${String(100 + idx + 1)}`;
+      const displayId = c.id;
       const hasBilingual =
         Boolean(translation.trim()) ||
         Boolean(c.passageTextVi?.trim()) ||

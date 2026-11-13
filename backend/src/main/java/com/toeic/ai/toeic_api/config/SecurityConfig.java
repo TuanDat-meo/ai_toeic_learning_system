@@ -68,6 +68,7 @@ public class SecurityConfig {
                         request -> request.getServletPath().startsWith("/api/")))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
                             "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
@@ -88,7 +89,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
                             "/api/admin/announcements", "/api/admin/announcements/**",
                             "/api/admin/settings", "/api/admin/settings/**",
-                            "/api/admin/mock-tests/**", "/api/admin/reading/**")
+                            "/api/admin/mock-tests/**", "/api/admin/reading/**",
+                            "/api/admin/question-bank/**")
                             .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers(HttpMethod.POST, "/api/admin/data/import/preview")
                             .hasAnyRole("ADMIN", "TEACHER")

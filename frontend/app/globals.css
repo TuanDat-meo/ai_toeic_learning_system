@@ -485,6 +485,35 @@
   background: #64748b;
 }
 
+.grammar-list-scroll {
+  height: min(60vh, 680px);
+  min-height: 280px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f8fafc;
+}
+
+.grammar-list-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.grammar-list-scroll::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 9999px;
+}
+
+.grammar-list-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border: 2px solid #f8fafc;
+  border-radius: 9999px;
+}
+
+.grammar-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
