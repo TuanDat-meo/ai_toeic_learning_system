@@ -11,36 +11,60 @@ import {
   CheckCircle2,
   Play,
   ClipboardCheck,
+  FileEdit,
+  Sparkles,
 } from "lucide-react";
 
 interface ReadingCardGridProps {
   cards: ExerciseCardData[];
   viewMode: "table" | "grid";
+  highlightedCardId?: string | null;
   onStartPractice: (card: ExerciseCardData) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
   onOpenEditCard: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
+  onToggleCardStatus?: (card: ExerciseCardData) => void;
+  onDeleteAllDrafts?: (draftCards: ExerciseCardData[]) => void;
+  onPublishAllDrafts?: (draftCards: ExerciseCardData[]) => void;
 }
 
 function ReadingTableRow({
   card,
+  isHighlighted,
   onStartPractice,
   onOpenTheory,
   onOpenEditCard,
   onOpenDeleteConfirm,
+  onToggleCardStatus,
 }: {
   card: ExerciseCardData;
+  isHighlighted?: boolean;
   onStartPractice: (card: ExerciseCardData) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
   onOpenEditCard: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
+  onToggleCardStatus?: (card: ExerciseCardData) => void;
 }) {
   const fallbackTotal = card.totalQuestions || 10;
+  const isDraft = card.status === "draft";
 
   return (
-    <tr className="hover:bg-slate-50/70 transition">
+    <tr
+      className={`transition-all duration-300 ${
+        isHighlighted
+          ? "bg-emerald-50/50 ring-2 ring-emerald-400"
+          : "hover:bg-slate-50/70"
+      }`}
+    >
       <td className="py-3.5 px-4">
-        <p className="font-bold text-slate-900 leading-snug">{card.title}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-bold text-slate-900 leading-snug">{card.title}</p>
+          {isHighlighted && (
+            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-600 text-white animate-pulse whitespace-nowrap shrink-0 shadow-xs">
+              ✨ Mới thêm ✨
+            </span>
+          )}
+        </div>
         {card.tag && (
           <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded inline-block mt-0.5 whitespace-nowrap">
             {card.tag}
@@ -59,10 +83,27 @@ function ReadingTableRow({
       </td>
 
       <td className="py-3.5 px-4 whitespace-nowrap">
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-          <span>Đã phát hành</span>
-        </span>
+        {isDraft ? (
+          <button
+            type="button"
+            onClick={() => onToggleCardStatus?.(card)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition cursor-pointer shadow-2xs"
+            title="Đang là Bản nháp (học viên chưa nhìn thấy). Bấm vào đây nếu muốn Phát hành!"
+          >
+            <FileEdit className="w-3 h-3 text-amber-600" />
+            <span>Bản nháp</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onToggleCardStatus?.(card)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer shadow-2xs"
+            title="Đã phát hành cho học viên. Bấm vào đây nếu muốn chuyển về Bản nháp!"
+          >
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            <span>Đã phát hành</span>
+          </button>
+        )}
       </td>
 
       <td className="py-3.5 px-4 text-center whitespace-nowrap">
@@ -107,29 +148,70 @@ function ReadingTableRow({
 
 function ReadingGridItem({
   card,
+  isHighlighted,
   onStartPractice,
   onOpenTheory,
   onOpenEditCard,
   onOpenDeleteConfirm,
+  onToggleCardStatus,
 }: {
   card: ExerciseCardData;
+  isHighlighted?: boolean;
   onStartPractice: (card: ExerciseCardData) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
   onOpenEditCard: (card: ExerciseCardData, e?: React.MouseEvent) => void;
   onOpenDeleteConfirm: (card: ExerciseCardData) => void;
+  onToggleCardStatus?: (card: ExerciseCardData) => void;
 }) {
   const fallbackTotal = card.totalQuestions || 10;
+  const isDraft = card.status === "draft";
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
+    <div
+      className={`bg-white rounded-3xl border p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group ${
+        isHighlighted
+          ? "border-emerald-400 ring-2 ring-emerald-300 bg-emerald-50/20 shadow-md"
+          : "border-slate-200/80 hover:border-blue-400"
+      }`}
+    >
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase whitespace-nowrap">
-            {card.category}
-          </span>
-          <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap shrink-0">
-            {card.totalQuestions} câu
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase whitespace-nowrap">
+              {card.category}
+            </span>
+            {isDraft ? (
+              <button
+                type="button"
+                onClick={() => onToggleCardStatus?.(card)}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition inline-flex items-center gap-1 cursor-pointer"
+                title="Đang là Bản nháp. Bấm để Phát hành!"
+              >
+                <FileEdit className="w-2.5 h-2.5 text-amber-600" />
+                <span>Bản nháp</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onToggleCardStatus?.(card)}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition inline-flex items-center gap-1 cursor-pointer"
+                title="Đã phát hành. Bấm để chuyển về Bản nháp!"
+              >
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                <span>Đã phát hành</span>
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {isHighlighted && (
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-600 text-white animate-pulse whitespace-nowrap">
+                ✨ Mới thêm ✨
+              </span>
+            )}
+            <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap shrink-0">
+              {card.totalQuestions} câu
+            </span>
+          </div>
         </div>
 
         <div>
@@ -202,10 +284,14 @@ function ReadingGridItem({
 export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
   cards,
   viewMode,
+  highlightedCardId,
   onStartPractice,
   onOpenTheory,
   onOpenEditCard,
   onOpenDeleteConfirm,
+  onToggleCardStatus,
+  onDeleteAllDrafts,
+  onPublishAllDrafts,
 }) => {
   if (cards.length === 0) {
     return (
@@ -236,6 +322,10 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
     (c) => !testCards.some((tc) => tc.id === c.id) && !levelCards.some((lc) => lc.id === c.id)
   );
 
+  const draftAndCustomCards = cards.filter(
+    (c) => c.status === "draft" || c.id === highlightedCardId
+  );
+
   const renderCardGrid = (items: ExerciseCardData[]) => {
     if (items.length === 0) {
       return (
@@ -264,10 +354,12 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
                   <ReadingTableRow
                     key={card.id}
                     card={card}
+                    isHighlighted={card.id === highlightedCardId}
                     onStartPractice={onStartPractice}
                     onOpenTheory={onOpenTheory}
                     onOpenEditCard={onOpenEditCard}
                     onOpenDeleteConfirm={onOpenDeleteConfirm}
+                    onToggleCardStatus={onToggleCardStatus}
                   />
                 ))}
               </tbody>
@@ -283,10 +375,12 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
           <ReadingGridItem
             key={card.id}
             card={card}
+            isHighlighted={card.id === highlightedCardId}
             onStartPractice={onStartPractice}
             onOpenTheory={onOpenTheory}
             onOpenEditCard={onOpenEditCard}
             onOpenDeleteConfirm={onOpenDeleteConfirm}
+            onToggleCardStatus={onToggleCardStatus}
           />
         ))}
       </div>
@@ -295,6 +389,53 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
 
   return (
     <div className="@container w-full space-y-8">
+      {/* NHÓM 0: BÀI ĐỌC MỚI THÊM & BẢN NHÁP (LUÔN ĐỨNG TRÊN CÙNG ĐỂ ADMIN DỄ THẤY) */}
+      {draftAndCustomCards.length > 0 && (
+        <section className="space-y-3 p-4 sm:p-5 rounded-3xl bg-amber-50/40 border-2 border-amber-200/80 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>✨ Bài Đọc Mới Thêm &amp; Bản Nháp Quản Trị</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-extrabold font-mono shadow-xs">
+                  {draftAndCustomCards.length} Bài
+                </span>
+              </h3>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Các bộ đề vừa được import hoặc đang biên soạn ở trạng thái <strong>Bản nháp</strong> (học viên chưa nhìn thấy). Bạn có thể bấm vào huy hiệu trạng thái để Phát hành!
+              </p>
+            </div>
+
+            {draftAndCustomCards.length >= 2 && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {onPublishAllDrafts && (
+                  <button
+                    type="button"
+                    onClick={() => onPublishAllDrafts(draftAndCustomCards)}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    title="Phát hành toàn bộ các bài bản nháp cho học viên"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Phát hành tất cả ({draftAndCustomCards.length})</span>
+                  </button>
+                )}
+                {onDeleteAllDrafts && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteAllDrafts(draftAndCustomCards)}
+                    className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300 text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    title="Xóa toàn bộ các bài đọc bản nháp này"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Xóa toàn bộ ({draftAndCustomCards.length})</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {renderCardGrid(draftAndCustomCards)}
+        </section>
+      )}
+
       {/* NHÓM 1: 10 BỘ ĐỀ ETS 2024 */}
       {testCards.length > 0 && (
         <section className="space-y-3">

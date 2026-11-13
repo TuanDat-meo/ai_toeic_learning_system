@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { ExerciseCardData, SampleQuestion } from "@/app/admin/content/reading/types";
 import { extractCardPassageBlocks } from "@/lib/readingPassageUtils";
+import { normalizeOptions } from "@/lib/api/reading";
 import {
   ArrowLeft,
   Pencil,
@@ -58,8 +59,10 @@ export const ReadingContentAuditWorkspace: React.FC<ReadingContentAuditWorkspace
 
   const handleCopyQuestion = (q: SampleQuestion, idx: number) => {
     const letters = ["A", "B", "C", "D"];
-    const text = `Câu ${q.questionNum}: ${q.question}\n` +
-      q.options.map((opt, i) => `(${letters[i]}) ${opt}`).join("\n") +
+    const qText = q.question || (q as any).questionEn || (q as any).questionText || "";
+    const opts = normalizeOptions(q.options);
+    const text = `Câu ${q.questionNum}: ${qText}\n` +
+      opts.map((opt, i) => `(${letters[i]}) ${opt}`).join("\n") +
       `\nĐáp án: ${letters[q.correctIndex]}\nLời giải: ${q.explanation || "N/A"}`;
     navigator.clipboard.writeText(text);
     setCopiedIndex(idx);
@@ -365,20 +368,20 @@ export const ReadingContentAuditWorkspace: React.FC<ReadingContentAuditWorkspace
                   <div className="p-5 space-y-4">
                     <div>
                       <p className="text-sm font-bold text-slate-900 leading-snug">
-                        {q.question}
+                        {q.question || (q as any).questionEn || (q as any).questionText || "---"}
                       </p>
-                      {q.bilingual && (
+                      {(q.bilingual || (q as any).questionVi || (q as any).translation) && (
                         <p className="mt-1 text-xs text-slate-500 italic">
-                          Dịch: {q.bilingual}
+                          Dịch: {q.bilingual || (q as any).questionVi || (typeof (q as any).translation === "string" ? (q as any).translation : (q as any).translation?.questionVi)}
                         </p>
                       )}
                     </div>
 
                     {/* Options Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {q.options.map((opt, oIdx) => {
+                      {normalizeOptions(q.options).map((opt, oIdx) => {
                         const isCorrect = oIdx === q.correctIndex;
-                        const meaning = q.optionMeanings?.[oIdx];
+                        const meaning = q.optionMeanings?.[oIdx] || (q as any).optionTranslations?.[letters[oIdx]];
 
                         return (
                           <div
@@ -528,21 +531,21 @@ export const ReadingContentAuditWorkspace: React.FC<ReadingContentAuditWorkspace
               <div className="p-6 space-y-6">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 leading-snug">
-                    {currentQ.question}
+                    {currentQ.question || (currentQ as any).questionEn || (currentQ as any).questionText || "---"}
                   </h3>
-                  {currentQ.bilingual && (
+                  {(currentQ.bilingual || (currentQ as any).questionVi || (currentQ as any).translation) && (
                     <p className="mt-1.5 text-xs text-slate-500 italic">
-                      Dịch: {currentQ.bilingual}
+                      Dịch: {currentQ.bilingual || (currentQ as any).questionVi || (typeof (currentQ as any).translation === "string" ? (currentQ as any).translation : (currentQ as any).translation?.questionVi)}
                     </p>
                   )}
                 </div>
 
                 {/* 4 Options */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {currentQ.options.map((opt, oIdx) => {
+                  {normalizeOptions(currentQ.options).map((opt, oIdx) => {
                     const letters = ["A", "B", "C", "D"];
                     const isCorrect = oIdx === currentQ.correctIndex;
-                    const meaning = currentQ.optionMeanings?.[oIdx];
+                    const meaning = currentQ.optionMeanings?.[oIdx] || (currentQ as any).optionTranslations?.[letters[oIdx]];
 
                     return (
                       <div

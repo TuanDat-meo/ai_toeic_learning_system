@@ -40,6 +40,8 @@ export interface ExerciseCardData {
   subCategory?: "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types";
   subtitle?: string;
   tag?: string;
+  status?: "draft" | "published";
+  createdAt?: string | number;
   totalQuestions: number;
   studiedQuestions: number;
   correctAnswers: number;

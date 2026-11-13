@@ -47,12 +47,12 @@ function normalizeVocabItem(raw: unknown): VocabItem | null {
   };
 }
 
-function normalizeVocabArray(raw: unknown): VocabItem[] {
+export function normalizeVocabArray(raw: unknown): VocabItem[] {
   if (!Array.isArray(raw)) return [];
   return raw.map(normalizeVocabItem).filter((item): item is VocabItem => item !== null);
 }
 
-function normalizeOptions(rawOptions: unknown): string[] {
+export function normalizeOptions(rawOptions: unknown): string[] {
   if (Array.isArray(rawOptions)) {
     const arr = rawOptions.map((item) => {
       if (typeof item === 'string') return item;
@@ -67,12 +67,17 @@ function normalizeOptions(rawOptions: unknown): string[] {
   }
   if (rawOptions && typeof rawOptions === 'object') {
     const obj = rawOptions as Record<string, unknown>;
-    return ['A', 'B', 'C', 'D'].map((key) => String(obj[key] ?? obj[key.toLowerCase()] ?? ''));
+    const opts = ['A', 'B', 'C', 'D'].map((key) => String(obj[key] ?? obj[key.toLowerCase()] ?? obj[String(key.charCodeAt(0) - 64)] ?? ''));
+    if (!opts[0] && !opts[1] && !opts[2] && !opts[3]) {
+      const vals = Object.values(obj).map(v => String(v ?? ''));
+      for (let i = 0; i < 4; i++) opts[i] = vals[i] || '';
+    }
+    return opts;
   }
   return ['', '', '', ''];
 }
 
-function normalizeSampleQuestion(
+export function normalizeSampleQuestion(
   raw: unknown,
   idx: number,
   fallbackPassageText?: string,
@@ -82,19 +87,30 @@ function normalizeSampleQuestion(
   const options = normalizeOptions(q.options);
   let correctIndex = typeof q.correctIndex === 'number' ? q.correctIndex : -1;
   if (correctIndex < 0 || correctIndex > 3) {
-    const ans = String(q.correctAnswer || '').trim().toUpperCase();
-    const letterIdx = ['A', 'B', 'C', 'D'].indexOf(ans);
+    const ans = String(q.correctAnswer ?? q.answer ?? q.key ?? '').trim().toUpperCase();
+    const letterIdx = ['A', 'B', 'C', 'D'].indexOf(ans.charAt(0));
     correctIndex = letterIdx >= 0 ? letterIdx : 0;
   }
 
   let bilingual = typeof q.bilingual === 'string' ? q.bilingual : '';
+  if (!bilingual && typeof q.questionVi === 'string') {
+    bilingual = q.questionVi;
+  }
   if (!bilingual && q.translation) {
     if (typeof q.translation === 'string') {
       bilingual = q.translation;
     } else if (typeof q.translation === 'object') {
       const tr = q.translation as Record<string, unknown>;
-      bilingual = String(tr.questionVi || tr.fullSentenceVi || '');
+      bilingual = String(tr.questionVi || tr.fullSentenceVi || tr.vi || '');
     }
+  }
+
+  let optionMeanings: string[] | undefined = undefined;
+  if (Array.isArray(q.optionMeanings)) {
+    optionMeanings = q.optionMeanings.map(String);
+  } else if (q.optionTranslations && typeof q.optionTranslations === 'object') {
+    const ot = q.optionTranslations as Record<string, unknown>;
+    optionMeanings = ['A', 'B', 'C', 'D'].map((key) => String(ot[key] ?? ot[key.toLowerCase()] ?? ''));
   }
 
   const vocabList = normalizeVocabArray(q.vocabList ?? q.vocabulary);
@@ -105,12 +121,12 @@ function normalizeSampleQuestion(
     passageTitle: typeof q.passageTitle === 'string' ? q.passageTitle : undefined,
     passageTextVi: typeof q.passageTextVi === 'string' ? q.passageTextVi : fallbackPassageTextVi,
     passages: Array.isArray(q.passages) ? (q.passages as ReadingSubPassage[]) : undefined,
-    question: String(q.question ?? q.questionText ?? q.questionEn ?? ''),
+    question: String(q.question ?? q.questionText ?? q.questionEn ?? q.text ?? q.content ?? ''),
     ...(bilingual ? { bilingual } : {}),
     options,
-    ...(Array.isArray(q.optionMeanings) ? { optionMeanings: q.optionMeanings as string[] } : {}),
+    ...(optionMeanings ? { optionMeanings } : {}),
     correctIndex,
-    explanation: String(q.explanation ?? q.solutionMethod ?? ''),
+    explanation: String(q.explanation ?? q.solutionMethod ?? q.explain ?? q.loiGiai ?? ''),
     ...(Array.isArray(q.steps) ? { steps: q.steps as SampleQuestion['steps'] } : {}),
     vocabList,
   };
@@ -173,6 +189,14 @@ export function mapReadingCard(
         : undefined,
     subtitle: typeof raw.subtitle === 'string' && raw.subtitle ? raw.subtitle : undefined,
     tag: typeof raw.tag === 'string' && raw.tag ? raw.tag : undefined,
+    status:
+      raw.status === 'draft' || raw.status === 'published'
+        ? (raw.status as ExerciseCardData['status'])
+        : undefined,
+    createdAt:
+      typeof raw.createdAt === 'string' || typeof raw.createdAt === 'number'
+        ? raw.createdAt
+        : undefined,
     totalQuestions:
       typeof raw.totalQuestions === 'number' && raw.totalQuestions > 0
         ? raw.totalQuestions
@@ -230,6 +254,7 @@ export function mergeReadingCardsWithBackend(
       title: bCard.title || localMatch.title,
       subtitle: mergedSubtitle,
       tag: bCard.tag || localMatch.tag,
+      status: localMatch.status || bCard.status,
       passageText: mergedPassageText,
       passageTextVi: mergedPassageTextVi,
       passages: bCard.passages && bCard.passages.length > 0 ? bCard.passages : localMatch.passages,

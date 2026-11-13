@@ -67,10 +67,10 @@ export const ReadingHeader: React.FC<ReadingHeaderProps> = ({
             type="button"
             onClick={onOpenImportModal}
             className="inline-flex h-10 sm:h-11 items-center gap-2 rounded-xl bg-emerald-600 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 cursor-pointer transition whitespace-nowrap"
-            title="Import hàng loạt bằng cách dán văn bản Word/PDF hoặc tải file Excel"
+            title="Import bài đọc hàng loạt bằng cách dán văn bản Word/PDF hoặc tải file Excel"
           >
             <Upload size={16} aria-hidden="true" />
-            <span>Import đề thi</span>
+            <span>Import bài đọc</span>
           </button>
           <button
             type="button"
