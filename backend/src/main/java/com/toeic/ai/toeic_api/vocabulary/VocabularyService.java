@@ -3,7 +3,11 @@ package com.toeic.ai.toeic_api.vocabulary;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -11,10 +15,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
@@ -56,7 +62,7 @@ public class VocabularyService {
                 SELECT w.id, w.set_id, w.word, w.ipa, w.part_of_speech, w.meaning,
                        w.meaning_source, w.meaning_edited,
                        w.example, w.example_meaning, w.level,
-                       w.audio_url, w.audio_region, w.word_family,
+                       w.audio_url, w.audio_region, w.word_family, w.term_type, w.dictionary_source_url,
                        COALESCE(p.starred, w.starred) AS starred,
                        COALESCE(p.status, 'NEW') AS status
                 FROM vocabulary_items w
@@ -115,7 +121,7 @@ public class VocabularyService {
                 SELECT w.id, w.set_id, w.word, w.ipa, w.part_of_speech, w.meaning,
                        w.meaning_source, w.meaning_edited,
                        w.example, w.example_meaning, w.level,
-                       w.audio_url, w.audio_region, w.word_family,
+                       w.audio_url, w.audio_region, w.word_family, w.term_type, w.dictionary_source_url,
                        COALESCE(p.starred, w.starred) AS starred,
                        COALESCE(p.status, 'NEW') AS status
                 FROM vocabulary_items w
@@ -200,9 +206,11 @@ public class VocabularyService {
         boolean meaningEdited = Boolean.TRUE.equals(req.meaningEdited());
         String example = primarySense.example();
         String exampleMeaning = req.exampleMeaning() != null ? req.exampleMeaning().trim() : "";
-        String audioUrl = req.audioUrl() != null ? req.audioUrl().trim() : "";
+        String audioUrl = vocabularyAudioUrl(req.audioUrl(), word);
         String audioRegion = normalizeAudioRegion(req.audioRegion());
         String wordFamily = req.wordFamily() != null ? req.wordFamily().trim() : "";
+        String termType = normalizeTermType(req.termType());
+        String dictionarySourceUrl = normalizeDictionarySourceUrl(req.dictionarySourceUrl());
         String level = formatLevel(req.level());
 
         List<String> existingWordIds = jdbc.query(
@@ -222,12 +230,14 @@ public class VocabularyService {
                         audio_url = COALESCE(NULLIF(audio_url, ''), ?),
                         audio_region = CASE WHEN audio_region IS NULL OR audio_region = 'UNKNOWN' THEN ? ELSE audio_region END,
                         word_family = COALESCE(NULLIF(word_family, ''), ?),
+                        term_type = COALESCE(NULLIF(?, ''), term_type),
+                        dictionary_source_url = COALESCE(NULLIF(?, ''), dictionary_source_url),
                         updated_at = now()
                     WHERE id = ?
-                    """, ipa, audioUrl, audioRegion, wordFamily, existingWordId);
+                    """, ipa, audioUrl, audioRegion, wordFamily, termType, dictionarySourceUrl, existingWordId);
             for (VocabularySenseInput sense : senses) {
                 upsertSense(existingWordId, sense.partOfSpeech(), sense.subCategory(), sense.meaning(),
-                        sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms());
+                        sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms(), sense.definitionEn());
             }
             addRelatedForms(existingWordId, req.relatedForms());
             return getWordsForSet(setId, null).stream()
@@ -241,10 +251,10 @@ public class VocabularyService {
         int orderIndex = maxOrder != null ? maxOrder : 0;
 
         jdbc.update("""
-                INSERT INTO vocabulary_items (id, set_id, word, ipa, part_of_speech, meaning, meaning_source, meaning_edited, example, example_meaning, level, audio_url, audio_region, word_family, starred, order_index, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, now(), now())
+                INSERT INTO vocabulary_items (id, set_id, word, ipa, part_of_speech, meaning, meaning_source, meaning_edited, example, example_meaning, level, audio_url, audio_region, word_family, term_type, dictionary_source_url, starred, order_index, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, now(), now())
                 """, wordId, setId, word, ipa, pos, meaning, meaningSource, meaningEdited,
-                example, exampleMeaning, level, audioUrl, audioRegion, wordFamily, orderIndex);
+                example, exampleMeaning, level, audioUrl, audioRegion, wordFamily, termType, dictionarySourceUrl, orderIndex);
         replaceSenses(wordId, senses);
         replaceRelatedForms(wordId, req.relatedForms());
 
@@ -255,6 +265,76 @@ public class VocabularyService {
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR, "Không thể tải từ vựng vừa tạo."));
+    }
+
+    @Transactional
+    public void addWordsFromQuickImport(String setId, List<Map<String, Object>> rows) {
+        if (setId == null || setId.isBlank()) {
+            throw new IllegalArgumentException("Chọn bộ từ vựng trước khi nhập.");
+        }
+        if (rows == null || rows.isEmpty()) {
+            throw new IllegalArgumentException("Không có dòng từ vựng để nhập.");
+        }
+        if (rows.size() > 5_000) {
+            throw new IllegalArgumentException("Mỗi lần chỉ được nhập tối đa 5.000 từ.");
+        }
+        Integer setCount = jdbc.queryForObject(
+                "SELECT count(*) FROM vocabulary_test_sets WHERE id = ?", Integer.class, setId);
+        if (setCount == null || setCount == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bộ từ vựng: " + setId);
+        }
+
+        List<ObjectNode> normalizedRows = new ArrayList<>(rows.size());
+        for (Map<String, Object> value : rows) {
+            normalizedRows.add(objectMapper.valueToTree(value));
+        }
+        for (int index = 0; index < normalizedRows.size(); index++) {
+            ObjectNode row = normalizedRows.get(index);
+            if (row.path("word").asText("").isBlank()) {
+                throw new IllegalArgumentException("Dòng " + (index + 1) + " thiếu từ tiếng Anh.");
+            }
+            if (row.path("meaning").asText("").isBlank()) {
+                throw new IllegalArgumentException("Dòng " + (index + 1) + " thiếu nghĩa tiếng Việt.");
+            }
+            row.put("setId", setId);
+        }
+        normalizedRows.forEach(this::syncFromImportItem);
+    }
+
+    @Transactional
+    public int fillMissingAudioUrls(String setId) {
+        List<AudioSyncTarget> targets;
+        if (setId == null || setId.isBlank()) {
+            targets = jdbc.query(
+                    """
+                    SELECT id, word FROM vocabulary_items
+                    WHERE audio_url IS NULL OR BTRIM(audio_url) = ''
+                    """,
+                    (rs, rowNum) -> new AudioSyncTarget(rs.getString("id"), rs.getString("word")));
+        } else {
+            targets = jdbc.query(
+                    """
+                    SELECT id, word FROM vocabulary_items
+                    WHERE set_id = ? AND (audio_url IS NULL OR BTRIM(audio_url) = '')
+                    """,
+                    (rs, rowNum) -> new AudioSyncTarget(rs.getString("id"), rs.getString("word")),
+                    setId);
+        }
+        if (targets.isEmpty()) return 0;
+
+        List<Object[]> updates = new ArrayList<>();
+        for (AudioSyncTarget target : targets) {
+            String audioUrl = vocabularyAudioUrl("", target.word());
+            if (!audioUrl.isBlank()) updates.add(new Object[] { audioUrl, target.id() });
+        }
+        if (updates.isEmpty()) return 0;
+        jdbc.batchUpdate(
+                """
+                UPDATE vocabulary_items SET audio_url = ?, updated_at = now()
+                WHERE id = ? AND (audio_url IS NULL OR BTRIM(audio_url) = '')
+                """,
+                updates);
+        return updates.size();
     }
 
     @Transactional
@@ -272,9 +352,11 @@ public class VocabularyService {
         Boolean meaningEdited = req.meaningEdited();
         String example = primarySense.example();
         String exampleMeaning = req.exampleMeaning() != null ? req.exampleMeaning().trim() : "";
-        String audioUrl = req.audioUrl() != null ? req.audioUrl().trim() : "";
+        String audioUrl = vocabularyAudioUrl(req.audioUrl(), word);
         String audioRegion = normalizeAudioRegion(req.audioRegion());
         String wordFamily = req.wordFamily() != null ? req.wordFamily().trim() : "";
+        String termType = normalizeTermType(req.termType());
+        String dictionarySourceUrl = normalizeDictionarySourceUrl(req.dictionarySourceUrl());
         String level = formatLevel(req.level());
 
         int rows = jdbc.update("""
@@ -291,10 +373,13 @@ public class VocabularyService {
                     audio_url = ?,
                     audio_region = ?,
                     word_family = ?,
+                    term_type = COALESCE(?, term_type),
+                    dictionary_source_url = COALESCE(?, dictionary_source_url),
                     updated_at = now()
                 WHERE id = ?
                 """, word, word, ipa, pos, meaning, meaningSource, meaningEdited,
-                example, exampleMeaning, level, audioUrl, audioRegion, wordFamily, wordId);
+                example, exampleMeaning, level, audioUrl, audioRegion, wordFamily, termType,
+                dictionarySourceUrl, wordId);
 
         if (rows == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy từ vựng: " + wordId);
@@ -304,7 +389,7 @@ public class VocabularyService {
         if (req.relatedForms() != null) {
             replaceRelatedForms(wordId, req.relatedForms());
         }
-        List<VocabularyWord> found = jdbc.query("SELECT id, set_id, word, ipa, part_of_speech, meaning, meaning_source, meaning_edited, example, example_meaning, level, audio_url, audio_region, word_family, starred, 'NEW' AS status FROM vocabulary_items WHERE id = ?", (rs, rowNum) -> mapWord(rs), wordId);
+        List<VocabularyWord> found = jdbc.query("SELECT id, set_id, word, ipa, part_of_speech, meaning, meaning_source, meaning_edited, example, example_meaning, level, audio_url, audio_region, word_family, term_type, dictionary_source_url, starred, 'NEW' AS status FROM vocabulary_items WHERE id = ?", (rs, rowNum) -> mapWord(rs), wordId);
         return loadSenses(found).get(0);
     }
 
@@ -317,6 +402,15 @@ public class VocabularyService {
         String setId = setIds.get(0);
         jdbc.update("DELETE FROM vocabulary_items WHERE id = ?", wordId);
         jdbc.update("UPDATE vocabulary_test_sets SET word_count = (SELECT count(*) FROM vocabulary_items WHERE set_id = ?), updated_at = now() WHERE id = ?", setId, setId);
+    }
+
+    static String vocabularyAudioUrl(String audioUrl, String word) {
+        String source = audioUrl == null ? "" : audioUrl.trim();
+        if (!source.isEmpty()) return source;
+        if (word == null || word.isBlank()) return "";
+        String normalizedWord = word.replace('(', ' ').replace(')', ' ').trim().replaceAll("\\s+", " ");
+        if (normalizedWord.length() > 80 || !normalizedWord.matches("(?i)^[a-z][a-z' -]*$")) return "";
+        return "/api/dictionary/audio?word=" + URLEncoder.encode(normalizedWord, StandardCharsets.UTF_8);
     }
 
     @Transactional
@@ -376,7 +470,8 @@ public class VocabularyService {
             example = importedSenses.get(0).example();
         }
         String exampleMeaning = data.path("exampleVi").asText("").trim();
-        String audioUrl = data.path("audioUrl").asText("").trim();
+        String suppliedAudioUrl = data.path("audioUrl").asText("").trim();
+        String audioUrl = vocabularyAudioUrl(suppliedAudioUrl, word);
         String subCategory = data.path("subCategory").asText(data.path("sub_category").asText("")).trim();
         if (!importedSenses.isEmpty()) {
             subCategory = importedSenses.get(0).subCategory();
@@ -430,6 +525,7 @@ public class VocabularyService {
         // Determine title and category for the test set
         String setTitle = "Bộ từ vựng: " + setId;
         String setCategory = "General";
+        Timestamp releaseAt = parseReleaseAt(data.path("releaseAt").asText(""));
         if (data.has("category") && !data.path("category").asText("").isBlank()) {
             setTitle = data.path("category").asText("").trim();
         } else if (data.has("setName") && !data.path("setName").asText("").isBlank()) {
@@ -450,13 +546,17 @@ public class VocabularyService {
 
         // Ensure target set exists in vocabulary_test_sets to satisfy foreign key constraint
         jdbc.update("""
-                INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status, created_at, updated_at)
-                VALUES (?, ?, '2024', ?, 0, 'PUBLISHED', now(), now())
+                INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status, release_at, created_at, updated_at)
+                VALUES (?, ?, '2024', ?, 0, 'PUBLISHED', COALESCE(?, now()), now(), now())
                 ON CONFLICT (id) DO UPDATE SET
                     title = CASE WHEN vocabulary_test_sets.title LIKE 'Bộ từ vựng: %' AND EXCLUDED.title NOT LIKE 'Bộ từ vựng: %' THEN EXCLUDED.title ELSE vocabulary_test_sets.title END,
                     category = CASE WHEN vocabulary_test_sets.category = 'General' AND EXCLUDED.category <> 'General' THEN EXCLUDED.category ELSE vocabulary_test_sets.category END,
+                    release_at = CASE
+                        WHEN ?::timestamptz IS NULL THEN COALESCE(vocabulary_test_sets.release_at, now())
+                        ELSE EXCLUDED.release_at
+                    END,
                     updated_at = now()
-                """, setId, setTitle, setCategory);
+                """, setId, setTitle, setCategory, releaseAt, releaseAt);
 
         // Upsert into vocabulary_items
         boolean createSeparateMeaning = "CREATE_NEW".equals(data.path("duplicateResolution").asText());
@@ -483,11 +583,16 @@ public class VocabularyService {
                         example = COALESCE(NULLIF(?, ''), example),
                         example_meaning = COALESCE(NULLIF(?, ''), example_meaning),
                         level = ?,
-                        audio_url = COALESCE(NULLIF(?, ''), audio_url),
+                        audio_url = CASE
+                            WHEN ? <> '' THEN ?
+                            WHEN audio_url IS NULL OR BTRIM(audio_url) = '' THEN ?
+                            ELSE audio_url
+                        END,
                         word_family = COALESCE(NULLIF(?, ''), word_family),
                         updated_at = now()
                     WHERE id = ?
-                    """, ipa, pos, meaning, meaningSource, meaningEdited, example, exampleMeaning, level, audioUrl, wordFamily, wordId);
+                    """, ipa, pos, meaning, meaningSource, meaningEdited, example, exampleMeaning, level,
+                    suppliedAudioUrl, suppliedAudioUrl, audioUrl, wordFamily, wordId);
         } else {
             String wordSlug = slugify(word);
             wordId = "w-" + wordSlug.substring(0, Math.min(wordSlug.length(), 53))
@@ -524,9 +629,10 @@ public class VocabularyService {
                     .asText(sense.path("part_of_speech").asText(sense.path("pos").asText(""))));
             String meaning = sense.path("meaning")
                     .asText(sense.path("meaningVi").asText(sense.path("meaning_vi").asText(""))).trim();
-            if (partOfSpeech.isBlank() || meaning.isBlank()) {
+            String definitionEn = sense.path("definitionEn").asText(sense.path("definition_en").asText("")).trim();
+            if (partOfSpeech.isBlank() || (meaning.isBlank() && definitionEn.isBlank())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Mỗi nghĩa cần có từ loại và nghĩa tiếng Việt.");
+                        "Mỗi nghĩa cần có từ loại và định nghĩa tiếng Anh hoặc nghĩa tiếng Việt.");
             }
             senses.add(new VocabularySenseInput(
                     partOfSpeech,
@@ -535,7 +641,8 @@ public class VocabularyService {
                     sense.path("example").asText(sense.path("exampleEn").asText(sense.path("example_en").asText(""))).trim(),
                     sense.path("exampleMeaning").asText(sense.path("exampleVi").asText(sense.path("example_vi").asText(""))).trim(),
                     sense.path("synonyms").asText("").trim(),
-                    sense.path("antonyms").asText("").trim()
+                    sense.path("antonyms").asText("").trim(),
+                    definitionEn
             ));
         }
         return senses;
@@ -544,7 +651,19 @@ public class VocabularyService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void seedInitialDataIfEmpty() {
-        // Ensure default sets exist
+        boolean initializeDefaultVocabulary = jdbc.update("""
+                INSERT INTO vocabulary_seed_state (seed_key)
+                VALUES ('default-vocabulary')
+                ON CONFLICT (seed_key) DO NOTHING
+                """) == 1;
+        if (!initializeDefaultVocabulary) {
+            jdbc.update("""
+                    UPDATE vocabulary_test_sets s
+                    SET word_count = (SELECT count(*) FROM vocabulary_items w WHERE w.set_id = s.id)
+                    """);
+            return;
+        }
+
         jdbc.update("""
                 INSERT INTO vocabulary_test_sets (id, title, year, category, word_count, status)
                 VALUES ('ets2024-t1', 'ETS 2024 - Test 1 Vocabulary', '2024', '2024', 8, 'PUBLISHED')
@@ -561,8 +680,8 @@ public class VocabularyService {
                 ON CONFLICT (id) DO NOTHING
                 """);
 
-        // Seed words for ets2024-t1 if empty
-        Integer t1WordCount = jdbc.queryForObject("SELECT count(*) FROM vocabulary_items WHERE set_id = 'ets2024-t1'", Integer.class);
+        Integer t1WordCount = jdbc.queryForObject(
+                "SELECT count(*) FROM vocabulary_items WHERE set_id = 'ets2024-t1'", Integer.class);
         if (t1WordCount == null || t1WordCount == 0) {
             String[][] wordsT1 = {
                 {"w-1", "negotiate", "/nəˈɡoʊʃieɪt/", "Verb", "Đàm phán, thương lượng hợp đồng", "The executive team successfully negotiated a lucrative distribution agreement.", "Ban điều hành đã thương lượng thành công thỏa thuận phân phối.", "B2", "true"},
@@ -585,8 +704,8 @@ public class VocabularyService {
             }
         }
 
-        // Seed words for ets2024-t2 if empty
-        Integer t2WordCount = jdbc.queryForObject("SELECT count(*) FROM vocabulary_items WHERE set_id = 'ets2024-t2'", Integer.class);
+        Integer t2WordCount = jdbc.queryForObject(
+                "SELECT count(*) FROM vocabulary_items WHERE set_id = 'ets2024-t2'", Integer.class);
         if (t2WordCount == null || t2WordCount == 0) {
             String[][] wordsT2 = {
                 {"w-t2-1", "compromise", "/ˈkɑːmprəmaɪz/", "Noun", "Sự thỏa hiệp, thỏa thuận nhượng bộ", "The management reached a compromise with the union over working hours.", "Ban quản lý đã đạt được thỏa thuận thỏa hiệp với công đoàn về giờ làm việc.", "B2", "true"},
@@ -609,8 +728,8 @@ public class VocabularyService {
             }
         }
 
-        // Seed words for 600-essential if empty
-        Integer w600Count = jdbc.queryForObject("SELECT count(*) FROM vocabulary_items WHERE set_id = '600-essential'", Integer.class);
+        Integer w600Count = jdbc.queryForObject(
+                "SELECT count(*) FROM vocabulary_items WHERE set_id = '600-essential'", Integer.class);
         if (w600Count == null || w600Count == 0) {
             String[][] words600 = {
                 {"w-600-1", "abide by", "/əˈbaɪd baɪ/", "Verb", "Tuân thủ, tuân theo hợp đồng", "Both parties agreed to abide by the terms stated in the agreement.", "Cả hai bên đã đồng ý tuân thủ các điều khoản được nêu trong hợp đồng.", "B1", "true"},
@@ -635,20 +754,6 @@ public class VocabularyService {
             }
         }
 
-        // Also sync any published VOCABULARY rows from imported_content
-        try {
-            List<String> publishedJson = jdbc.query(
-                    "SELECT payload_json::text FROM imported_content WHERE content_type = 'VOCABULARY'",
-                    (rs, rowNum) -> rs.getString(1));
-            for (String json : publishedJson) {
-                try {
-                    JsonNode node = objectMapper.readTree(json);
-                    syncFromImportItem(node);
-                } catch (Exception ignored) {}
-            }
-        } catch (Exception ignored) {}
-
-        // Synchronize all set word counts to actual items count
         jdbc.update("""
                 UPDATE vocabulary_test_sets s
                 SET word_count = (SELECT count(*) FROM vocabulary_items w WHERE w.set_id = s.id)
@@ -684,6 +789,8 @@ public class VocabularyService {
                 rs.getString("audio_url"),
                 rs.getString("audio_region"),
                 rs.getString("word_family"),
+                rs.getString("term_type"),
+                rs.getString("dictionary_source_url"),
                 rs.getBoolean("starred"),
                 rs.getString("status"),
                 List.of(),
@@ -698,7 +805,7 @@ public class VocabularyService {
         Map<String, List<VocabularySense>> sensesByItem = new HashMap<>();
         Map<String, List<VocabularyRelatedForm>> relatedFormsByItem = new HashMap<>();
         jdbc.query(
-                "SELECT id, vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms "
+                "SELECT id, vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, definition_en "
                         + "FROM vocabulary_item_senses WHERE vocabulary_item_id IN (" + placeholders + ") "
                         + "ORDER BY order_index, id",
                 (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
@@ -711,7 +818,8 @@ public class VocabularyService {
                                 rs.getString("example"),
                                 rs.getString("example_meaning"),
                                 rs.getString("synonyms"),
-                                rs.getString("antonyms")
+                                rs.getString("antonyms"),
+                                rs.getString("definition_en")
                         ));
                 },
                 ids.toArray()
@@ -747,13 +855,13 @@ public class VocabularyService {
             List<VocabularySense> senses = deduplicateSenseRecords(sensesByItem.getOrDefault(word.id(), List.of()));
             if (senses.isEmpty() && word.meaning() != null && !word.meaning().isBlank()) {
                 senses = List.of(new VocabularySense(null, word.partOfSpeech(), "", word.meaning(), word.example(),
-                        word.exampleMeaning(), "", ""));
+                        word.exampleMeaning(), "", "", ""));
             }
             return new VocabularyWord(
                     word.id(), word.setId(), word.word(), word.ipa(), word.partOfSpeech(), word.meaning(),
                     word.meaningSource(), word.meaningEdited(), word.example(), word.exampleMeaning(), word.level(),
-                    word.audioUrl(), word.audioRegion(), word.wordFamily(), word.starred(), word.status(), senses,
-                    relatedFormsByItem.getOrDefault(word.id(), List.of())
+                    word.audioUrl(), word.audioRegion(), word.wordFamily(), word.termType(), word.dictionarySourceUrl(),
+                    word.starred(), word.status(), senses, relatedFormsByItem.getOrDefault(word.id(), List.of())
             );
         }).toList();
     }
@@ -826,9 +934,10 @@ public class VocabularyService {
             if (sense == null) continue;
             String pos = VocabularyPartOfSpeech.normalize(sense.partOfSpeech());
             String meaning = sense.meaning() == null ? "" : sense.meaning().trim();
-            if (pos.isEmpty() || meaning.isEmpty()) {
+            String definitionEn = sense.definitionEn() == null ? "" : sense.definitionEn().trim();
+            if (pos.isEmpty() || (meaning.isEmpty() && definitionEn.isEmpty())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Mỗi nghĩa cần có từ loại và nghĩa tiếng Việt.");
+                        "Mỗi nghĩa cần có từ loại và định nghĩa tiếng Anh hoặc nghĩa tiếng Việt.");
             }
             VocabularySenseInput normalizedSense = new VocabularySenseInput(
                     pos,
@@ -837,9 +946,10 @@ public class VocabularyService {
                     sense.example() == null ? "" : sense.example().trim(),
                     sense.exampleMeaning() == null ? "" : sense.exampleMeaning().trim(),
                     sense.synonyms() == null ? "" : sense.synonyms().trim(),
-                    sense.antonyms() == null ? "" : sense.antonyms().trim()
+                    sense.antonyms() == null ? "" : sense.antonyms().trim(),
+                    definitionEn
             );
-            String key = senseKey(pos, meaning);
+            String key = senseKey(pos, meaning, definitionEn);
             VocabularySenseInput existing = normalized.get(key);
             if (existing == null) {
                 normalized.put(key, normalizedSense);
@@ -849,9 +959,10 @@ public class VocabularyService {
                         existing.subCategory().isBlank() ? normalizedSense.subCategory() : existing.subCategory(),
                         existing.meaning(),
                         existing.example().isBlank() ? normalizedSense.example() : existing.example(),
+                        existing.exampleMeaning().isBlank() ? normalizedSense.exampleMeaning() : existing.exampleMeaning(),
                         mergeRelationTerms(existing.synonyms(), normalizedSense.synonyms()),
                         mergeRelationTerms(existing.antonyms(), normalizedSense.antonyms()),
-                        existing.exampleMeaning().isBlank() ? normalizedSense.exampleMeaning() : existing.exampleMeaning()
+                        existing.definitionEn().isBlank() ? normalizedSense.definitionEn() : existing.definitionEn()
                 ));
             }
         }
@@ -865,12 +976,12 @@ public class VocabularyService {
         Map<String, VocabularySense> unique = new LinkedHashMap<>();
         for (VocabularySense sense : senses) {
             String partOfSpeech = VocabularyPartOfSpeech.normalize(sense.partOfSpeech());
-            String key = senseKey(partOfSpeech, sense.meaning());
+            String key = senseKey(partOfSpeech, sense.meaning(), sense.definitionEn());
             VocabularySense existing = unique.get(key);
             if (existing == null) {
                 unique.put(key, new VocabularySense(
                         sense.id(), partOfSpeech, sense.subCategory(), sense.meaning(), sense.example(),
-                        sense.exampleMeaning(), sense.synonyms(), sense.antonyms()));
+                        sense.exampleMeaning(), sense.synonyms(), sense.antonyms(), sense.definitionEn()));
             } else {
                 unique.put(key, new VocabularySense(
                         existing.id(),
@@ -883,14 +994,17 @@ public class VocabularyService {
                         existing.exampleMeaning() == null || existing.exampleMeaning().isBlank()
                                 ? sense.exampleMeaning() : existing.exampleMeaning(),
                         mergeRelationTerms(existing.synonyms(), sense.synonyms()),
-                        mergeRelationTerms(existing.antonyms(), sense.antonyms())));
+                        mergeRelationTerms(existing.antonyms(), sense.antonyms()),
+                        existing.definitionEn() == null || existing.definitionEn().isBlank()
+                                ? sense.definitionEn() : existing.definitionEn()));
             }
         }
         return new ArrayList<>(unique.values());
     }
 
-    private String senseKey(String partOfSpeech, String meaning) {
-        String normalizedMeaning = meaning == null ? "" : meaning.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    private String senseKey(String partOfSpeech, String meaning, String definitionEn) {
+        String identity = meaning == null || meaning.isBlank() ? "en:" + (definitionEn == null ? "" : definitionEn) : meaning;
+        String normalizedMeaning = identity.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
         return VocabularyPartOfSpeech.normalize(partOfSpeech).toLowerCase(Locale.ROOT) + "|" + normalizedMeaning;
     }
 
@@ -911,38 +1025,45 @@ public class VocabularyService {
             VocabularySenseInput sense = senses.get(index);
             jdbc.update("""
                     INSERT INTO vocabulary_item_senses (
-                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, order_index
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, definition_en, order_index
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, itemId, sense.partOfSpeech(), sense.subCategory(), sense.meaning(),
-                    sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms(), index);
+                    sense.example(), sense.exampleMeaning(), sense.synonyms(), sense.antonyms(), sense.definitionEn(), index);
         }
     }
 
     private void upsertSense(
             String itemId, String partOfSpeech, String subCategory, String meaning, String example,
             String exampleMeaning, String synonyms, String antonyms) {
+        upsertSense(itemId, partOfSpeech, subCategory, meaning, example, exampleMeaning, synonyms, antonyms, "");
+    }
+
+    private void upsertSense(
+            String itemId, String partOfSpeech, String subCategory, String meaning, String example,
+            String exampleMeaning, String synonyms, String antonyms, String definitionEn) {
         String normalizedPartOfSpeech = VocabularyPartOfSpeech.normalize(partOfSpeech);
         String normalizedMeaning = meaning == null ? "" : meaning.trim().replaceAll("\\s+", " ");
         List<UUID> senseIds = jdbc.query(
                 """
-                SELECT id, part_of_speech, meaning FROM vocabulary_item_senses
+                SELECT id, part_of_speech, meaning, definition_en FROM vocabulary_item_senses
                 WHERE vocabulary_item_id = ?
                 """,
-                (rs, rowNum) -> senseKey(normalizedPartOfSpeech, normalizedMeaning)
-                        .equals(senseKey(rs.getString("part_of_speech"), rs.getString("meaning")))
+                (rs, rowNum) -> senseKey(normalizedPartOfSpeech, normalizedMeaning, definitionEn)
+                        .equals(senseKey(rs.getString("part_of_speech"), rs.getString("meaning"),
+                                rs.getString("definition_en")))
                                 ? rs.getObject("id", UUID.class) : null,
                 itemId).stream().filter(java.util.Objects::nonNull).toList();
         if (senseIds.isEmpty()) {
             jdbc.update("""
                     INSERT INTO vocabulary_item_senses (
-                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, order_index
+                        vocabulary_item_id, part_of_speech, sub_category, meaning, example, example_meaning, synonyms, antonyms, definition_en, order_index
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, (
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (
                         SELECT COALESCE(MAX(order_index) + 1, 0)
                         FROM vocabulary_item_senses WHERE vocabulary_item_id = ?
                     ))
                     """, itemId, normalizedPartOfSpeech, subCategory, normalizedMeaning, example,
-                    exampleMeaning, synonyms, antonyms, itemId);
+                    exampleMeaning, synonyms, antonyms, definitionEn, itemId);
             return;
         }
         jdbc.update("""
@@ -952,23 +1073,50 @@ public class VocabularyService {
                     example_meaning = COALESCE(NULLIF(?, ''), example_meaning),
                     synonyms = COALESCE(NULLIF(?, ''), synonyms),
                     antonyms = COALESCE(NULLIF(?, ''), antonyms),
+                    definition_en = COALESCE(NULLIF(?, ''), definition_en),
                     updated_at = now()
                 WHERE id = ?
-                """, subCategory, example, exampleMeaning, synonyms, antonyms, senseIds.get(0));
+                """, subCategory, example, exampleMeaning, synonyms, antonyms, definitionEn, senseIds.get(0));
     }
 
     private String timestampToString(Timestamp timestamp) {
-        return timestamp == null ? null : timestamp.toLocalDateTime().toString();
+        return timestamp == null ? null
+                : timestamp.toInstant().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toLocalDateTime().toString();
     }
 
     private Timestamp parseReleaseAt(String value) {
         if (value == null || value.isBlank()) return null;
         try {
-            return Timestamp.valueOf(LocalDateTime.parse(value.trim()));
+            String normalized = value.trim();
+            var instant = normalized.endsWith("Z") || normalized.matches(".*[+-]\\d{2}:\\d{2}$")
+                    ? OffsetDateTime.parse(normalized).toInstant()
+                    : LocalDateTime.parse(normalized).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+            return Timestamp.from(instant);
         } catch (java.time.format.DateTimeParseException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Thời gian phát hành không đúng định dạng.", exception);
         }
+    }
+
+    private String normalizeTermType(String termType) {
+        if (termType == null || termType.isBlank()) return null;
+        String normalized = termType.trim().toUpperCase(Locale.ROOT);
+        if (Set.of("WORD", "PHRASAL_VERB", "NOUN_PHRASE", "ADJECTIVE_PHRASE",
+                "COLLOCATION", "IDIOM", "OTHER_PHRASE", "UNKNOWN").contains(normalized)) {
+            return normalized;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loại từ/cụm từ không hợp lệ.");
+    }
+
+    private String normalizeDictionarySourceUrl(String sourceUrl) {
+        if (sourceUrl == null || sourceUrl.isBlank()) return null;
+        String normalized = sourceUrl.trim();
+        if (normalized.length() > 2048
+                || !(normalized.startsWith("https://api.dictionaryapi.dev/")
+                || normalized.startsWith("https://en.wiktionary.org/wiki/"))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đường dẫn nguồn từ điển không hợp lệ.");
+        }
+        return normalized;
     }
 
     private String normalizeAudioRegion(String region) {
@@ -1045,6 +1193,8 @@ public class VocabularyService {
             String audioUrl,
             String audioRegion,
             String wordFamily,
+            String termType,
+            String dictionarySourceUrl,
             boolean starred,
             String status,
             List<VocabularySense> senses,
@@ -1060,6 +1210,8 @@ public class VocabularyService {
 
     public record VocabularyRelatedFormInput(String id, String relationType) {}
 
+    private record AudioSyncTarget(String id, String word) {}
+
     public record VocabularySense(
             String id,
             String partOfSpeech,
@@ -1068,10 +1220,17 @@ public class VocabularyService {
             String example,
             String exampleMeaning,
             String synonyms,
-            String antonyms
+            String antonyms,
+            String definitionEn
     ) {
         public VocabularySense(String id, String partOfSpeech, String subCategory, String meaning, String example) {
-            this(id, partOfSpeech, subCategory, meaning, example, "", "", "");
+            this(id, partOfSpeech, subCategory, meaning, example, "", "", "", "");
+        }
+
+        public VocabularySense(
+                String id, String partOfSpeech, String subCategory, String meaning, String example,
+                String exampleMeaning, String synonyms, String antonyms) {
+            this(id, partOfSpeech, subCategory, meaning, example, exampleMeaning, synonyms, antonyms, "");
         }
     }
 
@@ -1082,16 +1241,23 @@ public class VocabularyService {
             String example,
             String exampleMeaning,
             String synonyms,
-            String antonyms
+            String antonyms,
+            String definitionEn
     ) {
         public VocabularySenseInput(String partOfSpeech, String subCategory, String meaning, String example) {
-            this(partOfSpeech, subCategory, meaning, example, "", "", "");
+            this(partOfSpeech, subCategory, meaning, example, "", "", "", "");
         }
 
         public VocabularySenseInput(
                 String partOfSpeech, String subCategory, String meaning, String example,
                 String synonyms, String antonyms) {
-            this(partOfSpeech, subCategory, meaning, example, "", synonyms, antonyms);
+            this(partOfSpeech, subCategory, meaning, example, "", synonyms, antonyms, "");
+        }
+
+        public VocabularySenseInput(
+                String partOfSpeech, String subCategory, String meaning, String example,
+                String exampleMeaning, String synonyms, String antonyms) {
+            this(partOfSpeech, subCategory, meaning, example, exampleMeaning, synonyms, antonyms, "");
         }
     }
 
@@ -1128,7 +1294,9 @@ public class VocabularyService {
             String subCategory,
             String wordFamily,
             List<VocabularySenseInput> senses,
-            List<VocabularyRelatedFormInput> relatedForms
+            List<VocabularyRelatedFormInput> relatedForms,
+            String termType,
+            String dictionarySourceUrl
     ) {}
 
     public record UpdateWordRequest(
@@ -1146,6 +1314,8 @@ public class VocabularyService {
             String subCategory,
             String wordFamily,
             List<VocabularySenseInput> senses,
-            List<VocabularyRelatedFormInput> relatedForms
+            List<VocabularyRelatedFormInput> relatedForms,
+            String termType,
+            String dictionarySourceUrl
     ) {}
 }

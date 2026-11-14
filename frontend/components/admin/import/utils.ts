@@ -28,6 +28,7 @@ export function formatGuidance(type: ContentTypeConfig): string {
 export function statusLabel(status: ImportBatchSummary['status']): string {
   switch (status) {
     case 'PREVIEW': return 'Chờ publish';
+    case 'SCHEDULED': return 'Đã lên lịch';
     case 'PUBLISHED': return 'Đã publish';
     case 'PARTIAL': return 'Đã publish một phần';
     case 'NO_VALID_ROWS': return 'Không có dòng hợp lệ';

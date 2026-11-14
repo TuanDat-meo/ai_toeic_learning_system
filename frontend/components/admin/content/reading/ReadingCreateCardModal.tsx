@@ -375,7 +375,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     if (!dictSuggestion) return;
     const picked =
       dictSuggestion.meanings[meaningIdx] ||
-      dictSuggestion.meanings.find((m) => m.meaningLanguage === "vi") ||
       dictSuggestion.meanings[0];
     if (!picked) return;
     if (dictSuggestion.phonetic && !vocabInputIpa.trim()) {
@@ -384,7 +383,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     if (picked.partOfSpeech) {
       setVocabInputPos(toModalPosSelectValue(picked.partOfSpeech));
     }
-    setVocabInputMeaning(picked.definition);
+    if (picked.meaningVi) setVocabInputMeaning(picked.meaningVi);
     if (picked.example && !vocabInputExample.trim()) {
       setVocabInputExample(picked.example);
     }

@@ -1,6 +1,7 @@
 package com.toeic.ai.toeic_api.vocabulary;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -102,6 +103,19 @@ public class VocabularyController {
         return vocabularyService.addWord(setId, request);
     }
 
+    @PostMapping("/api/admin/vocabulary/sets/{setId}/words/bulk")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void addWordsBulk(
+            @PathVariable String setId,
+            @RequestBody List<Map<String, Object>> request) {
+        vocabularyService.addWordsFromQuickImport(setId, request);
+    }
+
+    @PostMapping("/api/admin/vocabulary/audio/fill-missing")
+    public AudioSyncResult fillMissingAudioUrls(@RequestParam(required = false) String setId) {
+        return new AudioSyncResult(vocabularyService.fillMissingAudioUrls(setId));
+    }
+
     @PutMapping("/api/admin/vocabulary/words/{wordId}")
     public VocabularyService.VocabularyWord updateWord(
             @PathVariable String wordId,
@@ -125,4 +139,6 @@ public class VocabularyController {
             return null;
         }
     }
+
+    public record AudioSyncResult(int updatedCount) {}
 }

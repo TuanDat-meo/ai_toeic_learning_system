@@ -152,9 +152,13 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                       </div>
                       {senses.map((sense, senseIndex) => (
                         <div key={sense.id ?? `${sense.partOfSpeech}-${senseIndex}`} className="space-y-0.5">
-                          <p className="text-xs font-bold text-slate-800">{sense.meaning}</p>
+                          {sense.meaning ? (
+                            <p className="text-xs font-bold text-slate-800">{sense.meaning}</p>
+                          ) : sense.definitionEn ? (
+                            <p className="text-xs text-slate-700"><span className="font-semibold">English definition:</span> {sense.definitionEn}</p>
+                          ) : null}
                           {sense.example ? (
-                            <p className="text-xs text-slate-500 italic leading-relaxed">&quot;{sense.example}&quot;</p>
+                            <p className="whitespace-pre-line text-xs text-slate-500 italic leading-relaxed">&quot;{sense.example}&quot;</p>
                           ) : null}
                           {(sense.exampleMeaning || (senseIndex === 0 && w.exampleMeaning)) ? (
                             <p className="text-xs text-blue-700 font-semibold leading-relaxed">
@@ -313,7 +317,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                         <Volume2 className="w-5 h-5" />
                       </button>
                       <p className="text-xs text-slate-400 font-medium pt-2">
-                        💡 Chạm vào thẻ để lật xem nghĩa tiếng Việt & ví dụ
+                        💡 Chạm vào thẻ để lật xem nghĩa và ví dụ
                       </p>
                     </div>
                   ) : (
@@ -327,9 +331,13 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                             <span className="text-[10px] font-bold uppercase tracking-wide text-blue-600">
                               {sense.partOfSpeech}{sense.subCategory ? ` · ${sense.subCategory}` : ""}
                             </span>
-                            <h4 className="text-xl font-bold text-slate-900">{sense.meaning}</h4>
+                            {sense.meaning ? (
+                              <h4 className="text-xl font-bold text-slate-900">{sense.meaning}</h4>
+                            ) : sense.definitionEn ? (
+                              <p className="text-sm text-slate-800"><strong>English definition:</strong> {sense.definitionEn}</p>
+                            ) : null}
                             {sense.example ? (
-                              <p className="text-xs text-slate-600 italic bg-white/80 p-3 rounded-2xl border border-slate-100 leading-relaxed">
+                              <p className="whitespace-pre-line text-xs text-slate-600 italic bg-white/80 p-3 rounded-2xl border border-slate-100 leading-relaxed">
                                 &quot;{sense.example}&quot;
                               </p>
                             ) : null}
@@ -590,11 +598,13 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
               // Lấy các phương án gây nhiễu từ kho từ đầy đủ
               const allSourceWords = (gameModalTest as any)?.allWords || gameModalTest.words || [];
               const otherWords = allSourceWords.filter((w: WordItem) => w.word !== currentWord.word);
-              const curMeaning = currentWord.meaning || currentWord.meanings?.[0]?.meaning || "";
+              const primarySense = getWordSenses(currentWord)[0];
+              const curMeaning = currentWord.meaning || primarySense?.meaning || primarySense?.definitionEn || "";
               
               const candidateDistractors: string[] = [];
               for (let i = 0; i < otherWords.length; i++) {
-                const candMeaning = otherWords[i].meaning || otherWords[i].meanings?.[0]?.meaning || "";
+                const candidateSense = getWordSenses(otherWords[i])[0];
+                const candMeaning = otherWords[i].meaning || candidateSense?.meaning || candidateSense?.definitionEn || "";
                 if (candMeaning && candMeaning !== curMeaning && !candidateDistractors.includes(candMeaning)) {
                   candidateDistractors.push(candMeaning);
                   if (candidateDistractors.length >= 3) break;
@@ -710,7 +720,11 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                         </div>
 
                         <div className="text-slate-800">
-                          <strong className="text-blue-900">Dịch nghĩa:</strong> {currentWord.meaning}
+                          {currentWord.meaning ? (
+                            <><strong className="text-blue-900">Dịch nghĩa:</strong> {currentWord.meaning}</>
+                          ) : getWordSenses(currentWord)[0]?.definitionEn ? (
+                            <><strong className="text-blue-900">English definition:</strong> {getWordSenses(currentWord)[0].definitionEn}</>
+                          ) : null}
                         </div>
 
                         {currentWord.example && (

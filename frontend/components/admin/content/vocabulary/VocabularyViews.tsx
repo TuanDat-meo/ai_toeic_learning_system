@@ -9,12 +9,10 @@ import {
   Trash2,
   Plus,
   Sliders,
-  CheckCircle2,
-  TrendingDown,
   AlertTriangle,
   Save,
-  BarChart2,
   BookOpen,
+  AudioLines,
 } from "lucide-react";
 import { normalizeVocabularyLevel, WordItem } from "@/app/admin/content/vocabulary/types";
 import {
@@ -46,6 +44,7 @@ function getVocabularySenses(word: WordItem) {
 interface VocabularyAllWordsViewProps {
   words: WordItem[];
   playAudio: (audioUrl: string, word: string) => void;
+  onSyncMissingAudio?: () => Promise<number>;
   onOpenAddWord?: () => void;
   onOpenEditWord?: (w: WordItem) => void;
   onOpenWordDetails?: (w: WordItem) => void;
@@ -55,6 +54,7 @@ interface VocabularyAllWordsViewProps {
 export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
   words,
   playAudio,
+  onSyncMissingAudio,
   onOpenAddWord,
   onOpenEditWord,
   onOpenWordDetails,
@@ -63,8 +63,20 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
   const [keyword, setKeyword] = useState("");
   const [posFilter, setPosFilter] = useState("ALL");
   const [levelFilter, setLevelFilter] = useState("ALL");
+  const [qualityFilter, setQualityFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [audioSyncing, setAudioSyncing] = useState(false);
+  const [audioSyncResult, setAudioSyncResult] = useState<string | null>(null);
+  const missingAudioWords = useMemo(
+    () => words.filter((word) => !(word.audioUrl || word.audio)?.trim()),
+    [words],
+  );
+  const missingIpaCount = useMemo(() => words.filter((word) => !word.ipa?.trim()).length, [words]);
+  const missingExampleCount = useMemo(
+    () => words.filter((word) => getVocabularySenses(word).some((sense) => !sense.example?.trim())).length,
+    [words],
+  );
 
   const filteredWords = useMemo(() => {
     return words.filter((w) => {
@@ -84,9 +96,13 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
             .some((partOfSpeech) => partOfSpeech.toLowerCase() === posFilter.toLowerCase()),
         );
       const matchLevel = levelFilter === "ALL" || levelText === levelFilter;
-      return matchKey && matchPos && matchLevel;
+      const matchQuality = qualityFilter === "ALL"
+        || (qualityFilter === "AUDIO" && !(w.audioUrl || w.audio)?.trim())
+        || (qualityFilter === "IPA" && !w.ipa?.trim())
+        || (qualityFilter === "EXAMPLE" && senses.some((sense) => !sense.example?.trim()));
+      return matchKey && matchPos && matchLevel && matchQuality;
     });
-  }, [words, keyword, posFilter, levelFilter]);
+  }, [words, keyword, posFilter, levelFilter, qualityFilter]);
   const availablePartOfSpeech = useMemo(() => {
     const values = words.flatMap((word) => getVocabularySenses(word)
       .map((sense) => normalizeVocabularyPartOfSpeech(sense.partOfSpeech))
@@ -104,6 +120,21 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
 
   const changePage = (nextPage: number) => {
     setPage(Math.min(Math.max(1, nextPage), totalPages));
+  };
+
+  const handleSyncMissingAudio = async () => {
+    if (!onSyncMissingAudio || audioSyncing || !missingAudioWords.length) return;
+    setAudioSyncing(true);
+    setAudioSyncResult(null);
+    try {
+      const updatedCount = await onSyncMissingAudio();
+      window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated"));
+      setAudioSyncResult(`Đã gắn link audio tự động cho ${updatedCount} mục từ. Audio được phát qua dịch vụ phát âm hiện tại.`);
+    } catch (error) {
+      setAudioSyncResult(error instanceof Error ? `Không thể bổ sung audio: ${error.message}` : "Không thể bổ sung audio. Vui lòng thử lại.");
+    } finally {
+      setAudioSyncing(false);
+    }
   };
 
   const paginationControls = (
@@ -156,23 +187,47 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      {/* Filter Bar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-md sm:flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Tìm theo từ tiếng Anh, phiên âm, định nghĩa..."
-            value={keyword}
-            onChange={(e) => {
-              setKeyword(e.target.value);
-              setPage(1);
-            }}
-            className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-hidden sm:text-xs"
-          />
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Tổng số mục từ", value: words.length, detail: "Trong ngân hàng hiện tại", icon: BookOpen, color: "text-blue-700 bg-blue-50" },
+          { label: "Thiếu link audio", value: missingAudioWords.length, detail: "Có thể gắn link TTS tự động; không lưu MP3", icon: AudioLines, color: "text-violet-700 bg-violet-50" },
+          { label: "Thiếu phiên âm", value: missingIpaCount, detail: "Nên bổ sung IPA chuẩn", icon: AlertTriangle, color: "text-amber-700 bg-amber-50" },
+          { label: "Thiếu câu ví dụ", value: missingExampleCount, detail: "Cần rà soát nội dung", icon: BookOpen, color: "text-rose-700 bg-rose-50" },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">{stat.label}</p>
+                  <p className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{stat.value.toLocaleString("vi-VN")}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{stat.detail}</p>
+                </div>
+                <span className={`rounded-xl p-2 ${stat.color}`}><Icon className="h-4 w-4" aria-hidden="true" /></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+      {/* Filter Bar */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-2xs">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full sm:max-w-md sm:flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Tìm theo từ tiếng Anh, phiên âm, định nghĩa..."
+              value={keyword}
+              onChange={(e) => {
+                setKeyword(e.target.value);
+                setPage(1);
+              }}
+              className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-hidden sm:text-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           <select
             value={posFilter}
             onChange={(e) => {
@@ -203,6 +258,36 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
             <option value="C1">C1 (Nâng cao)</option>
             <option value="C2">C2 (Thành thạo)</option>
           </select>
+
+          <select
+            value={qualityFilter}
+            onChange={(e) => {
+              setQualityFilter(e.target.value);
+              setPage(1);
+            }}
+            className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 sm:w-auto sm:text-xs"
+            aria-label="Lọc từ vựng theo chất lượng dữ liệu"
+          >
+            <option value="ALL">Mọi trạng thái dữ liệu</option>
+            <option value="AUDIO">Thiếu audio ({missingAudioWords.length})</option>
+            <option value="IPA">Thiếu IPA ({missingIpaCount})</option>
+            <option value="EXAMPLE">Thiếu ví dụ ({missingExampleCount})</option>
+          </select>
+
+          {onSyncMissingAudio ? (
+            <button
+              type="button"
+              onClick={() => void handleSyncMissingAudio()}
+              disabled={audioSyncing || missingAudioWords.length === 0}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-xs"
+            >
+              {audioSyncing ? <span className="animate-spin">◌</span> : <AudioLines className="h-4 w-4" />}
+              {audioSyncing
+                ? "Đang gắn audio…"
+                : `Gắn audio thiếu (${missingAudioWords.length})`}
+            </button>
+          ) : null}
+
           {onOpenAddWord && (
             <button
               type="button"
@@ -213,7 +298,14 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
               Thêm từ / cụm từ
             </button>
           )}
+          </div>
         </div>
+        {audioSyncResult ? (
+          <div role="status" className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            {audioSyncResult}
+            <button type="button" onClick={() => setAudioSyncResult(null)} className="ml-3 font-bold underline">Ẩn</button>
+          </div>
+        ) : null}
       </div>
 
       {/* Dictionary Table */}

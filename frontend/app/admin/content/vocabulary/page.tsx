@@ -11,6 +11,7 @@ import {
   updateVocabularySet,
   deleteVocabularySet,
   addVocabularyWord,
+  fillMissingVocabularyAudio,
   updateVocabularyWord,
   deleteVocabularyWord,
 } from "@/lib/api/vocabulary";
@@ -22,11 +23,12 @@ import {
   VocabularyAnalyticsView,
 } from "@/components/admin/content/vocabulary/VocabularyViews";
 import { VocabularyModals } from "@/components/admin/content/vocabulary/VocabularyModals";
+import { VocabularyQuickImport } from "@/components/admin/content/vocabulary/VocabularyQuickImport";
 import { deduplicateVocabularySenses } from "@/lib/vocabulary-part-of-speech";
 import { playVocabularyAudio } from "@/lib/vocabulary-pronunciation";
 
 export default function VocabularyLearningPage() {
-  const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "algorithm" | "analytics">("topics");
+  const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "quick_import" | "algorithm" | "analytics">("topics");
   const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
   const [tests, setTests] = useState<VocabularyTestSet[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -102,6 +104,11 @@ export default function VocabularyLearningPage() {
             ...(existing.senses || []),
             ...wordSenses,
           ]);
+          if (!existing.audioUrl && (w.audioUrl || w.audio)) {
+            existing.audioUrl = w.audioUrl || w.audio;
+            existing.audio = w.audioUrl || w.audio;
+          }
+          if (!existing.ipa && w.ipa) existing.ipa = w.ipa;
           existing.relatedForms = [...new Map([
             ...(existing.relatedForms || []),
             ...(w.relatedForms || []),
@@ -296,6 +303,9 @@ export default function VocabularyLearningPage() {
     audioRegion: string;
     subCategory: string;
     wordFamily: string;
+    termType: WordItem["termType"];
+    dictionarySourceUrl: string;
+    definitionEn: string;
     senses: VocabularySense[];
     relatedForms: VocabularyRelatedForm[];
     targetSetId?: string;
@@ -321,6 +331,8 @@ export default function VocabularyLearningPage() {
             audioUrl: w.audioUrl,
             audioRegion: w.audioRegion,
             wordFamily: w.wordFamily,
+            termType: w.termType,
+            dictionarySourceUrl: w.dictionarySourceUrl,
             senses: w.duplicateAction === "merge-other-senses"
               ? deduplicateVocabularySenses([...w.senses, ...(w.duplicateSenses || [])])
               : w.senses,
@@ -348,6 +360,8 @@ export default function VocabularyLearningPage() {
           audioUrl: w.audioUrl,
           audioRegion: w.audioRegion,
           wordFamily: w.wordFamily,
+          termType: w.termType,
+          dictionarySourceUrl: w.dictionarySourceUrl,
           senses: w.senses,
           relatedForms: w.relatedForms,
         });
@@ -380,6 +394,8 @@ export default function VocabularyLearningPage() {
           audioUrl: w.audioUrl,
           audioRegion: w.audioRegion,
           wordFamily: w.wordFamily,
+          termType: w.termType,
+          dictionarySourceUrl: w.dictionarySourceUrl,
           senses: w.senses,
           relatedForms: w.relatedForms,
         });
@@ -426,6 +442,8 @@ export default function VocabularyLearningPage() {
           audioUrl: existingWord.audioUrl || existingWord.audio || w.audioUrl,
           audioRegion: existingWord.audioRegion || w.audioRegion,
           wordFamily: existingWord.wordFamily || w.wordFamily,
+          termType: existingWord.termType || w.termType,
+          dictionarySourceUrl: existingWord.dictionarySourceUrl || w.dictionarySourceUrl,
           senses: sensesToSave,
           relatedForms: [...new Map([
             ...(existingWord.relatedForms || []),
@@ -462,6 +480,8 @@ export default function VocabularyLearningPage() {
           audioUrl: w.audioUrl,
           audioRegion: w.audioRegion,
           wordFamily: w.wordFamily,
+          termType: w.termType,
+          dictionarySourceUrl: w.dictionarySourceUrl,
           senses,
           relatedForms: w.relatedForms,
         });
@@ -556,6 +576,11 @@ export default function VocabularyLearningPage() {
         <VocabularyAllWordsView
           words={allWordsCombined}
           playAudio={playAudio}
+          onSyncMissingAudio={async () => {
+            const updatedCount = await fillMissingVocabularyAudio();
+            await loadSets();
+            return updatedCount;
+          }}
           onOpenWordDetails={setWordDetails}
           onOpenAddWord={() => {
             setEditingWord(null);
@@ -567,6 +592,16 @@ export default function VocabularyLearningPage() {
             setShowAddWordModal(true);
           }}
           onDeleteWord={setDeleteWordConfirm}
+        />
+      )}
+
+      {activeMainTab === "quick_import" && (
+        <VocabularyQuickImport
+          sets={tests}
+          onImported={() => {
+            void loadSets();
+            showToast("Đã cập nhật ngân hàng từ vựng.");
+          }}
         />
       )}
 
@@ -582,6 +617,15 @@ export default function VocabularyLearningPage() {
         vocabularySets={tests}
         onCloseWordList={() => setWordListModalTest(null)}
         playAudio={playAudio}
+        onSyncMissingAudio={async (setId) => {
+          const updatedCount = await fillMissingVocabularyAudio(setId);
+          const data = await getAdminVocabularySets();
+          setTests(data);
+          const updatedSet = data.find((set) => set.id === setId);
+          if (updatedSet) setWordListModalTest(updatedSet);
+          window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated", { detail: data }));
+          return updatedCount;
+        }}
         onOpenAddWord={() => {
           setEditingWord(null);
           setShowAddWordModal(true);

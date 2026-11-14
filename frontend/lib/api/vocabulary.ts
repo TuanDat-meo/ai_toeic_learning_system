@@ -21,6 +21,8 @@ interface RawWordItem {
   audioUrl?: string;
   audioRegion?: string;
   wordFamily?: string;
+  termType?: WordItem['termType'];
+  dictionarySourceUrl?: string;
   relatedForms?: VocabularyRelatedForm[];
   senses?: VocabularySense[];
 }
@@ -57,6 +59,8 @@ function mapWord(w: RawWordItem): WordItem {
     audioUrl: audio,
     audioRegion: w.audioRegion || 'UNKNOWN',
     wordFamily: w.wordFamily || '',
+    termType: w.termType,
+    dictionarySourceUrl: w.dictionarySourceUrl || '',
     relatedForms: w.relatedForms || [],
     senses: Array.isArray(w.senses) && w.senses.length > 0
       ? w.senses.map((sense) => ({
@@ -68,6 +72,7 @@ function mapWord(w: RawWordItem): WordItem {
           meaning: w.meaning || '',
           example: w.example || '',
           exampleMeaning: w.exampleMeaning || '',
+          definitionEn: '',
         }],
   };
 }
@@ -172,6 +177,8 @@ export async function addVocabularyWord(
     audioRegion?: string;
     subCategory?: string;
     wordFamily?: string;
+    termType?: WordItem['termType'];
+    dictionarySourceUrl?: string;
     relatedForms?: VocabularyRelatedForm[];
     senses?: VocabularySense[];
   }
@@ -189,10 +196,47 @@ export async function addVocabularyWord(
     audioRegion: data.audioRegion || 'UNKNOWN',
     subCategory: data.senses?.[0]?.subCategory || '',
     wordFamily: data.wordFamily || '',
+    termType: data.termType,
+    dictionarySourceUrl: data.dictionarySourceUrl || '',
     relatedForms: (data.relatedForms || []).map(({ id, relationType }) => ({ id, relationType })),
     senses: data.senses || [],
   });
   return mapWord(res);
+}
+
+export async function addVocabularyWordsBulk(
+  setId: string,
+  words: Array<{
+    word: string;
+    meaning: string;
+    partOfSpeech?: string;
+    ipa?: string;
+    example?: string;
+    exampleMeaning?: string;
+    level?: string;
+    audioUrl?: string;
+    wordFamily?: string;
+  }>,
+): Promise<void> {
+  await writeAuthRequest<void>(
+    'POST',
+    `/api/admin/vocabulary/sets/${encodeURIComponent(setId)}/words/bulk`,
+    words.map((word) => ({
+      ...word,
+      partOfSpeech: word.partOfSpeech || 'Noun',
+      level: word.level || 'B1',
+    })),
+  );
+}
+
+export async function fillMissingVocabularyAudio(setId?: string): Promise<number> {
+  const query = setId ? `?setId=${encodeURIComponent(setId)}` : '';
+  const result = await writeAuthRequest<{ updatedCount: number }>(
+    'POST',
+    `/api/admin/vocabulary/audio/fill-missing${query}`,
+    {},
+  );
+  return result.updatedCount;
 }
 
 export async function updateVocabularyWord(
@@ -209,6 +253,8 @@ export async function updateVocabularyWord(
     audioRegion?: string;
     subCategory?: string;
     wordFamily?: string;
+    termType?: WordItem['termType'];
+    dictionarySourceUrl?: string;
     relatedForms?: VocabularyRelatedForm[];
     senses?: VocabularySense[];
   }
@@ -225,6 +271,8 @@ export async function updateVocabularyWord(
     audioRegion: data.audioRegion || 'UNKNOWN',
     subCategory: data.senses?.[0]?.subCategory || '',
     wordFamily: data.wordFamily || '',
+    termType: data.termType,
+    dictionarySourceUrl: data.dictionarySourceUrl || '',
     relatedForms: (data.relatedForms || []).map(({ id, relationType }) => ({ id, relationType })),
     senses: data.senses || [],
   });

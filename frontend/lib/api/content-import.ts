@@ -17,9 +17,10 @@ export type ImportBatchSummary = {
   invalidCount: number;
   duplicateCount: number;
   publishedCount: number;
-  status: 'PREVIEW' | 'PUBLISHED' | 'PARTIAL' | 'NO_VALID_ROWS';
+  status: 'PREVIEW' | 'SCHEDULED' | 'PUBLISHED' | 'PARTIAL' | 'NO_VALID_ROWS';
   createdAt: string;
   completedAt: string | null;
+  releaseAt: string | null;
 };
 
 export type ImportPreviewItem = {
@@ -56,16 +57,28 @@ export type ContentImportMediaAsset = {
   storageKey: string;
 };
 
+export type ParsedVocabularyFileRow = {
+  rowNumber: number;
+  data: Record<string, string>;
+};
+
+export function parseVocabularyQuickImportFile(file: File) {
+  const body = new FormData();
+  body.append('file', file);
+  return uploadAuthRequest<ParsedVocabularyFileRow[]>('/api/admin/data/import/parse-vocabulary-file', body);
+}
+
 export function previewContentImport(
   type: ImportedContentType,
   file: File,
-  target?: { setId?: string; setName?: string },
+  target?: { setId?: string; setName?: string; releaseAt?: string },
 ) {
   const body = new FormData();
   body.append('type', type);
   body.append('file', file);
   if (target?.setId) body.append('vocabularySetId', target.setId);
   if (target?.setName) body.append('vocabularySetName', target.setName);
+  if (target?.releaseAt) body.append('releaseAt', target.releaseAt);
   return uploadAuthRequest<ImportBatchDetails>('/api/admin/data/import/preview', body);
 }
 
@@ -155,7 +168,13 @@ export function publishContentImport(batchId: string) {
 
 export function parseTextToContentImportPreview(
   type: ImportedContentType,
-  payload: { text: string; fileName?: string; vocabularySetId?: string; vocabularySetName?: string },
+  payload: {
+    text: string;
+    fileName?: string;
+    vocabularySetId?: string;
+    vocabularySetName?: string;
+    releaseAt?: string;
+  },
 ) {
   return writeAuthRequest<ImportBatchDetails>(
     'POST',

@@ -10,6 +10,7 @@
 5. As an administrator, I can reopen recent import batches and inspect their status and preview rows.
 6. As an administrator, I can extract text from supported documents and review/download the OCR draft before converting it to the structured import format.
 7. As an administrator, I can upload audio/video assets to S3 and use their durable URLs in structured content records.
+8. As an administrator, I can paste vocabulary rows or upload TXT, DOC/DOCX, CSV, XLS, or XLSX in the vocabulary quick-add tab, map unrecognized columns, review the result, and add the rows to a selected set.
 
 ## Scope
 
@@ -30,6 +31,8 @@
 
 - PDF and image files use the self-hosted PaddleOCR service. DOC/DOCX, TXT, Markdown, and HTML are extracted locally by the backend. Extraction returns plain text and a downloadable JSON draft; it does not infer TOEIC fields, answers, or question relationships, and it cannot be published directly. Admins must review and convert the draft into the structured CSV/XLSX/JSON schema.
 - XLSX remains a supported structured-import format for content prepared in spreadsheets.
+- The vocabulary admin page also provides a quick-add workflow for pasted text and TXT/DOC/DOCX/CSV/XLS/XLSX files. Recognized headers are mapped automatically; unrecognized columns must be assigned to a vocabulary field or explicitly skipped, and each row must contain a word and meaning before the batch can be saved. Quick XLS/XLSX parsing reads the first worksheet and does not create a persistent import batch. Word documents are extracted locally by the backend without saving another copy to object storage.
+- When a vocabulary word is saved or imported without an audio URL, the application assigns a same-origin `/api/dictionary/audio?word=...` pronunciation URL for supported English words. Admins can use the bank's bulk action to fill missing links on existing vocabulary rows. This URL streams audio through the configured dictionary TTS proxy; it does not download or store an MP3 file. If audio playback is unavailable, the learner UI can fall back to browser speech synthesis.
 - The importer maps the existing `Data` JSON shapes for vocabulary sets (`words` array), grammar topics (`coreTheory`/`description`), and ETS test question lists (`questions` array) into preview rows. Vocabulary imports preserve per-row `setId`/`topic` values, falling back to set metadata at the JSON root. When a vocabulary row has no set metadata, choose an existing set or enter a new set name before preview; the importer does not silently route such rows to the default set. File metadata takes precedence over the selected target. Local audio/image file paths in those JSON files are not treated as public URLs; upload the corresponding media separately and set its returned `audioUrl`/`imageUrl` before importing. Other JSON shapes still need to match the type-specific row schema.
 - Grammar topic JSON using `topicCode`, `titleVi`/`titleEn`, `coreTheory`, `description`, `signalClues`, `tipsAndTricks`, `commonTraps`, `gradedQuestions`, and `summaryTable` is mapped to the grammar import schema. The theory and explanations, question options/answers/translations/solutions, and supporting notes are retained in the normalized preview data.
 - Audio/video uploads are stored in AWS S3 and return a URL to be included in the applicable `audioUrl` field of a structured import. Question images return a URL for `imageUrl`. The bucket or CDN URL must be configured for durable read access by the application.
@@ -37,6 +40,7 @@
 - Published records are stored in `imported_content` as normalized JSON. Draft rows in other preview batches are not treated as published duplicates.
 - Original extracted documents are stored in AWS S3. OCR output is a transient review response and is not published as content.
 - Vocabulary duplicate rows can be explicitly resolved in the preview: append the new meaning to the matching item, or publish it as a separate entry with the same spelling.
+- Vocabulary import batches can be assigned a release date/time in the import dialog. Publishing applies that date to the target vocabulary set and imports its rows immediately. If the date is in the future, the entire set (including existing words) remains hidden from learners until then. Leaving the field blank preserves an existing set release date; if the set has no release date, the publish time is recorded automatically.
 - Existing admin content pages still contain prototype data; they do not yet read the new `imported_content` inventory. The published inventory is available through the admin API and learner-facing content integration is a dependent feature.
 
 ## Access control
@@ -62,7 +66,7 @@ CSV and XLSX use field names as the header row. Array-valued fields in CSV/XLSX 
 | QUESTION | `part`, `questionText`, `options`, `correctAnswer`, `explanation`, `skill`, `difficulty` | `passage`, `imageUrl`, `audioUrl`, `code` |
 | MOCK_TEST | `title`, `description`, `durationMinutes`, `questionCodes` | `level` |
 
-Normalization trims text, normalizes line endings and Unicode, canonicalizes Part and difficulty values, uppercases option IDs/answer, and derives a SHA-256 deduplication key. Part values accept forms such as `Part 5`, `PART_5`, and `5`. Difficulty accepts `EASY`, `MEDIUM`, or `HARD`. Duration fields are bounded to 1–86,400 seconds or 1–600 minutes. Media URLs must use HTTP or HTTPS.
+Normalization trims text, normalizes line endings and Unicode, canonicalizes Part and difficulty values, uppercases option IDs/answer, and derives a SHA-256 deduplication key. Part values accept forms such as `Part 5`, `PART_5`, and `5`. Difficulty accepts `EASY`, `MEDIUM`, or `HARD`. Duration fields are bounded to 1–86,400 seconds or 1–600 minutes. Media URLs must use HTTP or HTTPS; vocabulary audio can also use a same-origin path such as `/api/dictionary/audio?word=...`.
 
 A vocabulary row may keep the legacy scalar `meaning`/`pos` fields or provide multiple senses. Each sense requires `partOfSpeech` and `meaning`; `subCategory` and `example` are optional. `wordFamily` is optional at the vocabulary-row level. Example:
 

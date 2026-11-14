@@ -107,6 +107,11 @@ public class ContentImportUploadService {
         return new DocumentExtraction(safeFileName(file.getOriginalFilename()), type, text, storageKey);
     }
 
+    public String extractTextOnly(ContentType type, MultipartFile file) {
+        String extension = validateFile(file, type, type == null ? Set.of() : DOCUMENT_EXTENSIONS.get(type));
+        return extractText(file, extension);
+    }
+
     public MediaAsset uploadMedia(ContentType type, MultipartFile file) {
         Set<String> allowedExtensions = type == null ? Set.of() : MEDIA_EXTENSIONS.getOrDefault(type, Set.of());
         String extension = validateFile(file, type, allowedExtensions);

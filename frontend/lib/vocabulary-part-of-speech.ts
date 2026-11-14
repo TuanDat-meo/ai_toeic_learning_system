@@ -54,6 +54,7 @@ export interface VocabularySenseLike {
   exampleMeaning?: string;
   synonyms?: string;
   antonyms?: string;
+  definitionEn?: string;
 }
 
 function normalizeMeaningForComparison(value: string): string {
@@ -73,10 +74,10 @@ export function deduplicateVocabularySenses<T extends VocabularySenseLike>(sense
   const unique: T[] = [];
   for (const sense of senses) {
     const partOfSpeech = normalizeVocabularyPartOfSpeech(sense.partOfSpeech);
-    const meaningKey = normalizeMeaningForComparison(sense.meaning);
+    const meaningKey = normalizeMeaningForComparison(sense.meaning || `en:${sense.definitionEn || ""}`);
     const partOfSpeechSet = new Set(partOfSpeech.split(/\s*\/\s*/).map((value) => value.toLocaleLowerCase("en")));
     const existing = unique.find((candidate) => {
-      if (normalizeMeaningForComparison(candidate.meaning) !== meaningKey) return false;
+      if (normalizeMeaningForComparison(candidate.meaning || `en:${candidate.definitionEn || ""}`) !== meaningKey) return false;
       const candidateParts = candidate.partOfSpeech.split(/\s*\/\s*/).map((value) => value.toLocaleLowerCase("en"));
       return candidateParts.some((candidatePart) => partOfSpeechSet.has(candidatePart));
     });
@@ -92,6 +93,7 @@ export function deduplicateVocabularySenses<T extends VocabularySenseLike>(sense
     if (!existing.subCategory && sense.subCategory) existing.subCategory = sense.subCategory;
     if (!existing.example && sense.example) existing.example = sense.example;
     if (!existing.exampleMeaning && sense.exampleMeaning) existing.exampleMeaning = sense.exampleMeaning;
+    if (!existing.definitionEn && sense.definitionEn) existing.definitionEn = sense.definitionEn;
     existing.synonyms = mergeRelationTerms(existing.synonyms, sense.synonyms);
     existing.antonyms = mergeRelationTerms(existing.antonyms, sense.antonyms);
   }
