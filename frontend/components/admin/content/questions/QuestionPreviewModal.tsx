@@ -17,22 +17,174 @@ import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
+import { API_BASE_URL } from "@/lib/api/client";
+
+function toDisplayText(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(toDisplayText).filter(Boolean).join(", ");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = record.meaning ?? record.text ?? record.word ?? record.pos;
+    if (preferred !== undefined && preferred !== value) return toDisplayText(preferred);
+    return JSON.stringify(value);
+  }
+  return "";
+}
+
+function toDisplayList(value: unknown, keys: string[] = ["word", "meaning", "text", "pos"]): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const record = item as Record<string, unknown>;
+      for (const key of keys) {
+        if (record[key] !== undefined && record[key] !== null) return toDisplayText(record[key]);
+      }
+    }
+    return toDisplayText(item);
+  }).filter(Boolean);
+}
+
+function questionMediaUrl(sourcePath?: string): string | undefined {
+  if (!sourcePath?.trim()) return undefined;
+  const encodedPath = sourcePath.replace(/\\/g, "/").split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  return `/api/question-media/${encodedPath}`;
+}
+
+function backendMediaUrl(url?: string, sourcePath?: string): string | undefined {
+  const value = url || questionMediaUrl(sourcePath);
+  if (!value) return undefined;
+  return /^https?:\/\//i.test(value) ? value : `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
+}
 
 interface QuestionPreviewModalProps {
   question: QuestionItem | null;
+  questions?: QuestionItem[];
   onClose: () => void;
   playSfx?: (sound: string) => void;
   playAudio?: (url: string) => void;
   showToast?: (msg: string) => void;
 }
 
+const GroupedReadingQuestions: React.FC<{
+  questions: QuestionItem[];
+  onClose: () => void;
+  playSfx: (sound: string) => void;
+}> = ({ questions, onClose, playSfx }) => {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState(false);
+  const passage = questions[0]?.passage || "";
+  const answeredCount = questions.filter((item) => answers[item.id]).length;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6">
+      <section className="flex h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-2xl">
+        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-4 md:px-7">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-blue-100 px-2.5 py-1 text-xs font-extrabold text-blue-700">{questions[0]?.part}</span>
+              <span className="text-sm font-bold text-slate-900">Bài đọc gồm {questions.length} câu hỏi</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">Chọn một đáp án cho từng câu, sau đó kiểm tra cả bài.</p>
+          </div>
+          <button type="button" onClick={() => { playSfx("click"); onClose(); }} className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200" aria-label="Đóng xem trước">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 md:p-7">
+          {passage && (
+            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs md:p-6">
+              <h2 className="mb-3 text-xs font-extrabold uppercase tracking-wide text-blue-700">Bài đọc</h2>
+              <div className="whitespace-pre-line font-serif text-sm leading-7 text-slate-800">{passage}</div>
+            </article>
+          )}
+
+          {questions.map((item, index) => {
+            const selected = answers[item.id];
+            const isCorrect = selected === item.correctAnswer;
+            return (
+              <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs md:p-6">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-extrabold text-slate-700">
+                    Câu {item.code?.split("-").at(-1)?.replace(/^Q/i, "") || index + 1}
+                  </span>
+                  {checked && (
+                    <span className={`text-xs font-bold ${isCorrect ? "text-emerald-700" : "text-rose-700"}`}>
+                      {isCorrect ? "Chính xác" : `Đáp án đúng: ${item.correctAnswer}`}
+                    </span>
+                  )}
+                </div>
+                <p className="mb-4 whitespace-pre-line text-sm font-semibold leading-6 text-slate-900">{toDisplayText(item.questionText)}</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {item.options.map((option) => {
+                    const active = selected === option.id;
+                    const correctOption = checked && option.id === item.correctAnswer;
+                    const wrongOption = checked && active && !isCorrect;
+                    const style = correctOption
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-950"
+                      : wrongOption
+                        ? "border-rose-400 bg-rose-50 text-rose-950"
+                        : active
+                          ? "border-blue-500 bg-blue-50 text-blue-950"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50/50";
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        disabled={checked}
+                        onClick={() => { playSfx("click"); setAnswers((current) => ({ ...current, [item.id]: option.id })); }}
+                        className={`rounded-xl border p-3 text-left text-sm transition ${style} disabled:cursor-default`}
+                      >
+                        <span className="mr-2 font-extrabold">{option.id}.</span>{toDisplayText(option.text)}
+                        {checked && item.optionTranslations?.[option.id] && (
+                          <span className="mt-1 block text-xs text-slate-500">{toDisplayText(item.optionTranslations[option.id])}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {checked && item.questionTranslation && <p className="mt-3 rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-800">{toDisplayText(item.questionTranslation)}</p>}
+                {checked && item.explanation && <p className="mt-3 border-l-2 border-emerald-300 pl-3 text-xs leading-5 text-slate-700">{toDisplayText(item.explanation)}</p>}
+              </article>
+            );
+          })}
+        </div>
+
+        <footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-7">
+          <span className="text-xs font-semibold text-slate-500">Đã chọn {answeredCount}/{questions.length} câu</span>
+          {!checked ? (
+            <button type="button" disabled={answeredCount !== questions.length} onClick={() => { playSfx("click"); setChecked(true); }} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40">
+              Kiểm tra cả bài
+            </button>
+          ) : (
+            <button type="button" onClick={() => { playSfx("click"); setAnswers({}); setChecked(false); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-5 py-3 text-sm font-extrabold text-slate-700 hover:bg-slate-200">
+              <RotateCcw className="h-4 w-4" /> Làm lại bài đọc
+            </button>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+};
+
 export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
-  question: baseQuestion,
+  question: initialQuestion,
+  questions: relatedQuestions = [],
   onClose,
   playSfx = () => {},
   playAudio = () => {},
   showToast = () => {},
 }) => {
+  const groupQuestions = relatedQuestions.length > 0 ? relatedQuestions : initialQuestion ? [initialQuestion] : [];
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(() => {
+    const index = groupQuestions.findIndex((item) => item.id === initialQuestion?.id);
+    return index >= 0 ? index : 0;
+  });
+  React.useEffect(() => {
+    const index = groupQuestions.findIndex((item) => item.id === initialQuestion?.id);
+    setActiveQuestionIndex(index >= 0 ? index : 0);
+  }, [initialQuestion?.id, groupQuestions]);
+  const baseQuestion = groupQuestions[activeQuestionIndex] ?? initialQuestion;
   const [questionCorrectionState, setQuestionCorrectionState] = useState<{ ref: string; value: QuestionCorrection | null } | null>(null);
   React.useEffect(() => {
     let active = true;
@@ -47,7 +199,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
     ...baseQuestion,
     questionText: questionCorrection.questionText || baseQuestion.questionText,
     options: correctionOptions && !Array.isArray(correctionOptions)
-      ? Object.entries(correctionOptions).map(([id, text]) => ({ id, text, isCorrect: id === (questionCorrection.correctAnswer || baseQuestion.correctAnswer) }))
+      ? Object.entries(correctionOptions).map(([id, text]) => ({ id, text: toDisplayText(text), isCorrect: id === (questionCorrection.correctAnswer || baseQuestion.correctAnswer) }))
       : baseQuestion.options,
     correctAnswer: questionCorrection.correctAnswer || baseQuestion.correctAnswer,
     explanation: questionCorrection.explanation || baseQuestion.explanation,
@@ -60,6 +212,15 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
   const [isVocabExpanded, setIsVocabExpanded] = useState(true);
   const [localIsPlayingAudio, setLocalIsPlayingAudio] = useState(false);
 
+  React.useEffect(() => {
+    setUserSelectedOption(null);
+    setShowExplanation(false);
+    setShowExplanationDetails(true);
+    setShowVocabSection(true);
+    setIsVocabExpanded(true);
+    setLocalIsPlayingAudio(false);
+  }, [baseQuestion?.id]);
+
   const [prevQuestionId, setPrevQuestionId] = React.useState(question?.id);
   if (question?.id !== prevQuestionId) {
     setPrevQuestionId(question?.id);
@@ -68,11 +229,35 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
 
   if (!question) return null;
 
-  const cleanQuestionText = question.questionText.replace(/^[0-9]+\.\s*/, "");
+  if (groupQuestions.length > 1 && (question.part === "Part 6" || question.part === "Part 7")) {
+    return <GroupedReadingQuestions questions={groupQuestions} onClose={onClose} playSfx={playSfx} />;
+  }
 
-  const vocabList = question.vocabList ?? [];
+  const goToQuestion = (index: number) => {
+    setActiveQuestionIndex(Math.max(0, Math.min(groupQuestions.length - 1, index)));
+  };
+
+  const cleanQuestionText = question.questionText.replace(/^[0-9]+\.\s*/, "");
+  const audioUrl = backendMediaUrl(question.audioUrl, question.sourceAudioPath);
+  const imageUrl = backendMediaUrl(question.imageUrl, question.sourceImagePath);
+
+  const vocabList = (Array.isArray(question.vocabList) ? question.vocabList : []).map((item) => {
+    const raw = item && typeof item === "object" ? item as unknown as Record<string, unknown> : { word: item };
+    return {
+      ...raw,
+      word: toDisplayText(raw.word),
+      pos: toDisplayText(raw.pos ?? raw.partOfSpeech),
+      level: toDisplayText(raw.level),
+      ipa: toDisplayText(raw.ipa),
+      meaning: toDisplayText(raw.meaning),
+      synonyms: toDisplayList(raw.synonyms) as unknown as string[],
+      antonyms: toDisplayList(raw.antonyms) as unknown as string[],
+      wordFamily: toDisplayList(raw.wordFamily) as unknown as string[],
+      collocations: toDisplayList(raw.collocations, ["en", "word", "meaning", "text"]) as unknown as string[],
+    } as VocabItem;
+  });
   const steps = question.steps ?? [];
-  const questionTranslation = question.questionTranslation || question.translation;
+  const questionTranslation = toDisplayText(question.questionTranslation || question.translation);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-200">
@@ -92,6 +277,26 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
             </div>
           </div>
 
+          {groupQuestions.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <span className="mr-1 text-xs font-semibold text-slate-500">Câu {activeQuestionIndex + 1}/{groupQuestions.length}</span>
+              {groupQuestions.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => goToQuestion(index)}
+                  aria-label={`Mở câu hỏi ${index + 1}`}
+                  aria-current={index === activeQuestionIndex ? "step" : undefined}
+                  className={`h-8 min-w-8 rounded-lg border px-2 text-xs font-bold transition ${index === activeQuestionIndex ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {item.code?.split("-").at(-1)?.replace(/^Q/i, "") || index + 1}
+                </button>
+              ))}
+              <button type="button" onClick={() => goToQuestion(activeQuestionIndex - 1)} disabled={activeQuestionIndex === 0} className="ml-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 disabled:opacity-40">Trước</button>
+              <button type="button" onClick={() => goToQuestion(activeQuestionIndex + 1)} disabled={activeQuestionIndex === groupQuestions.length - 1} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 disabled:opacity-40">Tiếp</button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -109,14 +314,14 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
           {/* CỘT TRÁI (LEFT PANE): ẢNH, ĐOẠN VĂN, AUDIO */}
           <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-slate-50/50 space-y-6">
             {/* Ảnh minh họa nếu là Part 1 */}
-            {question.imageUrl && (
+            {imageUrl && (
               <div className="space-y-2">
                 <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                   Hình ảnh câu hỏi (Part 1):
                 </span>
                 <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100/70 p-2 shadow-xs flex items-center justify-center">
                   <img
-                    src={question.imageUrl}
+                    src={imageUrl}
                     alt="Question visual"
                     className="w-auto max-w-full max-h-80 rounded-xl object-contain"
                   />
@@ -139,9 +344,9 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
             )}
 
             {/* Trình phát Audio nếu có (Part 1 - Part 4) */}
-            {question.audioUrl && (
+            {audioUrl && (
               <AudioWaveformPlayer
-                audioUrl={question.audioUrl}
+                audioUrl={audioUrl}
                 isPlaying={localIsPlayingAudio}
                 onPlayPauseChange={(playing) => setLocalIsPlayingAudio(playing)}
                 showSpeedControl={true}
@@ -158,13 +363,17 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[11px] font-extrabold shadow-2xs">
-                    {question.difficulty === "Easy"
-                      ? "Lv.1"
-                      : question.difficulty === "Hard"
-                      ? "Lv.3"
-                      : "Lv.2"}
+                    {question.difficulty}
                   </span>
                 </div>
+                {question.sourceDifficulty && (
+                  <p className="text-[11px] text-slate-500">Phân loại gốc trong ETS: {question.sourceDifficulty}</p>
+                )}
+                {(question.sourceAudioPath || question.sourceImagePath) && (
+                  <p className="text-[11px] text-amber-700">
+                    Media nguồn: {[question.sourceAudioPath, question.sourceImagePath].filter(Boolean).join(" · ")}
+                  </p>
+                )}
 
                 {question.part === "Part 2" ? (
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
@@ -251,6 +460,11 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                             <span className="text-sm font-semibold">
                               ({opt.id}){mainText ? ` ${mainText}` : ""}
                             </span>
+                            {showExplanation && question.optionTranslations?.[opt.id] && (
+                              <span className="block text-xs font-normal text-slate-500">
+                            {toDisplayText(question.optionTranslations[opt.id])}
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
@@ -399,15 +613,15 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1">
                                       <div className="flex items-center gap-2">
-                                        <span className="font-extrabold text-slate-900 text-base">{v.word}</span>
-                                        <span className="italic font-serif text-slate-500 text-xs">{v.pos}</span>
+                                        <span className="font-extrabold text-slate-900 text-base">{toDisplayText(v.word)}</span>
+                                        <span className="italic font-serif text-slate-500 text-xs">{toDisplayText(v.pos)}</span>
                                         <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-extrabold text-[10px]">
-                                          {v.level}
+                                          {toDisplayText(v.level)}
                                         </span>
                                       </div>
 
                                       <div className="flex items-center gap-2 text-xs text-slate-600 font-mono">
-                                        <span>{v.ipa}</span>
+                                        <span>{toDisplayText(v.ipa)}</span>
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -424,7 +638,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
 
                                   </div>
 
-                                  <p className="text-sm font-bold text-slate-800 leading-snug">{v.meaning}</p>
+                                  <p className="text-sm font-bold text-slate-800 leading-snug">{toDisplayText(v.meaning)}</p>
 
                                   {(() => {
                                     const detail = getEnrichedVocabDetail(v, question?.questionText || question?.explanation || "");
@@ -504,14 +718,14 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                               >
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-extrabold text-slate-900 text-sm">{v.word}</span>
-                                    <span className="italic text-slate-500 font-semibold">{v.pos}</span>
+                                    <span className="font-extrabold text-slate-900 text-sm">{toDisplayText(v.word)}</span>
+                                    <span className="italic text-slate-500 font-semibold">{toDisplayText(v.pos)}</span>
                                     <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-100 text-blue-800">
-                                      {v.level}
+                                      {toDisplayText(v.level)}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2 text-slate-600 text-[11px]">
-                                    <span className="font-mono text-slate-500">{v.ipa}</span>
+                                    <span className="font-mono text-slate-500">{toDisplayText(v.ipa)}</span>
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -524,7 +738,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
                                       <Volume2 className="w-3.5 h-3.5" />
                                     </button>
                                     <span className="text-slate-300">•</span>
-                                    <span className="font-medium text-slate-800">{v.meaning}</span>
+                                    <span className="font-medium text-slate-800">{toDisplayText(v.meaning)}</span>
                                   </div>
                                 </div>
 
@@ -547,7 +761,7 @@ export const QuestionPreviewModal: React.FC<QuestionPreviewModalProps> = ({
           {question && <QuestionErrorReportButton source="QUESTION_BANK"
             questionRef={`QUESTION_BANK-${question.id}`}
             relatedContent={`${question.part} · ${question.code || question.id}`}
-            questionSnapshot={{ questionText: question.questionText, options: Object.fromEntries(question.options.map((option) => [option.id, option.text])), correctAnswer: question.correctAnswer, explanation: question.explanation, passage: question.passage, imageUrl: question.imageUrl, audioUrl: question.audioUrl, part: question.part }}
+            questionSnapshot={{ questionText: question.questionText, options: Object.fromEntries(question.options.map((option) => [option.id, option.text])), correctAnswer: question.correctAnswer, explanation: question.explanation, passage: question.passage, imageUrl, audioUrl, part: question.part }}
             onSubmitted={(ticket) => showToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />}
 
           <div className="flex items-center gap-2">

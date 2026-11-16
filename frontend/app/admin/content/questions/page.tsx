@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { QuestionItem, QuestionPart, QuestionDifficulty } from "./types";
+import { QuestionItem, QuestionPart, QuestionDifficulty, QUESTION_DIFFICULTY_BANDS } from "./types";
+import { DEFAULT_SKILLS } from "./constants";
 import { QuestionFilterBar } from "@/components/admin/content/questions/QuestionFilterBar";
 import { QuestionTableView } from "@/components/admin/content/questions/QuestionTableView";
 import { QuestionCardGridView } from "@/components/admin/content/questions/QuestionCardGridView";
@@ -10,6 +11,7 @@ import { QuestionEditModal } from "@/components/admin/content/questions/Question
 import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
 import { exportToExcel } from "@/lib/exportExcel";
 import { playUnifiedAnswerSound } from "@/lib/sound";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   createQuestionBankQuestion,
   deleteQuestionBankQuestion,
@@ -48,6 +50,8 @@ function parseCsv(text: string): string[][] {
   if (row.some((cell) => cell !== "")) rows.push(row);
   return rows;
 }
+
+const QUESTIONS_PER_PAGE = 10;
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
@@ -132,9 +136,24 @@ export default function QuestionsPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Modals state
   const [previewQuestion, setPreviewQuestion] = useState<QuestionItem | null>(null);
+  const previewQuestions = useMemo(() => {
+    if (!previewQuestion) return [];
+    if ((previewQuestion.part !== "Part 6" && previewQuestion.part !== "Part 7") || !previewQuestion.passage?.trim()) {
+      return [previewQuestion];
+    }
+    const testKey = previewQuestion.code?.match(/^ETS\d{4}-T\d{2}/i)?.[0]?.toLowerCase();
+    return questions
+      .filter((candidate) => {
+        if (candidate.part !== previewQuestion.part || candidate.passage?.trim() !== previewQuestion.passage?.trim()) return false;
+        const candidateTestKey = candidate.code?.match(/^ETS\d{4}-T\d{2}/i)?.[0]?.toLowerCase();
+        return !testKey || candidateTestKey === testKey;
+      })
+      .sort((left, right) => Number(left.id) - Number(right.id));
+  }, [questions, previewQuestion]);
   const [editingQuestion, setEditingQuestion] = useState<QuestionItem | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmQuestion, setDeleteConfirmQuestion] = useState<QuestionItem | null>(null);
@@ -157,6 +176,27 @@ export default function QuestionsPage() {
       return true;
     });
   }, [questions, selectedPart, selectedSkill, selectedDifficulty, selectedStatus, searchQuery]);
+  const availableSkills = useMemo(
+    () => Array.from(new Set([...DEFAULT_SKILLS, ...questions.map((question) => question.skill).filter(Boolean)])).sort(),
+    [questions],
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredQuestions.length / QUESTIONS_PER_PAGE));
+  const visiblePage = Math.min(currentPage, pageCount);
+  const pageWindowSize = 11;
+  const pageWindowStart = Math.max(1, Math.min(visiblePage - 5, pageCount - pageWindowSize + 1));
+  const pageWindowEnd = Math.min(pageCount, pageWindowStart + pageWindowSize - 1);
+  const pageNumbers = Array.from(
+    { length: pageWindowEnd - pageWindowStart + 1 },
+    (_, index) => pageWindowStart + index,
+  );
+  const paginatedQuestions = useMemo(() => {
+    const start = (visiblePage - 1) * QUESTIONS_PER_PAGE;
+    return filteredQuestions.slice(start, start + QUESTIONS_PER_PAGE);
+  }, [filteredQuestions, visiblePage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedPart, selectedSkill, selectedDifficulty, selectedStatus, searchQuery, viewMode]);
 
   // Selection handlers
   const handleSelectAll = (selectAll: boolean) => {
@@ -361,7 +401,7 @@ export default function QuestionsPage() {
         const difficulty = get(requiredColumns.difficulty) as QuestionDifficulty;
         const status = (get(statusColumn) || "DRAFT").toUpperCase();
         const correctAnswer = get(requiredColumns.correctAnswer).toUpperCase();
-        if (!/^Part [1-7]$/.test(part) || !["Easy", "Medium", "Hard"].includes(difficulty)
+        if (!(/^Part [1-7]$/.test(part) || part === "Grammar" || part === "Vocabulary") || !QUESTION_DIFFICULTY_BANDS.includes(difficulty)
           || !["DRAFT", "PUBLISHED"].includes(status)) {
           throw new Error(`Dòng ${index + 2}: phần thi, độ khó hoặc trạng thái không hợp lệ.`);
         }
@@ -433,6 +473,7 @@ export default function QuestionsPage() {
         setKeyword={setSearchQuery}
         selectedSkill={selectedSkill}
         setSelectedSkill={setSelectedSkill}
+        availableSkills={availableSkills}
         selectedDifficulty={selectedDifficulty}
         setSelectedDifficulty={setSelectedDifficulty}
         selectedStatus={selectedStatus}
@@ -461,7 +502,7 @@ export default function QuestionsPage() {
         </div>
       ) : viewMode === "table" ? (
         <QuestionTableView
-          questions={filteredQuestions}
+          questions={paginatedQuestions}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
           onSelectAll={handleSelectAll}
@@ -472,7 +513,7 @@ export default function QuestionsPage() {
         />
       ) : (
         <QuestionCardGridView
-          questions={filteredQuestions}
+          questions={paginatedQuestions}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
           onPreview={openPreviewModal}
@@ -482,9 +523,51 @@ export default function QuestionsPage() {
         />
       )}
 
+      {!isLoading && !loadError && filteredQuestions.length > 0 && (
+        <nav aria-label="Phân trang ngân hàng câu hỏi" className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-center text-xs text-slate-500">
+            {/* Hiển thị {(visiblePage - 1) * QUESTIONS_PER_PAGE + 1}–{Math.min(visiblePage * QUESTIONS_PER_PAGE, filteredQuestions.length)} trong {filteredQuestions.length} câu */}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Trang trước"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={visiblePage === 1}
+              className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            {pageWindowStart > 1 && <span aria-hidden="true" className="px-1 text-slate-400">…</span>}
+            {pageNumbers.map((page) => (
+              <button
+                key={page}
+                type="button"
+                aria-current={page === visiblePage ? "page" : undefined}
+                onClick={() => setCurrentPage(page)}
+                className={`h-9 min-w-9 rounded-lg px-2 text-sm font-semibold transition ${page === visiblePage ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
+              >
+                {page}
+              </button>
+            ))}
+            {pageWindowEnd < pageCount && <span aria-hidden="true" className="px-1 text-slate-400">…</span>}
+            <button
+              type="button"
+              aria-label="Trang sau"
+              onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+              disabled={visiblePage === pageCount}
+              className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </nav>
+      )}
+
       {/* Preview Fullscreen Quiz Modal */}
       <QuestionPreviewModal
         question={previewQuestion}
+        questions={previewQuestions}
         onClose={() => setPreviewQuestion(null)}
         playSfx={playSfx}
         playAudio={playAudio}
@@ -498,6 +581,7 @@ export default function QuestionsPage() {
         onClose={() => setEditModalOpen(false)}
         onSave={handleSaveModal}
         isSaving={isSaving}
+        availableSkills={availableSkills}
       />
 
       {/* Delete Single & Bulk Confirmation Modals */}

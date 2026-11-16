@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { FileQuestion, X } from "lucide-react";
-import { QuestionItem, QuestionPart, QuestionDifficulty } from "@/app/admin/content/questions/types";
+import { QuestionItem, QuestionPart, QuestionDifficulty, QUESTION_DIFFICULTY_BANDS } from "@/app/admin/content/questions/types";
 import { DEFAULT_SKILLS } from "@/app/admin/content/questions/constants";
 
 interface QuestionEditModalProps {
@@ -26,6 +26,7 @@ interface QuestionEditModalProps {
     status: "PUBLISHED" | "DRAFT";
   }) => void | Promise<void>;
   isSaving: boolean;
+  availableSkills?: string[];
 }
 
 export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
@@ -34,10 +35,11 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
   onClose,
   onSave,
   isSaving,
+  availableSkills = DEFAULT_SKILLS,
 }) => {
   const [formPart, setFormPart] = useState<QuestionPart>("Part 5");
   const [formSkill, setFormSkill] = useState<string>(DEFAULT_SKILLS[0]);
-  const [formDifficulty, setFormDifficulty] = useState<QuestionDifficulty>("Medium");
+  const [formDifficulty, setFormDifficulty] = useState<QuestionDifficulty>("650-750");
   const [formQuestionText, setFormQuestionText] = useState("");
   const [formPassage, setFormPassage] = useState("");
   const [formImageUrl, setFormImageUrl] = useState("");
@@ -55,7 +57,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormPart(editingQuestion.part);
       setFormSkill(editingQuestion.skill || DEFAULT_SKILLS[0]);
-      setFormDifficulty(editingQuestion.difficulty || "Medium");
+      setFormDifficulty(editingQuestion.difficulty || "650-750");
       setFormQuestionText(editingQuestion.questionText || "");
       setFormPassage(editingQuestion.passage || "");
       setFormImageUrl(editingQuestion.imageUrl || "");
@@ -70,7 +72,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
     } else {
       setFormPart("Part 5");
       setFormSkill(DEFAULT_SKILLS[0]);
-      setFormDifficulty("Medium");
+      setFormDifficulty("650-750");
       setFormQuestionText("");
       setFormPassage("");
       setFormImageUrl("");
@@ -100,7 +102,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       return;
     }
     if (
-      (formPart === "Part 3" || formPart === "Part 4" || formPart === "Part 5" || formPart === "Part 6" || formPart === "Part 7") &&
+      (formPart === "Part 3" || formPart === "Part 4" || formPart === "Part 5" || formPart === "Part 6" || formPart === "Part 7" || formPart === "Grammar" || formPart === "Vocabulary") &&
       (!formOptC.trim() || !formOptD.trim())
     ) {
       setErrorMessage(`Phần thi ${formPart} yêu cầu đầy đủ 4 phương án A, B, C, D.`);
@@ -170,6 +172,8 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
                 <option value="Part 5">Part 5 (Câu đơn)</option>
                 <option value="Part 6">Part 6 (Điền đoạn)</option>
                 <option value="Part 7">Part 7 (Đoạn văn)</option>
+                <option value="Grammar">Grammar (Ngữ pháp)</option>
+                <option value="Vocabulary">Vocabulary (Từ vựng)</option>
               </select>
             </div>
 
@@ -180,7 +184,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
                 onChange={(e) => setFormSkill(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
               >
-                {DEFAULT_SKILLS.map((s) => (
+                {availableSkills.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -195,9 +199,9 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
                 onChange={(e) => setFormDifficulty(e.target.value as QuestionDifficulty)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
               >
-                <option value="Easy">Dễ (Easy)</option>
-                <option value="Medium">Trung bình</option>
-                <option value="Hard">Khó (Hard)</option>
+                {QUESTION_DIFFICULTY_BANDS.map((band) => (
+                  <option key={band} value={band}>{band}</option>
+                ))}
               </select>
             </div>
           </div>

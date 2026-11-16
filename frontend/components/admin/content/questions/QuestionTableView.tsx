@@ -127,9 +127,9 @@ export const QuestionTableView: React.FC<QuestionTableViewProps> = ({
                     <td className="py-4 px-4 whitespace-nowrap">
                       <span
                         className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold whitespace-nowrap inline-flex items-center ${
-                          q.difficulty === "Easy"
+                          q.difficulty === "450-550"
                             ? "bg-emerald-100 text-emerald-800"
-                            : q.difficulty === "Hard"
+                            : q.difficulty === "850-900+"
                             ? "bg-rose-100 text-rose-800"
                             : "bg-amber-100 text-amber-800"
                         }`}

@@ -17,8 +17,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class QuestionBankService {
-    private static final Set<String> PARTS = Set.of("PART_1", "PART_2", "PART_3", "PART_4", "PART_5", "PART_6", "PART_7");
-    private static final Set<String> DIFFICULTIES = Set.of("EASY", "MEDIUM", "HARD");
+    private static final Set<String> PARTS = Set.of("PART_1", "PART_2", "PART_3", "PART_4", "PART_5", "PART_6", "PART_7", "GRAMMAR", "VOCABULARY");
+    private static final Set<String> DIFFICULTIES = Set.of("450-550", "550-650", "650-750", "750-850", "850-900+");
     private static final Set<String> STATUSES = Set.of("DRAFT", "PUBLISHED");
 
     private final JdbcTemplate jdbc;
@@ -31,9 +31,11 @@ public class QuestionBankService {
     public List<QuestionBankQuestion> listQuestions() {
         return jdbc.query("""
                 SELECT id, external_code, part, question_text, passage, bilingual_passage,
-                       audio_url, image_url, options::text AS options_json, correct_answer,
+                       audio_url, image_url, options::text AS options_json,
+                       option_translations::text AS option_translations_json, correct_answer,
                        explanation, transcript, translation, question_translation, trap_note,
-                       vocab_list::text AS vocab_json, difficulty, status, skill, created_at::text AS created_at
+                       vocab_list::text AS vocab_json, difficulty, source_difficulty, source_audio_path, source_image_path,
+                       status, skill, created_at::text AS created_at
                 FROM toeic_question_bank
                 WHERE status <> 'ARCHIVED'
                 ORDER BY created_at DESC, id DESC
@@ -114,9 +116,11 @@ public class QuestionBankService {
     private QuestionBankQuestion getQuestion(long id) {
         return jdbc.query("""
                 SELECT id, external_code, part, question_text, passage, bilingual_passage,
-                       audio_url, image_url, options::text AS options_json, correct_answer,
+                       audio_url, image_url, options::text AS options_json,
+                       option_translations::text AS option_translations_json, correct_answer,
                        explanation, transcript, translation, question_translation, trap_note,
-                       vocab_list::text AS vocab_json, difficulty, status, skill, created_at::text AS created_at
+                       vocab_list::text AS vocab_json, difficulty, source_difficulty, source_audio_path, source_image_path,
+                       status, skill, created_at::text AS created_at
                 FROM toeic_question_bank
                 WHERE id = ?
                 """, rs -> rs.next() ? mapQuestion(rs, 0) : null, id);
@@ -150,7 +154,11 @@ public class QuestionBankService {
                 rs.getString("translation"),
                 rs.getString("question_translation"),
                 rs.getString("trap_note"),
-                parseVocab(rs.getString("vocab_json")));
+                parseVocab(rs.getString("vocab_json")),
+                rs.getString("source_difficulty"),
+                rs.getString("source_audio_path"),
+                rs.getString("source_image_path"),
+                parseOptions(rs.getString("option_translations_json")));
     }
 
     private void validateRequest(QuestionBankQuestionRequest request) {
@@ -245,6 +253,8 @@ public class QuestionBankService {
     }
 
     private String fromDatabasePart(String part) {
+        if ("GRAMMAR".equals(part)) return "Grammar";
+        if ("VOCABULARY".equals(part)) return "Vocabulary";
         return part != null && part.startsWith("PART_") ? "Part " + part.substring(5) : part;
     }
 
@@ -253,9 +263,7 @@ public class QuestionBankService {
     }
 
     private String fromDatabaseDifficulty(String difficulty) {
-        return difficulty == null || difficulty.isBlank()
-                ? "Medium"
-                : difficulty.charAt(0) + difficulty.substring(1).toLowerCase();
+        return difficulty == null || difficulty.isBlank() ? "650-750" : difficulty;
     }
 
     private String generatedCode(String part, long id) {
