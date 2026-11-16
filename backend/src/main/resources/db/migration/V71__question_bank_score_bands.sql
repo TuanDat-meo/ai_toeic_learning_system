@@ -18,3 +18,6 @@ source_difficulty = COALESCE(source_difficulty, 'Legacy: ' || difficulty);
 ALTER TABLE toeic_question_bank
     ADD CONSTRAINT ck_toeic_question_bank_difficulty
     CHECK (difficulty IN ('450-550', '550-650', '650-750', '750-850', '850-900+'));
+
+ALTER TABLE toeic_question_bank
+    ALTER COLUMN difficulty SET DEFAULT '650-750';
