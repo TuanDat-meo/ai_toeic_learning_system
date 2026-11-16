@@ -218,12 +218,49 @@ export async function GET(request: NextRequest) {
       const responseWord = rawPayload && typeof rawPayload.word === "string" && rawPayload.word.trim()
         ? rawPayload.word.trim()
         : word;
+
+      // Đồng thời lấy từ đồng nghĩa (synonyms) & trái nghĩa (antonyms) từ Datamuse API
+      let synonyms: { word: string; meaning?: string }[] = [];
+      let antonyms: { word: string; meaning?: string }[] = [];
+      try {
+        const [synRes, antRes] = await Promise.allSettled([
+          fetch(`https://api.datamuse.com/words?rel_syn=${encodeURIComponent(word)}&max=8`, {
+            signal: AbortSignal.timeout(3000),
+          }).then((r) => (r.ok ? r.json() : [])),
+          fetch(`https://api.datamuse.com/words?rel_ant=${encodeURIComponent(word)}&max=8`, {
+            signal: AbortSignal.timeout(3000),
+          }).then((r) => (r.ok ? r.json() : [])),
+        ]);
+
+        if (synRes.status === "fulfilled" && Array.isArray(synRes.value)) {
+          synonyms = synRes.value
+            .map((item: any) => ({
+              word: typeof item.word === "string" ? item.word : "",
+              meaning: "",
+            }))
+            .filter((s: any) => s.word && s.word.toLowerCase() !== word.toLowerCase());
+        }
+
+        if (antRes.status === "fulfilled" && Array.isArray(antRes.value)) {
+          antonyms = antRes.value
+            .map((item: any) => ({
+              word: typeof item.word === "string" ? item.word : "",
+              meaning: "",
+            }))
+            .filter((a: any) => a.word && a.word.toLowerCase() !== word.toLowerCase());
+        }
+      } catch {
+        // Bỏ qua lỗi tra cứu từ đồng/trái nghĩa nếu mạng chậm
+      }
+
       return NextResponse.json({
         exists: true,
         word: responseWord,
         phonetic: isRecord(ipa) && typeof ipa.ipa === "string" ? ipa.ipa.trim() : "",
         meaningLanguage: "vi",
         meanings,
+        synonyms,
+        antonyms,
         sourceUrl: `https://en.wiktionary.org/wiki/${encodeURIComponent(responseWord.replace(/ /g, "_"))}`,
       }, {
         headers: { "Cache-Control": "no-store" },

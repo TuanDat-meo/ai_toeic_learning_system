@@ -13,6 +13,8 @@ export interface EnglishDictionarySuggestion {
   audioUrl: string;
   meaningLanguage: "vi" | "vi-machine" | "en";
   meanings: VietnameseDictionaryMeaning[];
+  synonyms?: { word: string; meaning?: string }[];
+  antonyms?: { word: string; meaning?: string }[];
   sourceUrl: string;
 }
 
@@ -85,12 +87,21 @@ export async function lookupEnglishDictionary(
     throw new Error(`Từ điển chưa có nghĩa tiếng Việt cho “${word}”.`);
   }
 
+  const synonyms: { word: string; meaning?: string }[] = Array.isArray((payload as any).synonyms)
+    ? (payload as any).synonyms.map((s: any) => ({ word: String(s.word || ""), meaning: String(s.meaning || "") })).filter((s: any) => s.word)
+    : [];
+  const antonyms: { word: string; meaning?: string }[] = Array.isArray((payload as any).antonyms)
+    ? (payload as any).antonyms.map((a: any) => ({ word: String(a.word || ""), meaning: String(a.meaning || "") })).filter((a: any) => a.word)
+    : [];
+
   return {
     word: typeof payload.word === "string" ? payload.word : word,
     phonetic: typeof payload.phonetic === "string" ? payload.phonetic : "",
     audioUrl: `/api/dictionary/audio?${new URLSearchParams({ word })}`,
     meaningLanguage: normalizeMeaningLanguage(payload.meaningLanguage),
     meanings,
+    synonyms,
+    antonyms,
     sourceUrl: typeof payload.sourceUrl === "string" ? payload.sourceUrl : "",
   };
 }

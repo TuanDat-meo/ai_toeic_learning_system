@@ -2,6 +2,8 @@
 
 import { recordQuestionAnswer, getItemProgress, getRedoWrongQuestions, saveItemProgress, resetItemProgress } from "@/lib/practiceProgress";
 import { getPassageFingerprint, isPlaceholderPassageText } from "@/lib/readingPassageUtils";
+import { getQuestionTranslation, getOptionMeaning, getSmartPassageTranslation, getEnrichedExplanation } from "@/lib/readingTranslationResolver";
+import { autoExtractVocabListForReading } from "@/lib/readingVocabExtractor";
 
 import React, { useState, useMemo, useEffect } from "react";
 import { ExerciseCardData, ReadingSubPassage, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
@@ -29,15 +31,17 @@ import {
   RotateCcw,
   Bookmark,
   BookOpen,
-  Target,
   Volume2,
   FolderPlus,
   Info,
+  Loader2,
 } from "lucide-react";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
+import { lookupEnglishDictionary } from "@/lib/api/english-dictionary";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
+import { formatExplanation } from "@/lib/utils/formatExplanation";
 
 interface ReadingPracticeWorkspaceProps {
   initialQuestionIndex?: number;
@@ -46,6 +50,7 @@ interface ReadingPracticeWorkspaceProps {
   onClose: () => void;
   playSfx: (type?: "correct" | "wrong" | "click") => void;
   showToast: (msg: string) => void;
+  showTimer?: boolean;
 }
 
 interface PassageQuestionItem {
@@ -70,17 +75,17 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   showToast,
   initialQuestionIndex = 0,
   isRedoWrongOnly = false,
+  showTimer = true,
 }) => {
   const fullQuestions = useMemo(() => {
     return card.sampleQuestions || [];
   }, [card]);
 
-  const activeQuestions = useMemo(() => {
-    if (!isRedoWrongOnly) return fullQuestions;
-    return getRedoWrongQuestions(fullQuestions, `reading-${card.id}`, card.totalQuestions || fullQuestions.length);
-  }, [fullQuestions, isRedoWrongOnly, card]);
-  // Group questions by passage (for Part 6, Part 7) or individual questions (for Part 5)
-  const passageGroups: PassageGroup[] = useMemo(() => {
+  // Gom nhóm câu hỏi và xử lý chế độ Luyện tập / Làm lại câu sai:
+  // - Part 5 / Grammar: Câu đơn độc lập -> Làm lại câu sai chỉ chọn đúng các câu sai.
+  // - Part 6 / Part 7: Có đoạn văn -> Nếu trong đoạn văn có bất kỳ câu nào sai, GIỮ NGUYÊN TOÀN BỘ ĐOẠN VĂN
+  //   kèm TẤT CẢ các câu hỏi của đoạn đó (cả 4 câu ở Part 6, hoặc 2-5 câu ở Part 7) để đảm bảo ngữ cảnh đọc hiểu!
+  const { activeQuestions, passageGroups } = useMemo(() => {
     const isStandaloneSentenceMode = card.category === "part5" || card.category === "grammar";
     const cardPassagesValid = (card.passages || []).filter((p) => !isPlaceholderPassageText(p.text));
     const cardTextValid = !isPlaceholderPassageText(card.passageText) ? card.passageText : undefined;
@@ -88,7 +93,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
     const hasPassages =
       !isStandaloneSentenceMode &&
-      (activeQuestions.some(
+      (fullQuestions.some(
         (q) =>
           !isPlaceholderPassageText(q.passageText) ||
           Boolean(q.passages && q.passages.some((p) => !isPlaceholderPassageText(p.text)))
@@ -96,18 +101,30 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         Boolean(cardTextValid) ||
         cardPassagesValid.length > 0);
 
+    // Trường hợp 1: Part 5 hoặc câu đơn không có đoạn văn
     if (!hasPassages) {
-      return activeQuestions.map((q, idx) => ({
+      const qList = isRedoWrongOnly
+        ? getRedoWrongQuestions(fullQuestions, `reading-${card.id}`, card.totalQuestions || fullQuestions.length)
+        : fullQuestions;
+
+      const pGroups: PassageGroup[] = qList.map((q, idx) => ({
         id: `q-${idx}`,
         startIndex: idx,
         questions: [{ question: q, globalIndex: idx }],
       }));
+
+      return {
+        activeQuestions: qList,
+        passageGroups: pGroups,
+      };
     }
 
-    const groups: PassageGroup[] = [];
+    // Trường hợp 2: Part 6 hoặc Part 7 có đoạn văn (Reading Passage)
+    // Gom tất cả fullQuestions thành các đoạn văn hoàn chỉnh
+    const allGroups: PassageGroup[] = [];
     let curr: PassageGroup | null = null;
 
-    activeQuestions.forEach((q, idx) => {
+    fullQuestions.forEach((q, idx) => {
       const qPassagesValid = (q.passages || []).filter((p) => !isPlaceholderPassageText(p.text));
       const validPassages = qPassagesValid.length > 0 ? qPassagesValid : cardPassagesValid;
       const validText = !isPlaceholderPassageText(q.passageText) ? q.passageText : cardTextValid;
@@ -119,7 +136,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       const pKey = fp && fp !== "__title__:" ? fp : `single-${idx}`;
 
       if (!curr || curr.id !== pKey) {
-        if (curr) groups.push(curr);
+        if (curr) allGroups.push(curr);
         curr = {
           id: pKey,
           passageTitle: q.passageTitle,
@@ -133,10 +150,84 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         curr.questions.push({ question: q, globalIndex: idx });
       }
     });
+    if (curr) allGroups.push(curr);
 
-    if (curr) groups.push(curr);
-    return groups;
-  }, [activeQuestions, card]);
+    // Nếu không phải chế độ làm lại câu sai -> hiển thị toàn bộ
+    if (!isRedoWrongOnly) {
+      return {
+        activeQuestions: fullQuestions,
+        passageGroups: allGroups,
+      };
+    }
+
+    // Trong chế độ làm lại câu sai cho Part 6 / Part 7:
+    // Kiểm tra đoạn văn nào có câu sai thì GIỮ NGUYÊN TOÀN BỘ ĐOẠN ĐÓ (tất cả các câu trong đoạn)
+    const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length);
+    const wrongIds = (prog.wrongQuestionIds || []).map(String);
+    const targetWrongCount = Math.max(prog.wrongAnswers || 0, wrongIds.length);
+
+    let keptGroups = allGroups.filter((group) => {
+      return group.questions.some((item) => {
+        const q = item.question;
+        const qIdRaw = (q as { id?: string | number }).id;
+        const qIdStr = qIdRaw !== undefined && qIdRaw !== null ? String(qIdRaw) : "";
+        const qNumStr = q.questionNum !== undefined && q.questionNum !== null ? String(q.questionNum) : "";
+        const idx1Str = String(item.globalIndex + 1);
+        const idx0Str = String(item.globalIndex);
+
+        return wrongIds.some(
+          (wid) =>
+            wid === qIdStr ||
+            wid === qNumStr ||
+            wid === idx1Str ||
+            wid === idx0Str ||
+            (qIdStr && (qIdStr.endsWith(`-${wid}`) || qIdStr.endsWith(`_${wid}`)))
+        );
+      });
+    });
+
+    // Fallback: nếu wrongIds rỗng nhưng targetWrongCount > 0
+    if (keptGroups.length === 0 && targetWrongCount > 0) {
+      let accQuestions = 0;
+      for (const grp of allGroups) {
+        keptGroups.push(grp);
+        accQuestions += grp.questions.length;
+        if (accQuestions >= targetWrongCount) break;
+      }
+    }
+
+    if (keptGroups.length === 0) {
+      keptGroups = allGroups;
+    }
+
+    // Tái cấu trúc lại activeQuestions và globalIndex tuần tự cho từng câu trong các đoạn được giữ
+    const reindexedQuestions: SampleQuestion[] = [];
+    const reindexedGroups: PassageGroup[] = [];
+    let startIdx = 0;
+
+    keptGroups.forEach((grp, gIdx) => {
+      const grpQuestions: { question: SampleQuestion; globalIndex: number }[] = [];
+      grp.questions.forEach((item) => {
+        const gIdxSeq = reindexedQuestions.length;
+        reindexedQuestions.push(item.question);
+        grpQuestions.push({ question: item.question, globalIndex: gIdxSeq });
+      });
+
+      reindexedGroups.push({
+        ...grp,
+        id: grp.id || `passage-group-${gIdx}`,
+        startIndex: startIdx,
+        questions: grpQuestions,
+      });
+
+      startIdx += grpQuestions.length;
+    });
+
+    return {
+      activeQuestions: reindexedQuestions,
+      passageGroups: reindexedGroups,
+    };
+  }, [fullQuestions, isRedoWrongOnly, card]);
 
   const [savedLogSummary] = useState<{
     hasSavedLog: boolean;
@@ -205,8 +296,24 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         map.set(key, v);
       }
     });
+
+    // Tự động bổ sung từ vựng trọng tâm cho bài đọc Part 6 & Part 7 nếu danh sách bị thiếu
+    if (map.size === 0) {
+      const autoVocabs = autoExtractVocabListForReading({
+        passageText: currentGroup.passageText || card.passageText || "",
+        questions: currentGroup.questions.map((item) => item.question),
+        maxCandidates: 6,
+      });
+      autoVocabs.forEach((v) => {
+        const key = v.word.trim().toLowerCase();
+        if (key && !map.has(key)) {
+          map.set(key, v);
+        }
+      });
+    }
+
     return Array.from(map.values());
-  }, [currentGroup, card.vocabList]);
+  }, [currentGroup, card.vocabList, card.passageText]);
 
   // Track user selections: globalIndex -> selected option index
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
@@ -315,76 +422,20 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     };
   }, []);
 
-  const targetPerQSeconds = useMemo(() => {
-    const p5Min = readingConfig?.part5Minutes || 12;
-    const p6Min = readingConfig?.part6Minutes || 10;
-    const p7SingleMin = readingConfig?.part7SingleMinutes || 27;
-    const p7MultiMin = readingConfig?.part7MultiMinutes || 26;
-
-    const title = (card.title || "").toLowerCase();
-    const cat = (card.category || "").toLowerCase();
-    let base = 24;
-    if (cat === "part5" || cat === "grammar") {
-      base = Math.round((p5Min * 60) / 30);
-    } else if (cat === "part6") {
-      base = Math.round((p6Min * 60) / 16);
-    } else if (cat === "part7") {
-      if (title.includes("đoạn đôi") || title.includes("đoạn ba") || title.includes("double") || title.includes("triple") || title.includes("multiple")) {
-        base = Math.round((p7MultiMin * 60) / 25);
-      } else {
-        base = Math.round((p7SingleMin * 60) / 29);
-      }
-    } else if (title.includes("part 5") || (card.totalQuestions === 30 && isPlaceholderPassageText(card.passageText))) {
-      base = Math.round((p5Min * 60) / 30);
-    } else if (title.includes("part 6")) {
-      base = Math.round((p6Min * 60) / 16);
-    } else if (title.includes("đoạn đôi") || title.includes("đoạn ba") || title.includes("multiple")) {
-      base = Math.round((p7MultiMin * 60) / 25);
-    } else {
-      base = Math.round((p7SingleMin * 60) / 29);
-    }
-
-    // Nếu đang bật chế độ Speed Drill, giảm 20% thời gian mục tiêu để kích thích nhịp độ phản xạ
-    if (readingConfig?.speedDrillMode) {
-      return Math.max(15, Math.round(base * 0.8));
-    }
-    return base;
-  }, [card, readingConfig]);
-
-  const [timeOnCurrentGroup, setTimeOnCurrentGroup] = useState(0);
-  const [showPacingAlert, setShowPacingAlert] = useState(false);
-
-  useEffect(() => {
-    setTimeOnCurrentGroup(0);
-    setShowPacingAlert(false);
-  }, [currentGroupIndex]);
-
-  useEffect(() => {
-    if (showResumePromptModal) return;
-    const t = setInterval(() => {
-      setTimeOnCurrentGroup((prev) => {
-        const next = prev + 1;
-        const multiplier = readingConfig?.speedDrillMode ? 1.2 : 1.5;
-        const minLimit = readingConfig?.speedDrillMode ? 20 : 30;
-        const limit = targetPerQSeconds ? Math.max(minLimit, Math.round(targetPerQSeconds * multiplier)) : 45;
-        if (
-          readingConfig?.enableTimeoutAlert &&
-          next >= limit &&
-          !isCurrentGroupChecked
-        ) {
-          setShowPacingAlert(true);
-        }
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [readingConfig, targetPerQSeconds, isCurrentGroupChecked, showResumePromptModal]);
   const [showPassageTranslation, setShowPassageTranslation] = useState(true);
   const [isSfxEnabled, setIsSfxEnabled] = useState(true);
 
   // Modals state
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qKey: string]: string }>({});
+  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qKey: string]: string }>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem(`toeic_reading_notes_${card.id}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   const [activeNoteTab, setActiveNoteTab] = useState<"current" | "tips" | "vocab">("current");
   const [selectedNoteQKey, setSelectedNoteQKey] = useState<string>("");
   const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
@@ -394,7 +445,31 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   // Vocabulary Expansion States
   const [expandedWords, setExpandedWords] = useState<Record<string, boolean>>({});
-  const [savedWords, setSavedWords] = useState<string[]>([]);
+  const [savedWords, setSavedWords] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem("toeic_user_word_basket");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Tự động lưu ghi chú học tập vào localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(`toeic_reading_notes_${card.id}`, JSON.stringify(practiceUserNotes));
+    } catch {}
+  }, [practiceUserNotes, card.id]);
+
+  // Tự động lưu giỏ từ vựng vào localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("toeic_user_word_basket", JSON.stringify(savedWords));
+    } catch {}
+  }, [savedWords]);
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Record<string, boolean>>({});
 
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -410,6 +485,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   const [selectedLookupWord, setSelectedLookupWord] = useState<string>("");
   const [showRichLookupModal, setShowRichLookupModal] = useState(false);
   const [richWordData, setRichWordData] = useState<WordDetail | null>(null);
+  const [isDictLoading, setIsDictLoading] = useState(false);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [activeCardTab, setActiveCardTab] = useState<string>("word");
   const [disableDoubleClick, setDisableDoubleClick] = useState(false);
@@ -485,14 +561,14 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return configs[workspacePart] || configs["PART 5"];
   }, [workspacePart]);
 
-  // Timer effect (pauses while Resume/Restart confirmation dialog is visible)
+  // Timer effect (pauses while Resume/Restart confirmation dialog is visible or when timer is hidden)
   React.useEffect(() => {
-    if (showResumePromptModal) return;
+    if (!showTimer || showResumePromptModal) return;
     const interval = setInterval(() => {
       setTimerSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [showResumePromptModal]);
+  }, [showTimer, showResumePromptModal]);
 
   const totalQuestionsCount = isRedoWrongOnly
     ? activeQuestions.length
@@ -697,7 +773,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     currentGroup.questions.forEach((item) => {
       const selected = nextAnswers[item.globalIndex] !== undefined ? nextAnswers[item.globalIndex] : userAnswers[item.globalIndex];
       const isItemCorrect = selected === item.question.correctIndex;
-      const qIdentifier = item.question.questionNum || (item.globalIndex + 1);
+      const origIdx = fullQuestions.findIndex(
+        (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+      );
+      const qIdentifier = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
       recordQuestionAnswer(
         `reading-${card.id}`,
         qIdentifier,
@@ -766,7 +845,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       setSessionWrongCount(nextWrong);
 
     const singleItem = currentGroup.questions[0]?.question;
-    const qIdentifier = singleItem?.questionNum || (globalIndex + 1);
+    const origIdx = fullQuestions.findIndex(
+      (q) => (q.questionNum && q.questionNum === singleItem?.questionNum) || q.question === singleItem?.question
+    );
+    const qIdentifier = singleItem?.questionNum || (origIdx !== -1 ? origIdx + 1 : globalIndex + 1);
     recordQuestionAnswer(
       `reading-${card.id}`,
       qIdentifier,
@@ -850,7 +932,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     currentGroup.questions.forEach((item) => {
       const selected = userAnswers[item.globalIndex];
       const isItemCorrect = selected === item.question.correctIndex;
-      const qIdentifier = item.question.questionNum || (item.globalIndex + 1);
+      const origIdx = fullQuestions.findIndex(
+        (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+      );
+      const qIdentifier = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
       recordQuestionAnswer(
         `reading-${card.id}`,
         qIdentifier,
@@ -898,7 +983,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       grp.questions.forEach((item) => {
         const chosen = nextAnswers[item.globalIndex];
         if (chosen === undefined) return;
-        const qId = item.question.questionNum || item.globalIndex + 1;
+        const origIdx = fullQuestions.findIndex(
+          (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+        );
+        const qId = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
         answeredIds.push(qId);
         if (chosen === item.question.correctIndex) {
           correctCount++;
@@ -949,8 +1037,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setSessionWrongCount(0);
     setEnergyScore(0);
     setTimerSeconds(0);
-    setTimeOnCurrentGroup(0);
-    setShowPacingAlert(false);
     setCurrentGroupIndex(0);
     setShowResumePromptModal(false);
 
@@ -1010,6 +1096,57 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     handleTriggerLookup(dictQuery.trim());
   };
 
+  const highlightSelection = (color: "yellow" | "green" | "pink" | "blue" = annotatorColor) => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) {
+      showToast("Vui lòng bôi đen từ hoặc câu cần highlight trước!");
+      return;
+    }
+    const rawText = sel.toString().trim();
+    if (!rawText) return;
+
+    try {
+      const range = sel.getRangeAt(0);
+      const mark = document.createElement("mark");
+      const colorMap: Record<string, string> = {
+        yellow: "bg-yellow-200 text-slate-900 px-0.5 rounded",
+        green: "bg-emerald-200 text-slate-900 px-0.5 rounded",
+        pink: "bg-pink-200 text-slate-900 px-0.5 rounded",
+        blue: "bg-sky-200 text-slate-900 px-0.5 rounded",
+      };
+      mark.className = `toeic-user-highlight ${colorMap[color] || colorMap.yellow}`;
+      mark.title = "Đoạn đã highlight";
+      range.surroundContents(mark);
+      sel.removeAllRanges();
+      setShowLookupTooltip(false);
+      showToast("Đã highlight đoạn văn bản! ✏️");
+    } catch {
+      try {
+        const hexMap: Record<string, string> = {
+          yellow: "#fef08a",
+          green: "#a7f3d0",
+          pink: "#fbcfe8",
+          blue: "#bae6fd",
+        };
+        document.execCommand("hiliteColor", false, hexMap[color] || "#fef08a");
+        setShowLookupTooltip(false);
+        showToast("Đã highlight đoạn văn bản! ✏️");
+      } catch {
+        showToast("Vui lòng bôi đen trọn vẹn văn bản trong cùng một đoạn.");
+      }
+    }
+  };
+
+  const handleClearAllHighlights = () => {
+    const highlights = document.querySelectorAll(".toeic-user-highlight");
+    highlights.forEach((el) => {
+      const parent = el.parentNode;
+      while (el.firstChild) parent?.insertBefore(el.firstChild, el);
+      parent?.removeChild(el);
+    });
+    showToast("Đã xóa tất cả highlight trên bài đọc!");
+  };
+
   const handleMouseUp = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest(".no-lookup-select")) return;
@@ -1043,16 +1180,115 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     }, 15);
   };
 
-  const handleTriggerLookup = (wordToLookup?: string) => {
-    const target = wordToLookup || selectedLookupWord;
-    if (!target) return;
-    const detail = lookupWordDetail(target);
-    setRichWordData(detail);
+  const formatPosBadge = (pos?: string) => {
+    if (!pos) return { label: "Từ vựng", badgeClass: "bg-slate-100 text-slate-700 border-slate-200" };
+    const p = pos.toLowerCase().trim();
+    if (p === "n" || p === "noun") return { label: "Danh từ (Noun)", badgeClass: "bg-blue-100 text-blue-800 border-blue-200" };
+    if (p === "v" || p === "verb") return { label: "Động từ (Verb)", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200" };
+    if (p === "adj" || p === "adjective") return { label: "Tính từ (Adjective)", badgeClass: "bg-amber-100 text-amber-800 border-amber-200" };
+    if (p === "adv" || p === "adverb") return { label: "Trạng từ (Adverb)", badgeClass: "bg-purple-100 text-purple-800 border-purple-200" };
+    if (p === "prep" || p === "preposition") return { label: "Giới từ (Preposition)", badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-200" };
+    if (p === "conj" || p === "conjunction") return { label: "Liên từ (Conjunction)", badgeClass: "bg-pink-100 text-pink-800 border-pink-200" };
+    if (p === "pron" || p === "pronoun") return { label: "Đại từ (Pronoun)", badgeClass: "bg-cyan-100 text-cyan-800 border-cyan-200" };
+    if (p === "phrase" || p === "phr") return { label: "Cụm từ (Phrase)", badgeClass: "bg-teal-100 text-teal-800 border-teal-200" };
+    return { label: pos.toUpperCase(), badgeClass: "bg-slate-100 text-slate-700 border-slate-200" };
+  };
+
+  const handleTriggerLookup = async (wordToLookup?: string) => {
+    const rawTarget = (wordToLookup || selectedLookupWord || "").trim();
+    if (!rawTarget) return;
+
+    // Clean up punctuation (e.g. "(morning," -> "morning")
+    const cleanWord = rawTarget.replace(/^[^\w]+|[^\w]+$/g, "");
+    if (!cleanWord) return;
+
+    // Find in passage/card vocabulary for instant fallback
+    const vocabMatch = Array.from(combinedGroupVocab.values()).find(
+      (v) => (v.word || "").toLowerCase() === cleanWord.toLowerCase()
+    );
+
+    // Initial sync lookup so modal opens immediately with no delay
+    const initialDetail = lookupWordDetail(
+      cleanWord,
+      vocabMatch
+        ? {
+            meaning: vocabMatch.meaning,
+            pos: vocabMatch.pos || "n",
+            ipa: vocabMatch.ipa,
+            exampleEn: vocabMatch.example?.en,
+            exampleVi: vocabMatch.example?.vi,
+            synonyms: (vocabMatch.synonyms || []).map((s) => ({ word: s.en, meaning: s.vi })),
+            antonyms: (vocabMatch.antonyms || []).map((a) => ({ word: a.en, meaning: a.vi })),
+          }
+        : undefined
+    );
+    setRichWordData(initialDetail);
     setIsCardFlipped(false);
     setActiveCardTab("word");
     setShowLookupTooltip(false);
     setShowRichLookupModal(true);
     if (isSfxEnabled) playSfx("click");
+
+    // Live online dictionary lookup (meanings, part of speech, synonyms, antonyms)
+    setIsDictLoading(true);
+    try {
+      const liveDict = await lookupEnglishDictionary(cleanWord);
+      if (liveDict) {
+        setRichWordData((prev) => {
+          if (!prev || prev.word.toLowerCase() !== cleanWord.toLowerCase()) return prev;
+
+          const posVal = liveDict.meanings?.[0]?.partOfSpeech || prev.pos || "n";
+          const primaryDef = liveDict.meanings?.[0]?.definition || prev.contextMeaning;
+          const ipaVal = liveDict.phonetic || prev.usIpa;
+
+          // Process synonyms
+          const syns: { word: string; meaning: string }[] = [];
+          if (liveDict.synonyms && liveDict.synonyms.length > 0) {
+            liveDict.synonyms.forEach((s) => {
+              syns.push({ word: s.word, meaning: s.meaning || "đồng nghĩa" });
+            });
+          }
+          const finalSynonyms = syns.length > 0 ? syns : prev.synonyms;
+
+          // Process antonyms
+          const ants: { word: string; meaning: string }[] = [];
+          if (liveDict.antonyms && liveDict.antonyms.length > 0) {
+            liveDict.antonyms.forEach((a) => {
+              ants.push({ word: a.word, meaning: a.meaning || "trái nghĩa" });
+            });
+          }
+          const finalAntonyms = ants.length > 0 ? ants : (prev.antonyms || []);
+
+          const extraMeanings = (liveDict.meanings || []).map((m) => ({
+            partOfSpeech: m.partOfSpeech || posVal,
+            definition: m.definition,
+            example: m.example,
+          }));
+
+          const updatedTabs = [
+            { id: "word", label: "Từ", en: prev.word, vi: primaryDef },
+            ...(prev.cardTabs?.filter((t) => t.id !== "word") || []),
+          ];
+
+          return {
+            ...prev,
+            usIpa: ipaVal,
+            ukIpa: ipaVal,
+            pos: posVal,
+            contextMeaning: primaryDef,
+            extraMeanings,
+            synonyms: finalSynonyms,
+            antonyms: finalAntonyms,
+            cardTabs: updatedTabs,
+            exampleEn: prev.exampleEn || liveDict.meanings?.[0]?.example,
+          };
+        });
+      }
+    } catch {
+      // Keep static curated / fallback data if network request fails
+    } finally {
+      setIsDictLoading(false);
+    }
   };
 
   const speakWord = (text: string, lang: "en-US" | "en-GB" = "en-US") => {
@@ -1170,17 +1406,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           </button>
 
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-bold shadow-2xs">
-              <Clock className="w-3.5 h-3.5" />
-              {formatTimer(timerSeconds)}
-            </span>
-            {readingConfig?.enablePacingTimer && (
-              <span
-                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-medium"
-                title="Mục tiêu nhịp độ từ Cấu hình lộ trình"
-              >
-                <Target className="w-3.5 h-3.5 text-blue-300" />
-                <span>Mục tiêu: ≤{targetPerQSeconds}s/câu</span>
+            {showTimer && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/20 text-white text-xs font-mono font-bold shadow-2xs">
+                <Clock className="w-3.5 h-3.5" />
+                {formatTimer(timerSeconds)}
               </span>
             )}
             {readingConfig?.speedDrillMode && (
@@ -1199,49 +1428,25 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         </div>
       </header>
 
-      {/* CẢNH BÁO NHỊP ĐỘ DỪNG QUÁ LÂU THEO CẤU HÌNH */}
-      {showPacingAlert && !isCurrentGroupChecked && (
-        <div
-          className={`px-4 sm:px-6 py-2.5 text-xs font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs select-none animate-in slide-in-from-top-1 ${
-            readingConfig?.speedDrillMode
-              ? "bg-rose-500 text-white"
-              : "bg-amber-400 text-slate-950"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Clock className={`w-4 h-4 shrink-0 ${readingConfig?.speedDrillMode ? "text-white" : "text-slate-900"}`} />
-            <span>
-              <strong>{readingConfig?.speedDrillMode ? "⚡ Cảnh báo Speed Drill:" : "Cảnh báo nhịp độ:"}</strong> Bạn đã dừng ở câu hỏi này hơn {timeOnCurrentGroup} giây (vượt mức mục tiêu {targetPerQSeconds}s/câu theo chiến lược {readingConfig?.part5Minutes || 12}p - {readingConfig?.part6Minutes || 10}p - {(readingConfig?.part7SingleMinutes || 27) + (readingConfig?.part7MultiMinutes || 26)}p). Hãy chọn phương án khả dĩ nhất và chuyển tiếp để tránh thiếu giờ ở Part 7!
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowPacingAlert(false)}
-            className={`px-3 py-1 rounded-md font-bold text-[11px] transition cursor-pointer shrink-0 ml-3 ${
-              readingConfig?.speedDrillMode
-                ? "bg-white text-rose-700 hover:bg-rose-50"
-                : "bg-slate-950/10 hover:bg-slate-950/20 text-slate-950"
-            }`}
-          >
-            Đã hiểu
-          </button>
-        </div>
-      )}
-
       {/* ANNOTATOR BAR */}
       {isAnnotatorActive && (
-        <div className="bg-amber-100 border-b border-amber-300 px-6 py-2 flex items-center justify-between shadow-xs select-none text-xs">
-          <div className="flex items-center gap-3">
-            <span className="font-extrabold text-amber-900 flex items-center gap-1.5">
+        <div className="bg-amber-100/95 border-b border-amber-300 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 shadow-xs select-none text-xs animate-in slide-in-from-top-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-extrabold text-amber-950 flex items-center gap-1.5">
               <Pencil className="w-4 h-4 text-amber-700" />
               Công cụ Annotator:
             </span>
+            <span className="text-amber-900 text-[11px] hidden sm:inline">Bôi đen văn bản rồi bấm màu để highlight:</span>
             <div className="flex items-center gap-1.5">
               {(["yellow", "green", "pink", "blue"] as const).map((color) => (
                 <button
                   key={color}
                   type="button"
-                  onClick={() => setAnnotatorColor(color)}
+                  title={`Tô highlight màu ${color}`}
+                  onClick={() => {
+                    setAnnotatorColor(color);
+                    highlightSelection(color);
+                  }}
                   className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
                     color === "yellow"
                       ? "bg-yellow-400 border-yellow-500"
@@ -1250,15 +1455,24 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                       : color === "pink"
                       ? "bg-pink-400 border-pink-500"
                       : "bg-sky-400 border-sky-500"
-                  } ${annotatorColor === color ? "scale-110 ring-2 ring-slate-800" : "opacity-70"}`}
+                  } ${annotatorColor === color ? "scale-115 ring-2 ring-slate-800" : "opacity-75 hover:opacity-100"}`}
                 />
               ))}
             </div>
+            <button
+              type="button"
+              onClick={handleClearAllHighlights}
+              className="px-2.5 py-1 rounded-lg border border-amber-300 bg-white hover:bg-amber-50 text-amber-900 font-bold text-[11px] transition cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3 inline mr-1" />
+              Xóa highlight
+            </button>
           </div>
           <button
             type="button"
             onClick={() => setIsAnnotatorActive(false)}
             className="p-1 rounded-full text-amber-900 hover:bg-amber-200 transition cursor-pointer"
+            title="Đóng Annotator"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1377,7 +1591,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                         ? `Bộ ${subPassages.length} văn bản đọc liên kết (Passage 1 -> ${subPassages.length})`
                         : "Văn bản đọc (Reading Passage)"}
                     </span>
-                    {subPassages.some((p) => !!p.textVi) && (
+                    {subPassages.some((p) => Boolean(p.textVi || (subPassages.length === 1 && (currentGroup.passageTextVi || card.passageTextVi)) || getSmartPassageTranslation(p.text))) && (
                       <button
                         type="button"
                         onClick={() => setShowPassageTranslation((prev) => !prev)}
@@ -1391,9 +1605,13 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
                   {/* DANH SÁCH CÁC ĐOẠN VĂN: Đoạn 1 kết thúc hoàn toàn rồi mới tới Đoạn 2 */}
                   {subPassages.map((sub, pIdx) => {
-                    const hasTranslation = !!sub.textVi;
+                    const resolvedTextVi =
+                      sub.textVi ||
+                      (subPassages.length === 1 ? (currentGroup.passageTextVi || card.passageTextVi) : undefined) ||
+                      getSmartPassageTranslation(sub.text);
+                    const hasTranslation = Boolean(resolvedTextVi);
                     const showThisTranslation =
-                      hasTranslation && (showPassageTranslation || isBilingual || isCurrentGroupChecked);
+                      hasTranslation && (showPassageTranslation || (isBilingual && isCurrentGroupChecked) || isCurrentGroupChecked);
 
                     return (
                       <div
@@ -1493,7 +1711,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                               </span>
                             </div>
                             <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/80 border border-blue-200/90 text-base sm:text-lg font-normal font-sans whitespace-pre-line text-blue-950 leading-relaxed sm:leading-loose select-text italic">
-                              {sub.textVi}
+                              {resolvedTextVi}
                             </div>
                           </div>
                         )}
@@ -1620,18 +1838,22 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                       </div>
                     )}
 
-                  {/* BILINGUAL SENTENCE TRANSLATION (Chỉ cho Part 5 không có bài đọc) */}
-                  {!currentGroup.passageText && !card.passageText && (isCardChecked || isBilingual) && (q.bilingual || (q as any).questionVi) && (
-                    <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 shadow-xs space-y-1.5">
-                      <div className="font-bold text-blue-700 flex items-center gap-1.5 text-xs sm:text-sm">
-                        <Languages className="w-4 h-4 text-blue-600" />
-                        <span>Bản dịch câu hỏi:</span>
+                  {/* BILINGUAL SENTENCE TRANSLATION (Chỉ hiển thị khi đã chọn/kiểm tra đáp án) */}
+                  {isCardChecked && (() => {
+                    const qTranslation = getQuestionTranslation(q, card);
+                    if (!qTranslation) return null;
+                    return (
+                      <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200/90 text-blue-900 shadow-xs space-y-1.5 animate-in fade-in">
+                        <div className="font-bold text-blue-700 flex items-center gap-1.5 text-xs sm:text-sm">
+                          <Languages className="w-4 h-4 text-blue-600" />
+                          <span>Bản dịch câu hỏi:</span>
+                        </div>
+                        <p className="text-blue-950 font-medium text-sm sm:text-base leading-relaxed">
+                          {qTranslation}
+                        </p>
                       </div>
-                      <p className="text-blue-950 font-medium text-sm sm:text-base leading-relaxed">
-                        {q.bilingual || (q as any).questionVi || (typeof (q as any).translation === "string" ? (q as any).translation : (q as any).translation?.questionVi)}
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* OPTIONS LIST */}
                   <div className="space-y-3">
@@ -1639,6 +1861,9 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                       const optLetter = String.fromCharCode(65 + optIdx);
                       const isChosen = userChosen === optIdx;
                       const isCorrectOpt = optIdx === q.correctIndex;
+                      const optMeaning = isCardChecked
+                        ? getOptionMeaning(q, optIdx, optVal, card.vocabList)
+                        : null;
 
                       let cardStyle = "bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-800";
                       let iconNode = (
@@ -1684,9 +1909,9 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                               ({optLetter}) {optVal}
                             </span>
                           </div>
-                          {isCardChecked && q.optionMeanings && q.optionMeanings[optIdx] && (
+                          {optMeaning && (
                             <p className="text-xs text-blue-700 font-medium pl-8 animate-in fade-in">
-                              | {q.optionMeanings[optIdx]}
+                              | {optMeaning}
                             </p>
                           )}
                         </div>
@@ -1717,9 +1942,9 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                             </div>
                           )}
 
-                          <div className="p-3.5 rounded-xl bg-white/90 border border-blue-200 text-slate-900 leading-relaxed text-xs sm:text-sm">
+                          <div className="p-3.5 rounded-xl bg-white/90 border border-blue-200 text-slate-900 leading-relaxed text-xs sm:text-sm whitespace-pre-line">
                             <span className="font-extrabold text-blue-700">Phân tích: </span>
-                            {q.explanation}
+                            {getEnrichedExplanation(q, card)}
                           </div>
                         </div>
                       </div>
@@ -1737,6 +1962,49 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                             if (key && !singleVocabMap.has(key)) singleVocabMap.set(key, v);
                           });
                         }
+
+                        // Tự động làm giàu từ vựng trọng tâm cho Part 5 từ 4 phương án và câu hỏi nếu danh sách bị thiếu
+                        if (singleVocabMap.size < 2) {
+                          const candidateWords: string[] = [];
+                          (q.options || []).forEach((opt) => {
+                            const clean = opt.trim().replace(/^[\(\[]?[A-Da-d][\)\].:]\s*/, "").replace(/[^a-zA-Z]/g, "").toLowerCase();
+                            if (clean && clean.length > 2 && !candidateWords.includes(clean)) {
+                              candidateWords.push(clean);
+                            }
+                          });
+                          const qWords = (q.question || "")
+                            .split(/\s+/)
+                            .map((w) => w.replace(/[^a-zA-Z]/g, "").toLowerCase())
+                            .filter((w) => w.length > 3 && !["this", "that", "with", "from", "have", "will", "been", "were"].includes(w));
+                          for (const qw of qWords) {
+                            if (!candidateWords.includes(qw) && candidateWords.length < 5) {
+                              candidateWords.push(qw);
+                            }
+                          }
+
+                          candidateWords.forEach((word) => {
+                            if (singleVocabMap.has(word)) return;
+                            const detail = lookupWordDetail(word);
+                            const optMeaning = getOptionMeaning(q, 0, word, card.vocabList);
+                            const meaning = optMeaning
+                              ? optMeaning.replace(/^\([^)]+\):\s*/, "")
+                              : (detail.contextMeaning && !detail.contextMeaning.includes("Chưa có") ? detail.contextMeaning : "");
+                            if (meaning) {
+                              singleVocabMap.set(word, {
+                                word,
+                                pos: detail.pos || "n",
+                                level: "Level 2: 200 - 300 đ",
+                                ipa: detail.usIpa || detail.ukIpa || `/${word}/`,
+                                meaning,
+                                example: {
+                                  en: q.question || "",
+                                  vi: q.bilingual || ""
+                                }
+                              });
+                            }
+                          });
+                        }
+
                         const singleVocabList = Array.from(singleVocabMap.values());
                         if (singleVocabList.length === 0) return null;
                         return (
@@ -2067,8 +2335,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           >
             <Grid className="w-4 h-4" />
             <span>
-              {isMultiQuestionGroup
-                ? `Đoạn ${currentGroupIndex + 1}/${passageGroups.length} (${totalQuestionsCount} câu)`
+              {currentGroup.questions.length > 1
+                ? `Câu ${currentGroup.startIndex + 1} - ${currentGroup.startIndex + currentGroup.questions.length}/${totalQuestionsCount}`
                 : `Câu ${currentGroup.startIndex + 1}/${totalQuestionsCount}`}
             </span>
           </button>
@@ -2787,7 +3055,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             transform: "translate(-50%, 0)",
             zIndex: 9999,
           }}
-          className="pointer-events-auto no-lookup-select animate-in fade-in zoom-in-95 duration-100"
+          className="pointer-events-auto no-lookup-select animate-in fade-in zoom-in-95 duration-100 flex items-center gap-1.5 bg-white/95 backdrop-blur-xs p-1 rounded-full shadow-2xl border border-slate-200"
         >
           <button
             type="button"
@@ -2795,11 +3063,24 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               e.preventDefault();
               handleTriggerLookup();
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1e60f0] hover:bg-blue-700 text-white text-xs font-bold shadow-xl transition-transform hover:scale-105 active:scale-95 cursor-pointer select-none"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1e60f0] hover:bg-blue-700 text-white text-xs font-bold transition-transform hover:scale-105 active:scale-95 cursor-pointer select-none"
           >
             <BookOpen className="w-3.5 h-3.5 text-white" />
             <span>Tra</span>
           </button>
+          {isAnnotatorActive && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                highlightSelection(annotatorColor);
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-transform hover:scale-105 active:scale-95 cursor-pointer select-none"
+            >
+              <Pencil className="w-3 h-3 text-white" />
+              <span>Tô màu</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -2845,9 +3126,53 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               </button>
             </div>
 
-            {/* Subtitle */}
-            <div className="text-sm font-bold text-blue-600">
-              Nghĩa trong câu này · {richWordData.pos}
+            {/* KHUNG DỊCH NGHĨA & PHÂN LOẠI TỪ CHÍNH */}
+            <div className="rounded-2xl bg-gradient-to-br from-blue-50/90 via-slate-50 to-white border border-blue-200/90 p-4 space-y-2.5 shadow-xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Loại từ:
+                  </span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${formatPosBadge(richWordData.pos).badgeClass}`}>
+                    {formatPosBadge(richWordData.pos).label}
+                  </span>
+                </div>
+                {isDictLoading ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-blue-600 font-medium">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang nạp nghĩa...</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/70">
+                    ✓ Từ điển Anh - Việt
+                  </span>
+                )}
+              </div>
+
+              {/* Nghĩa tiếng Việt hiển thị trực diện */}
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-blue-700">Dịch nghĩa:</div>
+                <div className="text-base font-extrabold text-slate-900 leading-snug">
+                  {richWordData.contextMeaning || (isDictLoading ? "Đang tra cứu từ điển..." : "Chưa có bản dịch")}
+                </div>
+              </div>
+
+              {/* Các nét nghĩa bổ sung nếu có */}
+              {richWordData.extraMeanings && richWordData.extraMeanings.length > 1 && (
+                <div className="pt-2 border-t border-slate-200/60 space-y-1 text-xs">
+                  <div className="font-bold text-slate-600">Các nét nghĩa khác:</div>
+                  <ul className="list-disc list-inside space-y-0.5 pl-1 text-slate-700">
+                    {richWordData.extraMeanings.slice(1, 4).map((em, idx) => (
+                      <li key={idx}>
+                        <span className="font-semibold text-slate-900">{em.definition}</span>
+                        {em.partOfSpeech && (
+                          <span className="text-slate-400 text-[11px] ml-1">({em.partOfSpeech})</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             {/* Flashcard Box */}
@@ -2887,7 +3212,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 return (
                   <div
                     onClick={() => setIsCardFlipped(!isCardFlipped)}
-                    className="py-5 px-3 rounded-2xl bg-gradient-to-b from-blue-50/30 to-slate-50/60 border border-blue-100/80 text-center cursor-pointer hover:border-blue-300 transition-all select-none space-y-1.5"
+                    className="py-4 px-3 rounded-2xl bg-gradient-to-b from-blue-50/40 to-slate-50/70 border border-blue-100/90 text-center cursor-pointer hover:border-blue-300 hover:shadow-xs transition-all select-none space-y-2"
                   >
                     {!isCardFlipped ? (
                       <>
@@ -2895,16 +3220,30 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                           {currentTabItem.en}
                         </div>
                         <div className="text-xs text-slate-500 font-mono italic">
-                          {richWordData.pos} · {richWordData.usIpa}
+                          {formatPosBadge(richWordData.pos).label} · {richWordData.usIpa}
+                        </div>
+                        <div className="text-sm font-bold text-blue-700 pt-1.5 border-t border-blue-100/80">
+                          {currentTabItem.vi || richWordData.contextMeaning}
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center justify-center gap-1 pt-0.5">
+                          <span>🔄</span>
+                          <span>Bấm để xem câu ví dụ & ngữ cảnh</span>
                         </div>
                       </>
                     ) : (
                       <>
-                        <div className="text-base font-bold text-blue-700">
-                          {currentTabItem.vi}
+                        <div className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+                          Ví dụ & Ngữ cảnh
                         </div>
-                        <div className="text-xs text-slate-500 italic">
-                          {richWordData.contextMeaning}
+                        <div className="text-sm font-semibold text-slate-900">
+                          {richWordData.exampleEn || currentTabItem.en}
+                        </div>
+                        <div className="text-xs text-blue-700 italic">
+                          {richWordData.exampleVi || currentTabItem.vi || richWordData.contextMeaning}
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center justify-center gap-1 pt-1">
+                          <span>🔄</span>
+                          <span>Bấm để quay lại mặt trước</span>
                         </div>
                       </>
                     )}
@@ -2962,37 +3301,63 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               </div>
             )}
 
-            {/* Synonyms */}
+            {/* Synonyms (Từ đồng nghĩa) */}
             {richWordData.synonyms && richWordData.synonyms.length > 0 && (
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold text-slate-800">Đồng nghĩa</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Từ đồng nghĩa (Synonyms)</span>
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    {richWordData.synonyms.length} từ
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {richWordData.synonyms.map((s, i) => (
-                    <span
+                    <button
                       key={i}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold"
+                      type="button"
+                      onClick={() => handleTriggerLookup(s.word)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-950 hover:bg-emerald-100 border border-emerald-200/80 text-xs font-bold transition cursor-pointer group"
+                      title={`Bấm để tra cứu "${s.word}"`}
                     >
-                      <strong className="text-slate-900">{s.word}</strong>
-                      <span className="font-normal text-slate-500">· {s.meaning}</span>
-                    </span>
+                      <strong className="text-emerald-900 group-hover:text-emerald-700">{s.word}</strong>
+                      {s.meaning && s.meaning !== "đồng nghĩa" && (
+                        <span className="font-normal text-emerald-700 text-[11px]">· {s.meaning}</span>
+                      )}
+                    </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Trái nghĩa (Antonyms - Hình 1) */}
+            {/* Antonyms (Từ trái nghĩa) */}
             {richWordData.antonyms && richWordData.antonyms.length > 0 && (
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold text-slate-800">Trái nghĩa</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span>Từ trái nghĩa (Antonyms)</span>
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    {richWordData.antonyms.length} từ
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {richWordData.antonyms.map((a, i) => (
-                    <span
+                    <button
                       key={i}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold"
+                      type="button"
+                      onClick={() => handleTriggerLookup(a.word)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-950 hover:bg-rose-100 border border-rose-200/80 text-xs font-bold transition cursor-pointer group"
+                      title={`Bấm để tra cứu "${a.word}"`}
                     >
-                      <strong className="text-slate-900">{a.word}</strong>
-                      <span className="font-normal text-slate-500">· {a.meaning}</span>
-                    </span>
+                      <strong className="text-rose-900 group-hover:text-rose-700">{a.word}</strong>
+                      {a.meaning && a.meaning !== "trái nghĩa" && (
+                        <span className="font-normal text-rose-700 text-[11px]">· {a.meaning}</span>
+                      )}
+                    </button>
                   ))}
                 </div>
               </div>

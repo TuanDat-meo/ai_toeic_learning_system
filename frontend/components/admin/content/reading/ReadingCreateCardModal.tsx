@@ -306,6 +306,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     prevPart: string;
     qCount: number;
   } | null>(null);
+  const [multiPartSource, setMultiPartSource] = useState<{
+    fileName: string;
+    parsed: any;
+    availableParts: ("part5" | "part6" | "part7")[];
+  } | null>(null);
 
   // Form State for "Thêm từ vựng mới" (Identical to VocabularyModals layout)
   const [vocabInputWord, setVocabInputWord] = useState("");
@@ -661,6 +666,185 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     }));
   };
 
+  // Nạp cụ thể một Part từ dữ liệu JSON đã bóc tách
+  const loadPartFromParsedJson = (
+    parsed: any,
+    targetPart: "part5" | "part6" | "part7",
+    fileName: string
+  ) => {
+    // 1. Tìm danh sách câu hỏi thô từ mọi cấu trúc JSON khả dĩ
+    let rawCandidates: any[] = [];
+
+    // A. Cấu trúc Full Test ETS: parsed.reading = { part5: [...], part6: [...], part7: [...] }
+    if (parsed.reading && typeof parsed.reading === "object") {
+      const r = parsed.reading;
+      if (targetPart === "part5" && Array.isArray(r.part5)) {
+        rawCandidates = r.part5;
+      } else if (targetPart === "part6" && Array.isArray(r.part6)) {
+        rawCandidates = r.part6;
+      } else if (targetPart === "part7" && Array.isArray(r.part7)) {
+        rawCandidates = r.part7;
+      } else if (Array.isArray(r.questions)) {
+        rawCandidates = r.questions;
+      } else if (Array.isArray(r.sampleQuestions)) {
+        rawCandidates = r.sampleQuestions;
+      }
+    }
+
+    // B. Cấu trúc có keys ở root: parsed.part5 / part6 / part7
+    if (rawCandidates.length === 0) {
+      if (targetPart === "part5" && Array.isArray(parsed.part5)) {
+        rawCandidates = parsed.part5;
+      } else if (targetPart === "part6" && Array.isArray(parsed.part6)) {
+        rawCandidates = parsed.part6;
+      } else if (targetPart === "part7" && Array.isArray(parsed.part7)) {
+        rawCandidates = parsed.part7;
+      }
+    }
+
+    // C. Cấu trúc sampleQuestions, questions, items, data.questions, root array
+    if (rawCandidates.length === 0) {
+      if (Array.isArray(parsed.sampleQuestions)) {
+        rawCandidates = parsed.sampleQuestions;
+      } else if (Array.isArray(parsed.questions)) {
+        rawCandidates = parsed.questions;
+      } else if (Array.isArray(parsed.items)) {
+        rawCandidates = parsed.items;
+      } else if (Array.isArray(parsed.data?.questions)) {
+        rawCandidates = parsed.data.questions;
+      } else if (Array.isArray(parsed.data?.sampleQuestions)) {
+        rawCandidates = parsed.data.sampleQuestions;
+      } else if (Array.isArray(parsed.data)) {
+        rawCandidates = parsed.data;
+      } else if (Array.isArray(parsed)) {
+        rawCandidates = parsed;
+      }
+    }
+
+    // 2. Chuẩn hóa tất cả câu hỏi về dạng SampleQuestion
+    const normalizedList: SampleQuestion[] = rawCandidates.map((q, idx) =>
+      normalizeSampleQuestion(q, idx)
+    );
+
+    // 3. Nếu danh sách chứa nhiều Part -> Trích xuất đúng Part hiện tại
+    let qs: SampleQuestion[] = [];
+    if (normalizedList.length > 0) {
+      const hasMultiParts =
+        normalizedList.length > 30 ||
+        normalizedList.some((q) => {
+          const n = parseInt(q.questionNum || "0", 10);
+          return targetPart === "part5"
+            ? n < 101 || n > 130
+            : targetPart === "part6"
+            ? n < 131 || n > 146
+            : n < 147;
+        });
+
+      if (hasMultiParts) {
+        qs = extractQuestionsForPart(normalizedList, targetPart);
+      } else {
+        qs = normalizedList;
+      }
+    }
+
+    // 4. Trích xuất đoạn văn (Passage) cho Part 6 / 7
+    let extractedPassage = parsed.passageText || "";
+    let extractedPassageVi = parsed.passageTextVi || "";
+
+    if (!extractedPassage) {
+      const firstWithPassage = rawCandidates.find(
+        (q) => q && (q.passageTextEn || q.passageText || q.passages)
+      );
+      if (firstWithPassage) {
+        extractedPassage =
+          firstWithPassage.passageTextEn ||
+          firstWithPassage.passageText ||
+          (Array.isArray(firstWithPassage.passages)
+            ? firstWithPassage.passages.map((p: any) => p.text || "").join("\n\n")
+            : "");
+        extractedPassageVi =
+          firstWithPassage.passageTextVi ||
+          (Array.isArray(firstWithPassage.passages)
+            ? firstWithPassage.passages.map((p: any) => p.textVi || "").join("\n\n")
+            : "");
+      }
+    }
+
+    if (targetPart !== "part5") {
+      if (extractedPassage) setCardFormPassageText(extractedPassage);
+      if (extractedPassageVi) setCardFormPassageTextVi(extractedPassageVi);
+    } else {
+      setCardFormPassageText("");
+      setCardFormPassageTextVi("");
+    }
+
+    // 5. Trích xuất từ vựng (Vocabulary)
+    const extractedVocabs: VocabItem[] = [];
+    const seenWords = new Set<string>();
+    const addVocabs = (list: VocabItem[]) => {
+      list.forEach((v) => {
+        const k = v.word.trim().toLowerCase();
+        if (k && !seenWords.has(k)) {
+          seenWords.add(k);
+          extractedVocabs.push(v);
+        }
+      });
+    };
+
+    if (Array.isArray(parsed.vocabList)) {
+      addVocabs(normalizeVocabArray(parsed.vocabList));
+    }
+    if (Array.isArray(parsed.vocabulary)) {
+      addVocabs(normalizeVocabArray(parsed.vocabulary));
+    }
+    qs.forEach((q) => {
+      if (q.vocabList && q.vocabList.length > 0) addVocabs(q.vocabList);
+    });
+
+    if (extractedVocabs.length > 0 && setCardFormVocabList) {
+      setCardFormVocabList(extractedVocabs);
+    }
+
+    // 6. Cập nhật Category và Preset Metadata (Đảm bảo thẻ Part luôn sáng đúng màu)
+    const preset = PART_PRESETS[targetPart];
+    setCardFormCategory(targetPart);
+    setCardFormSubCategory(preset.subCategory);
+    setCardFormTag(parsed.tag || preset.tag);
+
+    // 7. Tiêu đề (Title)
+    let baseTitle = parsed.title || fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    baseTitle = baseTitle
+      .replace(/\s*\((?:bản chi tiết đầy đủ\s*)?200\s*câu\)/gi, "")
+      .replace(/\s*-\s*full\s*reading\s*(?:\([^\)]*\))?/gi, "")
+      .replace(/\s*full\s*reading\s*(?:\([^\)]*\))?/gi, "")
+      .replace(/\s*\(\s*200\s*câu\s*\)/gi, "")
+      .replace(/\s*-\s*Part\s*[567]\s*(?:\([^\)]*\))?/gi, "")
+      .replace(/[\s\-_]+$/, "")
+      .trim();
+
+    const partLabel =
+      targetPart === "part5"
+        ? "Part 5 (Câu 101 - 130)"
+        : targetPart === "part6"
+        ? "Part 6 (Câu 131 - 146)"
+        : "Part 7 (Câu 147 - 200)";
+    setCardFormTitle(`${baseTitle || "ETS TOEIC Reading"} - ${partLabel}`);
+
+    // 8. Cập nhật câu hỏi và đồng bộ số câu
+    if (qs.length > 0) {
+      setCardFormSampleQuestions(qs);
+      setCardFormTotalQuestions(qs.length);
+      setSelectedQuestionIndex(0);
+      setInternalToast(
+        `Đã nạp thành công ${qs.length} câu hỏi ${targetPart.toUpperCase()} từ file "${fileName}"! 🎉`
+      );
+    } else {
+      setErrorMsg(
+        `Không tìm thấy câu hỏi phù hợp cho ${targetPart.toUpperCase()} trong file "${fileName}". Vui lòng kiểm tra lại cấu trúc file!`
+      );
+    }
+  };
+
   // Import tệp đề thi từ bên ngoài (.json, .xlsx, .xls, .txt, .csv)
   const handleImportFileFromLocal = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -676,171 +860,77 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         const text = await file.text();
         const parsed = JSON.parse(text);
 
-        // 1. Tìm danh sách câu hỏi thô từ mọi cấu trúc JSON khả dĩ
-        let rawCandidates: any[] = [];
-
-        // A. Cấu trúc Full Test ETS: parsed.reading = { part5: [...], part6: [...], part7: [...] }
-        if (parsed.reading && typeof parsed.reading === "object") {
-          const r = parsed.reading;
-          if (targetPart === "part5" && Array.isArray(r.part5)) {
-            rawCandidates = r.part5;
-          } else if (targetPart === "part6" && Array.isArray(r.part6)) {
-            rawCandidates = r.part6;
-          } else if (targetPart === "part7" && Array.isArray(r.part7)) {
-            rawCandidates = r.part7;
-          } else if (Array.isArray(r.questions)) {
-            rawCandidates = r.questions;
-          } else if (Array.isArray(r.sampleQuestions)) {
-            rawCandidates = r.sampleQuestions;
-          }
-        }
-
-        // B. Cấu trúc có keys ở root: parsed.part5 / part6 / part7
-        if (rawCandidates.length === 0) {
-          if (targetPart === "part5" && Array.isArray(parsed.part5)) {
-            rawCandidates = parsed.part5;
-          } else if (targetPart === "part6" && Array.isArray(parsed.part6)) {
-            rawCandidates = parsed.part6;
-          } else if (targetPart === "part7" && Array.isArray(parsed.part7)) {
-            rawCandidates = parsed.part7;
-          }
-        }
-
-        // C. Cấu trúc sampleQuestions, questions, items, data.questions, root array
-        if (rawCandidates.length === 0) {
-          if (Array.isArray(parsed.sampleQuestions)) {
-            rawCandidates = parsed.sampleQuestions;
-          } else if (Array.isArray(parsed.questions)) {
-            rawCandidates = parsed.questions;
-          } else if (Array.isArray(parsed.items)) {
-            rawCandidates = parsed.items;
-          } else if (Array.isArray(parsed.data?.questions)) {
-            rawCandidates = parsed.data.questions;
-          } else if (Array.isArray(parsed.data?.sampleQuestions)) {
-            rawCandidates = parsed.data.sampleQuestions;
-          } else if (Array.isArray(parsed.data)) {
-            rawCandidates = parsed.data;
-          } else if (Array.isArray(parsed)) {
-            rawCandidates = parsed;
-          }
-        }
-
-        // 2. Chuẩn hóa tất cả câu hỏi về dạng SampleQuestion
-        const normalizedList: SampleQuestion[] = rawCandidates.map((q, idx) =>
-          normalizeSampleQuestion(q, idx)
+        // Kiểm tra xem file có chứa nhiều Part hay chỉ 1 Part
+        const hasP5 = Boolean(
+          parsed.reading?.part5?.length ||
+          parsed.part5?.length ||
+          (Array.isArray(parsed.sampleQuestions) && parsed.sampleQuestions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 101 && n <= 130;
+          })) ||
+          (Array.isArray(parsed.questions) && parsed.questions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 101 && n <= 130;
+          }))
         );
 
-        // 3. Nếu danh sách chứa nhiều Part (đề full 200 câu hoặc 100 câu reading) -> Trích xuất đúng Part hiện tại
-        let qs: SampleQuestion[] = [];
-        if (normalizedList.length > 0) {
-          const hasMultiParts =
-            normalizedList.length > 30 ||
-            normalizedList.some((q) => {
-              const n = parseInt(q.questionNum || "0", 10);
-              return targetPart === "part5"
-                ? n < 101 || n > 130
-                : targetPart === "part6"
-                ? n < 131 || n > 146
-                : n < 147;
-            });
+        const hasP6 = Boolean(
+          parsed.reading?.part6?.length ||
+          parsed.part6?.length ||
+          (Array.isArray(parsed.sampleQuestions) && parsed.sampleQuestions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 131 && n <= 146;
+          })) ||
+          (Array.isArray(parsed.questions) && parsed.questions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 131 && n <= 146;
+          }))
+        );
 
-          if (hasMultiParts) {
-            qs = extractQuestionsForPart(normalizedList, targetPart);
-          } else {
-            qs = normalizedList;
-          }
-        }
+        const hasP7 = Boolean(
+          parsed.reading?.part7?.length ||
+          parsed.part7?.length ||
+          (Array.isArray(parsed.sampleQuestions) && parsed.sampleQuestions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 147 && n <= 200;
+          })) ||
+          (Array.isArray(parsed.questions) && parsed.questions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 147 && n <= 200;
+          }))
+        );
 
-        // 4. Trích xuất đoạn văn (Passage) cho Part 6 / 7
-        let extractedPassage = parsed.passageText || "";
-        let extractedPassageVi = parsed.passageTextVi || "";
+        const foundParts: ("part5" | "part6" | "part7")[] = [];
+        if (hasP5) foundParts.push("part5");
+        if (hasP6) foundParts.push("part6");
+        if (hasP7) foundParts.push("part7");
 
-        if (!extractedPassage) {
-          const firstWithPassage = rawCandidates.find(
-            (q) => q && (q.passageTextEn || q.passageText || q.passages)
-          );
-          if (firstWithPassage) {
-            extractedPassage =
-              firstWithPassage.passageTextEn ||
-              firstWithPassage.passageText ||
-              (Array.isArray(firstWithPassage.passages)
-                ? firstWithPassage.passages.map((p: any) => p.text || "").join("\n\n")
-                : "");
-            extractedPassageVi =
-              firstWithPassage.passageTextVi ||
-              (Array.isArray(firstWithPassage.passages)
-                ? firstWithPassage.passages.map((p: any) => p.textVi || "").join("\n\n")
-                : "");
-          }
-        }
+        let activeTargetPart = targetPart;
 
-        if (targetPart !== "part5") {
-          if (extractedPassage) setCardFormPassageText(extractedPassage);
-          if (extractedPassageVi) setCardFormPassageTextVi(extractedPassageVi);
-        } else {
-          setCardFormPassageText("");
-          setCardFormPassageTextVi("");
-        }
-
-        // 5. Trích xuất từ vựng (Vocabulary)
-        const extractedVocabs: VocabItem[] = [];
-        const seenWords = new Set<string>();
-        const addVocabs = (list: VocabItem[]) => {
-          list.forEach((v) => {
-            const k = v.word.trim().toLowerCase();
-            if (k && !seenWords.has(k)) {
-              seenWords.add(k);
-              extractedVocabs.push(v);
-            }
+        if (foundParts.length > 1) {
+          // File đa part (như Full test ETS): lưu lại để người dùng có thể chọn hoặc chuyển đổi bất cứ lúc nào
+          setMultiPartSource({
+            fileName: file.name,
+            parsed,
+            availableParts: foundParts,
           });
-        };
-
-        if (Array.isArray(parsed.vocabList)) {
-          addVocabs(normalizeVocabArray(parsed.vocabList));
-        }
-        if (Array.isArray(parsed.vocabulary)) {
-          addVocabs(normalizeVocabArray(parsed.vocabulary));
-        }
-        qs.forEach((q) => {
-          if (q.vocabList && q.vocabList.length > 0) addVocabs(q.vocabList);
-        });
-
-        if (extractedVocabs.length > 0 && setCardFormVocabList) {
-          setCardFormVocabList(extractedVocabs);
-        }
-
-        // 6. Tiêu đề (Title) & Thẻ (Tag)
-        if (parsed.tag) setCardFormTag(parsed.tag);
-        if (parsed.title) {
-          let finalTitle = parsed.title;
-          if (/200\s*câu|full/i.test(finalTitle) && !finalTitle.toLowerCase().includes(targetPart)) {
-            const partLabel =
-              targetPart === "part5"
-                ? "Part 5 (Câu 101 - 130)"
-                : targetPart === "part6"
-                ? "Part 6 (Câu 131 - 146)"
-                : "Part 7 (Câu 147 - 200)";
-            finalTitle = `${finalTitle.replace(/\s*\((?:bản chi tiết đầy đủ\s*)?200\s*câu\)/i, "").trim()} - ${partLabel}`;
+          if (!foundParts.includes(activeTargetPart)) {
+            activeTargetPart = foundParts[0];
           }
-          setCardFormTitle(finalTitle);
+        } else if (foundParts.length === 1) {
+          setMultiPartSource(null);
+          activeTargetPart = foundParts[0];
+        } else {
+          setMultiPartSource(null);
         }
 
-        // 7. Cập nhật câu hỏi và đồng bộ số câu
-        if (qs.length > 0) {
-          setCardFormSampleQuestions(qs);
-          setCardFormTotalQuestions(qs.length);
-          setSelectedQuestionIndex(0);
-          setInternalToast(
-            `Đã import thành công ${qs.length} câu hỏi ${targetPart.toUpperCase()} từ file "${file.name}"! 🎉`
-          );
-        } else {
-          setErrorMsg(
-            `Không tìm thấy câu hỏi phù hợp cho ${targetPart.toUpperCase()} trong file "${file.name}". Vui lòng kiểm tra lại cấu trúc file!`
-          );
-        }
+        loadPartFromParsedJson(parsed, activeTargetPart, file.name);
       } else if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
         try {
           const parsedCard = await parseAdminReadingFile(file);
+          const preset = PART_PRESETS[targetPart];
+          setCardFormCategory(targetPart);
+          setCardFormSubCategory(preset.subCategory);
           if (parsedCard.title) setCardFormTitle(parsedCard.title);
           if (parsedCard.tag) setCardFormTag(parsedCard.tag);
           if (parsedCard.passageText && targetPart !== "part5") setCardFormPassageText(parsedCard.passageText);
@@ -909,6 +999,15 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   // Xác nhận đổi Part & Làm mới sạch dữ liệu theo chuẩn Part mới
   const handleExecutePartSwitchWithReset = (targetPart: "grammar" | "part5" | "part6" | "part7") => {
     const presetKey = (targetPart === "grammar" ? "part5" : targetPart) as "part5" | "part6" | "part7";
+
+    // Nếu đang có nguồn tệp đa part đã nạp và part đích có trong tệp, ưu tiên nạp thẳng dữ liệu từ tệp
+    if (multiPartSource && multiPartSource.availableParts.includes(presetKey)) {
+      loadPartFromParsedJson(multiPartSource.parsed, presetKey, multiPartSource.fileName);
+      setPartSwitchConfirm(null);
+      setPartTransitionNotice(null);
+      return;
+    }
+
     const preset = PART_PRESETS[presetKey];
 
     setCardFormCategory(targetPart);
@@ -2225,16 +2324,68 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>
-                    {cardFormCategory === "grammar" ? (
-                      <>
-                        <strong>Chế độ Ngữ pháp đọc (Grammar / Câu đơn):</strong> Vì dạng câu đơn không có đoạn văn dài nên hệ thống tự động ẩn tab Đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Nếu bạn muốn thêm bài đọc Part 6 hoặc Part 7 có đoạn văn, hãy chọn <strong>Part 6</strong> hoặc <strong>Part 7</strong> ở bên dưới!
-                      </>
-                    ) : (
-                      <>
-                        <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
-                      </>
-                    )}
+                    <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
                   </span>
+                </div>
+              )}
+
+              {/* BANNER CHỌN PART KHI FILE IMPORT CHỨA NHIỀU PART (VÍ DỤ ĐỀ ETS FULL CHI TIẾT) */}
+              {multiPartSource && (
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 border border-indigo-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-2 rounded-xl bg-indigo-600 text-white shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-indigo-950 leading-tight">
+                        Tệp <span className="font-extrabold text-blue-700 underline">&quot;{multiPartSource.fileName}&quot;</span> chứa đầy đủ các Part của bài thi ({multiPartSource.availableParts.map((p) => p.toUpperCase()).join(", ")})
+                      </p>
+                      <p className="text-[11px] text-indigo-800 mt-0.5">
+                        Đang nạp <strong>{(cardFormCategory === "grammar" ? "part5" : cardFormCategory).toUpperCase()}</strong>. Bấm nút bên cạnh để đổi sang nạp Part khác từ file này ngay:
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    {multiPartSource.availableParts.includes("part5") && (
+                      <button
+                        type="button"
+                        onClick={() => loadPartFromParsedJson(multiPartSource.parsed, "part5", multiPartSource.fileName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          cardFormCategory === "part5" || cardFormCategory === "grammar"
+                            ? "bg-emerald-600 text-white shadow-xs"
+                            : "bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50"
+                        }`}
+                      >
+                        <span>🟢 Part 5 (30 câu)</span>
+                      </button>
+                    )}
+                    {multiPartSource.availableParts.includes("part6") && (
+                      <button
+                        type="button"
+                        onClick={() => loadPartFromParsedJson(multiPartSource.parsed, "part6", multiPartSource.fileName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          cardFormCategory === "part6"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-white text-purple-800 border border-purple-300 hover:bg-purple-50"
+                        }`}
+                      >
+                        <span>🟣 Part 6 (16 câu)</span>
+                      </button>
+                    )}
+                    {multiPartSource.availableParts.includes("part7") && (
+                      <button
+                        type="button"
+                        onClick={() => loadPartFromParsedJson(multiPartSource.parsed, "part7", multiPartSource.fileName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          cardFormCategory === "part7"
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "bg-white text-blue-800 border border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        <span>🔵 Part 7 (54 câu)</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -2260,7 +2411,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     type="button"
                     onClick={() => handleRequestPartChange("part5")}
                     className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                      cardFormCategory === "part5"
+                      cardFormCategory === "part5" || cardFormCategory === "grammar"
                         ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                         : "bg-white hover:bg-emerald-50/60 border-slate-200 text-slate-800"
                     }`}
@@ -2360,10 +2511,10 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-200/90 shadow-2xs">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-800">
-                    Cách nạp nội dung cho {cardFormCategory.toUpperCase()}:
+                    Cách nạp nội dung cho {(cardFormCategory === "grammar" ? "part5" : cardFormCategory).toUpperCase()}:
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-600 text-white shadow-2xs">
-                    {cardFormCategory === "part5" ? "Điền câu đơn" : cardFormCategory === "part6" ? "Điền đoạn văn" : "Đọc hiểu văn bản"}
+                    {(cardFormCategory === "part5" || cardFormCategory === "grammar") ? "Điền câu đơn" : cardFormCategory === "part6" ? "Điền đoạn văn" : "Đọc hiểu văn bản"}
                   </span>
                 </div>
 
@@ -2499,9 +2650,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     Phần thi (Part)
                   </label>
                   <select
-                    value={cardFormCategory}
+                    value={cardFormCategory === "grammar" ? "part5" : cardFormCategory}
                     onChange={(e) => {
-                      const cat = e.target.value as "grammar" | "part5" | "part6" | "part7";
+                      const cat = e.target.value as "part5" | "part6" | "part7";
                       handleRequestPartChange(cat);
                     }}
                     className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
@@ -2509,7 +2660,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     <option value="part5">Part 5 (Điền câu đơn)</option>
                     <option value="part6">Part 6 (Điền đoạn văn)</option>
                     <option value="part7">Part 7 (Đọc hiểu văn bản)</option>
-                    <option value="grammar">Ngữ pháp đọc (Grammar)</option>
                   </select>
                 </div>
 

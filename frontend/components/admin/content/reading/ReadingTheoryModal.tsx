@@ -25,6 +25,7 @@ import {
   buildVocabItemFromCandidate,
   extractReadingVocabCandidates,
 } from "@/lib/readingVocabExtractor";
+import { formatExplanation } from "@/lib/utils/formatExplanation";
 import {
   fetchAdminReadingCardDetails,
   updateAdminReadingCard,
@@ -611,8 +612,8 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                     <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
                       💡 Giải thích chi tiết đáp án:
                     </span>
-                    <p className="text-xs text-amber-950 leading-relaxed font-medium">
-                      {activeQuestion.explanation}
+                    <p className="text-xs text-amber-950 leading-relaxed font-medium whitespace-pre-line">
+                      {formatExplanation(activeQuestion.explanation)}
                     </p>
                   </div>
                 )}

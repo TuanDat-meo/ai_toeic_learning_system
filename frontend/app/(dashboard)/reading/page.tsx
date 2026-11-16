@@ -9,6 +9,7 @@ import {
   fetchReadingCards,
 } from "@/lib/api/reading";
 import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
+import { StudentReadingVocabCartModal } from "@/components/student/reading/StudentReadingVocabCartModal";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
 import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
@@ -22,6 +23,7 @@ export default function StudentReadingPage() {
   const [readingStartIndex, setReadingStartIndex] = useState<number>(0);
   const [isReadingRedoWrong, setIsReadingRedoWrong] = useState<boolean>(false);
   const [theoryCard, setTheoryCard] = useState<ExerciseCardData | null>(null);
+  const [vocabCartCard, setVocabCartCard] = useState<ExerciseCardData | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const cardsRef = React.useRef<ExerciseCardData[]>(cards);
@@ -99,9 +101,13 @@ export default function StudentReadingPage() {
     playUnifiedAnswerSound();
   };
 
-  const totalQuestionsCount = React.useMemo(() => {
-    return cards.reduce((acc, c) => acc + c.totalQuestions, 0);
+  const publishedCards = React.useMemo(() => {
+    return cards.filter((c) => c.status !== "draft");
   }, [cards]);
+
+  const totalQuestionsCount = React.useMemo(() => {
+    return publishedCards.reduce((acc, c) => acc + c.totalQuestions, 0);
+  }, [publishedCards]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
@@ -141,12 +147,23 @@ export default function StudentReadingPage() {
         </div>
       ) : null}
       <StudentReadingCardGrid
-        cards={cards}
+        cards={publishedCards}
         onStartPractice={(card, sIdx, isRedo) => { void startReadingPractice(card, sIdx, isRedo); }}
         onOpenTheory={(card) => {
           void ensureCardDetails(card).then((hydrated) => setTheoryCard(hydrated));
         }}
+        onOpenSaved={(card) => {
+          void ensureCardDetails(card).then((hydrated) => setVocabCartCard(hydrated));
+        }}
       />
+
+      {/* Modal Giỏ từ vựng cá nhân */}
+      {vocabCartCard && (
+        <StudentReadingVocabCartModal
+          card={vocabCartCard}
+          onClose={() => setVocabCartCard(null)}
+        />
+      )}
 
       {/* Modal Xem Lý Thuyết */}
       {theoryCard && (
@@ -175,6 +192,7 @@ export default function StudentReadingPage() {
           }}
           playSfx={playSfx}
           showToast={showToast}
+          showTimer={false}
         />
       )}
     </div>
