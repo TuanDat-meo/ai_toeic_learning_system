@@ -46,13 +46,25 @@ public class ContentImportController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "vocabularySetId", required = false) String vocabularySetId,
             @RequestParam(value = "vocabularySetName", required = false) String vocabularySetName,
+            @RequestParam(value = "releaseAt", required = false) String releaseAt,
             Authentication authentication,
             HttpServletRequest servletRequest) {
         ManagedUser actor = userAccountService.findManagedUser(authentication.getName());
         ContentImportService.BatchDetails result = importService.preview(
-                type, file, actor.id(), vocabularySetId, vocabularySetName);
+                type, file, actor.id(), vocabularySetId, vocabularySetName, releaseAt);
         auditLogService.record(actor.id(), "PREVIEW_IMPORT", "IMPORT_BATCH", result.batch().id(),
                 "Tạo bản xem trước import " + result.batch().fileName() + " (" + type + ").",
+                servletRequest.getRemoteAddr());
+        return result;
+    }
+
+    @PostMapping("/parse-vocabulary-file")
+    List<ParsedImportRow> parseVocabularyFile(@RequestParam("file") MultipartFile file,
+            Authentication authentication, HttpServletRequest servletRequest) {
+        ManagedUser actor = userAccountService.findManagedUser(authentication.getName());
+        List<ParsedImportRow> result = importService.parseVocabularyFile(file);
+        auditLogService.record(actor.id(), "PARSE_VOCABULARY_QUICK_IMPORT", "CONTENT_IMPORT_FILE", null,
+                "Đọc " + result.size() + " dòng từ file " + file.getOriginalFilename() + " để nhập nhanh từ vựng.",
                 servletRequest.getRemoteAddr());
         return result;
     }
@@ -66,7 +78,8 @@ public class ContentImportController {
         String text = payload.getOrDefault("text", "");
         String fileName = payload.getOrDefault("fileName", "extracted-document.json");
         ContentImportService.BatchDetails result = importService.previewExtractedText(
-                type, fileName, text, actor.id(), payload.get("vocabularySetId"), payload.get("vocabularySetName"));
+                type, fileName, text, actor.id(), payload.get("vocabularySetId"),
+                payload.get("vocabularySetName"), payload.get("releaseAt"));
         auditLogService.record(actor.id(), "PREVIEW_IMPORT_TEXT", "IMPORT_BATCH", result.batch().id(),
                 "Tạo bản xem trước từ văn bản trích xuất " + fileName + " (" + type + ") gồm " + result.batch().totalRecords() + " mục.",
                 servletRequest.getRemoteAddr());

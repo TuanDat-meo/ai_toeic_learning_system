@@ -1,0 +1,379 @@
+﻿<USER_REQUEST>
+# PROMPT TỔNG THỂ: HOÀN THIỆN GAME "BATTLESHIP VOCABULARY – ĐẠI CHIẾN CHIẾN HẠM"
+### (Dùng được cho VS Code Copilot Chat chế độ Agent, Antigravity hoặc công cụ AI lập trình tương tự)
+
+> **Cách dùng**
+> 1. Dán **PHẦN A** (prompt chính) làm lệnh đầu tiên. AI sẽ làm **Giai đoạn 1** rồi dừng báo cáo.
+> 2. Kiểm tra kết quả, rồi dùng **PHẦN B** (prompt ngắn) để chuyển giai đoạn, sửa lỗi, tối ưu, chỉnh cân bằng, nghiệm thu.
+> 3. Chia nhỏ như vậy giúp AI không bị quá tải ngữ cảnh và bạn kiểm soát được chất lượng từng bước.
+>
+> **Các quyết định đã chốt (sửa ở đây nếu muốn đổi, rồi báo AI):**
+> - Trần **20 câu/trận**; hết 20 câu mà địch còn thì thua.
+> - **Server là nguồn sự thật**: server chấm từng câu, tính HP/sát thương/điểm/combo.
+> - Góc nhìn **2D từ trên xuống**.
+> - MVP **không** có vật phẩm, boss nhiều giai đoạn, nâng cấp sức mạnh (xem mục 15).
+> - Battleship nằm cùng Game Center với Vocabulary Runner và dùng chung kho từ vựng, tiến độ, SRS, API.
+
+---
+
+# PHẦN A: PROMPT CHÍNH
+
+## 0. VAI TRÒ & QUY TẮC LÀM VIỆC
+
+Bạn là Senior Fullstack Engineer kiêm Game Developer và UI/UX Designer, chuyên game 2D chạy trên trình duyệt (desktop + mobile), bảo mật phía server, tối ưu hiệu năng và viết test.
+
+**Trước khi viết bất kỳ dòng code nào:**
+1. **Đọc toàn bộ dự án** (frontend, backend, database/migration, test, Game Center, game Vocabulary Runner nếu có). Xác định stack, kiến trúc, quy ước code, cách xác thực (JWT), cách render đồ họa. **Không đoán, hãy xác định từ code.**
+2. Báo cáo ngắn (tối đa 20 dòng): kiến trúc hiện tại, phần **tái sử dụng được** (kho từ vựng, tiến độ, SRS, API game vocabulary, xác thực), file sẽ thêm/sửa, rủi ro.
+3. **Tái sử dụng, không viết lại.** **Giữ nguyên API và hành vi hiện có**; chỉ *thêm* trường/endpoint mới, tương thích ngược. Không phá Vocabulary Runner và Game Center.
+4. Làm **từng giai đoạn** (mục 16). Mỗi giai đoạn phải chạy được và có test. **Xong giai đoạn thì dừng, báo cáo, chờ tôi xác nhận.**
+5. Nếu thiếu thông tin quan trọng, hỏi tối đa 3 câu ngắn rồi tiếp tục với giả định hợp lý (ghi rõ giả định).
+6. **Không tạo dữ liệu/tài khoản mẫu trong migration, không thay API thật bằng mock, không tạo bảng tiến độ trùng lặp.**
+7. Trung thực về kiểm chứng: phần nào đã chạy thật, phần nào chỉ giả lập, phần nào chưa kiểm chứng.
+
+---
+
+## 1. MÔ TẢ GAME
+
+**Battleship Vocabulary** là game học từ vựng TOEIC theo lượt, phong cách hải quân 2D nhìn từ trên xuống. Người chơi điều khiển một chiến hạm; **mỗi câu trả lời đúng là một phát bắn trúng, trả lời sai thì bắn trượt và địch nạp đạn để phản công**. Thắng khi tiêu diệt toàn bộ hạm đội (kể cả boss); thua khi hết HP hoặc hết 20 câu mà địch còn.
+
+Kết hợp ba yếu tố: **học** (nhập từ theo nghĩa/định nghĩa/ví dụ/âm thanh), **hành động** (khai hỏa, combo, critical), **tiến trình** (vượt đợt, hạ boss, XP/Coins, huy hiệu, ngoại hình chiến hạm).
+
+Mục tiêu: người học ghi nhớ từ thật sự (không chỉ đoán), muốn chơi lại, giao diện rõ ràng và mượt trên mọi thiết bị, dữ liệu học tập chính xác và không thể gian lận.
+
+---
+
+## 2. LUẬT CHƠI ĐÃ CHỐT (KHÔNG TỰ Ý THAY ĐỔI; mọi hằng số đặt trong MỘT file cấu hình)
+
+### 2.1 Cấu hình trận
+| Thuộc tính | Giá trị |
+|---|---|
+| HP chiến hạm người chơi | **5** |
+| Số câu tối đa mỗi trận | **20** (mỗi câu chỉ trả lời **1 lần**) |
+| Tổng HP hạm đội địch | **12** |
+| Điểm bắn trúng | 10 |
+| Sát thương cơ bản | 1 |
+| Lần sai để địch phản công | 2 |
+| Thời gian mềm mỗi câu | **20 giây** (cấu hình được 15–20) |
+
+### 2.2 Hạm đội (3 đợt cố định)
+- **Đợt 1 – Tuần tra:** 3 tàu × 1 HP (từ dễ, làm quen).
+- **Đợt 2 – Khu trục:** 2 tàu × 2 HP (từ trung bình).
+- **Đợt 3 – Boss chiến hạm:** 1 tàu × 5 HP, có thanh máu riêng, hiệu ứng xuất hiện và bị tiêu diệt (từ trộn nhiều dạng). MVP: boss **một giai đoạn**.
+
+### 2.3 Chiến đấu
+| Hành động | Kết quả |
+|---|---|
+| Đúng | Bắn trúng, địch mất 1 HP, +10 điểm (+ thưởng combo) |
+| Gần đúng (sai 1 ký tự ở từ ≥ 6 chữ) | Bắn trúng nhưng **0 sát thương** hoặc nửa điểm (cấu hình), **không tăng combo**, **không tăng bộ đếm sai** |
+| Sai | Bắn trượt, hiện đáp án đúng, bộ đếm phản công +1, combo về 0 |
+| Quá thời gian mềm | Địch nạp +1 (một lần mỗi câu); câu vẫn trả lời được |
+| Bộ đếm đạt 2 | Địch phản công, người chơi **mất 1 HP**, bộ đếm về 0 |
+| Trả lời đúng | **Không** reset bộ đếm (chỉ reset sau khi địch phản công) |
+| Tàu địch hết HP | Chuyển mục tiêu / sang đợt kế |
+| Boss hết HP | Chiến thắng |
+| HP người chơi = 0 | Thất bại |
+| Hết 20 câu, địch còn | Thất bại |
+
+HP người chơi không bao giờ âm; HP địch không bao giờ âm.
+
+### 2.4 Combo, Critical, điểm
+- Combo tăng khi đúng liên tiếp, **về 0 khi sai** (gần đúng không tăng, không reset).
+- Điểm thưởng combo: combo 2 → +5, 3 → +10, 4 → +15, từ 5 → +20 (**trần +20**).
+- **Critical Shot:** chỉ ở **phát đúng thứ 5, 10, 15 của chuỗi liên tiếp**, gây **2 sát thương**; **không cộng thêm điểm** ngoài thưởng combo. Critical chỉ là phần thưởng cho chuỗi đúng, không được hiển thị đáp án hay làm thay đổi kết quả học tập.
+- **Một công thức điểm duy nhất, đặt ở backend**; frontend chỉ hiển thị điểm đã được server xác nhận.
+
+### 2.5 Gợi ý
+Tối đa **3 lần/trận**, mỗi lần **−5 điểm**, **không tăng combo** cho câu đó; chỉ hé lộ **chữ cái đầu** (không điền đáp án). Server ghi `usedHint`.
+
+### 2.6 Từ sai nạp lại
+Từ trả lời sai được **thay vào các vị trí câu còn lại** (xuất hiện lại sau 3–4 câu), **không thêm câu** vượt trần 20.
+
+### 2.7 Máy trạng thái (cài tường minh, ở cả server và client)
+`LOBBY → CREATING_SESSION → TUTORIAL(tùy chọn) → AIMING → QUESTION → SUBMITTING → RESOLVE (đúng/gần đúng/sai/quá giờ) → ENEMY_COUNTER (nếu đủ nạp) → NEXT_TARGET/NEXT_WAVE → BOSS → VICTORY | DEFEAT → RESULT`. Có `PAUSED`, `RECONNECTING`. Mỗi trạng thái chỉ cho chuyển đổi hợp lệ; **không có trạng thái treo**.
+
+### 2.8 Kiểm tra khả thi (bắt buộc có mô phỏng)
+Viết bộ mô phỏng Monte-Carlo (seed cố định) với độ chính xác 50/60/70/80/90%: báo cáo tỉ lệ thắng và HP còn lại. Yêu cầu: tỉ lệ thắng **tăng đơn điệu** theo độ chính xác; ở 60–65% xấp xỉ 50%; ở ≥ 85% rất cao nhưng không 100%. Nếu lệch, **chỉ chỉnh hằng số trong file cấu hình** và báo cáo, không sửa logic.
+
+---
+
+## 3. HỆ THỐNG CÂU HỎI
+
+**5 dạng:** Vietnamese Meaning, English Definition, Fill in the Blank, Audio Challenge, TOEIC Situation. Gắn theo đợt: tuần tra → nghĩa/định nghĩa; khu trục → điền khuyết/audio; boss → trộn, gồm TOEIC Situation.
+
+**Kiểu trả lời theo độ khó:** Dễ = chọn đáp án (đáp án nhiễu lấy từ cùng nhóm bộ/cấp, **do server sinh**); Trung bình = gõ có gợi ý số chữ (`e _ _ r _ _ _`); Khó = gõ hoàn toàn.
+
+**Điều kiện câu hỏi hợp lệ (server kiểm tra khi tạo phiên):**
+- Chỉ dùng từ thuộc **bộ đã phát hành** bởi quản trị viên.
+- Mỗi câu liên kết đúng `vocabulary_meaning_id`; nghĩa cần hỏi phải xác định rõ (từ nhiều nghĩa không bị bó vào một cách hiểu).
+- Không dùng câu ví dụ **không chứa từ đích**.
+- Không dùng Audio Challenge khi từ **chưa có audio** (tự chuyển dạng khác, không phạt).
+- Ưu tiên từ học viên chưa thành thạo nhưng giữ phân bố hợp lý.
+
+**Chấm đáp án (server):**
+- Không phân biệt hoa/thường, bỏ khoảng trắng thừa, chuẩn hóa Unicode.
+- Mỗi nghĩa có danh sách **dạng chấp nhận** (US/UK như color/colour, biến thể chia từ, từ đồng nghĩa cùng nghĩa trong bộ đã phát hành).
+- "Gần đúng": sai 1 ký tự ở từ ≥ 6 chữ (Levenshtein ≤ 1).
+- Câu nghĩa tiếng Việt luôn hiện thêm **loại từ + chữ cái đầu** để tránh nhiều đáp án hợp lệ.
+- Khi sai: server trả đáp án đúng; client hiển thị **so sánh từng chữ cái**.
+- Không trả đáp án (hay hash của đáp án) xuống client **trước khi** học viên nộp.
+
+**3 chế độ chọn từ** (tái sử dụng engine hiện có nếu có): (1) bộ đề đã chọn – shuffle bag, cảnh báo nếu bộ < 10 từ; (2) toàn bộ đề – cân bằng giữa các bộ, loại trùng, chỉ lấy ID rồi tải lô; (3) theo cấp độ từ – chọn nhiều cấp, từ thiếu nhãn vào "Chưa phân loại", tùy chọn tự thích ứng. Trộn 20–30% từ người chơi từng sai (SRS). Xử lý biên: bộ rỗng, quá ngắn, thiếu nhãn, dữ liệu lỗi, **không làm treo game**. Hỗ trợ seed cố định cho test.
+
+---
+
+## 4. KIẾN TRÚC: SERVER LÀ NGUỒN SỰ THẬT
+
+### 4.1 Nguyên tắc
+- Server **tạo phiên, lưu thứ tự câu hỏi, chấm từng câu**, và tự tính: HP hai bên, sát thương, điểm, combo, bộ đếm phản công, Critical, tiến độ trận, kết quả. **Client không gửi và server không tin** các giá trị này từ client.
+- Client chỉ gửi: định danh phiên, định danh câu, đáp án, cờ dùng gợi ý, idempotency key.
+- Client **phát hoạt ảnh bắn ngay khi bấm (lạc quan)**, rồi cập nhật theo kết quả server. Mục tiêu độ trễ ≤ 300ms; quá 1 giây hiện "đang xác nhận".
+- Response mỗi câu: `result` (`correct|near|wrong|timeout`), đáp án đúng (sau khi nộp), `damage`, `playerHp`, `enemyHp`, `score`, `combo`, `counterCharge`, `isCritical`, trạng thái trận, câu kế tiếp (không kèm đáp án).
+
+### 4.2 Hai chế độ
+1. **Trận chính thức (online):** mất mạng thì tạm dừng (`RECONNECTING`) và thử lại; điểm/XP/Coins/xếp hạng chỉ tính ở chế độ này.
+2. **Luyện tập ngoại tuyến:** không tính điểm/XP/Coins/xếp hạng; lưu lượt trả lời cục bộ và đồng bộ lên khi có mạng (hàng đợi, có ID chống ghi trùng).
+
+### 4.3 Bảo mật & toàn vẹn (bắt buộc)
+- Danh tính học viên lấy từ **JWT**; kiểm tra **quyền sở hữu phiên**.
+- Không cho trả lời câu **ngoài phiên** hoặc **sai thứ tự**; không cho **gửi lại câu đã trả lời**; không cho tiếp tục phiên đã hoàn thành.
+- **Idempotency key** mỗi lần gửi đáp án (request trùng không tính hai lần); **giới hạn tốc độ** gọi API.
+- Server ghi mốc thời gian gửi câu và nhận đáp án; **không tin đồng hồ client**.
+- Chỉ **một tab** điều khiển một phiên tại một thời điểm.
+- Phiên bỏ dở quá hạn → `abandoned` (không XP/Coins).
+- **Khôi phục phiên từ server** khi tải lại trang.
+- Dùng **transaction** khi lưu câu trả lời và cập nhật tiến độ.
+- XP/Coins **do server tính**, có **trần mỗi ngày** (chống cày).
+- Không log dữ liệu nhạy cảm; xác thực/ủy quyền kiểm tra ở mọi endpoint.
+
+### 4.4 Dữ liệu & API
+- Tái sử dụng API game vocabulary hiện có (dự kiến tương ứng: tạo phiên `POST /api/vocabulary/games/sessions`, gửi đáp án `POST /api/vocabulary/answers`, hoàn tất `POST /api/vocabulary/games/sessions/{id}/complete`; các hàm hiện có như `startVocabularyGameSession`, `recordVocabularyAnswer`, `completeVocabularyGameSession`). **Xác minh tên thật trong code**, mở rộng bằng tham số `gameType = BATTLESHIP_VOCABULARY`, không đổi hợp đồng cũ.
+- Mỗi lượt trả lời ghi: học viên, từ, `vocabulary_meaning_id`, phiên, đáp án, kết quả, loại câu, thời điểm, `usedHint`, thời gian trả lời, nguồn `BATTLESHIP_VOCABULARY`, `enemyType`, `damage`.
+- Cập nhật tiến độ theo `vocabulary_meaning_id`; từ sai đưa vào danh sách ôn tập và cập nhật **SRS qua hệ thống dùng chung**.
+- Lưu `Game Session`, `Game Question` (thứ tự), `Game Result`, thành tích nếu hệ thống đã có.
+- Migration **tương thích ngược, có rollback**, không làm hỏng dữ liệu cũ.
+
+---
+
+## 5. GIAO DIỆN (UI/UX THÔNG MINH)
+
+### 5.1 Nguyên tắc
+Phong cách nhất quán, thân thiện người học, không rối mắt. **Design tokens** (màu, bo góc, đổ bóng, spacing, font) bằng CSS variables, hỗ trợ **sáng/tối**. Tối đa 2 font, hỗ trợ đầy đủ dấu tiếng Việt.
+
+### 5.2 Bố cục (góc nhìn từ trên xuống)
+- **Hạm đội địch ở phía trên, chiến hạm ta ở phía dưới, đạn bay theo chiều dọc.** Thẻ câu hỏi và ô nhập ở dưới cùng (vùng ngón cái). Bàn phím ảo **không che hai chiến hạm** (dùng `visualViewport`).
+- Màn ngang/máy tính: cảnh biển toàn khung, thẻ câu hỏi bên dưới hoặc bên phải.
+- Sân chơi logic **tỉ lệ cố định** scale vừa khít, phần thừa nền liền mạch; dùng `dvh/svh`, `clamp()`, `safe-area-inset-*` (không dùng `100vh` đơn thuần). Hỗ trợ 320px → ultrawide, ngang/dọc, DPR 1x–3x. Xoay màn hình giữa trận không mất trạng thái.
+
+### 5.3 Khu vực chiến đấu (phải NHÌN RÕ NGAY)
+- Hình dáng tàu **khác nhau rõ** (tuần tra nhỏ, khu trục dài, boss to có hào quang); **không chỉ phân biệt bằng màu** (thân thiện người mù màu). Viền dày, tương phản với nền ≥ 3:1; nền xa giảm bão hòa để tàu nổi bật. Kích thước tối thiểu: tàu cao ≥ 12% chiều cao sân và ≥ 48px.
+- **Thanh HP dạng chấm** trên mỗi tàu; **mục tiêu hiện tại** có vòng ngắm + đường ngắm rõ.
+- **Thanh nạp đạn của địch (2 nấc)** hiển thị rõ để thấy nguy hiểm đang tới.
+- HUD gọn: HP ta, điểm, combo, tiến độ câu (n/20), số lần gợi ý còn lại; **không che khu vực chiến đấu** và **không che mục tiêu khi hiện thẻ câu hỏi**.
+
+### 5.4 Phản hồi mỗi phát bắn (dưới 1 giây)
+- **Đúng:** pháo nổ, đạn bay, rung nhẹ, số sát thương nổi lên, tàu địch nháy trắng; **Critical** có hiệu ứng riêng.
+- **Gần đúng:** hiệu ứng khác biệt rõ.
+- **Sai/quá giờ:** đạn rơi xuống nước, tóe nước, hiện đáp án + so sánh chữ cái; địch phản công có hiệu ứng rõ.
+- Nghĩa và ví dụ hiện ở **thẻ thu nhỏ tự đóng**, không chặn nhịp trận.
+
+### 5.5 Thẻ câu hỏi
+Hiện sẵn số chữ, loại từ, chữ cái đầu (bật/tắt theo độ khó). Tự lấy focus, Enter để bắn. Nút Khai hỏa, Gợi ý, Phát âm. Thanh thời gian mềm cạnh thẻ. Chế độ chọn đáp án có nút ≥ 44px.
+
+### 5.6 Màn hình
+1. **Lobby:** chọn bộ từ/chế độ chọn từ, độ khó, loại thử thách, xem số câu có thể chơi, xem luật, chế độ Chính thức/Luyện tập. **Vừa trong một màn hình, không phải cuộn** ở mọi kích thước (điện thoại ngang chuyển bố cục gọn); lưới `auto-fit/minmax`; nút "Bắt đầu" luôn to và rõ; xem trước nhỏ hạm đội; ghi nhớ lựa chọn gần nhất.
+2. **Battle Arena**, 3. **Attack Feedback**, 4. **Boss Battle** (thanh máu riêng, hiệu ứng xuất hiện/bị tiêu diệt).
+5. **Result:** banner thắng/thua, 1–3 sao, điểm chính thức, đúng/sai, độ chính xác, tàu hạ, combo cao nhất, HP còn lại, thời gian, XP/Coins/thành tích; danh sách từ sai kèm nghĩa, ví dụ, phát âm. Nút: **Ôn từ sai ngay**, Chơi lại (tạo phiên mới), Chọn bộ khác, Về Game Center.
+6. **Trận hướng dẫn** 3 phát bắn cho lần đầu (không mất HP, không tính điểm).
+
+### 5.7 Toàn màn hình
+Nút Toàn màn hình (Lobby + HUD), phím `F` vào / `Esc` thoát; đồng bộ qua `fullscreenchange`; tính lại kích thước sân chơi ngay khi vào/ra; chỉ kích hoạt từ thao tác người dùng. **iPhone/Safari** không hỗ trợ fullscreen phần tử: dùng **toàn màn hình giả bằng CSS** (`100dvh`) và gợi ý "Thêm vào Màn hình chính" (manifest/meta PWA). Android: thử khóa hướng ngang, lỗi thì bỏ qua êm. Tự tạm dừng khi thoát đột ngột. Mọi API đều kiểm tra tính năng, không crash.
+
+### 5.8 Tiếp cận
+WCAG AA, điều khiển bàn phím đầy đủ, nhãn ARIA, tôn trọng `prefers-reduced-motion`, tùy chọn tắt rung/âm/hiệu ứng, chế độ tương phản cao, vùng bấm ≥ 44px, không cuộn ngang, cỡ chữ co giãn và hỗ trợ tăng cỡ chữ hệ thống.
+
+---
+
+## 6. NGÂN SÁCH DUNG LƯỢNG & TÀI NGUYÊN (BẮT BUỘC)
+
+| Hạng mục | Mục tiêu |
+|---|---|
+| JS gzip (không tính dữ liệu từ vựng) | ≤ 150 KB |
+| CSS gzip | ≤ 30 KB |
+| Hình ảnh tải ban đầu | ≤ 300 KB |
+| Audio tải ban đầu | ≤ 200 KB (phần còn lại lazy-load) |
+| Tương tác được (4G chậm) | ≤ 3 giây |
+| Heap khi chơi | ≤ 100 MB, **không tăng liên tục** sau 15 phút |
+| FPS | ≥ 55 trung bình, không dưới 30 kéo dài |
+| Frame time p95 | ≤ 20 ms |
+
+Đây là mức đề xuất; sau Giai đoạn 1 hãy đo số liệu thật và đề xuất điều chỉnh nếu cần. Nếu hiện trạng đã tốt hơn thì giữ mức tốt hơn; nếu không đạt, ghi rõ lý do.
+
+**Biện pháp bắt buộc:** SVG/sprite gộp và nén (SVGO, WebP/AVIF), subset font; code splitting + lazy-load (audio, hiệu ứng boss, màn Result); **một vòng lặp `requestAnimationFrame`** dùng delta time, dừng khi tab ẩn; **object pooling** cho đạn, hạt nước, popup sát thương, khói lửa; chỉ animate `transform`/`opacity`, tránh `box-shadow`/`filter` nặng trên phần tử chuyển động; giới hạn số hạt đồng thời và **tự giảm chất lượng khi FPS tụt**; dọn dẹp listener/timer/audio node khi rời màn hình; không thêm thư viện nặng nếu tự viết gọn được (mọi dependency mới ghi rõ kích thước); cache dữ liệu tĩnh, không dùng Service Worker theo cách làm hỏng luồng xác thực/đồng bộ.
+
+---
+
+## 7. XỬ LÝ LỖI & ỔN ĐỊNH
+- Không có trạng thái treo; luôn có lối thoát (tạm dừng, thoát có xác nhận, chơi lại).
+- API lỗi/timeout/mất mạng: thông báo rõ, tự thử lại có giới hạn, **không mất hoặc ghi trùng dữ liệu**.
+- Thiếu asset/audio có fallback (audio lỗi → đổi dạng câu, không phạt).
+- Log lỗi gọn, không gửi dữ liệu nhạy cảm; thông báo lỗi cho người dùng bằng tiếng Việt dễ hiểu.
+
+---
+
+## 8. KIỂM THỬ LOGIC (UNIT) — BẮT BUỘC, CHẠY TỰ ĐỘNG
+- Máy trạng thái: mọi chuyển đổi hợp lệ/không hợp lệ.
+- Chấm đáp án: đúng, gần đúng, sai, quá giờ, US/UK, biến thể, đồng nghĩa, hoa/thường, khoảng trắng, Unicode.
+- Cân bằng: tàu 1/2/5 HP; HP không âm; câu đúng giảm HP địch; câu sai +1 bộ đếm; 2 lần sai → phản công, bộ đếm về 0; đúng không reset bộ đếm; combo reset khi sai; Critical đúng mốc 5/10/15; thưởng combo có trần +20; gợi ý (−5 điểm, không tăng combo, tối đa 3).
+- Kết thúc trận: boss chết → thắng (nếu hết tàu), HP = 0 → thua, hết 20 câu → thua; không vượt 20 câu.
+- Chọn từ: không trùng từ trong trận (trừ từ nạp lại có chủ đích, thay vào vị trí còn lại); 3 chế độ; cân bằng giữa các bộ; thiếu nhãn cấp; chỉ dùng từ đã phát hành; loại câu ví dụ không chứa từ đích; không dùng audio khi chưa có.
+- **Mô phỏng khả thi** (mục 2.8).
+
+## 9. KIỂM THỬ BACKEND, HỢP ĐỒNG API & CHỐNG GIAN LẬN
+- **Contract test** cho 3 API (tạo phiên, gửi đáp án, hoàn tất) và kiểm tra tương thích ngược với Vocabulary Runner.
+- Chống gian lận: không giả mạo được damage/điểm/HP/combo từ client; không gửi lại câu đã trả lời; không trả lời sai thứ tự hoặc câu ngoài phiên; không dùng phiên của người khác (kiểm tra JWT/quyền sở hữu); không tiếp tục phiên đã hoàn thành; request trùng (idempotency) không tính hai lần; hai tab không điều khiển cùng một phiên; giới hạn tốc độ hoạt động; đáp án không lộ trước khi nộp (kiểm tra payload).
+- Điểm cuối trận khớp server; tiến độ từ vựng cập nhật theo `vocabulary_meaning_id`; từ sai xuất hiện trong danh sách ôn tập/SRS; XP/Coins đúng và có trần ngày.
+- Transaction: lỗi giữa chừng không để dữ liệu nửa vời. Migration chạy được và rollback được.
+- Chơi lại tạo phiên mới; phiên `abandoned` không cấp XP/Coins.
+
+## 10. KIỂM THỬ E2E (Playwright hoặc tương đương)
+- Luồng đầy đủ: Lobby → hướng dẫn → chơi → đúng/gần đúng/sai → phản công → hạ tàu → boss → Result → "Ôn từ sai".
+- Mất mạng giữa trận chính thức: tạm dừng, khôi phục đúng, không ghi trùng; luyện tập ngoại tuyến không tạo điểm chính thức và đồng bộ đúng khi có mạng.
+- Tải lại trang giữa trận: khôi phục phiên từ server.
+- Chuyển tab / khóa màn hình / xoay màn hình / thu-phóng cửa sổ: tạm dừng và tiếp tục đúng, không rò rỉ listener.
+- Toàn màn hình: nút, `F`, `Esc`, fallback khi API không hỗ trợ; sân chơi scale lại đúng.
+- Bàn phím ảo: ô nhập không bị che (giả lập `visualViewport`).
+- Audio lỗi: tự đổi dạng câu, không phạt.
+
+## 11. MA TRẬN MÔI TRƯỜNG
+| Nhóm | Kiểm tra |
+|---|---|
+| Trình duyệt | Chrome, Edge, Firefox, Safari (mới nhất và 2 bản trước) |
+| Thiết bị | Desktop; Android tầm thấp (~2–3 GB RAM); iPhone cũ; tablet |
+| Màn hình | 320×568, 360×640, 390×844, 768×1024, 1024×768, 1366×768, 1920×1080, 2560×1080; ngang/dọc; DPR 1x/2x/3x |
+| Mạng | Nhanh, 4G chậm, 3G, ngoại tuyến, mất kết nối giữa chừng |
+| Hệ điều hành | Windows, macOS, Android, iOS |
+| Đầu vào | Bàn phím, chạm, chuột |
+| Cài đặt | Giảm chuyển động, chế độ tối, tắt âm, tương phản cao |
+
+**Ghi rõ phần nào chạy thật, phần nào chỉ giả lập.** Không khẳng định "đã test trên thiết bị thật" nếu chưa làm.
+
+## 12. VISUAL REGRESSION & HIỂN THỊ
+- Chụp so sánh các màn (Lobby, Battle, Boss, Result) ở các viewport trên.
+- Kiểm tra tự động: không cuộn ngang; mọi nút ≥ 44px; tàu đạt kích thước tối thiểu và tương phản ≥ 3:1; Lobby không cần cuộn; chữ không bị cắt/tràn.
+
+## 13. KIỂM THỬ HIỆU NĂNG
+1. **Lighthouse CI** (mobile, 4G + CPU 4x): Performance ≥ 90, Accessibility ≥ 90.
+2. **Bundle budget:** script kiểm tra gzip, **fail build** nếu vượt mục 6.
+3. **FPS / frame time** (PerformanceObserver + rAF sampler) ở 3 kịch bản: trận thường; nhiều tàu + nhiều hạt cùng lúc; boss nhiều hiệu ứng. Xuất p50/p95/p99 và số frame > 33ms.
+4. **Soak test 15–30 phút** (tự động): theo dõi heap, số DOM node, số listener; fail nếu tăng liên tục (rò rỉ).
+5. **CPU throttling 4x–6x:** ≥ 30 FPS và tự giảm hiệu ứng.
+6. Đo LCP, INP, CLS, TTI trước/sau tối ưu; **đo độ trễ mỗi lần gửi đáp án** (p50/p95) ở mạng chậm.
+7. Kiểm tra vòng lặp dừng khi tab ẩn (pin/nhiệt).
+8. **Hồi quy:** lưu baseline vào JSON, cảnh báo nếu xấu đi > 10%.
+9. Tải backend cơ bản cho API gửi đáp án (nhiều phiên song song): không lỗi, độ trễ chấp nhận được.
+
+Cung cấp lệnh rõ ràng (ví dụ `npm run test`, `npm run test:api`, `npm run test:e2e`, `npm run test:perf`, `npm run test:size`) và tích hợp CI nếu repo có sẵn.
+
+---
+
+## 14. TIÊU CHÍ NGHIỆM THU
+- [ ] Luật chơi đúng mục 2; không còn mâu thuẫn (HP 5, địch 12 HP, trần 20 câu, 2 lần sai → phản công).
+- [ ] Mô phỏng khả thi đạt (mục 2.8); mọi cấu hình đều có thể thắng được.
+- [ ] Chỉ dùng từ đã phát hành; không vượt 20 câu; tàu HP đúng (1/2/5); HP không âm.
+- [ ] Câu đúng giảm HP địch; câu sai tăng bộ đếm; 2 lần sai kích hoạt phản công; Critical đúng mốc 5/10/15; combo hoạt động đúng.
+- [ ] Hết câu hoặc hết HP kết thúc trận đúng luật; boss chết kết thúc chiến thắng.
+- [ ] Server chấm từng câu và tính toàn bộ điểm/HP/sát thương/combo; điểm cuối trận khớp server; không lộ đáp án trước khi nộp.
+- [ ] Không giả mạo được sát thương/điểm; không gửi lại câu; không sai thứ tự; không dùng phiên người khác; idempotency hoạt động; hai tab không xung đột.
+- [ ] Tiến độ từ vựng cập nhật theo `vocabulary_meaning_id`; từ sai vào danh sách ôn tập/SRS; từ sai nạp lại trong trận.
+- [ ] API cũ và Vocabulary Runner hoạt động như trước; migration tương thích ngược và rollback được; không bảng trùng, không dữ liệu mẫu.
+- [ ] Chấm đáp án xử lý đủ biên (US/UK, biến thể, gần đúng, nhiều nghĩa, audio lỗi, ví dụ thiếu từ đích).
+- [ ] Tàu, mục tiêu, thanh nạp đạn nhìn rõ trên mọi kích thước (kích thước tối thiểu, tương phản ≥ 3:1, không chỉ dùng màu).
+- [ ] Responsive đúng (ngang/dọc), không cuộn ngang, bàn phím ảo không che nội dung, Lobby vừa màn hình.
+- [ ] Toàn màn hình hoạt động (nút, F/Esc) kèm fallback iPhone.
+- [ ] Mất mạng giữa trận: xử lý đúng; luyện tập ngoại tuyến không tạo điểm chính thức.
+- [ ] Đạt ngân sách mục 6 (hoặc ghi rõ hạng mục không đạt và lý do).
+- [ ] Toàn bộ test mục 8–13 chạy xanh; có báo cáo số liệu trước/sau.
+- [ ] Có chế độ giảm chuyển động, tương phản cao, tùy chọn tắt rung/âm.
+- [ ] Chơi lại tạo phiên mới; giao diện hoạt động trên desktop, tablet, mobile.
+
+---
+
+## 15. PHẠM VI: MVP VÀ SAU MVP
+
+**MVP (làm ngay):** một trận hoàn chỉnh 3 đợt, server chấm điểm, 5 dạng câu hỏi (theo điều kiện dữ liệu), 3 chế độ chọn từ, thưởng XP/Coins, huy hiệu, ngoại hình chiến hạm, SRS, Result, toàn bộ yêu cầu responsive/hiệu năng/test.
+
+**Hoãn sang sau MVP (không làm trừ khi tôi yêu cầu):** vật phẩm (khiên, sửa chữa, bắn đôi, loại bớt đáp án), boss nhiều giai đoạn, nâng cấp sức mạnh chiến hạm/pháo, nhiều bản đồ/vùng biển, nhiệm vụ hằng ngày, bảng xếp hạng, chế độ nhiều người chơi. Thiết kế dữ liệu và code **để dễ mở rộng** các phần này sau, nhưng không cài đặt sớm.
+
+---
+
+## 16. LỘ TRÌNH (làm tuần tự; xong giai đoạn nào test giai đoạn đó, rồi dừng chờ tôi xác nhận)
+1. **Khảo sát & baseline:** đọc code, xác định phần tái sử dụng, đo số liệu hiện tại (dung lượng, FPS, heap, độ trễ API), dựng khung test, báo cáo giả định.
+2. **Lõi logic & cấu hình:** máy trạng thái, cân bằng, chấm đáp án, Critical/combo/bộ đếm, file cấu hình duy nhất, bộ mô phỏng khả thi + unit test (chưa UI).
+3. **Backend Battle Session:** tạo phiên, chấm từng câu, tính điểm/HP, hoàn tất trận, bảo mật (JWT, thứ tự, idempotency, rate limit, transaction), migration + contract test + test chống gian lận.
+4. **Hệ thống câu hỏi & chọn từ:** 5 dạng, 3 chế độ, điều kiện hợp lệ, nạp lại từ sai, tích hợp tiến độ/SRS.
+5. **Giao diện chiến đấu:** design tokens, cảnh biển từ trên xuống, tàu, thanh HP/nạp đạn, thẻ câu hỏi, hiệu ứng (có pooling), kết nối server, hoạt ảnh lạc quan.
+6. **Responsive, toàn màn hình, Lobby thích ứng, hướng dẫn, Result, Game Center, chế độ luyện tập ngoại tuyến.**
+7. **Tối ưu dung lượng & hiệu năng:** lazy-load, adaptive quality, dọn dẹp tài nguyên, đạt ngân sách mục 6.
+8. **Test đầy đủ & nghiệm thu:** unit, API, E2E, ma trận môi trường, visual regression, hiệu năng, soak test, so sánh trước/sau, rà soát mục 14.
+
+## 17. ĐỊNH DẠNG ĐẦU RA (mỗi giai đoạn)
+1. Tóm tắt thay đổi (ngắn).
+2. Danh sách file thêm/sửa + code đầy đủ.
+3. Lệnh chạy game, chạy migration và chạy test.
+4. Bảng kết quả test/hiệu năng (trước và sau).
+5. Giả định đã dùng, rủi ro còn lại, đề xuất bước tiếp theo.
+
+Viết code có chú thích ngắn ở đoạn logic quan trọng. **Mọi hằng số cân bằng (HP, nạp đạn, điểm, thưởng combo, thời gian mềm, mốc Critical, giới hạn gợi ý, trần XP/Coins) đặt trong một file cấu hình duy nhất.**
+
+**BẮT ĐẦU TỪ GIAI ĐOẠN 1. XONG THÌ DỪNG VÀ BÁO CÁO.**
+
+---
+
+# PHẦN B: PROMPT NGẮN ĐỂ ĐIỀU KHIỂN TỪNG BƯỚC
+
+**Sang giai đoạn tiếp theo**
+```
+Giai đoạn [N] đã xác nhận. Tiếp tục Giai đoạn [N+1] theo prompt chính (mục 16), tuân thủ mục 2–15 và 17.
+Nhắc lại: server là nguồn sự thật, giữ nguyên API cũ, hằng số trong một file cấu hình duy nhất, có test, báo cáo theo mục 17, xong thì dừng chờ tôi.
+```
+
+**Khi test hoặc build lỗi**
+```
+Test/build đang lỗi. Log đầy đủ: [dán log].
+Tìm nguyên nhân gốc (không vá tạm), sửa, chạy lại test liên quan và báo cáo. Không đổi luật đã chốt ở mục 2 nếu chưa hỏi tôi.
+```
+
+**Khi cần tối ưu hiệu năng**
+```
+Số liệu hiện tại: [dán FPS/heap/dung lượng/độ trễ API]. Vượt ngân sách mục 6 ở: [liệt kê].
+Phân tích điểm nghẽn bằng profiling, đề xuất phương án, áp dụng từng bước, đo lại sau mỗi bước và so sánh trước/sau.
+```
+
+**Khi cần chỉnh cân bằng sau khi chơi thử**
+```
+Sau khi chơi thử: [ví dụ "địch phản công quá sớm", "boss quá dễ", "khó thắng"].
+Chỉ chỉnh hằng số trong file cấu hình (không sửa logic), giải thích thay đổi, chạy lại bộ mô phỏng khả thi (mục 2.8) và test cân bằng, báo cáo tỉ lệ thắng theo độ chính xác trước/sau.
+```
+
+**Khi cần rà soát bảo mật**
+```
+Rà soát bảo mật backend Battleship theo mục 4.3 và 9: thử tấn công thực tế bằng test (giả mạo damage/điểm, gửi lại câu, sai thứ tự, phiên của người khác, request trùng, hai tab, spam).
+Mỗi mục báo Đạt / Không đạt kèm tên test và cách khắc phục. Không sửa luật chơi.
+```
+
+**Khi cần kiểm tra tích hợp với hệ thống hiện có**
+```
+Kiểm tra Battleship không làm hỏng Vocabulary Runner, tiến độ học, SRS và Game Center: chạy lại toàn bộ test cũ, so sánh hành vi API cũ trước/sau, kiểm tra migration chạy và rollback.
+Báo cáo mọi thay đổi hành vi (nếu có) và cách giữ tương thích ngược.
+```
+
+**Rà soát toàn bộ trước khi bàn giao**
+```
+Rà soát toàn bộ theo mục 14 (Tiêu chí nghiệm thu). Với mỗi mục trả lời Đạt / Không đạt / Chưa kiểm chứng kèm bằng chứng (tên test, số liệu).
+Nêu rõ phần nào đã chạy trên thiết bị thật và phần nào chỉ giả lập. Liệt kê rủi ro còn lại và việc nên làm sau MVP.
+```
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-16T11:30:49+07:00.
+</ADDITIONAL_METADATA>

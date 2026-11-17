@@ -1,10 +1,11 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const sqlFile = path.resolve(
-  __dirname,
-  "../../backend/src/main/resources/db/migration/V70__seed_reading_exercise_cards.sql"
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../backend/src/main/resources/db/migration/V94__seed_reading_exercise_cards.sql"
 );
 
 if (!fs.existsSync(sqlFile)) {
@@ -39,5 +40,6 @@ proc.on("close", (code) => {
     console.log("✅ Seeding completed successfully! All reading cards are now in PostgreSQL.");
   } else {
     console.error(`❌ Seeding failed with exit code ${code}`);
+    process.exitCode = code ?? 1;
   }
 });

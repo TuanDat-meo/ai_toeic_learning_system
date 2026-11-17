@@ -53,7 +53,12 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       }
       throw new Error(payload?.detail || payload?.message || 'Bạn không có quyền thực hiện thao tác này.');
     }
-    throw new Error(payload?.detail || payload?.message || 'Yêu cầu chưa thể xử lý. Vui lòng thử lại.');
+    const message = payload?.detail || payload?.message || (
+      response.status === 404
+        ? 'Không tìm thấy API. Hãy kiểm tra URL hoặc cập nhật backend rồi thử lại.'
+        : `Yêu cầu chưa thể xử lý (HTTP ${response.status}). Vui lòng thử lại.`
+    );
+    throw new ApiRequestError(message, response.status);
   }
 
   return payload as T;

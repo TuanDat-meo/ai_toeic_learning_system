@@ -21,6 +21,9 @@ export interface VocabularyTestSet {
   count?: number;
   totalWords?: number;
   completedWords?: number;
+  isRedoMode?: boolean;
+  allWords?: WordItem[];
+  originalTotalWords?: number;
   words?: WordItem[];
 }
 
@@ -44,7 +47,18 @@ export interface VocabularySense {
   exampleMeaning?: string;
   synonyms?: string;
   antonyms?: string;
+  definitionEn?: string;
 }
+
+export type VocabularyTermType =
+  | 'WORD'
+  | 'PHRASAL_VERB'
+  | 'NOUN_PHRASE'
+  | 'ADJECTIVE_PHRASE'
+  | 'COLLOCATION'
+  | 'IDIOM'
+  | 'OTHER_PHRASE'
+  | 'UNKNOWN';
 
 export interface VocabularyRelatedForm {
   id: string;
@@ -63,10 +77,13 @@ export interface WordItem {
   pos?: string;
   senses?: VocabularySense[];
   wordFamily?: string;
+  termType?: VocabularyTermType;
+  dictionarySourceUrl?: string;
   relatedForms?: VocabularyRelatedForm[];
   cefrLevel?: CefrLevel;  // A1–C2
   level?: string;         // legacy alias
   status?: ContentStatus;
+  progressStatus?: 'NEW' | 'LEARNING' | 'REVIEWING' | 'MASTERED';
   meanings?: WordMeaning[];
   meaning?: string;       // legacy alias
   example?: string;       // legacy alias

@@ -217,7 +217,7 @@ public class QuestionBankService {
 
     private Map<String, String> optionsMap(List<QuestionBankOption> options) {
         Map<String, String> map = new LinkedHashMap<>();
-        options.stream().sorted(java.util.Comparator.comparing(QuestionBankOption::id))
+        options.stream().sorted(java.util.Comparator.comparing((QuestionBankOption option) -> option.id()))
                 .forEach(option -> map.put(option.id().trim().toUpperCase(), option.text().trim()));
         return map;
     }

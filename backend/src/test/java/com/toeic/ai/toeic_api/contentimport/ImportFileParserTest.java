@@ -39,7 +39,8 @@ class ImportFileParserTest {
                       "meaningVi":"lịch trình",
                       "ipa":"/ˈskedʒuːl/",
                       "examples":[{"sentenceEn":"Check the schedule.","sentenceVi":"Kiểm tra lịch trình."}],
-                      "audioFile":"Audio/Set_01/schedule.mp3"
+                      "audioFile":"Audio/Set_01/schedule.mp3",
+                      "audioUrl":"/api/dictionary/audio?word=schedule"
                     }
                   ]
                 }
@@ -51,7 +52,10 @@ class ImportFileParserTest {
         assertThat(rows.getFirst().data().path("word").asText()).isEqualTo("schedule");
         assertThat(rows.getFirst().data().path("meaning").asText()).isEqualTo("lịch trình");
         assertThat(rows.getFirst().data().path("exampleEn").asText()).isEqualTo("Check the schedule.");
-        assertThat(rows.getFirst().data().has("audioUrl")).isFalse();
+        assertThat(rows.getFirst().data().path("audioUrl").asText())
+                .isEqualTo("/api/dictionary/audio?word=schedule");
+        assertThat(new ContentPayloadValidator().validate(ContentType.VOCABULARY, rows.getFirst().data()).valid())
+                .isTrue();
     }
 
     @Test

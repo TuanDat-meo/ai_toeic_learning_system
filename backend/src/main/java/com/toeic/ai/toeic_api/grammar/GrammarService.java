@@ -886,6 +886,13 @@ public class GrammarService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void seedInitialDataIfEmpty() {
+        jdbc.update("""
+                INSERT INTO grammar_categories (code, name, field_definitions, is_system)
+                VALUES ('other', 'Khác',
+                        '[{"key":"structureType","label":"Dạng ngữ pháp"},{"key":"usage","label":"Cách dùng"},{"key":"pattern","label":"Cấu trúc chính"}]'::jsonb,
+                        true)
+                ON CONFLICT (code) DO NOTHING
+                """);
         Integer count = jdbc.queryForObject("SELECT count(*) FROM grammar_topics", Integer.class);
         if (count == null || count == 0) {
             String signals = "[\"career experiences\", \"own\", \"by oneself\", \"on one's own\", \"colleagues\"]";

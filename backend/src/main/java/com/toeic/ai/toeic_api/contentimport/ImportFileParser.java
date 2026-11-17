@@ -110,6 +110,7 @@ public class ImportFileParser {
             copyFirstText(source, row, "pos", "partOfSpeech", "pos");
             copyText(source, row, "ipa", "ipa");
             copyText(source, row, "level", "level");
+            copyUrl(source, row, "audioUrl", "audioUrl", "audioURL", "audio", "audioFile");
             copyFirstText(source, row, "topic", "topic", "themeEn", "tag");
             if (!row.has("topic")) copyFirstText(root, row, "topic", "topic", "themeEn", "tag");
             copyFirstText(source, row, "category", "category", "setName");
@@ -363,7 +364,8 @@ public class ImportFileParser {
                 continue;
             }
             String candidate = value.asText().trim();
-            if (candidate.matches("(?i)^https?://.+")) {
+            if (candidate.matches("(?i)^https?://.+")
+                    || (candidate.startsWith("/") && !candidate.startsWith("//"))) {
                 target.put(targetField, candidate);
                 return;
             }
@@ -611,8 +613,9 @@ public class ImportFileParser {
     private String extractFieldByAliases(JsonNode rowData, String... aliases) {
         if (rowData == null || !rowData.isObject()) return "";
         Map<String, String> byKey = new LinkedHashMap<>();
-        rowData.fields().forEachRemaining(entry ->
-                byKey.put(normalizeHeaderKey(entry.getKey()), entry.getValue().asText("")));
+        for (Map.Entry<String, JsonNode> entry : rowData.properties()) {
+            byKey.put(normalizeHeaderKey(entry.getKey()), entry.getValue().asText(""));
+        }
         for (String alias : aliases) {
             String exact = byKey.get(alias);
             if (exact != null && !exact.isBlank()) return exact.trim();

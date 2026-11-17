@@ -1,6 +1,9 @@
 package com.toeic.ai.toeic_api.contentimport;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -71,12 +74,18 @@ public class ContentImportService {
 
     @Transactional
     public BatchDetails preview(ContentType type, MultipartFile file, UUID uploadedBy) {
-        return preview(type, file, uploadedBy, null, null);
+        return preview(type, file, uploadedBy, null, null, null);
     }
 
     @Transactional
     public BatchDetails preview(ContentType type, MultipartFile file, UUID uploadedBy,
             String vocabularySetId, String vocabularySetName) {
+        return preview(type, file, uploadedBy, vocabularySetId, vocabularySetName, null);
+    }
+
+    @Transactional
+    public BatchDetails preview(ContentType type, MultipartFile file, UUID uploadedBy,
+            String vocabularySetId, String vocabularySetName, String releaseAt) {
         if (type == null) {
             throw new IllegalArgumentException("Chọn loại nội dung cần nhập.");
         }
@@ -109,17 +118,44 @@ public class ContentImportService {
 
         validator.validateFileShape(type, rows);
         return createPreviewBatch(type, fileName, file.getSize(),
-                applyVocabularyTarget(type, rows, vocabularySetId, vocabularySetName), uploadedBy);
+                applyVocabularyTarget(type, rows, vocabularySetId, vocabularySetName), uploadedBy, releaseAt);
+    }
+
+    public List<ParsedImportRow> parseVocabularyFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Chọn file từ vựng có dữ liệu.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("File không được vượt quá 256 MB.");
+        }
+        String extension = fileExtension(safeFileName(file.getOriginalFilename()));
+        if (Set.of("doc", "docx").contains(extension)) {
+            if (uploadService == null) {
+                throw new IllegalStateException("Dịch vụ đọc tài liệu Word hiện không khả dụng.");
+            }
+            String text = uploadService.extractTextOnly(ContentType.VOCABULARY, file);
+            return List.of(new ParsedImportRow(1, objectMapper.createObjectNode().put("extractedText", text)));
+        }
+        if (!Set.of("csv", "xlsx", "xls").contains(extension)) {
+            throw new IllegalArgumentException("Chỉ hỗ trợ CSV, XLS, XLSX hoặc Word DOC/DOCX cho nhập nhanh.");
+        }
+        return fileParser.parse(file, ContentType.VOCABULARY);
     }
 
     @Transactional
     public BatchDetails previewExtractedText(ContentType type, String fileName, String text, UUID uploadedBy) {
-        return previewExtractedText(type, fileName, text, uploadedBy, null, null);
+        return previewExtractedText(type, fileName, text, uploadedBy, null, null, null);
     }
 
     @Transactional
     public BatchDetails previewExtractedText(ContentType type, String fileName, String text, UUID uploadedBy,
             String vocabularySetId, String vocabularySetName) {
+        return previewExtractedText(type, fileName, text, uploadedBy, vocabularySetId, vocabularySetName, null);
+    }
+
+    @Transactional
+    public BatchDetails previewExtractedText(ContentType type, String fileName, String text, UUID uploadedBy,
+            String vocabularySetId, String vocabularySetName, String releaseAt) {
         if (type == null) {
             throw new IllegalArgumentException("Chọn loại nội dung cần nhập.");
         }
@@ -138,7 +174,7 @@ public class ContentImportService {
         String safeName = fileName == null || fileName.isBlank() ? "extracted-document.json" : safeFileName(fileName);
         validator.validateFileShape(type, rows);
         return createPreviewBatch(type, safeName, text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
-                applyVocabularyTarget(type, rows, vocabularySetId, vocabularySetName), uploadedBy);
+                applyVocabularyTarget(type, rows, vocabularySetId, vocabularySetName), uploadedBy, releaseAt);
     }
 
     private List<ParsedImportRow> applyVocabularyTarget(ContentType type, List<ParsedImportRow> rows,
@@ -197,8 +233,16 @@ public class ContentImportService {
         return data.has(field) && !data.path(field).asText("").isBlank();
     }
 
+    private JsonNode withReleaseAt(JsonNode data, Instant releaseAt) {
+        if (releaseAt == null || data == null || !data.isObject()) return data;
+        ObjectNode scheduled = ((ObjectNode) data).deepCopy();
+        scheduled.put("releaseAt", releaseAt.toString());
+        return scheduled;
+    }
+
     private BatchDetails createPreviewBatch(ContentType type, String fileName, long fileSizeBytes,
-            List<ParsedImportRow> rows, UUID uploadedBy) {
+            List<ParsedImportRow> rows, UUID uploadedBy, String releaseAt) {
+        Timestamp scheduledRelease = parseReleaseAt(type, releaseAt);
         List<PreparedImportRow> preparedRows = new ArrayList<>();
         Set<String> dedupeKeys = new java.util.HashSet<>();
         Set<String> mockQuestionCodes = new java.util.HashSet<>();
@@ -237,9 +281,9 @@ public class ContentImportService {
         UUID batchId = UUID.randomUUID();
         jdbcTemplate.update(
                 "INSERT INTO import_batches (id, source_id, file_name, total_records, success_count, "
-                        + "failed_count, status, content_type, uploaded_by, file_size_bytes) "
-                        + "VALUES (?, ?, ?, ?, 0, 0, 'PREVIEW', ?, ?, ?)",
-                batchId, sourceId, fileName, rows.size(), type.name(), uploadedBy, fileSizeBytes);
+                        + "failed_count, status, content_type, uploaded_by, file_size_bytes, release_at) "
+                        + "VALUES (?, ?, ?, ?, 0, 0, 'PREVIEW', ?, ?, ?, ?)",
+                batchId, sourceId, fileName, rows.size(), type.name(), uploadedBy, fileSizeBytes, scheduledRelease);
 
         int validCount = 0;
         int invalidCount = 0;
@@ -546,10 +590,12 @@ public class ContentImportService {
         BatchForPublish batch;
         try {
             batch = jdbcTemplate.queryForObject(
-                    "SELECT id, content_type, status, total_records FROM import_batches WHERE id = ? FOR UPDATE",
+                    "SELECT id, content_type, status, total_records, release_at, scheduled_by FROM import_batches WHERE id = ? FOR UPDATE",
                     (rs, rowNum) -> new BatchForPublish(rs.getObject("id", UUID.class),
                             ContentType.valueOf(rs.getString("content_type")), rs.getString("status"),
-                            rs.getInt("total_records")),
+                            rs.getInt("total_records"),
+                            rs.getTimestamp("release_at") == null ? null : rs.getTimestamp("release_at").toInstant(),
+                            rs.getObject("scheduled_by", UUID.class)),
                     batchId);
         } catch (EmptyResultDataAccessException exception) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lô nhập.");
@@ -594,6 +640,7 @@ public class ContentImportService {
                 batchId);
         int publishedCount = 0;
         for (PublishableItem item : validItems) {
+            JsonNode publishData = withReleaseAt(item.normalizedData(), batch.releaseAt());
             int inserted;
             if (batch.contentType() == ContentType.GRAMMAR) {
                 inserted = jdbcTemplate.update(
@@ -608,20 +655,39 @@ public class ContentImportService {
                                 + "AND g.code = EXCLUDED.payload_json ->> 'code') "
                                 + "OR lower(g.title) = lower(EXCLUDED.payload_json ->> 'title'))",
                         batch.contentType().name(), item.dedupeKey(), item.title(),
-                        toJson(item.normalizedData()), item.id(), publishedBy);
+                        toJson(publishData), item.id(), publishedBy);
+            } else if (batch.contentType() == ContentType.VOCABULARY) {
+                inserted = jdbcTemplate.update(
+                        """
+                        INSERT INTO imported_content (content_type, dedupe_key, title, payload_json,
+                                source_import_item_id, created_by)
+                        VALUES (?, ?, ?, ?::jsonb, ?, ?)
+                        ON CONFLICT (content_type, dedupe_key) DO UPDATE SET
+                            title = EXCLUDED.title,
+                            payload_json = EXCLUDED.payload_json,
+                            source_import_item_id = EXCLUDED.source_import_item_id,
+                            created_by = EXCLUDED.created_by,
+                            published_at = now()
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM vocabulary_items vi
+                            WHERE lower(trim(vi.word)) = lower(trim(EXCLUDED.payload_json ->> 'word'))
+                        )
+                        """,
+                        batch.contentType().name(), item.dedupeKey(), item.title(),
+                        toJson(publishData), item.id(), publishedBy);
             } else {
                 inserted = jdbcTemplate.update(
                         "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
                                 + "source_import_item_id, created_by) VALUES (?, ?, ?, ?::jsonb, ?, ?) "
                                 + "ON CONFLICT (content_type, dedupe_key) DO NOTHING",
                         batch.contentType().name(), item.dedupeKey(), item.title(),
-                        toJson(item.normalizedData()), item.id(), publishedBy);
+                        toJson(publishData), item.id(), publishedBy);
             }
             if (inserted == 1) {
                 if (batch.contentType() == ContentType.GRAMMAR) {
                     grammarService.syncFromImportItem(item.normalizedData());
                 } else if (batch.contentType() == ContentType.VOCABULARY) {
-                    vocabularyService.syncFromImportItem(item.normalizedData());
+                    vocabularyService.syncFromImportItem(publishData);
                 } else if (batch.contentType() == ContentType.READING && readingService != null) {
                     readingService.syncFromImportItem(item.normalizedData());
                 }
@@ -631,7 +697,7 @@ public class ContentImportService {
                 if (batch.contentType() == ContentType.GRAMMAR) {
                     grammarService.syncFromImportItem(item.normalizedData());
                 } else if (batch.contentType() == ContentType.VOCABULARY) {
-                    vocabularyService.syncFromImportItem(item.normalizedData());
+                    vocabularyService.syncFromImportItem(publishData);
                 } else if (batch.contentType() == ContentType.READING && readingService != null) {
                     readingService.syncFromImportItem(item.normalizedData());
                 }
@@ -657,6 +723,9 @@ public class ContentImportService {
                         (rs, rowNum) -> readJson(rs.getString(1)), addition.existingContentId());
                 ObjectNode merged = existingPayload.deepCopy();
                 appendMeaning(merged, addition.normalizedData().path("meaning").asText());
+                if (batch.releaseAt() != null) {
+                    merged.put("releaseAt", batch.releaseAt().toString());
+                }
                 jdbcTemplate.update("UPDATE imported_content SET payload_json = ?::jsonb WHERE id = ?",
                         toJson(merged), addition.existingContentId());
                 vocabularyService.syncFromImportItem(merged);
@@ -675,6 +744,36 @@ public class ContentImportService {
                         + "WHERE id = ?",
                 finalStatus, publishedCount, skippedCount, batchId);
         return getBatch(batchId, 0, PREVIEW_LIMIT).batch();
+    }
+
+    @Transactional
+    public BatchSummary publishScheduledBatch(UUID batchId) {
+        BatchForPublish batch;
+        try {
+            batch = jdbcTemplate.queryForObject(
+                    "SELECT id, content_type, status, total_records, release_at, scheduled_by FROM import_batches WHERE id = ? FOR UPDATE",
+                    (rs, rowNum) -> new BatchForPublish(rs.getObject("id", UUID.class),
+                            ContentType.valueOf(rs.getString("content_type")), rs.getString("status"),
+                            rs.getInt("total_records"),
+                            rs.getTimestamp("release_at") == null ? null : rs.getTimestamp("release_at").toInstant(),
+                            rs.getObject("scheduled_by", UUID.class)),
+                    batchId);
+        } catch (EmptyResultDataAccessException exception) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lô nhập đã lên lịch.");
+        }
+        if (!"SCHEDULED".equals(batch.status())) {
+            return getBatch(batchId, 0, 1).batch();
+        }
+        jdbcTemplate.update("UPDATE import_batches SET status = 'PREVIEW' WHERE id = ?", batchId);
+        return publish(batchId, batch.scheduledBy());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UUID> listScheduledBatches() {
+        return jdbcTemplate.query(
+                "SELECT id FROM import_batches WHERE status = 'SCHEDULED' "
+                        + "ORDER BY release_at, id LIMIT 100",
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
     }
 
     @Transactional(readOnly = true)
@@ -728,24 +827,35 @@ public class ContentImportService {
                                 return found;
                             });
                 }
-                Map<String, UUID> found = new java.util.HashMap<>(findContentIds(type, dedupeKeys));
-                if (type != ContentType.VOCABULARY) return found;
+                if (type != ContentType.VOCABULARY) return findContentIds(type, dedupeKeys);
 
                 Set<String> words = validations.stream()
                         .filter(validation -> validation.valid())
                         .map(result -> result.normalizedData().path("word").asText().trim().toLowerCase(Locale.ROOT))
                         .filter(word -> !word.isBlank())
                         .collect(java.util.stream.Collectors.toSet());
-                if (words.isEmpty()) return found;
+                if (words.isEmpty() || dedupeKeys.isEmpty()) return Map.of();
+                Map<String, UUID> found = new java.util.HashMap<>();
                 Map<String, UUID> publishedWords = namedParameterJdbcTemplate.query(
-                        "SELECT lower(payload_json ->> 'word') AS word, id FROM imported_content "
-                                + "WHERE content_type = 'VOCABULARY' AND lower(payload_json ->> 'word') IN (:words) "
-                                + "ORDER BY published_at, id",
-                        Map.of("words", words),
+                        """
+                        SELECT lower(trim(ic.payload_json ->> 'word')) AS word, ic.dedupe_key, ic.id
+                        FROM imported_content ic
+                        WHERE ic.content_type = 'VOCABULARY'
+                          AND (ic.dedupe_key IN (:keys)
+                               OR lower(trim(ic.payload_json ->> 'word')) IN (:words))
+                          AND EXISTS (
+                              SELECT 1 FROM vocabulary_items vi
+                              WHERE lower(trim(vi.word)) = lower(trim(ic.payload_json ->> 'word'))
+                          )
+                        ORDER BY ic.published_at, ic.id
+                        """,
+                        Map.of("keys", dedupeKeys, "words", words),
                         rs -> {
                             Map<String, UUID> byWord = new java.util.HashMap<>();
                             while (rs.next()) {
-                                byWord.putIfAbsent(rs.getString("word"), rs.getObject("id", UUID.class));
+                                UUID id = rs.getObject("id", UUID.class);
+                                found.putIfAbsent(rs.getString("dedupe_key"), id);
+                                byWord.putIfAbsent(rs.getString("word"), id);
                             }
                             return byWord;
                         });
@@ -774,7 +884,7 @@ public class ContentImportService {
 
     private String batchSummarySql() {
         return "SELECT b.id, b.file_name, b.content_type, b.total_records, b.status, b.created_at, "
-                + "b.completed_at, count(*) FILTER (WHERE i.status = 'VALID' "
+                + "b.completed_at, b.release_at, count(*) FILTER (WHERE i.status = 'VALID' "
                 + "OR (i.status = 'DUPLICATE' AND i.duplicate_resolution = 'ADD_MEANING')) AS valid_count, "
                 + "count(*) FILTER (WHERE i.status = 'INVALID') AS invalid_count, "
                 + "count(*) FILTER (WHERE i.status = 'DUPLICATE' AND i.duplicate_resolution IS NULL) AS duplicate_count, "
@@ -788,7 +898,8 @@ public class ContentImportService {
                 rs.getInt("valid_count"), rs.getInt("invalid_count"), rs.getInt("duplicate_count"),
                 rs.getInt("published_count"), rs.getString("status"),
                 rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("completed_at") == null ? null : rs.getTimestamp("completed_at").toInstant());
+                rs.getTimestamp("completed_at") == null ? null : rs.getTimestamp("completed_at").toInstant(),
+                rs.getTimestamp("release_at") == null ? null : rs.getTimestamp("release_at").toInstant());
     }
 
     private PublishedContent mapPublished(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -807,6 +918,22 @@ public class ContentImportService {
             case "doc", "docx" -> "WORD";
             default -> "MANUAL";
         };
+    }
+
+    private Timestamp parseReleaseAt(ContentType type, String value) {
+        if (value == null || value.isBlank()) return null;
+        if (type != ContentType.VOCABULARY) {
+            throw new IllegalArgumentException("Chỉ lô import từ vựng hỗ trợ lên lịch phát hành.");
+        }
+        try {
+            String normalized = value.trim();
+            Instant instant = normalized.endsWith("Z") || normalized.matches(".*[+-]\\d{2}:\\d{2}$")
+                    ? java.time.OffsetDateTime.parse(normalized).toInstant()
+                    : LocalDateTime.parse(normalized).atZone(ZoneId.systemDefault()).toInstant();
+            return Timestamp.from(instant);
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new IllegalArgumentException("Thời gian phát hành không đúng định dạng.", exception);
+        }
     }
 
     private static String fileExtension(String fileName) {
@@ -862,7 +989,8 @@ public class ContentImportService {
         }
     }
 
-    private record BatchForPublish(UUID id, ContentType contentType, String status, int totalRecords) { }
+    private record BatchForPublish(UUID id, ContentType contentType, String status, int totalRecords,
+            Instant releaseAt, UUID scheduledBy) { }
     private record EditableBatch(ContentType contentType, String status) { }
     private record PreviewRevalidation(UUID id, JsonNode rawData, String duplicateResolution) { }
     private record DuplicatePreviewItem(JsonNode rawData, JsonNode normalizedData,
@@ -874,7 +1002,7 @@ public class ContentImportService {
 
     public record BatchSummary(UUID id, String fileName, ContentType contentType, int totalRecords,
             int validCount, int invalidCount, int duplicateCount, int publishedCount, String status,
-            Instant createdAt, Instant completedAt) { }
+            Instant createdAt, Instant completedAt, Instant releaseAt) { }
     public record PreviewItem(UUID id, int rowNumber, String status, Map<String, Object> rawData,
             Map<String, Object> normalizedData,
             List<String> errors, UUID duplicateOfContentId, String duplicateResolution) { }

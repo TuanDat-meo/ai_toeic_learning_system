@@ -1245,7 +1245,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           const syns: { word: string; meaning: string }[] = [];
           if (liveDict.synonyms && liveDict.synonyms.length > 0) {
             liveDict.synonyms.forEach((s) => {
-              syns.push({ word: s.word, meaning: s.meaning || "đồng nghĩa" });
+              syns.push({ word: s, meaning: "đồng nghĩa" });
             });
           }
           const finalSynonyms = syns.length > 0 ? syns : prev.synonyms;
@@ -1254,7 +1254,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           const ants: { word: string; meaning: string }[] = [];
           if (liveDict.antonyms && liveDict.antonyms.length > 0) {
             liveDict.antonyms.forEach((a) => {
-              ants.push({ word: a.word, meaning: a.meaning || "trái nghĩa" });
+              ants.push({ word: a, meaning: "trái nghĩa" });
             });
           }
           const finalAntonyms = ants.length > 0 ? ants : (prev.antonyms || []);

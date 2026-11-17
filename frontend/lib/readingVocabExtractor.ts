@@ -649,11 +649,9 @@ export async function enrichReadingVocabWord(
       try {
         const suggestion = await lookupEnglishDictionary(candidateWord, options?.signal);
         dictPhonetic = suggestion.phonetic || "";
-        const bestMeaning =
-          suggestion.meanings.find((m) => m.meaningLanguage === "vi") ||
-          suggestion.meanings[0];
+        const bestMeaning = suggestion.meanings.find((meaning) => meaning.meaningVi.trim());
         if (bestMeaning) {
-          dictMeaning = bestMeaning.definition;
+          dictMeaning = bestMeaning.meaningVi;
           dictPos = bestMeaning.partOfSpeech;
           dictExample = bestMeaning.example || "";
         }

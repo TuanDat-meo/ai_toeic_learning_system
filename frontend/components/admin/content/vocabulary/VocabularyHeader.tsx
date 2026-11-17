@@ -8,11 +8,12 @@ import {
   BookOpen,
   Sliders,
   BarChart3,
+  FileSpreadsheet,
 } from "lucide-react";
 
 interface VocabularyHeaderProps {
-  activeMainTab: "topics" | "all_words" | "algorithm" | "analytics";
-  setActiveMainTab: (tab: "topics" | "all_words" | "algorithm" | "analytics") => void;
+  activeMainTab: "topics" | "all_words" | "quick_import" | "algorithm" | "analytics";
+  setActiveMainTab: (tab: "topics" | "all_words" | "quick_import" | "algorithm" | "analytics") => void;
   totalTests?: number;
   totalWords?: number;
   onOpenCreateTest?: () => void;
@@ -74,6 +75,7 @@ export const VocabularyHeader: React.FC<VocabularyHeaderProps> = ({
         {[
           { id: "topics", label: "Danh sách bộ từ vựng", icon: FolderKanban, count: totalTests },
           { id: "all_words", label: "Ngân hàng toàn bộ từ vựng", icon: BookOpen, count: totalWords },
+          { id: "quick_import", label: "Thêm nhanh từ vựng", icon: FileSpreadsheet },
           { id: "algorithm", label: "Cấu hình thuật toán SRS", icon: Sliders },
           { id: "analytics", label: "Báo cáo & Tương tác học viên", icon: BarChart3 },
         ].map((tab) => {
@@ -83,7 +85,7 @@ export const VocabularyHeader: React.FC<VocabularyHeaderProps> = ({
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveMainTab(tab.id as "topics" | "all_words" | "algorithm" | "analytics")}
+              onClick={() => setActiveMainTab(tab.id as "topics" | "all_words" | "quick_import" | "algorithm" | "analytics")}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${
                 isActive
                   ? "border-blue-600 text-blue-600 bg-blue-50/50 rounded-t-xl"
