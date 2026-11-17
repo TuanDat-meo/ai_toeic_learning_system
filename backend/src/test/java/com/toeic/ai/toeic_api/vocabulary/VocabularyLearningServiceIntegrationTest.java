@@ -74,7 +74,7 @@ class VocabularyLearningServiceIntegrationTest {
                 Integer.class, studentId)).isEqualTo(1);
         assertThat(vocabularyService.getLearningHistory(studentId, 20, "PRACTICE"))
                 .hasSize(2)
-                .extracting(VocabularyService.VocabularyHistoryItem::word)
+                .extracting(historyItem -> historyItem.word())
                 .containsOnly("invoice");
         assertThat(vocabularyService.getWeakVocabularyWords(studentId, 10))
                 .singleElement()

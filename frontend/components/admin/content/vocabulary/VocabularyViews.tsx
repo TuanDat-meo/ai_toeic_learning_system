@@ -22,6 +22,7 @@ import {
   uniqueVocabularyPartOfSpeech,
 } from "@/lib/vocabulary-part-of-speech";
 import { playVocabularyPronunciation } from "@/lib/vocabulary-pronunciation";
+import { notifyVocabularyContentChanged } from "@/lib/vocabulary-content-sync";
 
 function getVocabularySenses(word: WordItem) {
   const senses = word.senses?.length
@@ -128,7 +129,7 @@ export const VocabularyAllWordsView: React.FC<VocabularyAllWordsViewProps> = ({
     setAudioSyncResult(null);
     try {
       const updatedCount = await onSyncMissingAudio();
-      window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated"));
+      notifyVocabularyContentChanged();
       setAudioSyncResult(`Đã gắn link audio tự động cho ${updatedCount} mục từ. Audio được phát qua dịch vụ phát âm hiện tại.`);
     } catch (error) {
       setAudioSyncResult(error instanceof Error ? `Không thể bổ sung audio: ${error.message}` : "Không thể bổ sung audio. Vui lòng thử lại.");

@@ -435,7 +435,8 @@ public class VocabularyService {
         }
         List<String> deckIds = request.deckIds() == null || request.deckIds().isEmpty()
                 ? List.of(request.setId().trim())
-                : request.deckIds().stream().filter(java.util.Objects::nonNull).map(String::trim).distinct().toList();
+                : request.deckIds().stream().filter(java.util.Objects::nonNull)
+                        .map(deckId -> deckId.trim()).distinct().toList();
         if (deckIds.stream().anyMatch(id -> id.isBlank() || id.length() > 64 || id.contains(","))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Danh sách bộ từ vựng không hợp lệ.");
         }
@@ -499,7 +500,7 @@ public class VocabularyService {
         List<VocabularyWord> setWords = deckIds.stream()
                 .flatMap(deckId -> getWordsForSet(deckId, userId).stream())
                 .collect(java.util.stream.Collectors.toMap(
-                        VocabularyWord::id,
+                        word -> word.id(),
                         word -> word,
                         (first, ignored) -> first,
                         LinkedHashMap::new))
@@ -531,7 +532,7 @@ public class VocabularyService {
             List<VocabularyWord> shuffledDistractors = new ArrayList<>(distractors);
             Collections.shuffle(shuffledDistractors);
             List<String> options = new ArrayList<>(List.of(target.id()));
-            shuffledDistractors.stream().limit(3).map(VocabularyWord::id).forEach(options::add);
+            shuffledDistractors.stream().limit(3).map(word -> word.id()).forEach(options::add);
             Collections.shuffle(options);
             plan.add(new SentenceGameQuestion(0, target.id(), options));
         }
@@ -581,13 +582,13 @@ public class VocabularyService {
 
     private boolean shareSynonym(VocabularyWord left, VocabularyWord right) {
         Set<String> leftSynonyms = left.senses().stream()
-                .map(VocabularySense::synonyms)
+                .map(sense -> sense.synonyms())
                 .filter(value -> value != null && !value.isBlank())
                 .flatMap(value -> java.util.Arrays.stream(value.split("[,;|\\n]")))
                 .map(this::normalizeAnswer)
                 .collect(java.util.stream.Collectors.toSet());
         Set<String> rightSynonyms = right.senses().stream()
-                .map(VocabularySense::synonyms)
+                .map(sense -> sense.synonyms())
                 .filter(value -> value != null && !value.isBlank())
                 .flatMap(value -> java.util.Arrays.stream(value.split("[,;|\\n]")))
                 .map(this::normalizeAnswer)

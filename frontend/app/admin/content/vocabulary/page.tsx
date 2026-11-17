@@ -26,6 +26,7 @@ import { VocabularyModals } from "@/components/admin/content/vocabulary/Vocabula
 import { VocabularyQuickImport } from "@/components/admin/content/vocabulary/VocabularyQuickImport";
 import { deduplicateVocabularySenses } from "@/lib/vocabulary-part-of-speech";
 import { playVocabularyAudio } from "@/lib/vocabulary-pronunciation";
+import { notifyVocabularyContentChanged } from "@/lib/vocabulary-content-sync";
 
 export default function VocabularyLearningPage() {
   const [activeMainTab, setActiveMainTab] = useState<"topics" | "all_words" | "quick_import" | "algorithm" | "analytics">("topics");
@@ -34,13 +35,10 @@ export default function VocabularyLearningPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Notify student views after the backend confirms a change.
+  // Notify student views only after the backend confirms a change.
   const updateTestsState = (updater: (prev: VocabularyTestSet[]) => VocabularyTestSet[]) => {
-    setTests((prev) => {
-      const next = updater(prev);
-      window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated", { detail: next }));
-      return next;
-    });
+    setTests(updater);
+    notifyVocabularyContentChanged();
   };
 
   // Toast state
@@ -600,6 +598,7 @@ export default function VocabularyLearningPage() {
           sets={tests}
           onImported={() => {
             void loadSets();
+            notifyVocabularyContentChanged();
             showToast("Đã cập nhật ngân hàng từ vựng.");
           }}
         />
@@ -623,7 +622,7 @@ export default function VocabularyLearningPage() {
           setTests(data);
           const updatedSet = data.find((set) => set.id === setId);
           if (updatedSet) setWordListModalTest(updatedSet);
-          window.dispatchEvent(new CustomEvent("toeic-vocab-tests-updated", { detail: data }));
+          notifyVocabularyContentChanged();
           return updatedCount;
         }}
         onOpenAddWord={() => {

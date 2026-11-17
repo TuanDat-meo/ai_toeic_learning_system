@@ -22,9 +22,9 @@ class QuestionBankServiceIntegrationTest {
         assertThat(created.id()).isNotBlank();
         assertThat(created.code()).startsWith("P5-");
         assertThat(created.options()).hasSize(2);
-        assertThat(created.options()).filteredOn(QuestionBankOption::isCorrect)
-                .extracting(QuestionBankOption::id).containsExactly("B");
-        assertThat(questionBankService.listQuestions()).extracting(QuestionBankQuestion::id)
+        assertThat(created.options()).filteredOn(option -> option.isCorrect())
+                .extracting(option -> option.id()).containsExactly("B");
+        assertThat(questionBankService.listQuestions()).extracting(question -> question.id())
                 .contains(created.id());
 
         QuestionBankQuestion updated = questionBankService.updateQuestion(
@@ -37,7 +37,7 @@ class QuestionBankServiceIntegrationTest {
 
         questionBankService.deleteQuestion(Long.parseLong(created.id()));
 
-        assertThat(questionBankService.listQuestions()).extracting(QuestionBankQuestion::id)
+        assertThat(questionBankService.listQuestions()).extracting(question -> question.id())
                 .doesNotContain(created.id());
     }
 
@@ -50,7 +50,7 @@ class QuestionBankServiceIntegrationTest {
                 List.of(Long.parseLong(first.id()), Long.parseLong(second.id())));
 
         assertThat(deletedCount).isEqualTo(2);
-        assertThat(questionBankService.listQuestions()).extracting(QuestionBankQuestion::id)
+        assertThat(questionBankService.listQuestions()).extracting(question -> question.id())
                 .doesNotContain(first.id(), second.id());
     }
 

@@ -32,10 +32,10 @@ class ReadingPublicationStatusIntegrationTest {
 
         assertThat(draft.status()).isEqualTo("draft");
         assertThat(readingService.listCards("part5", userId))
-                .extracting(ReadingExerciseCard::id)
+                .extracting(card -> card.id())
                 .doesNotContain(draft.id());
         assertThat(readingService.listAdminCards("part5", userId))
-                .extracting(ReadingExerciseCard::id)
+                .extracting(card -> card.id())
                 .contains(draft.id());
         assertThatThrownBy(() -> readingService.getCard(draft.id(), userId))
                 .isInstanceOf(ResponseStatusException.class);
@@ -51,7 +51,7 @@ class ReadingPublicationStatusIntegrationTest {
                 userId);
 
         assertThat(readingService.listCards("part5", userId))
-                .extracting(ReadingExerciseCard::id)
+                .extracting(card -> card.id())
                 .contains(draft.id());
     }
 }

@@ -10,6 +10,7 @@ import { StudentVocabularyModals } from "@/components/vocabulary/StudentVocabula
 import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { getItemProgress } from "@/lib/practiceProgress";
+import { subscribeToVocabularyContentChanges } from "@/lib/vocabulary-content-sync";
 
 export default function StudentVocabularyPage() {
   const [activeSubCategory, setActiveSubCategory] = useState<string>("all");
@@ -73,10 +74,18 @@ export default function StudentVocabularyPage() {
 
   useEffect(() => {
     void loadSets();
-    const handleSync = () => { void loadSets(); };
-    window.addEventListener("toeic-vocab-tests-updated", handleSync);
+    const unsubscribe = subscribeToVocabularyContentChanges(() => {
+      void loadSets();
+    });
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void loadSets();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
-      window.removeEventListener("toeic-vocab-tests-updated", handleSync);
+      unsubscribe();
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [loadSets]);
 
