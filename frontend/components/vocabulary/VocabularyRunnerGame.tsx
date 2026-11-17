@@ -115,6 +115,14 @@ function getEnglishOrVietnameseMeaning(word: WordItem): string {
   return getVietnameseMeaning(word);
 }
 
+function createRuntimeId(): string {
+  return crypto.randomUUID();
+}
+
+function getCurrentTimestamp(): number {
+  return Date.now();
+}
+
 function buildQuestionItem(
   word: WordItem,
   index: number,
@@ -369,6 +377,8 @@ export default function VocabularyRunnerGame({
   const questionTimerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedTimerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lowFpsFramesRef = useRef(0);
+  const gameLoopRef = useRef<(time: number) => void>(() => {});
+  const handleTimeoutRef = useRef<() => void>(() => {});
 
   const currentQuestion = questions[questionIndex];
 
@@ -542,7 +552,7 @@ export default function VocabularyRunnerGame({
       questionTimerIntervalRef.current = setInterval(() => {
         setQuestionTimer((time) => {
           if (time <= 1) {
-            void handleTimeout();
+            handleTimeoutRef.current();
             return 0;
           }
           return time - 1;
@@ -606,10 +616,14 @@ export default function VocabularyRunnerGame({
       }
 
       lastTimeRef.current = time;
-      requestRef.current = requestAnimationFrame(gameLoop);
+      requestRef.current = requestAnimationFrame((nextTime) => gameLoopRef.current(nextTime));
     },
     [questionIndex, speedPreset, correctStreak, wrongStreak]
   );
+
+  useEffect(() => {
+    gameLoopRef.current = gameLoop;
+  }, [gameLoop]);
 
   useEffect(() => {
     if (isLoopActive(gameState)) {
@@ -834,7 +848,7 @@ export default function VocabularyRunnerGame({
     try {
       if (activeSessionId) {
         await recordVocabularyAnswer({
-          requestId: currentQuestion.instanceId || crypto.randomUUID(),
+          requestId: currentQuestion.instanceId || createRuntimeId(),
           wordId: currentQuestion.word.id,
           activityType: "GAME",
           questionType: currentQuestion.type,
@@ -904,11 +918,11 @@ export default function VocabularyRunnerGame({
       setIsJumping(true);
 
       setToast({
-        id: crypto.randomUUID(),
+        id: createRuntimeId(),
         type: evalResult.isTypo ? "typo_correct" : "correct",
         message: toastMsg,
         subMessage: toastSub,
-        timestamp: Date.now(),
+        timestamp: getCurrentTimestamp(),
       });
 
       const resolveState = runnerTransition(gameState, "SUBMIT_CORRECT");
@@ -950,11 +964,11 @@ export default function VocabularyRunnerGame({
     // Quy tắc hộp mù: Sai ở hộp mù thì hộp biến mất, KHÔNG mất tim
     if (isMysteryBox) {
       setToast({
-        id: crypto.randomUUID(),
+        id: createRuntimeId(),
         type: "wrong",
         message: "Hộp mù đã biến mất!",
         subMessage: `Đáp án là: ${correctWord} · Nghĩa: ${currentQuestion?.vietnameseMeaning}`,
-        timestamp: Date.now(),
+        timestamp: getCurrentTimestamp(),
       });
 
       const resolveState = runnerTransition(gameState, "SUBMIT_WRONG");
@@ -988,11 +1002,11 @@ export default function VocabularyRunnerGame({
     if (hasShield) {
       setHasShield(false);
       setToast({
-        id: crypto.randomUUID(),
+        id: createRuntimeId(),
         type: "typo_correct",
         message: "🛡️ Khiên đã chặn 1 lần va chạm!",
         subMessage: `Không mất tim! Đáp án đúng: ${correctWord}`,
-        timestamp: Date.now(),
+        timestamp: getCurrentTimestamp(),
       });
 
       const resolveState = runnerTransition(gameState, "SUBMIT_CORRECT");
@@ -1052,11 +1066,11 @@ export default function VocabularyRunnerGame({
     }
 
     setToast({
-      id: crypto.randomUUID(),
+      id: createRuntimeId(),
       type: "wrong",
       message: `Chưa chính xác! (-1 ❤️)`,
       subMessage: `Đáp án: ${correctWord} · Nghĩa: ${currentQuestion?.vietnameseMeaning}`,
-      timestamp: Date.now(),
+      timestamp: getCurrentTimestamp(),
     });
 
     const resolveState = runnerTransition(gameState, "SUBMIT_WRONG");
@@ -1095,6 +1109,10 @@ export default function VocabularyRunnerGame({
     const isBox = currentQuestion.encounterType === "mystery_box";
     handleFailure(currentQuestion.word.word, isBox);
   };
+
+  useEffect(() => {
+    handleTimeoutRef.current = handleTimeout;
+  }, [handleTimeout]);
 
   // Pause toggle
   const togglePause = () => {
@@ -1542,7 +1560,7 @@ export default function VocabularyRunnerGame({
                           <span className="text-emerald-700 font-semibold text-xs">• {getVietnameseMeaning(w)}</span>
                         </div>
                         {w.example && (
-                          <p className="text-slate-500 text-xs mt-0.5 line-clamp-1">"{w.example}"</p>
+                          <p className="text-slate-500 text-xs mt-0.5 line-clamp-1">&ldquo;{w.example}&rdquo;</p>
                         )}
                       </div>
                       <button type="button" onClick={() => playWord(w, soundMuted)}

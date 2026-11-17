@@ -62,6 +62,14 @@ type LearningDirection = "en-vi" | "vi-en" | "mixed";
 type BattleSpeedMode = "auto" | "slow" | "normal" | "fast";
 type QuestionCount = 10 | 20 | "all";
 
+function getCurrentTimestamp(): number {
+  return Date.now();
+}
+
+function getMonotonicTimestamp(): number {
+  return performance.now();
+}
+
 const BATTLE_SPEED_OPTIONS: {
   id: BattleSpeedMode;
   label: string;
@@ -465,7 +473,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [finalizeSession, fireProjectile, reviewOnly, updateTargets]);
+  }, [finalizeSession, fireProjectile, reviewOnly, setLockedTargetId, updateTargets]);
 
   useEffect(() => { resolveTargetRef.current = saveResolvedWord; }, [saveResolvedWord]);
   useEffect(() => {
@@ -555,8 +563,8 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
       setInventory(initInv);
       inventoryRef.current = initInv;
 
-      startTimeRef.current = Date.now();
-      lastSpawnTimeRef.current = performance.now() - 1500;
+      startTimeRef.current = getCurrentTimestamp();
+      lastSpawnTimeRef.current = getMonotonicTimestamp() - 1500;
       setPhase("playing");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể bắt đầu phiên chơi.");

@@ -262,6 +262,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
   const shieldRef = useRef(false);
   const frozenUntilRef = useRef(0);
   const resolveDropRef = useRef<(drop: RainDrop, answer: string) => Promise<void>>(async () => {});
+  const activatePowerUpRef = useRef<(id: "hint" | "freeze" | "shield") => void>(() => {});
 
   // ── Sync refs ──
   const updateDrops = useCallback((next: RainDrop[] | ((c: RainDrop[]) => RainDrop[])) => {
@@ -644,9 +645,9 @@ export default function WordRainGame({ setId }: { setId: string }) {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
 
       // Power-up hotkeys
-      if (e.key === "F1") { e.preventDefault(); activatePowerUp("hint"); return; }
-      if (e.key === "F2") { e.preventDefault(); activatePowerUp("freeze"); return; }
-      if (e.key === "F3") { e.preventDefault(); activatePowerUp("shield"); return; }
+      if (e.key === "F1") { e.preventDefault(); activatePowerUpRef.current("hint"); return; }
+      if (e.key === "F2") { e.preventDefault(); activatePowerUpRef.current("freeze"); return; }
+      if (e.key === "F3") { e.preventDefault(); activatePowerUpRef.current("shield"); return; }
 
       // Backspace → unlock
       if (e.key === "Backspace") {
@@ -743,11 +744,15 @@ export default function WordRainGame({ setId }: { setId: string }) {
     });
   }, [updateDrops]);
 
+  useEffect(() => {
+    activatePowerUpRef.current = activatePowerUp;
+  }, [activatePowerUp]);
+
   // ─── Derived ──────────────────────────────────────────────────────────────
   const accuracy = Math.round((correctCount / Math.max(1, correctCount + missedCount)) * 100);
   const totalWords = allWords.length;
   const processed = correctCount + missedCount;
-  const isFreezeActive = frozenUntil > 0 && performance.now() < frozenUntil;
+  const isFreezeActive = frozenUntil > 0;
 
   const filteredSets = availableSets.filter((s) => {
     if (!searchSetQuery.trim()) return true;

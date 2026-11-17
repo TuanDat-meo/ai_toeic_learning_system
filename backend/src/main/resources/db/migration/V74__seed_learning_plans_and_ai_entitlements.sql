@@ -74,7 +74,7 @@ INSERT INTO subscription_plans (
         'Nâng cao',
         false,
         '["VOCABULARY","GRAMMAR","LISTENING","READING","MOCK_TEST","AI_ASSISTANT"]'::jsonb,
-        200,
+        0,
         'UNLIMITED',
         'ACTIVE',
         'STANDARD',

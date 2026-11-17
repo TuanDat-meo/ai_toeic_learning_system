@@ -12,8 +12,8 @@ export function levenshteinDistance(s1: string, s2: string): number {
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
 
-  let prevRow = new Array(b.length + 1);
-  let currRow = new Array(b.length + 1);
+  const prevRow = new Array(b.length + 1);
+  const currRow = new Array(b.length + 1);
 
   for (let j = 0; j <= b.length; j++) {
     prevRow[j] = j;
