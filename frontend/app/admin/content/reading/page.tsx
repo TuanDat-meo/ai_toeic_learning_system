@@ -207,7 +207,7 @@ export default function ReadingLearningPage() {
 
   // Form State
   const [cardFormTitle, setCardFormTitle] = useState("");
-  const [cardFormCategory, setCardFormCategory] = useState<"grammar" | "part5" | "part6" | "part7">("grammar");
+  const [cardFormCategory, setCardFormCategory] = useState<"grammar" | "part5" | "part6" | "part7">("part5");
   const [cardFormSubCategory, setCardFormSubCategory] = useState<
     "word_types" | "verbs" | "other_grammar" | "by_topic" | "levels" | "text_types"
   >("word_types");
@@ -235,7 +235,7 @@ export default function ReadingLearningPage() {
 
   // Handlers
   const openCreateCardModal = (
-    initialCategory: "grammar" | "part5" | "part6" | "part7" = "grammar"
+    initialCategory: "grammar" | "part5" | "part6" | "part7" = "part5"
   ) => {
     setEditingCard(null);
     setCardFormTitle("");
@@ -272,7 +272,7 @@ export default function ReadingLearningPage() {
   };
 
   const handleOpenCreateCard = () => {
-    openCreateCardModal(selectedCategory === "all" ? "grammar" : selectedCategory);
+    openCreateCardModal(selectedCategory === "all" || selectedCategory === "grammar" ? "part5" : selectedCategory);
   };
 
   const handleOpenEditCard = async (card: ExerciseCardData, e?: React.MouseEvent) => {
@@ -419,7 +419,7 @@ export default function ReadingLearningPage() {
         category: cardFormCategory,
         subCategory: cardFormSubCategory,
         tag: cardFormTag.trim() || undefined,
-        status: "published",
+        status: targetCard.status || "published",
         totalQuestions: totalCount,
         passageText: isPart5 ? undefined : (cardFormPassageText.trim() || undefined),
         passageTextVi: isPart5 ? undefined : (cardFormPassageTextVi.trim() || undefined),
@@ -450,6 +450,7 @@ export default function ReadingLearningPage() {
         category: cardFormCategory,
         subCategory: cardFormSubCategory,
         tag: cardFormTag.trim() || undefined,
+        status: "draft",
         totalQuestions: totalCount,
         studiedQuestions: 0,
         correctAnswers: 0,

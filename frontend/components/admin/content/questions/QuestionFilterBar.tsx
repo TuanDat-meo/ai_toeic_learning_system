@@ -10,7 +10,7 @@ import {
   Table as TableIcon,
   Trash2,
 } from "lucide-react";
-import { QuestionPart } from "@/app/admin/content/questions/types";
+import { QuestionPart, QUESTION_DIFFICULTY_BANDS } from "@/app/admin/content/questions/types";
 import { DEFAULT_PARTS, DEFAULT_SKILLS } from "@/app/admin/content/questions/constants";
 
 interface QuestionFilterBarProps {
@@ -20,6 +20,7 @@ interface QuestionFilterBarProps {
   setKeyword: (kw: string) => void;
   selectedSkill: string;
   setSelectedSkill: (sk: string) => void;
+  availableSkills?: string[];
   selectedDifficulty: string;
   setSelectedDifficulty: (diff: string) => void;
   selectedStatus: string;
@@ -42,6 +43,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
   setKeyword,
   selectedSkill,
   setSelectedSkill,
+  availableSkills = DEFAULT_SKILLS,
   selectedDifficulty,
   setSelectedDifficulty,
   selectedStatus,
@@ -69,7 +71,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
             Ngân Hàng Câu Hỏi TOEIC
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
-            Quản lý toàn bộ câu hỏi Part 1 - Part 7, lời giải thích chi tiết, bộ từ vựng và xem trước tương tác.
+            Quản lý câu hỏi ETS theo Part, kỹ năng và band điểm 450–900+. Band mới được ánh xạ theo thứ tự từ 4 Level gốc (hai thang không tương đương); giáo viên và quản trị viên có thể chỉnh từng câu.
           </p>
         </div>
 
@@ -164,7 +166,7 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
               className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
             >
               <option value="">Tất cả kỹ năng</option>
-              {DEFAULT_SKILLS.map((sk) => (
+              {availableSkills.map((sk) => (
                 <option key={sk} value={sk}>
                   {sk}
                 </option>
@@ -177,10 +179,10 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
               onChange={(e) => setSelectedDifficulty(e.target.value)}
               className="shrink-0 px-3 py-2 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer"
             >
-              <option value="">Tất cả độ khó</option>
-              <option value="Easy">Lv.1 Dễ (Easy)</option>
-              <option value="Medium">Lv.2 Trung bình (Medium)</option>
-              <option value="Hard">Lv.3 Khó (Hard)</option>
+              <option value="">Tất cả band điểm</option>
+              {QUESTION_DIFFICULTY_BANDS.map((band) => (
+                <option key={band} value={band}>{band}</option>
+              ))}
             </select>
 
             {/* Status Select */}

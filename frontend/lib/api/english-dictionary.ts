@@ -117,6 +117,14 @@ export async function lookupEnglishDictionary(
     throw new Error(`Không tìm thấy định nghĩa cho “${word}”.`);
   }
 
+  const normalizeRelatedTerms = (value: unknown): string[] => Array.isArray(value)
+    ? [...new Set(value.flatMap((item) => {
+      if (typeof item === "string") return item.trim() ? [item.trim()] : [];
+      if (isRecord(item) && typeof item.word === "string" && item.word.trim()) return [item.word.trim()];
+      return [];
+    }))]
+    : [];
+
   return {
     word: typeof payload.word === "string" ? payload.word : word,
     termType: normalizeTermType(payload.termType),
@@ -124,8 +132,8 @@ export async function lookupEnglishDictionary(
     audioUrl: typeof payload.audioUrl === "string" ? payload.audioUrl : "",
     meaningLanguage: payload.meaningLanguage === "vi-machine" ? "vi-machine" : "en",
     meanings,
-    synonyms: stringList(payload.synonyms),
-    antonyms: stringList(payload.antonyms),
+    synonyms: normalizeRelatedTerms(payload.synonyms),
+    antonyms: normalizeRelatedTerms(payload.antonyms),
     relatedTerms: stringList(payload.relatedTerms),
     source: typeof payload.source === "string" ? payload.source : "",
     sourceUrl: typeof payload.sourceUrl === "string" ? payload.sourceUrl : "",

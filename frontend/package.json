@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --experimental-strip-types tests/runner/**/*.test.ts tests/battleship/**/*.test.ts",
-    "test:perf": "node --experimental-strip-types tests/runner/perfBenchmark.ts"
+    "test:perf": "node --experimental-strip-types tests/runner/perfBenchmark.ts",
+    "db:seed:reading": "node --experimental-strip-types scripts/seed_to_postgres.ts"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",

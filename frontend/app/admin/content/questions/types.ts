@@ -5,9 +5,19 @@ export type QuestionPart =
   | "Part 4"
   | "Part 5"
   | "Part 6"
-  | "Part 7";
+  | "Part 7"
+  | "Grammar"
+  | "Vocabulary";
 
-export type QuestionDifficulty = "Easy" | "Medium" | "Hard";
+export type QuestionDifficulty = "450-550" | "550-650" | "650-750" | "750-850" | "850-900+";
+
+export const QUESTION_DIFFICULTY_BANDS: QuestionDifficulty[] = [
+  "450-550",
+  "550-650",
+  "650-750",
+  "750-850",
+  "850-900+",
+];
 
 export interface QuestionOption {
   id: string; // 'A' | 'B' | 'C' | 'D'
@@ -56,4 +66,8 @@ export interface QuestionItem {
   trapNote?: string;
   vocabList?: VocabItem[];
   steps?: ExplanationStep[];
+  sourceDifficulty?: string;
+  sourceAudioPath?: string;
+  sourceImagePath?: string;
+  optionTranslations?: Record<string, string>;
 }

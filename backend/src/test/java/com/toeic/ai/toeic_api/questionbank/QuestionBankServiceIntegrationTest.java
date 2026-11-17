@@ -33,7 +33,7 @@ class QuestionBankServiceIntegrationTest {
         assertThat(updated.questionText()).isEqualTo("Updated question bank integration test");
         assertThat(updated.code()).isEqualTo(created.code());
         assertThat(updated.status()).isEqualTo("DRAFT");
-        assertThat(updated.difficulty()).isEqualTo("Hard");
+        assertThat(updated.difficulty()).isEqualTo("850-900+");
 
         questionBankService.deleteQuestion(Long.parseLong(created.id()));
 
@@ -67,7 +67,7 @@ class QuestionBankServiceIntegrationTest {
                         new QuestionBankOption("B", "Correct answer", true)),
                 "B",
                 "Grammar (Ngữ pháp)",
-                questionText.startsWith("Updated") ? "Hard" : "Medium",
+                questionText.startsWith("Updated") ? "850-900+" : "650-750",
                 "Integration test explanation",
                 questionText.startsWith("Updated") ? "DRAFT" : "PUBLISHED");
     }

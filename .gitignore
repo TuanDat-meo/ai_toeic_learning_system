@@ -1,7 +1,7 @@
 # Local data and generation scripts
 data/
 database/
-scripts/
+/scripts/
 scratch/
 export_*.sql
 export_*.json
