@@ -21,6 +21,9 @@ export interface VocabularyTestSet {
   count?: number;
   totalWords?: number;
   completedWords?: number;
+  isRedoMode?: boolean;
+  allWords?: WordItem[];
+  originalTotalWords?: number;
   words?: WordItem[];
 }
 
@@ -80,6 +83,7 @@ export interface WordItem {
   cefrLevel?: CefrLevel;  // A1–C2
   level?: string;         // legacy alias
   status?: ContentStatus;
+  progressStatus?: 'NEW' | 'LEARNING' | 'REVIEWING' | 'MASTERED';
   meanings?: WordMeaning[];
   meaning?: string;       // legacy alias
   example?: string;       // legacy alias
