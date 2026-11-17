@@ -38,6 +38,15 @@ interface DictionaryResult {
   meaningLanguage: "vi-machine" | "en";
 }
 
+interface VietnameseDictionaryPayload extends Record<string, unknown> {
+  exists?: boolean;
+  word?: unknown;
+  results?: unknown;
+  definitions?: unknown;
+  pronunciations?: unknown;
+}
+
+const VIETNAMESE_DICTIONARY_API_URL = "https://dict.minhqnd.com/api/v1/lookup";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
 const lookupCache = new Map<string, { expiresAt: number; result: DictionaryResult }>();
@@ -50,6 +59,15 @@ function strings(value: unknown): string[] {
   return Array.isArray(value)
     ? [...new Set(value.filter((item): item is string => typeof item === "string")
         .map((item) => item.trim()).filter(Boolean))]
+    : [];
+}
+
+function relatedWordStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.flatMap((item) => {
+      if (typeof item === "string") return item.trim() ? [item.trim()] : [];
+      return isRecord(item) && typeof item.word === "string" && item.word.trim() ? [item.word.trim()] : [];
+    }))]
     : [];
 }
 
@@ -121,6 +139,79 @@ function dictionaryApiResult(payload: unknown): Pick<DictionaryResult, "phonetic
     antonyms: [...new Set(meanings.flatMap((meaning) => meaning.antonyms))],
     licenseName: license && typeof license.name === "string" ? license.name : "",
     licenseUrl: license && typeof license.url === "string" ? license.url : "",
+  };
+}
+
+function normalizeDictionaryPartOfSpeech(word: string, value: unknown): string {
+  const partOfSpeech = typeof value === "string" ? value.trim().toLowerCase().replace(/\.+$/, "") : "";
+  const possessiveDeterminers = new Set(["my", "your", "his", "her", "its", "our", "their"]);
+  if (possessiveDeterminers.has(word.trim().toLowerCase()) && ["adj", "adjective", "possessive adjective"].includes(partOfSpeech)) {
+    return "Determiner";
+  }
+  const labels: Record<string, string> = {
+    n: "Noun", noun: "Noun", v: "Verb", verb: "Verb", adj: "Adjective", adjective: "Adjective",
+    adv: "Adverb", adverb: "Adverb", pron: "Pronoun", pronoun: "Pronoun",
+    prep: "Preposition", preposition: "Preposition", conj: "Conjunction",
+    conjunction: "Conjunction", interj: "Interjection", interjection: "Interjection",
+    det: "Determiner", determiner: "Determiner",
+  };
+  return labels[partOfSpeech] ?? (typeof value === "string" ? value.trim() : "");
+}
+
+async function lookupVietnameseDictionary(
+  word: string,
+  signal: AbortSignal,
+): Promise<Pick<DictionaryResult, "phonetic" | "audioUrl" | "meanings" | "synonyms" | "antonyms" | "licenseName" | "licenseUrl"> | null> {
+  const query = new URLSearchParams({ word, lang: "en", def_lang: "vi" });
+  const response = await fetch(`${VIETNAMESE_DICTIONARY_API_URL}?${query}`, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(3_000)]),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Vietnamese dictionary returned HTTP ${response.status}`);
+
+  const payload: unknown = await response.json();
+  if (!isRecord(payload)) throw new Error("Vietnamese dictionary returned an invalid response.");
+  const dictionaryPayload = payload as VietnameseDictionaryPayload;
+  const rawResults: unknown[] = dictionaryPayload.exists === false
+    ? []
+    : Array.isArray(dictionaryPayload.results) && dictionaryPayload.results.length > 0
+      ? dictionaryPayload.results
+      : [{ lang_code: "en", meanings: dictionaryPayload.definitions, pronunciations: dictionaryPayload.pronunciations }];
+  const englishResults = rawResults.filter((item): item is Record<string, unknown> =>
+    isRecord(item) && (typeof item.lang_code !== "string" || item.lang_code === "en"));
+  const meanings: DictionaryMeaning[] = englishResults.flatMap((entry) =>
+    Array.isArray(entry.meanings) ? entry.meanings : [],
+  ).flatMap((meaning, index) => {
+    if (!isRecord(meaning) || meaning.definition_lang !== "vi"
+      || typeof meaning.definition !== "string" || !meaning.definition.trim()) return [];
+    const definition = meaning.definition.trim();
+    const example = typeof meaning.example === "string" ? meaning.example.trim() : "";
+    return [{
+      id: `vi-${index}`,
+      partOfSpeech: normalizeDictionaryPartOfSpeech(word, meaning.pos),
+      definition,
+      meaningVi: definition,
+      examples: example ? [example] : [],
+      example,
+      synonyms: [],
+      antonyms: [],
+      meaningLanguage: "vi-machine" as const,
+    }];
+  });
+  if (meanings.length === 0) return null;
+  const pronunciation = englishResults.flatMap((entry) =>
+    Array.isArray(entry.pronunciations) ? entry.pronunciations : [],
+  ).find((item) => isRecord(item) && typeof item.ipa === "string" && item.ipa.trim());
+  return {
+    phonetic: isRecord(pronunciation) && typeof pronunciation.ipa === "string" ? pronunciation.ipa.trim() : "",
+    audioUrl: typeof dictionaryPayload.audio === "string" ? dictionaryPayload.audio : "",
+    meanings,
+    synonyms: relatedWordStrings(dictionaryPayload.synonyms),
+    antonyms: relatedWordStrings(dictionaryPayload.antonyms),
+    licenseName: "",
+    licenseUrl: "",
   };
 }
 
@@ -233,8 +324,11 @@ async function addVietnameseTranslations(
   const translationLimit = 24;
   for (let start = 0; start < Math.min(meanings.length, translationLimit); start += batchSize) {
     if (signal.aborted) throw new DOMException("Lookup aborted", "AbortError");
-    const batch = meanings.slice(start, start + batchSize);
-    const results = await Promise.all(batch.map(async (meaning) => {
+    const batch = meanings.slice(start, start + batchSize)
+      .map((meaning, index) => ({ meaning, index: start + index }))
+      .filter(({ meaning }) => !meaning.meaningVi);
+    if (batch.length === 0) continue;
+    const results = await Promise.all(batch.map(async ({ meaning }) => {
       try {
         return await translateDefinition(meaning.definition, signal);
       } catch (error) {
@@ -243,10 +337,11 @@ async function addVietnameseTranslations(
         return "";
       }
     }));
-    results.forEach((meaningVi, index) => {
+    results.forEach((meaningVi, resultIndex) => {
       if (!meaningVi) return;
-      translated[start + index] = {
-        ...translated[start + index],
+      const meaningIndex = batch[resultIndex].index;
+      translated[meaningIndex] = {
+        ...translated[meaningIndex],
         meaningVi,
         meaningLanguage: "vi-machine",
       };
@@ -272,7 +367,7 @@ export async function GET(request: NextRequest) {
   const cacheKey = word.toLocaleLowerCase("en-US");
   const cached = lookupCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json(cached.result, { headers: { "Cache-Control": "private, max-age=1800" } });
+    return NextResponse.json({ ...cached.result, exists: true }, { headers: { "Cache-Control": "private, max-age=1800" } });
   }
   if (cached) lookupCache.delete(cacheKey);
 
@@ -299,6 +394,19 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         if (request.signal.aborted) throw error;
         console.error("Wiktionary lookup failed:", error);
+      }
+    }
+
+    if (!result) {
+      try {
+        result = await lookupVietnameseDictionary(word, request.signal);
+        if (result) {
+          source = "Vietnamese Dictionary";
+          sourceUrl = "https://dict.minhqnd.com/";
+        }
+      } catch (error) {
+        if (request.signal.aborted) throw error;
+        console.error("Vietnamese dictionary lookup failed:", error);
       }
     }
 
@@ -332,7 +440,7 @@ export async function GET(request: NextRequest) {
       if (oldestKey) lookupCache.delete(oldestKey);
     }
     lookupCache.set(cacheKey, { result: normalized, expiresAt: Date.now() + CACHE_TTL_MS });
-    return NextResponse.json(normalized, { headers: { "Cache-Control": "private, max-age=1800" } });
+    return NextResponse.json({ ...normalized, exists: true }, { headers: { "Cache-Control": "private, max-age=1800" } });
   } catch (error) {
     if (request.signal.aborted) return jsonError("Yêu cầu tra cứu đã bị hủy.", 499);
     console.error("Dictionary lookup failed:", error);

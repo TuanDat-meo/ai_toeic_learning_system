@@ -23,6 +23,10 @@ public record QuestionBankQuestion(
         String translation,
         String questionTranslation,
         String trapNote,
-        List<Map<String, Object>> vocabList
+        List<Map<String, Object>> vocabList,
+        String sourceDifficulty,
+        String sourceAudioPath,
+        String sourceImagePath,
+        Map<String, String> optionTranslations
 ) {
 }

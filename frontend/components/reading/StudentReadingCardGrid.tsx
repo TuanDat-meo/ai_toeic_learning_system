@@ -3,10 +3,8 @@
 import React, { useState, useMemo } from "react";
 import {
   Search,
-  BookOpen,
-  Play,
   CheckCircle2,
-  Layers,
+  BookOpen,
 } from "lucide-react";
 import { ExerciseCardData } from "@/app/admin/content/reading/types";
 import { StudentCardProgressAction } from "@/components/common/StudentCardProgressAction";
@@ -16,16 +14,19 @@ interface StudentReadingCardGridProps {
   cards: ExerciseCardData[];
   onStartPractice: (card: ExerciseCardData, startIndex?: number, isRedoWrong?: boolean) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
+  onOpenSaved?: (card: ExerciseCardData) => void;
 }
 
 function StudentReadingCardItem({
   card,
   onStartPractice,
   onOpenTheory,
+  onOpenSaved,
 }: {
   card: ExerciseCardData;
   onStartPractice: (card: ExerciseCardData, startIndex?: number, isRedoWrong?: boolean) => void;
   onOpenTheory: (card: ExerciseCardData) => void;
+  onOpenSaved?: (card: ExerciseCardData) => void;
 }) {
   const progress = useItemProgress(`reading-${card.id}`, card.totalQuestions);
   const completed = Math.max(progress.completedQuestions, card.studiedQuestions || 0);
@@ -76,6 +77,7 @@ function StudentReadingCardItem({
             onStart={(nextIdx) => onStartPractice(card, nextIdx, false)}
             onRedoWrong={() => onStartPractice(card, 0, true)}
             onOpenTheory={() => onOpenTheory(card)}
+            onOpenSaved={() => onOpenSaved?.(card)}
           />
         </div>
       </div>
@@ -87,6 +89,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
   cards,
   onStartPractice,
   onOpenTheory,
+  onOpenSaved,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<
@@ -147,6 +150,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
             card={card}
             onStartPractice={onStartPractice}
             onOpenTheory={onOpenTheory}
+            onOpenSaved={onOpenSaved}
           />
         ))}
       </div>
@@ -262,6 +266,16 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
             </div>
             {renderCardGrid(topicAndGrammarCards)}
           </section>
+        )}
+
+        {testCards.length === 0 && levelCards.length === 0 && topicAndGrammarCards.length === 0 && (
+          <div className="p-12 text-center text-slate-500 bg-white rounded-3xl border border-slate-200/80 shadow-xs">
+            <BookOpen className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+            <h4 className="text-sm font-bold text-slate-800">Chưa có bài đọc nào trong cơ sở dữ liệu</h4>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              Dữ liệu bài tập được tải trực tiếp từ PostgreSQL. Vui lòng nạp (import) bộ đề hoặc chạy lệnh seed dữ liệu.
+            </p>
+          </div>
         )}
       </div>
     </div>

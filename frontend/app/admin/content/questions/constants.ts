@@ -9,6 +9,8 @@ export const DEFAULT_PARTS: { part: QuestionPart | "ALL"; label: string; desc: s
   { part: "Part 5", label: "Part 5", desc: "Hoàn thành câu (Incomplete Sentences)" },
   { part: "Part 6", label: "Part 6", desc: "Điền đoạn văn (Text Completion)" },
   { part: "Part 7", label: "Part 7", desc: "Đọc hiểu văn bản (Reading)" },
+  { part: "Grammar", label: "Grammar", desc: "Ngữ pháp" },
+  { part: "Vocabulary", label: "Vocabulary", desc: "Từ vựng" },
 ];
 
 export const DEFAULT_SKILLS = [

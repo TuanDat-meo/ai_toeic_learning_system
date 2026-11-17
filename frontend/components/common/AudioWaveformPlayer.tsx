@@ -47,7 +47,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const skipStep = 3; // Tua mặc định 3 giây theo yêu cầu
+  const skipStep = 10;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Trạng thái kéo / tua (Drag & Scrub)
@@ -135,7 +135,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     }
   };
 
-  // Tua lùi (Rewind) 3s hoặc 5s
+  // Tua lùi theo khoảng nhảy đã cấu hình.
   const handleRewind = (seconds?: number) => {
     if (!audioRef.current) return;
     const step = seconds ?? skipStep;
@@ -147,7 +147,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     }
   };
 
-  // Tua tới (Fast Forward) 3s hoặc 5s
+  // Tua tới theo khoảng nhảy đã cấu hình.
   const handleForward = (seconds?: number) => {
     if (!audioRef.current) return;
     const step = seconds ?? skipStep;
@@ -364,18 +364,18 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
       )}
 
       {/* HÀNG ĐIỀU KHIỂN CHÍNH */}
-      <div className="flex items-center gap-2 sm:gap-2.5 w-full">
-        {/* NHÓM NÚT ĐIỀU HƯỚNG: TUA LÙI (-3s) - PLAY/PAUSE - TUA TỚI (+3s) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Nút tua lùi 3s */}
+      <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2.5">
+        {/* NHÓM NÚT ĐIỀU HƯỚNG: TUA LÙI (-10s) - PLAY/PAUSE - TUA TỚI (+10s) */}
+        <div className="col-start-1 row-start-2 flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Nút tua lùi 10s */}
           <button
             type="button"
-            onClick={() => handleRewind(3)}
+            onClick={() => handleRewind(skipStep)}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
-            title="Tua lại 3 giây"
+            title="Tua lại 10 giây"
           >
             <RotateCcw className="w-3.5 h-3.5 transition-transform group-hover:-rotate-45" />
-            <span className="text-[9px] font-black -mt-0.5 tracking-tight">-3s</span>
+            <span className="text-[9px] font-black -mt-0.5 tracking-tight">-10s</span>
           </button>
 
           {/* Nút Play / Pause tròn màu xanh lớn */}
@@ -392,15 +392,15 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
             )}
           </button>
 
-          {/* Nút tua tới 3s */}
+          {/* Nút tua tới 10s */}
           <button
             type="button"
-            onClick={() => handleForward(3)}
+            onClick={() => handleForward(skipStep)}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
-            title="Tua tới 3 giây"
+            title="Tua tới 10 giây"
           >
             <RotateCw className="w-3.5 h-3.5 transition-transform group-hover:rotate-45" />
-            <span className="text-[9px] font-black -mt-0.5 tracking-tight">+3s</span>
+            <span className="text-[9px] font-black -mt-0.5 tracking-tight">+10s</span>
           </button>
         </div>
 
@@ -413,7 +413,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
             if (!isDragging) setIsHovering(false);
           }}
           onMouseMove={handleMouseMove}
-          className="flex-1 min-w-0 relative h-11 sm:h-12 px-2.5 sm:px-3 bg-slate-50 hover:bg-blue-50/30 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer flex items-center select-none group"
+          className="col-span-2 row-start-1 w-full min-w-0 relative h-11 sm:h-12 px-2.5 sm:px-3 bg-slate-50 hover:bg-blue-50/30 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer flex items-center select-none group"
           title="Kéo hoặc nhấn vào bất kỳ vị trí nào để nghe từ đoạn đó"
         >
           {/* TRACK SÓNG ÂM (CÙNG HỆ QUY CHIẾU TỌA ĐỘ CHO CẢ CÁC THANH VÀ THANH DỌC) */}
@@ -489,7 +489,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
         </div>
 
         {/* THÔNG TIN THỜI GIAN THỰC & CÁC NÚT TIỆN ÍCH */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
           {/* Badge đồng hồ mm:ss / mm:ss */}
           <span className="font-mono text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-100 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200/90 whitespace-nowrap">
             {formatTime(currentTime)} / {formatTime(duration)}
