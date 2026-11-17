@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BookOpen, Gamepad2, Search, Volume2 } from "lucide-react";
 import type { VocabularyTestSet, WordItem } from "@/app/admin/content/vocabulary/types";
 import { getVocabularySet } from "@/lib/api/vocabulary";
+import { subscribeToVocabularyContentChanges } from "@/lib/vocabulary-content-sync";
 
 type DetailTab = "overview" | "words";
 
@@ -30,18 +31,46 @@ export default function VocabularySetDetailPage({ params }: { params: Promise<{ 
 
   useEffect(() => {
     let active = true;
+    let currentSetId = "";
+    const loadSet = async (id: string) => {
+      try {
+        setError(null);
+        const set = await getVocabularySet(id);
+        if (active) setTestSet(set);
+      } catch (reason: unknown) {
+        if (active) {
+          setTestSet(null);
+          setError(reason instanceof Error ? reason.message : "Không thể tải bộ từ.");
+        }
+      }
+    };
+
     void params.then(({ setId: id }) => {
       if (!active) return;
+      currentSetId = id;
       setSetId(id);
-      return getVocabularySet(id).then((set) => {
-        if (active) setTestSet(set);
-      });
+      return loadSet(id);
     }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error ? reason.message : "Không thể tải bộ từ.");
     }).finally(() => {
       if (active) setLoading(false);
     });
-    return () => { active = false; };
+
+    const unsubscribe = subscribeToVocabularyContentChanges(() => {
+      if (currentSetId) void loadSet(currentSetId);
+    });
+    const refreshWhenVisible = () => {
+      if (currentSetId && document.visibilityState === "visible") void loadSet(currentSetId);
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [params]);
 
   const words = useMemo(() => testSet?.words ?? [], [testSet]);

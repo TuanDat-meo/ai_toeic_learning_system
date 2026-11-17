@@ -613,8 +613,9 @@ public class ImportFileParser {
     private String extractFieldByAliases(JsonNode rowData, String... aliases) {
         if (rowData == null || !rowData.isObject()) return "";
         Map<String, String> byKey = new LinkedHashMap<>();
-        rowData.fields().forEachRemaining(entry ->
-                byKey.put(normalizeHeaderKey(entry.getKey()), entry.getValue().asText("")));
+        for (Map.Entry<String, JsonNode> entry : rowData.properties()) {
+            byKey.put(normalizeHeaderKey(entry.getKey()), entry.getValue().asText(""));
+        }
         for (String alias : aliases) {
             String exact = byKey.get(alias);
             if (exact != null && !exact.isBlank()) return exact.trim();
