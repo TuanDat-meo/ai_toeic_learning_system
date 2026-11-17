@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.toeic.ai.toeic_api.user.UserAccountService;
 
@@ -36,6 +37,12 @@ public class VocabularyController {
             Authentication authentication) {
         UUID userId = extractUserId(authentication);
         return vocabularyService.listSets(category, userId);
+    }
+
+    @GetMapping("/api/vocabulary/sets/summary")
+    public List<VocabularyService.VocabularyTestSet> listSetSummaries(
+            @RequestParam(required = false) String category) {
+        return vocabularyService.listSetSummaries(category);
     }
 
     @GetMapping("/api/vocabulary/sets/{setId}")
@@ -65,6 +72,147 @@ public class VocabularyController {
         if (userId != null) {
             vocabularyService.updateWordStatus(wordId, status, userId);
         }
+    }
+
+    @GetMapping("/api/vocabulary/dashboard")
+    public VocabularyService.StudentVocabularyDashboard getDashboard(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getStudentDashboard(userId);
+    }
+
+    @GetMapping("/api/vocabulary/goals")
+    public VocabularyService.StudentVocabularyGoal getDailyGoal(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getDailyGoal(userId);
+    }
+
+    @PutMapping("/api/vocabulary/goals")
+    public VocabularyService.StudentVocabularyGoal upsertDailyGoal(
+            @RequestBody VocabularyService.UpdateDailyGoalRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.upsertDailyGoal(userId, request.newWordsGoal(), request.reviewGoal());
+    }
+
+    @PostMapping("/api/vocabulary/answers")
+    @ResponseStatus(HttpStatus.OK)
+    public VocabularyService.VocabularyAnswerResult recordAnswer(
+            @RequestBody VocabularyService.RecordVocabularyAnswerRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.recordAnswer(userId, request);
+    }
+
+    @GetMapping("/api/vocabulary/review/due")
+    public List<VocabularyService.VocabularyWord> listDueReviewWords(
+            @RequestParam(required = false) String setId,
+            @RequestParam(defaultValue = "50") int limit,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getDueReviewWords(userId, setId, limit);
+    }
+
+    @PostMapping("/api/vocabulary/games/sessions")
+    @ResponseStatus(HttpStatus.CREATED)
+    public VocabularyService.VocabularyGameSession startGameSession(
+            @RequestBody VocabularyService.StartVocabularyGameRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.startGameSession(userId, request);
+    }
+
+    @GetMapping("/api/vocabulary/games/sessions/{sessionId}")
+    public VocabularyService.VocabularyGameSession getGameSession(
+            @PathVariable UUID sessionId,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getGameSession(userId, sessionId);
+    }
+
+    @GetMapping("/api/vocabulary/games/sessions/{sessionId}/state")
+    public VocabularyService.BattleSessionState getBattleSessionState(
+            @PathVariable UUID sessionId,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getBattleSessionState(userId, sessionId);
+    }
+
+    @PostMapping("/api/vocabulary/games/sessions/{sessionId}/complete")
+    public VocabularyService.VocabularyGameSession completeGameSession(
+            @PathVariable UUID sessionId,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.completeGameSession(userId, sessionId);
+    }
+
+    @GetMapping("/api/vocabulary/games/scores")
+    public List<VocabularyService.VocabularyGameScore> getGameScores(
+            @RequestParam(required = false) String setId,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getGameScores(userId, setId);
+    }
+
+    @GetMapping("/api/vocabulary/weak-words")
+    public List<VocabularyService.WeakVocabularyWord> getWeakVocabularyWords(
+            @RequestParam(defaultValue = "10") int limit,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getWeakVocabularyWords(userId, limit);
+    }
+
+    @GetMapping("/api/vocabulary/stats/daily")
+    public List<VocabularyService.VocabularyDailyStat> getDailyVocabularyStats(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getDailyLearningStats(userId);
+    }
+
+    @GetMapping("/api/vocabulary/history")
+    public List<VocabularyService.VocabularyHistoryItem> getLearningHistory(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) String activity,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
+        }
+        return vocabularyService.getLearningHistory(userId, limit, activity);
     }
 
     // Admin endpoints (protected by hasRole('ADMIN') under /api/admin/**)

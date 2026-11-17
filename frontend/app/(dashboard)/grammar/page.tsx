@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
 import { getGrammarTopics, saveGrammarProgress } from "@/lib/api/grammar";
-import { StudentGrammarGrid } from "@/components/student/grammar/StudentGrammarGrid";
+import { StudentGrammarGrid } from "@/components/grammar/StudentGrammarGrid";
 import {
   GrammarTopicDetailModal,
   GrammarQuizModal,

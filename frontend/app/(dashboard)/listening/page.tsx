@@ -4,13 +4,13 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Sparkles, Volume2 } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData } from "@/app/admin/content/listening/types";
 import { fetchListeningCards, fetchListeningUnits } from "@/lib/api/listening";
-import { StudentListeningDictationTab } from "@/components/student/listening/StudentListeningDictationTab";
-import { StudentListeningPartTab } from "@/components/student/listening/StudentListeningPartTab";
+import { StudentListeningDictationTab } from "@/components/listening/StudentListeningDictationTab";
+import { StudentListeningPartTab } from "@/components/listening/StudentListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
 

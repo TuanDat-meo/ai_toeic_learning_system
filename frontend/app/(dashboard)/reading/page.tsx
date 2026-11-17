@@ -8,10 +8,10 @@ import {
   fetchReadingCardDetails,
   fetchReadingCards,
 } from "@/lib/api/reading";
-import { StudentReadingCardGrid } from "@/components/student/reading/StudentReadingCardGrid";
+import { StudentReadingCardGrid } from "@/components/reading/StudentReadingCardGrid";
 import { ReadingTheoryModal } from "@/components/admin/content/reading/ReadingTheoryModal";
 import { ReadingPracticeWorkspace } from "@/components/admin/content/reading/ReadingPracticeWorkspace";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 
 export default function StudentReadingPage() {
