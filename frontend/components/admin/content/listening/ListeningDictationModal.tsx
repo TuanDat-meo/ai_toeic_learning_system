@@ -27,9 +27,26 @@ import { DictationCardData } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
-import { saveItemProgress } from "@/lib/practiceProgress";
+import { saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
 import { saveListeningProgress } from "@/lib/api/listening";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
+
+function isNonBlankableToken(token: string): boolean {
+  const trimmed = token.trim();
+  if (!trimmed) return true;
+  if (/^(?:\([A-Da-d]\)|[A-Da-d][\.\):]|Man:|Woman:|Speaker\s*\d*:|M-[A-Za-z]+:|W-[A-Za-z]+:)$/i.test(trimmed)) {
+    return true;
+  }
+  return !/[a-zA-Z0-9]/.test(trimmed);
+}
+
+function normalizeDictationWord(word: string): string {
+  return word
+    .trim()
+    .toLowerCase()
+    .replace(/[’‘`]/g, "'")
+    .replace(/^[^a-z0-9']+|[^a-z0-9']+$/g, "");
+}
 
 interface ListeningDictationModalProps {
   dictationModalCard: DictationCardData;
@@ -88,9 +105,41 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
   const [isLocalQuestionGridOpen, setIsLocalQuestionGridOpen] = useState(false);
   const [isLocalNotesModalOpen, setIsLocalNotesModalOpen] = useState(false);
-  const [userNotes, setUserNotes] = useState<{ [qId: number]: string }>({});
-  const [selfAssessment, setSelfAssessment] = useState<{ [qId: number]: "clear" | "partial" | "hard" }>({});
+  const notesStorageKey = `toeic_listening_dictation_notes_${dictationModalCard.id}`;
+  const selfAssessStorageKey = `toeic_listening_dictation_self_${dictationModalCard.id}`;
+  const [userNotes, setUserNotes] = useState<{ [qId: number]: string }>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(notesStorageKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [selfAssessment, setSelfAssessment] = useState<{ [qId: number]: "clear" | "partial" | "hard" }>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(selfAssessStorageKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const [dictationTimerSeconds, setDictationTimerSeconds] = useState(0);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(notesStorageKey, JSON.stringify(userNotes));
+    } catch {}
+  }, [notesStorageKey, userNotes]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(selfAssessStorageKey, JSON.stringify(selfAssessment));
+    } catch {}
+  }, [selfAssessStorageKey, selfAssessment]);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -124,7 +173,8 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
-  }, [activeDictationQIndex, setIsPlayingAudio]);
+    setRevealedWordCount(0);
+  }, [activeDictationQIndex, setIsPlayingAudio, setRevealedWordCount]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -143,16 +193,59 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
   const [localChecked, setLocalChecked] = useState<{ [qId: number]: boolean }>({});
   const [inputsByQuestion, setInputsByQuestion] = useState<{ [qId: number]: { [wordIdx: number]: string } }>({});
+  const [fullSelectedOption, setFullSelectedOption] = useState<{ [qId: number]: string }>({});
 
   if (!q) return null;
 
   const isChecked = !!dictationChecked[q.id] || !!localChecked[q.id];
+  const selectedFullOpt = fullSelectedOption[q.id];
   const isFlagged = flaggedReviewIds.includes(q.id);
-  const words = q.fullTranscript.split(" ");
+  const words = q.fullTranscript.trim().split(/\s+/).filter(Boolean);
   const totalWords = words.length;
-  const isVocabLocked = dictationSubTab === "chep" && !isChecked && revealedWordCount < totalWords;
+  const isAnswerUnlocked = isChecked || revealedWordCount >= totalWords || selectedFullOpt !== undefined;
+  const isVocabLocked = !isAnswerUnlocked;
+
+  const handleSelectFullOption = (optKey: string) => {
+    if (selectedFullOpt !== undefined) return;
+    playSfx("click");
+    setFullSelectedOption((prev) => ({ ...prev, [q.id]: optKey }));
+    const isRight = optKey === q.correctAnswer;
+    const totalCardQuestions =
+      dictationModalCard.originalTotalQuestions ||
+      dictationModalCard.totalQuestions ||
+      dictationModalCard.questions.length ||
+      1;
+    const updatedProgress = recordQuestionAnswer(
+      `listening-dictation-${dictationModalCard.id}`,
+      q.id,
+      isRight,
+      totalCardQuestions
+    );
+    saveListeningProgress({
+      cardId: dictationModalCard.id,
+      completedQuestions: updatedProgress.completedQuestions,
+      totalQuestions: totalCardQuestions,
+      lastQuestionIndex: activeDictationQIndex,
+      status: updatedProgress.completedQuestions >= totalCardQuestions ? "Đã hoàn thành" : "Đang luyện tập",
+    });
+    if (isRight) {
+      playSfx("correct");
+      triggerToast("🎉 Chính xác! Bạn đã chọn đúng đáp án (+10 XP)!");
+    } else {
+      playSfx("wrong");
+      triggerToast(`Chưa chính xác! Đáp án đúng là ${q.correctAnswer}. Hãy xem phân tích chi tiết bên dưới.`);
+    }
+  };
 
   const currentQInputs = inputsByQuestion[q.id] || {};
+
+  const shouldHideWordAt = (w: string, idx: number): boolean => {
+    if (isNonBlankableToken(w)) return false;
+    if (idx < revealedWordCount) return false;
+    if (fillPercentage === 100) return true;
+    if (fillPercentage === 50) return idx % 2 === 1;
+    return idx % 3 === 2;
+  };
 
   const handleInputChange = (wordIdx: number, val: string) => {
     setInputsByQuestion((prev) => ({
@@ -167,39 +260,38 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   const handleSubmitQuestion = () => {
     playSfx("click");
     setLocalChecked((prev) => ({ ...prev, [q.id]: true }));
-    saveItemProgress(`listening-dictation-${dictationModalCard.id}`, activeDictationQIndex + 1, dictationModalCard.totalQuestions);
-    saveListeningProgress({
-      cardId: dictationModalCard.id,
-      completedQuestions: activeDictationQIndex + 1,
-      totalQuestions: dictationModalCard.totalQuestions,
-      lastQuestionIndex: activeDictationQIndex,
-      status: activeDictationQIndex + 1 >= dictationModalCard.totalQuestions ? "Đã hoàn thành" : "Đang luyện tập",
-    });
 
     let correctCount = 0;
     let blankCount = 0;
 
     words.forEach((w, idx) => {
-      const shouldHide =
-        idx < revealedWordCount
-          ? false
-          : fillPercentage === 100
-          ? true
-          : fillPercentage === 50
-          ? idx % 2 === 1
-          : idx % 3 === 2;
-
-      if (shouldHide) {
+      if (shouldHideWordAt(w, idx)) {
         blankCount++;
-        const userVal = (currentQInputs[idx] || "").trim().toLowerCase().replace(/[^a-z0-9']/g, "");
-        const targetVal = w.trim().toLowerCase().replace(/[^a-z0-9']/g, "");
+        const userVal = normalizeDictationWord(currentQInputs[idx] || "");
+        const targetVal = normalizeDictationWord(w);
         if (userVal && userVal === targetVal) {
           correctCount++;
         }
       }
     });
 
-    if (blankCount === 0 || correctCount === blankCount) {
+    const isAllCorrect = blankCount === 0 || correctCount === blankCount;
+    const totalCardQuestions = dictationModalCard.originalTotalQuestions || dictationModalCard.totalQuestions || dictationModalCard.questions.length || 1;
+    const updatedProgress = recordQuestionAnswer(
+      `listening-dictation-${dictationModalCard.id}`,
+      q.id,
+      isAllCorrect,
+      totalCardQuestions
+    );
+    saveListeningProgress({
+      cardId: dictationModalCard.id,
+      completedQuestions: updatedProgress.completedQuestions,
+      totalQuestions: totalCardQuestions,
+      lastQuestionIndex: activeDictationQIndex,
+      status: updatedProgress.completedQuestions >= totalCardQuestions ? "Đã hoàn thành" : "Đang luyện tập",
+    });
+
+    if (isAllCorrect) {
       playSfx("correct");
       triggerToast("🎉 Xuất sắc! Bạn đã điền chính xác toàn bộ câu này (+10 XP)!");
     } else {
@@ -212,8 +304,13 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
     playSfx("click");
     setLocalChecked((prev) => ({ ...prev, [q.id]: false }));
     setInputsByQuestion((prev) => ({ ...prev, [q.id]: {} }));
+    setFullSelectedOption((prev) => {
+      const next = { ...prev };
+      delete next[q.id];
+      return next;
+    });
     setRevealedWordCount(0);
-    triggerToast("Đã đặt lại để bạn luyện tập chép lại từ đầu!");
+    triggerToast("Đã đặt lại để bạn luyện tập lại từ đầu!");
   };
 
   const vocabItems = q.vocabList || [];
@@ -371,18 +468,19 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                     <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-6 min-h-[110px] flex items-center justify-center">
                       <div className="flex flex-wrap items-center justify-center gap-2 text-base font-semibold leading-loose text-slate-800">
                         {words.map((w, idx) => {
-                          const shouldHide =
-                            idx < revealedWordCount
-                              ? false
-                              : fillPercentage === 100
-                              ? true
-                              : fillPercentage === 50
-                              ? idx % 2 === 1
-                              : idx % 3 === 2;
+                          const shouldHide = shouldHideWordAt(w, idx);
 
                           if (!shouldHide) {
+                            const isLabel = isNonBlankableToken(w) && w.length > 1;
                             return (
-                              <span key={idx} className="font-bold text-slate-900 border-b-2 border-slate-300 px-1">
+                              <span
+                                key={idx}
+                                className={
+                                  isLabel
+                                    ? "font-extrabold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2 py-0.5 text-xs"
+                                    : "font-bold text-slate-900 border-b-2 border-slate-300 px-1"
+                                }
+                              >
                                 {w}
                               </span>
                             );
@@ -390,7 +488,7 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
                           if (isChecked) {
                             const userVal = (currentQInputs[idx] || "").trim();
-                            const isCorrect = userVal.toLowerCase().replace(/[^a-z0-9']/g, "") === w.toLowerCase().replace(/[^a-z0-9']/g, "");
+                            const isCorrect = normalizeDictationWord(userVal) === normalizeDictationWord(w);
 
                             if (isCorrect) {
                               return (
@@ -543,148 +641,189 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
               {/* CHẾ ĐỘ 2: NGHE CHECK (ĐỐI CHIẾU SONG NGỮ & PHÁT ÂM) */}
               {dictationSubTab === "check" && (
                 <div className="space-y-5">
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                          <Languages className="w-4 h-4" />
+                  {!isAnswerUnlocked ? (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-8 shadow-xs flex flex-col items-center justify-center text-center space-y-4 min-h-[280px]">
+                      <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-2xs">
+                        <Lock className="w-6 h-6 stroke-[2.2]" />
+                      </div>
+                      <div className="space-y-1.5 max-w-md">
+                        <h3 className="font-extrabold text-base text-slate-900">
+                          Transcript &amp; Đáp án đang được ẩn để bạn tự luyện nghe
+                        </h3>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Hãy hoàn thành điền từ ở tab <strong>Nghe chép</strong> hoặc chọn đáp án trắc nghiệm ở tab <strong>Nghe full</strong> trước để không bị lộ đáp án sớm.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setDictationSubTab("chep")}
+                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                        >
+                          Quay lại Nghe chép
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDictationSubTab("full")}
+                          className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition cursor-pointer"
+                        >
+                          Chọn đáp án ở Nghe full
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRevealedWordCount(totalWords)}
+                          className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition cursor-pointer"
+                        >
+                          Mở khóa xem luôn Script
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                              <Languages className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
+                                Đối chiếu &amp; Kiểm tra câu nghe
+                              </h3>
+                              <p className="text-xs text-slate-500">
+                                Nhấn vào từng từ để nghe phát âm riêng lẻ hoặc đối chiếu câu song ngữ Anh - Việt
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/80">
+                            Song ngữ Anh - Việt
+                          </span>
                         </div>
-                        <div>
-                          <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
-                            Đối chiếu & Kiểm tra câu nghe
-                          </h3>
-                          <p className="text-xs text-slate-500">
-                            Nhấn vào từng từ để nghe phát âm riêng lẻ hoặc đối chiếu câu song ngữ Anh - Việt
+
+                        {/* CÂU TIẾNG ANH (INTERACTIVE TỪNG TỪ) */}
+                        <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              TRANSCRIPT GỐC (BẤM TỪNG TỪ ĐỂ PHÁT ÂM)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => playAudio(q.fullTranscript)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 text-xs font-bold transition cursor-pointer shadow-2xs"
+                              title="Nghe toàn bộ câu"
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                              <span>Phát âm cả câu</span>
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-base sm:text-lg font-bold leading-relaxed text-slate-900">
+                            {words.map((w, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => playAudio(w)}
+                                className="px-2.5 py-1 rounded-xl bg-white border border-slate-200/80 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 text-slate-800 transition cursor-pointer active:scale-95 shadow-2xs"
+                                title={`Bấm để nghe phát âm "${w}"`}
+                              >
+                                {w}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* DỊCH NGHĨA TIẾNG VIỆT */}
+                        <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 space-y-1.5">
+                          <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-xs">
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            <span>DỊCH NGHĨA TIẾNG VIỆT</span>
+                          </div>
+                          <p className="text-sm font-semibold text-emerald-950 leading-relaxed">
+                            {q.vietnameseTranslation || "Chưa có bản dịch tiếng Việt."}
                           </p>
                         </div>
-                      </div>
-                      <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/80">
-                        Song ngữ Anh - Việt
-                      </span>
-                    </div>
 
-                    {/* CÂU TIẾNG ANH (INTERACTIVE TỪNG TỪ) */}
-                    <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          TRANSCRIPT GỐC (BẤM TỪNG TỪ ĐỂ PHÁT ÂM)
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => playAudio(q.fullTranscript)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 text-xs font-bold transition cursor-pointer shadow-2xs"
-                          title="Nghe toàn bộ câu"
-                        >
-                          <Volume2 className="w-3.5 h-3.5" />
-                          <span>Phát âm cả câu</span>
-                        </button>
+                        {/* KHUNG TỰ ĐÁNH GIÁ MỨC ĐỘ TỰ TIN (SELF-ASSESSMENT) */}
+                        <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-extrabold text-slate-600 uppercase tracking-wider">
+                              TỰ ĐÁNH GIÁ MỨC ĐỘ NGHE HIỂU
+                            </span>
+                            <span className="text-slate-400">Chọn cảm nhận của bạn sau khi nghe</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playSfx("click");
+                                setSelfAssessment((prev) => ({ ...prev, [q.id]: "clear" }));
+                                triggerToast("Tuyệt vời! Bạn đã nắm chắc câu này.");
+                              }}
+                              className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                selfAssessment[q.id] === "clear"
+                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                  : "bg-emerald-50/60 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+                              }`}
+                            >
+                              <span>🟢 Nghe rõ 100%</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playSfx("click");
+                                setSelfAssessment((prev) => ({ ...prev, [q.id]: "partial" }));
+                                triggerToast("Ghi nhận! Cần chú ý thêm một số từ vựng nối âm.");
+                              }}
+                              className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                selfAssessment[q.id] === "partial"
+                                  ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                                  : "bg-amber-50/60 border-amber-200 text-amber-800 hover:bg-amber-100"
+                              }`}
+                            >
+                              <span>🟡 Nghe bập bõm</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playSfx("click");
+                                setSelfAssessment((prev) => ({ ...prev, [q.id]: "hard" }));
+                                triggerToast("Đã lưu lại! Hãy luyện chép lại ở tab Nghe chép nhé.");
+                              }}
+                              className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                selfAssessment[q.id] === "hard"
+                                  ? "bg-rose-500 text-white border-rose-500 shadow-xs"
+                                  : "bg-rose-50/60 border-rose-200 text-rose-800 hover:bg-rose-100"
+                              }`}
+                            >
+                              <span>🔴 Chưa nghe kịp</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-base sm:text-lg font-bold leading-relaxed text-slate-900">
-                        {words.map((w, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => playAudio(w)}
-                            className="px-2.5 py-1 rounded-xl bg-white border border-slate-200/80 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 text-slate-800 transition cursor-pointer active:scale-95 shadow-2xs"
-                            title={`Bấm để nghe phát âm "${w}"`}
-                          >
-                            {w}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* DỊCH NGHĨA TIẾNG VIỆT */}
-                    <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 space-y-1.5">
-                      <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-xs">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>DỊCH NGHĨA TIẾNG VIỆT</span>
-                      </div>
-                      <p className="text-sm font-semibold text-emerald-950 leading-relaxed">
-                        {q.vietnameseTranslation || "Anh ấy đang leo lên một chiếc thang."}
-                      </p>
-                    </div>
-
-                    {/* KHUNG TỰ ĐÁNH GIÁ MỨC ĐỘ TỰ TIN (SELF-ASSESSMENT) */}
-                    <div className="pt-2 border-t border-slate-100 space-y-2.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-extrabold text-slate-600 uppercase tracking-wider">
-                          TỰ ĐÁNH GIÁ MỨC ĐỘ NGHE HIỂU
-                        </span>
-                        <span className="text-slate-400">Chọn cảm nhận của bạn sau khi nghe</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            playSfx("click");
-                            setSelfAssessment((prev) => ({ ...prev, [q.id]: "clear" }));
-                            triggerToast("Tuyệt vời! Bạn đã nắm chắc câu này.");
-                          }}
-                          className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                            selfAssessment[q.id] === "clear"
-                              ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                              : "bg-emerald-50/60 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
-                          }`}
-                        >
-                          <span>🟢 Nghe rõ 100%</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            playSfx("click");
-                            setSelfAssessment((prev) => ({ ...prev, [q.id]: "partial" }));
-                            triggerToast("Ghi nhận! Cần chú ý thêm một số từ vựng nối âm.");
-                          }}
-                          className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                            selfAssessment[q.id] === "partial"
-                              ? "bg-amber-500 text-white border-amber-500 shadow-xs"
-                              : "bg-amber-50/60 border-amber-200 text-amber-800 hover:bg-amber-100"
-                          }`}
-                        >
-                          <span>🟡 Nghe bập bõm</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            playSfx("click");
-                            setSelfAssessment((prev) => ({ ...prev, [q.id]: "hard" }));
-                            triggerToast("Đã lưu lại! Hãy luyện chép lại ở tab Nghe chép nhé.");
-                          }}
-                          className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                            selfAssessment[q.id] === "hard"
-                              ? "bg-rose-500 text-white border-rose-500 shadow-xs"
-                              : "bg-rose-50/60 border-rose-200 text-rose-800 hover:bg-rose-100"
-                          }`}
-                        >
-                          <span>🔴 Chưa nghe kịp</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* GIẢI THÍCH CHI TIẾT & BẪY */}
-                  {(q.explanation || q.trapNote) && (
-                    <div className="bg-white rounded-3xl border border-blue-200/90 p-6 shadow-xs space-y-3">
-                      <div className="flex items-center gap-2 text-blue-900 font-extrabold text-sm sm:text-base">
-                        <Sparkles className="w-4 h-4 text-blue-600" />
-                        <span>Lưu ý & Điểm ngữ pháp câu</span>
-                      </div>
-                      <p className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
-                        {q.explanation}
-                      </p>
-                      {q.trapNote && (
-                        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
-                          ⚠️ <strong>Bẫy cần tránh:</strong> {q.trapNote}
+                      {/* GIẢI THÍCH CHI TIẾT & BẪY */}
+                      {(q.explanation || q.trapNote) && (
+                        <div className="bg-white rounded-3xl border border-blue-200/90 p-6 shadow-xs space-y-3">
+                          <div className="flex items-center gap-2 text-blue-900 font-extrabold text-sm sm:text-base">
+                            <Sparkles className="w-4 h-4 text-blue-600" />
+                            <span>Lưu ý &amp; Điểm ngữ pháp câu</span>
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                            {q.explanation}
+                          </p>
+                          {q.trapNote && (
+                            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                              ⚠️ <strong>Bẫy cần tránh:</strong> {q.trapNote}
+                            </div>
+                          )}
                         </div>
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
               )}
 
-              {/* CHẾ ĐỘ 3: NGHE FULL (NGHE TRỌN VẸN & PHÂN TÍCH TOÀN DIỆN) */}
+              {/* CHẾ ĐỘ 3: NGHE FULL (LUYỆN TRẮC NGHIỆM & PHÂN TÍCH TOÀN DIỆN) */}
               {dictationSubTab === "full" && (
                 <div className="space-y-5">
                   <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">
@@ -695,16 +834,29 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                         </div>
                         <div>
                           <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
-                            Nghe trọn vẹn & Phân tích toàn diện
+                            Nghe trọn vẹn &amp; Chọn đáp án chuẩn TOEIC
                           </h3>
                           <p className="text-xs text-slate-500">
-                            Luyện nghe hiểu tổng thể kết hợp phân tích đáp án và bẫy đề thi
+                            {isAnswerUnlocked
+                              ? "Xem lời thoại đầy đủ, dịch nghĩa và phân tích chi tiết các phương án"
+                              : "Nghe audio và chọn phương án đúng (A, B, C, D) để mở khóa lời thoại & giải thích"}
                           </p>
                         </div>
                       </div>
-                      <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200/80">
-                        Chế độ Full
-                      </span>
+                      {isAnswerUnlocked ? (
+                        <button
+                          type="button"
+                          onClick={handleResetQuestion}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold text-xs transition cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Làm lại</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200/80">
+                          Hãy chọn đáp án
+                        </span>
+                      )}
                     </div>
 
                     {/* HÌNH MINH HỌA (NẾU CÓ - PART 1) */}
@@ -718,91 +870,145 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                       </div>
                     )}
 
-                    {/* TRANSCRIPT ĐẦY ĐỦ + DỊCH NGHĨA */}
-                    <div className="space-y-3">
-                      <div className="p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            TRANSCRIPT HOÀN CHỈNH
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => playAudio(q.fullTranscript)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-xs font-bold transition cursor-pointer shadow-2xs"
-                          >
-                            <Volume2 className="w-3.5 h-3.5" />
-                            <span>Phát âm</span>
-                          </button>
-                        </div>
-                        <p className="text-base sm:text-lg font-bold text-slate-900 leading-relaxed">
-                          {q.fullTranscript}
-                        </p>
-                        <div className="pt-2 border-t border-slate-200/70">
-                          <p className="text-xs sm:text-sm font-semibold text-emerald-800 leading-relaxed">
-                            👉 {q.vietnameseTranslation || "Anh ấy đang leo lên một chiếc thang."}
-                          </p>
-                        </div>
+                    {/* CÂU HỎI CHO PART 3 & PART 4 */}
+                    {q.question && (q.part === "Part 3" || q.part === "Part 4" || isAnswerUnlocked) && (
+                      <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 text-sm font-extrabold text-slate-900">
+                        Câu {activeDictationQIndex + 1}: {q.question}
                       </div>
+                    )}
 
-                      {/* CÁC PHƯƠNG ÁN LỰA CHỌN (A, B, C, D) */}
-                      {q.options && Object.keys(q.options).length > 0 && (
-                        <div className="space-y-2 pt-2">
-                          <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
-                            CÁC PHƯƠNG ÁN LỰA CHỌN
-                          </span>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {Object.entries(q.options).map(([key, optText]) => {
-                              const isCorrect = key === q.correctAnswer;
-                              const optVi = q.optionTranslations?.[key];
+                    {/* CÁC PHƯƠNG ÁN LỰA CHỌN (A, B, C, D) - TƯƠNG TÁC CHỌN ĐÁP ÁN */}
+                    <div className="space-y-3">
+                      {q.options && Object.keys(q.options).length > 0 && (() => {
+                        const currentPart = q.part || dictationModalCard.part;
+                        const isBlindOptionsPart = currentPart === "Part 1" || currentPart === "Part 2";
+                        const optionEntries = Object.entries(q.options).filter(
+                          ([key]) => !(currentPart === "Part 2" && key === "D" && !q.options?.D)
+                        );
 
-                              return (
-                                <div
-                                  key={key}
-                                  className={`p-3 rounded-2xl border transition ${
-                                    isCorrect
-                                      ? "bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-200/60"
-                                      : "bg-slate-50/60 border-slate-200"
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span
-                                      className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
-                                        isCorrect
-                                          ? "bg-emerald-600 text-white"
-                                          : "bg-slate-200 text-slate-700"
+                        return (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                                {isAnswerUnlocked ? "KẾT QUẢ CÁC PHƯƠNG ÁN" : "CHỌN ĐÁP ÁN CỦA BẠN"}
+                              </span>
+                              {!isAnswerUnlocked && isBlindOptionsPart && (
+                                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200">
+                                  Ẩn nội dung phương án chuẩn thi thật {currentPart}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {optionEntries.map(([key, optText]) => {
+                                const isChosen = selectedFullOpt === key;
+                                const isCorrect = key === q.correctAnswer;
+                                const optVi = q.optionTranslations?.[key];
+
+                                let cardStyle =
+                                  "bg-white border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 cursor-pointer";
+                                let badgeStyle = "bg-slate-200 text-slate-700";
+
+                                if (isAnswerUnlocked) {
+                                  if (isCorrect) {
+                                    cardStyle =
+                                      "bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-200/60";
+                                    badgeStyle = "bg-emerald-600 text-white";
+                                  } else if (isChosen) {
+                                    cardStyle =
+                                      "bg-rose-50/80 border-rose-400 ring-2 ring-rose-200/60";
+                                    badgeStyle = "bg-rose-600 text-white";
+                                  } else {
+                                    cardStyle = "bg-slate-50/60 border-slate-200 opacity-85";
+                                  }
+                                }
+
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    disabled={isAnswerUnlocked}
+                                    onClick={() => handleSelectFullOption(key)}
+                                    className={`p-3.5 rounded-2xl border text-left transition ${cardStyle}`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span
+                                        className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${badgeStyle}`}
+                                      >
+                                        {key}
+                                      </span>
+                                      {isAnswerUnlocked && isCorrect && (
+                                        <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                          <Check className="w-3 h-3 stroke-[3]" /> Đáp án đúng
+                                        </span>
+                                      )}
+                                      {isAnswerUnlocked && isChosen && !isCorrect && (
+                                        <span className="text-[10px] font-black uppercase text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                          <X className="w-3 h-3 stroke-[3]" /> Bạn chọn
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p
+                                      className={`text-xs sm:text-sm font-bold ${
+                                        isAnswerUnlocked && isCorrect
+                                          ? "text-emerald-950"
+                                          : isAnswerUnlocked && isChosen
+                                          ? "text-rose-950"
+                                          : "text-slate-800"
                                       }`}
                                     >
-                                      {key}
-                                    </span>
-                                    {isCorrect && (
-                                      <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                        <Check className="w-3 h-3 stroke-[3]" /> Đáp án đúng
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className={`text-xs sm:text-sm font-bold ${isCorrect ? "text-emerald-950" : "text-slate-800"}`}>
-                                    {optText}
-                                  </p>
-                                  {optVi && (
-                                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                                      {optVi}
+                                      {!isAnswerUnlocked && isBlindOptionsPart
+                                        ? `Nghe và chọn phương án (${key})`
+                                        : optText}
                                     </p>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                    {isAnswerUnlocked && optVi && (
+                                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                        {optVi}
+                                      </p>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* CHỈ HIỂN THỊ TRANSCRIPT ĐẦY ĐỦ + DỊCH NGHĨA SAU KHI ĐÃ TRẢ LỜI / MỞ KHÓA */}
+                      {isAnswerUnlocked && (
+                        <div className="p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-2.5 animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              TRANSCRIPT HOÀN CHỈNH
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => playAudio(q.fullTranscript)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-xs font-bold transition cursor-pointer shadow-2xs"
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                              <span>Phát âm</span>
+                            </button>
+                          </div>
+                          <p className="text-base sm:text-lg font-bold text-slate-900 leading-relaxed">
+                            {q.fullTranscript}
+                          </p>
+                          <div className="pt-2 border-t border-slate-200/70">
+                            <p className="text-xs sm:text-sm font-semibold text-emerald-800 leading-relaxed">
+                              👉 {q.vietnameseTranslation || "Chưa có bản dịch tiếng Việt."}
+                            </p>
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* PHÂN TÍCH ĐÁP ÁN & BẪY ĐỀ THI */}
-                  {(q.explanation || q.trapNote) && (
-                    <div className="bg-white rounded-3xl border border-indigo-200/90 p-6 shadow-xs space-y-3">
+                  {/* PHÂN TÍCH ĐÁP ÁN & BẪY ĐỀ THI (CHỈ HIỆN SAU KHI ĐÃ CHỌN ĐÁP ÁN / NỘP BÀI) */}
+                  {isAnswerUnlocked && (q.explanation || q.trapNote) && (
+                    <div className="bg-white rounded-3xl border border-indigo-200/90 p-6 shadow-xs space-y-3 animate-in fade-in duration-150">
                       <div className="flex items-center gap-2 text-indigo-950 font-extrabold text-sm sm:text-base">
                         <Sparkles className="w-4 h-4 text-indigo-600" />
-                        <span>Phân tích đáp án & Bẫy đề thi</span>
+                        <span>Phân tích đáp án &amp; Bẫy đề thi</span>
                       </div>
                       <p className="text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
                         {q.explanation}
@@ -987,14 +1193,6 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                 playSfx?.("click");
                 const nextIdx = Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1);
                 setActiveDictationQIndex(nextIdx);
-                saveItemProgress(`listening-dictation-${dictationModalCard.id}`, nextIdx + 1, dictationModalCard.totalQuestions);
-                saveListeningProgress({
-                  cardId: dictationModalCard.id,
-                  completedQuestions: nextIdx + 1,
-                  totalQuestions: dictationModalCard.totalQuestions,
-                  lastQuestionIndex: nextIdx,
-                  status: nextIdx + 1 >= dictationModalCard.totalQuestions ? "Đã hoàn thành" : "Đang luyện tập",
-                });
               }}
               className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs active:scale-95"
               title="Câu tiếp theo"

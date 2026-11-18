@@ -727,7 +727,7 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {(["A", "B", "C", "D"] as const).map((key) => (
+              {((levelFormPart === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"]) as readonly ("A" | "B" | "C" | "D")[]).map((key) => (
                 <div key={key}>
                   <label className="mb-1 block text-xs font-semibold text-slate-700">Lựa chọn {key} *</label>
                   <input
@@ -754,7 +754,7 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
                   }))}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
                 >
-                  {["A", "B", "C", "D"].map((answer) => <option key={answer}>{answer}</option>)}
+                  {(levelFormPart === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"]).map((answer) => <option key={answer}>{answer}</option>)}
                 </select>
               </div>
               <div>

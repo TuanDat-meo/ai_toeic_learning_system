@@ -59,8 +59,9 @@ public class ListeningController {
     }
 
     @GetMapping("/api/listening/units")
-    public List<ListeningService.ListeningUnit> listUnits() {
-        return listeningService.listUnits();
+    public List<ListeningService.ListeningUnit> listUnits(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return listeningService.listUnits(userId);
     }
 
     @GetMapping("/api/admin/listening/units")
@@ -99,6 +100,14 @@ public class ListeningController {
     public void saveProgress(@RequestBody SaveListeningProgressRequest request, Authentication authentication) {
         UUID userId = extractUserId(authentication);
         listeningService.saveProgress(userId, request);
+    }
+
+    @PostMapping("/api/listening/units/progress")
+    @ResponseStatus(HttpStatus.OK)
+    public void saveUnitProgress(@RequestBody ListeningService.SaveListeningUnitProgressRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        listeningService.saveUnitProgress(userId, request);
     }
 
     private UUID extractUserId(Authentication authentication) {

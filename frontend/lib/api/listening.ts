@@ -1,5 +1,5 @@
 import { apiRequest, writeAuthRequest } from './client';
-import type { DictationCardData, LevelCategoryCardData } from '@/app/admin/content/listening/types';
+import type { DictationCardData, DictationQuestion, LevelCategoryCardData } from '@/app/admin/content/listening/types';
 
 export async function fetchListeningCards(): Promise<DictationCardData[]> {
   const cards = await apiRequest<DictationCardData[]>('/api/listening/cards');
@@ -38,6 +38,7 @@ export type ListeningCardRequest = {
   audioUrl: string;
   fullTranscript: string;
   vietnameseTranslation: string;
+  questions?: DictationQuestion[];
 };
 
 export async function createListeningCard(request: ListeningCardRequest): Promise<DictationCardData> {
@@ -79,5 +80,23 @@ export async function saveListeningProgress(req: {
     await writeAuthRequest<void>('POST', '/api/listening/progress', req);
   } catch (error) {
     console.warn('Could not persist listening progress to backend:', error);
+  }
+}
+
+export async function saveListeningUnitProgress(req: {
+  unitId: string;
+  completedQuestions: number;
+  totalQuestions: number;
+  correctCount: number;
+  wrongCount: number;
+  wrongQuestionIds?: (number | string)[];
+  answeredQuestionIds?: (number | string)[];
+  status: string;
+  lastQuestionIndex: number;
+}): Promise<void> {
+  try {
+    await writeAuthRequest<void>('POST', '/api/listening/units/progress', req);
+  } catch (error) {
+    console.warn('Could not persist listening unit progress to backend:', error);
   }
 }

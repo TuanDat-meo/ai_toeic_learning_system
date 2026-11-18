@@ -34,6 +34,7 @@ import {
   LevelFormModal,
   DeleteLevelModal,
 } from "@/components/admin/content/listening/ListeningModals";
+import { ListeningBulkImportModal } from "@/components/admin/content/listening/ListeningBulkImportModal";
 
 const EMPTY_LISTENING_QUESTION: DictationQuestion = {
   id: 0,
@@ -63,6 +64,28 @@ export default function ListeningPage() {
   const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>([]);
   const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>([]);
   const [dataLoadError, setDataLoadError] = useState<string | null>(null);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+
+  const reloadListeningData = React.useCallback(() => {
+    Promise.all([fetchAdminListeningCards(), fetchAdminListeningUnits()])
+      .then(([cards, units]) => {
+        setDictationCards(cards);
+        const byPart = (part: LevelCategoryCardData["part"], type: "level" | "category") =>
+          units.filter((unit) => unit.part === part && unit.type === type);
+        setPart1Levels(byPart("Part 1", "level"));
+        setPart1Categories(byPart("Part 1", "category"));
+        setPart2Levels(byPart("Part 2", "level"));
+        setPart2Categories(byPart("Part 2", "category"));
+        setPart3Levels(byPart("Part 3", "level"));
+        setPart3Categories(byPart("Part 3", "category"));
+        setPart4Levels(byPart("Part 4", "level"));
+        setPart4Categories(byPart("Part 4", "category"));
+        setDataLoadError(null);
+      })
+      .catch((error: unknown) => {
+        setDataLoadError(error instanceof Error ? error.message : "Không thể tải dữ liệu nghe.");
+      });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -102,7 +125,7 @@ export default function ListeningPage() {
   const [activeDictationQIndex, setActiveDictationQIndex] = useState(0);
   const [dictationUserInputs, setDictationUserInputs] = useState<{ [qId: number]: string }>({});
   const [dictationChecked, setDictationChecked] = useState<{ [qId: number]: boolean }>({});
-  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("check");
+  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("chep");
   const [fillPercentage, setFillPercentage] = useState<30 | 50 | 100>(50);
   const [revealedWordCount, setRevealedWordCount] = useState<number>(0);
   const [replayCount, setReplayCount] = useState<number>(1);
@@ -301,24 +324,28 @@ export default function ListeningPage() {
       return;
     }
     const options = levelFormQuestion.options || {};
+    const part = editingLevelCard?.part || levelFormPart;
+    const requiredKeys = part === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"];
     if (!levelFormQuestion.audioUrl.trim() || !levelFormQuestion.fullTranscript.trim()
-      || !["A", "B", "C", "D"].every((key) => options[key]?.trim())
+      || !requiredKeys.every((key) => options[key]?.trim())
       || !levelFormQuestion.correctAnswer) {
-      triggerToast("Vui lòng nhập audio, transcript, đủ 4 lựa chọn và đáp án đúng.");
+      triggerToast(`Vui lòng nhập audio, transcript, đủ các lựa chọn (${requiredKeys.join(", ")}) và đáp án đúng.`);
       return;
     }
     const rulesArray = levelFormRules.split("\n").map((r) => r.trim()).filter(Boolean);
-    const part = editingLevelCard?.part || levelFormPart;
+    const savedOptions: { [key: string]: string } = {
+      A: options.A || "",
+      B: options.B || "",
+      C: options.C || "",
+    };
+    if (part !== "Part 2" || options.D?.trim()) {
+      savedOptions.D = options.D || "";
+    }
     const savedQuestion: DictationQuestion = {
       ...levelFormQuestion,
       id: editingLevelCard?.questions[0]?.id || Date.now(),
       part,
-      options: {
-        A: options.A || "",
-        B: options.B || "",
-        C: options.C || "",
-        D: options.D || "",
-      },
+      options: savedOptions,
     };
     const request = {
       part,
@@ -569,6 +596,7 @@ export default function ListeningPage() {
             handleOpenAddLevel("Part 4");
           }
         }}
+        onOpenBulkImport={() => setShowBulkImportModal(true)}
         onExportCsv={handleExportCsv}
       />
 
@@ -812,6 +840,13 @@ export default function ListeningPage() {
         deleteLevelConfirm={deleteLevelConfirm}
         setDeleteLevelConfirm={setDeleteLevelConfirm}
         handleConfirmDeleteLevelCard={handleConfirmDeleteLevelCard}
+      />
+
+      <ListeningBulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onImported={reloadListeningData}
+        triggerToast={triggerToast}
       />
     </div>
   );

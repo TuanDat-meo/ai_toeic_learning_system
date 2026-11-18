@@ -32,6 +32,7 @@ import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
 import { saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
+import { saveListeningUnitProgress } from "@/lib/api/listening";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
 
 interface ListeningQuizModalProps {
@@ -96,7 +97,22 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
   const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
+  const quizNotesKey = `toeic_listening_quiz_notes_${quizModalCard.id}`;
+  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(quizNotesKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(quizNotesKey, JSON.stringify(practiceUserNotes));
+    } catch {}
+  }, [quizNotesKey, practiceUserNotes]);
   const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
   const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
   const [quizTimerSeconds, setQuizTimerSeconds] = useState(0);
@@ -140,6 +156,17 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     const isCorrect = chosen === q.correctAnswer;
     const totalQ = quizModalCard.originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 0;
     const progress = recordQuestionAnswer(`listening-quiz-${quizModalCard.id}`, q.id, isCorrect, totalQ);
+    void saveListeningUnitProgress({
+      unitId: quizModalCard.id,
+      completedQuestions: progress.completedQuestions,
+      totalQuestions: totalQ,
+      correctCount: progress.correctAnswers || 0,
+      wrongCount: progress.wrongAnswers || 0,
+      wrongQuestionIds: progress.wrongQuestionIds || [],
+      answeredQuestionIds: progress.answeredQuestionIds || [],
+      status: progress.status === "completed" ? "COMPLETED" : "IN_PROGRESS",
+      lastQuestionIndex: activeQuizQIndex,
+    });
     const updateCard = (c: LevelCategoryCardData): LevelCategoryCardData => {
       if (c.id === quizModalCard.id) {
         return {
@@ -163,9 +190,21 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   };
 
   const isGroupMode = quizModalCard.part === "Part 3" || quizModalCard.part === "Part 4";
-  const currentGroupQuestions = isGroupMode
-    ? quizModalCard.questions.filter((q) => q.audioUrl === (quizModalCard.questions[activeQuizQIndex]?.audioUrl || quizModalCard.questions[0]?.audioUrl))
-    : [quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0]];
+  const currentGroupQuestions = useMemo(() => {
+    const activeQ = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
+    if (!activeQ) return [];
+    if (!isGroupMode) return [activeQ];
+    const targetAudio = activeQ.audioUrl || "";
+    const targetTranscript = activeQ.fullTranscript || "";
+    const matching = quizModalCard.questions.filter(
+      (item) => item.audioUrl === targetAudio && (targetTranscript ? item.fullTranscript === targetTranscript : true)
+    );
+    if (matching.length > 0 && matching.length <= 4) {
+      return matching;
+    }
+    const groupStart = Math.floor(activeQuizQIndex / 3) * 3;
+    return quizModalCard.questions.slice(groupStart, groupStart + 3);
+  }, [isGroupMode, quizModalCard.questions, activeQuizQIndex]);
   const isGroupChecked = isGroupMode
     ? currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizAnswerChecked[q.id])
     : !!quizAnswerChecked[quizModalCard.questions[activeQuizQIndex]?.id];
@@ -830,7 +869,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                           ({optKey}) {optVal}
                                         </span>
                                       </div>
-                                      {isChecked && optTrans && (
+                                      {(isChecked || showBilingualQuiz) && optTrans && (
                                         <div className="flex items-center gap-2 pl-7 pt-0.5">
                                           <span className="text-blue-500 font-bold text-xs">|</span>
                                           <span className="text-xs font-semibold text-blue-700">

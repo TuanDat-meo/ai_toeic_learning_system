@@ -12,7 +12,7 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
 import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
-import { getItemProgress, getRedoWrongQuestions } from "@/lib/practiceProgress";
+import { getItemProgress, getRedoWrongQuestions, saveItemProgress } from "@/lib/practiceProgress";
 
 export default function StudentListeningPage() {
   const [activeTab, setActiveTab] = useState<"dictation" | "part1" | "part2" | "part3" | "part4">("dictation");
@@ -73,6 +73,28 @@ export default function StudentListeningPage() {
     Promise.all([fetchListeningCards(), fetchListeningUnits()])
       .then(([cards, units]) => {
         if (!active) return;
+        cards.forEach((card) => {
+          const key = `listening-dictation-${card.id}`;
+          const local = getItemProgress(key, card.totalQuestions);
+          if (card.completedQuestions > local.completedQuestions) {
+            saveItemProgress(key, card.completedQuestions, card.totalQuestions);
+          }
+        });
+        units.forEach((unit) => {
+          const key = `listening-quiz-${unit.id}`;
+          const totalQ = unit.questions?.length || unit.totalQuestions || 0;
+          const local = getItemProgress(key, totalQ);
+          if (unit.completedQuestions > local.completedQuestions) {
+            saveItemProgress(
+              key,
+              unit.completedQuestions,
+              totalQ,
+              undefined,
+              unit.correctCount || 0,
+              unit.wrongCount || 0
+            );
+          }
+        });
         setDictationCards(cards);
         const byPart = (part: LevelCategoryCardData["part"], type: "level" | "category") =>
           units.filter((unit) => unit.part === part && unit.type === type);
@@ -97,7 +119,7 @@ export default function StudentListeningPage() {
   const [activeDictationQIndex, setActiveDictationQIndex] = useState(0);
   const [dictationUserInputs, setDictationUserInputs] = useState<{ [qId: number]: string }>({});
   const [dictationChecked, setDictationChecked] = useState<{ [qId: number]: boolean }>({});
-  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("check");
+  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("chep");
   const [fillPercentage, setFillPercentage] = useState<30 | 50 | 100>(50);
   const [revealedWordCount, setRevealedWordCount] = useState<number>(0);
   const [replayCount, setReplayCount] = useState<number>(1);
@@ -120,8 +142,38 @@ export default function StudentListeningPage() {
     summary: string;
     rules: string[];
   } | null>(null);
-  const [savedVocabBag, setSavedVocabBag] = useState<string[]>([]);
-  const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>([]);
+  const [savedVocabBag, setSavedVocabBag] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("toeic_listening_saved_vocab");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("toeic_listening_flagged_questions");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("toeic_listening_saved_vocab", JSON.stringify(savedVocabBag));
+    } catch {}
+  }, [savedVocabBag]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("toeic_listening_flagged_questions", JSON.stringify(flaggedReviewIds));
+    } catch {}
+  }, [flaggedReviewIds]);
 
   // ✅ FIX 1: Ghi chú & Lưới câu hỏi — có state thật, không còn hàm rỗng
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -258,6 +310,7 @@ export default function StudentListeningPage() {
               }
               setDictationModalCard(cardToUse);
               setActiveDictationQIndex(isRedo ? 0 : startIndex);
+              setDictationSubTab("chep");
               setDictationUserInputs({});
               setDictationChecked({});
             });
