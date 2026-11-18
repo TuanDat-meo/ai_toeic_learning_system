@@ -100,7 +100,8 @@ export function saveItemProgress(
   wrongAnswers?: number,
   wrongQuestionIds?: (number | string)[],
   savedCount?: number,
-  answeredQuestionIds?: (number | string)[]
+  answeredQuestionIds?: (number | string)[],
+  silentSync: boolean = false
 ): ItemProgress {
   if (typeof window === "undefined") {
     const pct = totalQuestions > 0 ? Math.min(100, Math.round((completedQuestions / totalQuestions) * 100)) : 0;
@@ -158,14 +159,16 @@ export function saveItemProgress(
   const wasCompleted = prev ? (prev.status === "completed" || prev.percent >= 100) : false;
   const isNowCompleted = (status === "completed" || percent >= 100);
 
-  if (!wasCompleted && isNowCompleted) {
-    try {
-      logStudySession(0, 1);
-    } catch {}
-  } else if (wasCompleted && !isNowCompleted) {
-    try {
-      recordLessonCompleted(-1);
-    } catch {}
+  if (!silentSync) {
+    if (!wasCompleted && isNowCompleted) {
+      try {
+        logStudySession(0, 1);
+      } catch {}
+    } else if (wasCompleted && !isNowCompleted) {
+      try {
+        recordLessonCompleted(-1);
+      } catch {}
+    }
   }
 
   return updated;
@@ -263,7 +266,7 @@ export function resetItemProgress(key: string, fallbackTotal: number = 0): ItemP
       localStorage.removeItem(`toeic_reading_answers_${cardId}`);
     } catch {}
   }
-  return saveItemProgress(key, 0, current.totalQuestions || fallbackTotal, undefined, 0, 0, [], current.savedCount);
+  return saveItemProgress(key, 0, current.totalQuestions || fallbackTotal, undefined, 0, 0, [], current.savedCount, []);
 }
 
 /**

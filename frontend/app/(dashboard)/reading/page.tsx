@@ -105,6 +105,20 @@ export default function StudentReadingPage() {
     return cards.filter((c) => c.status !== "draft");
   }, [cards]);
 
+  const autoOpenedCardRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (loading || publishedCards.length === 0 || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const openCardId = params.get("openCard");
+    if (!openCardId || autoOpenedCardRef.current === openCardId) return;
+    const match = publishedCards.find((c) => c.id === openCardId);
+    if (!match) return;
+    autoOpenedCardRef.current = openCardId;
+    const redoWrong = params.get("redoWrong") === "1";
+    void startReadingPractice(match, 0, redoWrong);
+  }, [loading, publishedCards]);
+
   const totalQuestionsCount = React.useMemo(() => {
     return publishedCards.reduce((acc, c) => acc + c.totalQuestions, 0);
   }, [publishedCards]);
