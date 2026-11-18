@@ -5,7 +5,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,11 +23,20 @@ public class ChatController {
     private final ChatService chat;
     private final UserAccountService users;
     private final GeminiChatService gemini;
+    private final JdbcTemplate jdbc;
+    private final String geminiModel;
 
-    public ChatController(ChatService chat, UserAccountService users, GeminiChatService gemini) {
+    public ChatController(
+            ChatService chat,
+            UserAccountService users,
+            GeminiChatService gemini,
+            JdbcTemplate jdbc,
+            @Value("${gemini.model:gemini-2.5-flash}") String geminiModel) {
         this.chat = chat;
         this.users = users;
         this.gemini = gemini;
+        this.jdbc = jdbc;
+        this.geminiModel = geminiModel;
     }
 
     @PostMapping("/api/chat/ai")
@@ -34,7 +45,30 @@ public class ChatController {
         if (!"STUDENT".equals(user.role())) {
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ học viên mới có thể sử dụng gia sư AI.");
         }
-        return gemini.reply(request.messages());
+        String lastPrompt = request.messages().stream()
+                .filter(turn -> "user".equals(turn.role()))
+                .reduce((first, second) -> second)
+                .map(AiChatTurn::content)
+                .orElse("(empty)");
+        try {
+            AiChatResponse response = gemini.reply(request.messages());
+            logAiInteraction(user.id(), lastPrompt, response.reply(), "SUCCESS");
+            return response;
+        } catch (RuntimeException exception) {
+            logAiInteraction(user.id(), lastPrompt, exception.getMessage(), "FAILED");
+            throw exception;
+        }
+    }
+
+    private void logAiInteraction(UUID userId, String prompt, String response, String status) {
+        try {
+            jdbc.update("""
+                    INSERT INTO ai_interactions (user_id, type, prompt, response, model, status, completed_at)
+                    VALUES (?, 'EXPLAIN_ANSWER', ?, ?, ?, ?, now())
+                    """, userId, prompt, response, geminiModel, status);
+        } catch (Exception ignored) {
+            // Never block student AI chat if telemetry logging fails
+        }
     }
 
     @GetMapping("/api/chat/discussion")
