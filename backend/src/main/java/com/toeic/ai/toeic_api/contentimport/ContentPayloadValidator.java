@@ -37,7 +37,11 @@ public class ContentPayloadValidator {
             "toeicParts", "toeic_parts", "difficulty", "status", "theory", "metadata",
             "sourceNotes", "source_notes", "wordFamilyWords", "word_family_words");
     private static final Set<String> LISTENING_FIELDS = Set.of(
-            "title", "part", "transcript", "audioUrl", "imageUrl", "durationSeconds", "source", "difficulty");
+            "id", "recordType", "mode", "unitType", "type", "title", "part", "testNumber", "year",
+            "targetLevel", "totalQuestions", "transcript", "fullTranscript", "vietnameseTranslation",
+            "translation", "audioUrl", "imageUrl", "durationSeconds", "source", "difficulty",
+            "question", "questionText", "options", "optionTranslations", "correctAnswer",
+            "explanation", "trapNote", "vocabList", "vocabBag", "theorySummary", "rules", "questions");
     private static final Set<String> READING_FIELDS = Set.of(
             "id", "title", "part", "category", "content", "passage", "passageText", "text", "body",
             "subtitle", "topic", "difficulty", "source", "audioUrl", "imageUrl",
@@ -98,7 +102,9 @@ public class ContentPayloadValidator {
             case VOCABULARY -> Set.of("word", "meaning", "meaningVi", "definitionEn");
             case GRAMMAR -> Set.of(
                     "title", "titleVi", "rule", "formula", "coreTheory", "englishTitle", "topicCode");
-            case LISTENING -> Set.of("transcript", "transcriptEn", "audioUrl", "audioURL", "durationSeconds");
+            case LISTENING -> Set.of(
+                    "transcript", "transcriptEn", "fullTranscript", "audioUrl", "audioURL", "durationSeconds",
+                    "recordType", "unitType", "theorySummary", "questions", "testNumber");
             case READING -> Set.of(
                     "content", "text", "passage", "body", "passageText", "passages", "questions", "sampleQuestions");
             case QUESTION -> Set.of("questionText", "questionEn", "question", "options", "correctAnswer");
@@ -396,10 +402,60 @@ public class ContentPayloadValidator {
     }
 
     private void normalizeListening(JsonNode raw, ObjectNode out, List<String> errors) {
+        copyText(raw, out, "id", errors, false);
+        copyText(raw, out, "recordType", errors, false);
+        if (!out.has("recordType") && raw.has("mode")) {
+            copyText(raw, out, "mode", errors, false);
+            if (out.has("mode")) out.put("recordType", out.remove("mode").asText());
+        }
+        copyText(raw, out, "unitType", errors, false);
+        if (!out.has("unitType") && raw.has("type")) {
+            copyText(raw, out, "type", errors, false);
+            if (out.has("type")) out.put("unitType", out.remove("type").asText());
+        }
         copyText(raw, out, "title", errors, true);
         copyText(raw, out, "part", errors, true);
-        copyText(raw, out, "transcript", errors, true);
-        copyText(raw, out, "audioUrl", errors, true);
+
+        JsonNode firstQuestion = raw.path("questions").isArray() && !raw.path("questions").isEmpty()
+                ? raw.path("questions").get(0) : null;
+
+        String resolvedTranscript = firstText(raw, "transcript", "fullTranscript");
+        if (resolvedTranscript.isBlank() && firstQuestion != null) {
+            resolvedTranscript = firstText(firstQuestion, "fullTranscript", "transcript", "question");
+        }
+        if (resolvedTranscript.isBlank()) {
+            errors.add("Thiếu trường bắt buộc \"transcript\".");
+        } else {
+            out.put("transcript", resolvedTranscript);
+        }
+
+        String resolvedAudioUrl = firstText(raw, "audioUrl");
+        if (resolvedAudioUrl.isBlank() && firstQuestion != null) {
+            resolvedAudioUrl = firstText(firstQuestion, "audioUrl");
+        }
+        if (resolvedAudioUrl.isBlank()) {
+            errors.add("Thiếu trường bắt buộc \"audioUrl\".");
+        } else {
+            out.put("audioUrl", resolvedAudioUrl);
+        }
+
+        copyText(raw, out, "imageUrl", errors, false);
+        String resolvedTranslation = firstText(raw, "vietnameseTranslation", "translation");
+        if (!resolvedTranslation.isBlank()) {
+            out.put("vietnameseTranslation", resolvedTranslation);
+        }
+        String resolvedQuestion = firstText(raw, "question", "questionText");
+        if (!resolvedQuestion.isBlank()) {
+            out.put("question", resolvedQuestion);
+        }
+        copyText(raw, out, "correctAnswer", errors, false);
+        copyText(raw, out, "explanation", errors, false);
+        copyText(raw, out, "trapNote", errors, false);
+        copyText(raw, out, "targetLevel", errors, false);
+        copyText(raw, out, "year", errors, false);
+        copyText(raw, out, "theorySummary", errors, false);
+        copyInteger(raw, out, "testNumber", errors, false, 1, 100);
+        copyInteger(raw, out, "totalQuestions", errors, false, 1, 500);
         copyText(raw, out, "source", errors, false);
         copyText(raw, out, "difficulty", errors, false);
         if (out.has("part")) {
@@ -409,7 +465,25 @@ public class ContentPayloadValidator {
         }
         if (out.has("difficulty")) normalizeDifficulty(out, "difficulty", errors);
         validateUrl(out, "audioUrl", errors);
+        validateUrl(out, "imageUrl", errors);
         copyInteger(raw, out, "durationSeconds", errors, false, 1, 86_400);
+
+        if (raw.has("options") && !raw.path("options").isNull()) {
+            if (raw.path("options").isObject()) {
+                normalizeJsonObjectField(raw, out, "options", errors);
+            } else if (raw.path("options").isArray()) {
+                normalizeJsonArrayField(raw, out, "options", errors);
+            } else if (raw.path("options").isTextual()) {
+                String txt = raw.path("options").asText().trim();
+                if (txt.startsWith("{")) normalizeJsonObjectField(raw, out, "options", errors);
+                else if (txt.startsWith("[")) normalizeJsonArrayField(raw, out, "options", errors);
+            }
+        }
+        normalizeJsonObjectField(raw, out, "optionTranslations", errors);
+        normalizeStringArray(raw, out, "rules", errors);
+        normalizeJsonArrayField(raw, out, "vocabList", errors);
+        normalizeJsonArrayField(raw, out, "vocabBag", errors);
+        normalizeJsonArrayField(raw, out, "questions", errors);
     }
 
     private void normalizeReading(JsonNode raw, ObjectNode out, List<String> errors) {

@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.toeic.ai.toeic_api.grammar.GrammarService;
+import com.toeic.ai.toeic_api.listening.ListeningService;
 import com.toeic.ai.toeic_api.reading.ReadingService;
 import com.toeic.ai.toeic_api.vocabulary.VocabularyService;
 
@@ -44,6 +45,7 @@ public class ContentImportService {
     private final GrammarService grammarService;
     private final VocabularyService vocabularyService;
     private final ReadingService readingService;
+    private final ListeningService listeningService;
     private final ContentImportUploadService uploadService;
     private final DocumentContentRecognizer recognizer;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -51,7 +53,14 @@ public class ContentImportService {
     public ContentImportService(JdbcTemplate jdbcTemplate, ImportFileParser fileParser,
             ContentPayloadValidator validator, GrammarService grammarService,
             VocabularyService vocabularyService) {
-        this(jdbcTemplate, fileParser, validator, grammarService, vocabularyService, null, null, null);
+        this(jdbcTemplate, fileParser, validator, grammarService, vocabularyService, null, null, null, null);
+    }
+
+    public ContentImportService(JdbcTemplate jdbcTemplate, ImportFileParser fileParser,
+            ContentPayloadValidator validator, GrammarService grammarService,
+            VocabularyService vocabularyService, ReadingService readingService,
+            ContentImportUploadService uploadService, DocumentContentRecognizer recognizer) {
+        this(jdbcTemplate, fileParser, validator, grammarService, vocabularyService, readingService, null, uploadService, recognizer);
     }
 
     @Autowired
@@ -59,6 +68,7 @@ public class ContentImportService {
             ContentPayloadValidator validator, GrammarService grammarService,
             VocabularyService vocabularyService,
             @Autowired(required = false) ReadingService readingService,
+            @Autowired(required = false) ListeningService listeningService,
             @Autowired(required = false) ContentImportUploadService uploadService,
             @Autowired(required = false) DocumentContentRecognizer recognizer) {
         this.jdbcTemplate = jdbcTemplate;
@@ -68,6 +78,7 @@ public class ContentImportService {
         this.grammarService = grammarService;
         this.vocabularyService = vocabularyService;
         this.readingService = readingService;
+        this.listeningService = listeningService;
         this.uploadService = uploadService;
         this.recognizer = recognizer;
     }
@@ -655,26 +666,17 @@ public class ContentImportService {
                                 + "AND g.code = EXCLUDED.payload_json ->> 'code') "
                                 + "OR lower(g.title) = lower(EXCLUDED.payload_json ->> 'title'))",
                         batch.contentType().name(), item.dedupeKey(), item.title(),
-                        toJson(publishData), item.id(), publishedBy);
-            } else if (batch.contentType() == ContentType.VOCABULARY) {
+                        toJson(item.normalizedData()), item.id(), publishedBy);
+            } else if (batch.contentType() == ContentType.LISTENING) {
                 inserted = jdbcTemplate.update(
-                        """
-                        INSERT INTO imported_content (content_type, dedupe_key, title, payload_json,
-                                source_import_item_id, created_by)
-                        VALUES (?, ?, ?, ?::jsonb, ?, ?)
-                        ON CONFLICT (content_type, dedupe_key) DO UPDATE SET
-                            title = EXCLUDED.title,
-                            payload_json = EXCLUDED.payload_json,
-                            source_import_item_id = EXCLUDED.source_import_item_id,
-                            created_by = EXCLUDED.created_by,
-                            published_at = now()
-                        WHERE NOT EXISTS (
-                            SELECT 1 FROM vocabulary_items vi
-                            WHERE lower(trim(vi.word)) = lower(trim(EXCLUDED.payload_json ->> 'word'))
-                        )
-                        """,
+                        "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
+                                + "source_import_item_id, created_by) VALUES (?, ?, ?, ?::jsonb, ?, ?) "
+                                + "ON CONFLICT (content_type, dedupe_key) DO UPDATE SET "
+                                + "title = EXCLUDED.title, payload_json = EXCLUDED.payload_json, "
+                                + "source_import_item_id = EXCLUDED.source_import_item_id, "
+                                + "created_by = EXCLUDED.created_by, published_at = now()",
                         batch.contentType().name(), item.dedupeKey(), item.title(),
-                        toJson(publishData), item.id(), publishedBy);
+                        toJson(item.normalizedData()), item.id(), publishedBy);
             } else {
                 inserted = jdbcTemplate.update(
                         "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
@@ -690,6 +692,8 @@ public class ContentImportService {
                     vocabularyService.syncFromImportItem(publishData);
                 } else if (batch.contentType() == ContentType.READING && readingService != null) {
                     readingService.syncFromImportItem(item.normalizedData());
+                } else if (batch.contentType() == ContentType.LISTENING && listeningService != null) {
+                    listeningService.syncFromImportItem(item.normalizedData());
                 }
                 jdbcTemplate.update("UPDATE import_items SET status = 'PUBLISHED' WHERE id = ?", item.id());
                 publishedCount++;
@@ -700,6 +704,8 @@ public class ContentImportService {
                     vocabularyService.syncFromImportItem(publishData);
                 } else if (batch.contentType() == ContentType.READING && readingService != null) {
                     readingService.syncFromImportItem(item.normalizedData());
+                } else if (batch.contentType() == ContentType.LISTENING && listeningService != null) {
+                    listeningService.syncFromImportItem(item.normalizedData());
                 }
                 UUID duplicateId = findContentId(batch.contentType(), item.dedupeKey());
                 jdbcTemplate.update(
@@ -827,7 +833,23 @@ public class ContentImportService {
                                 return found;
                             });
                 }
-                if (type != ContentType.VOCABULARY) return findContentIds(type, dedupeKeys);
+                if (type == ContentType.LISTENING) {
+                    if (dedupeKeys.isEmpty()) return Map.of();
+                    return namedParameterJdbcTemplate.query(
+                            "SELECT ic.dedupe_key, ic.id FROM imported_content ic "
+                                    + "WHERE ic.content_type = 'LISTENING' AND ic.dedupe_key IN (:keys) "
+                                    + "AND (EXISTS (SELECT 1 FROM listening_dictation_cards c WHERE lower(c.title) = lower(ic.payload_json ->> 'title')) "
+                                    + "OR EXISTS (SELECT 1 FROM listening_part_units u WHERE lower(u.title) = lower(ic.payload_json ->> 'title')))",
+                            Map.of("keys", dedupeKeys),
+                            rs -> {
+                                Map<String, UUID> found = new java.util.HashMap<>();
+                                while (rs.next()) found.put(rs.getString("dedupe_key"),
+                                        rs.getObject("id", UUID.class));
+                                return found;
+                            });
+                }
+                Map<String, UUID> found = new java.util.HashMap<>(findContentIds(type, dedupeKeys));
+                if (type != ContentType.VOCABULARY) return found;
 
                 Set<String> words = validations.stream()
                         .filter(validation -> validation.valid())

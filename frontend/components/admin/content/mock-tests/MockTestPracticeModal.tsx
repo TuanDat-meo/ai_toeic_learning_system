@@ -1060,12 +1060,12 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                   </div>
                 )}
 
-                {/* Đối với Part 1: Hiển thị hình ảnh */}
-                {currentQ && qPart === "Part 1" && currentQ.imageUrl && (
+                {/* Đối với Part 1 và các câu hỏi có hình ảnh/biểu đồ (Part 3, 4, 7): Hiển thị hình ảnh */}
+                {currentQ && currentQ.imageUrl && (
                   <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
                     <img
                       src={currentQ.imageUrl}
-                      alt="Photograph"
+                      alt="Question stimulus"
                       className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
                     />
                   </div>

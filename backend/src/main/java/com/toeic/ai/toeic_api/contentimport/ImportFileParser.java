@@ -47,8 +47,8 @@ public class ImportFileParser {
         try {
             return switch (extension) {
                 case "json" -> parseJson(file, type);
-                case "csv" -> maybeGroupReadingQuestionRows(parseCsv(file), name, type);
-                case "xlsx", "xls" -> maybeGroupReadingQuestionRows(parseXlsx(file), name, type);
+                case "csv" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(parseCsv(file), name, type), name, type);
+                case "xlsx", "xls" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(parseXlsx(file), name, type), name, type);
                 default -> throw new IllegalArgumentException("Chỉ hỗ trợ file CSV, XLSX hoặc JSON.");
             };
         } catch (IOException exception) {
@@ -608,6 +608,115 @@ public class ImportFileParser {
         card.set("questions", questions);
         card.put("totalQuestions", questions.size());
         return List.of(new ParsedImportRow(1, card));
+    }
+
+    private List<ParsedImportRow> maybeNormalizeListeningRows(
+            List<ParsedImportRow> rows, String fileName, ContentType type) {
+        if (type != ContentType.LISTENING || rows.isEmpty()) {
+            return rows;
+        }
+        boolean needsMapping = rows.stream().anyMatch(r -> {
+            JsonNode d = r.data();
+            return !d.has("transcript") || d.has("optionA") || d.has("Đáp án A") || d.has("Tiêu đề");
+        });
+        if (!needsMapping) {
+            return rows;
+        }
+
+        List<ParsedImportRow> normalized = new ArrayList<>(rows.size());
+        for (ParsedImportRow row : rows) {
+            JsonNode d = row.data();
+            ObjectNode out = objectMapper.createObjectNode();
+
+            String title = extractFieldByAliases(d, "title", "tieude", "tenbainghe", "chudiem");
+            if (!title.isBlank()) out.put("title", title);
+            else if (!fileName.isBlank()) out.put("title", stripFileExtension(fileName));
+
+            String part = extractFieldByAliases(d, "part", "phanthi");
+            if (!part.isBlank()) out.put("part", part);
+
+            String recordType = extractFieldByAliases(d, "recordtype", "mode", "hinhthuc");
+            if (!recordType.isBlank()) out.put("recordType", recordType);
+
+            String unitType = extractFieldByAliases(d, "unittype", "type", "loai");
+            if (!unitType.isBlank()) out.put("unitType", unitType);
+
+            String testNumber = extractFieldByAliases(d, "testnumber", "testso", "test");
+            if (!testNumber.isBlank()) out.put("testNumber", testNumber);
+
+            String year = extractFieldByAliases(d, "year", "nam");
+            if (!year.isBlank()) out.put("year", year);
+
+            String targetLevel = extractFieldByAliases(d, "targetlevel", "muctieu", "band");
+            if (!targetLevel.isBlank()) out.put("targetLevel", targetLevel);
+
+            String transcript = extractFieldByAliases(d, "transcript", "fulltranscript", "loithoai", "noidungnghe");
+            if (!transcript.isBlank()) out.put("transcript", transcript);
+
+            String translation = extractFieldByAliases(d, "vietnamesetranslation", "translation", "dichnghia", "bandich");
+            if (!translation.isBlank()) out.put("vietnameseTranslation", translation);
+
+            String audioUrl = extractFieldByAliases(d, "audiourl", "audio", "linkaudio", "mp3");
+            if (!audioUrl.isBlank()) out.put("audioUrl", audioUrl);
+
+            String imageUrl = extractFieldByAliases(d, "imageurl", "image", "hinhanh");
+            if (!imageUrl.isBlank()) out.put("imageUrl", imageUrl);
+
+            String question = extractFieldByAliases(d, "question", "questiontext", "cauhoi", "debai");
+            if (!question.isBlank()) out.put("question", question);
+
+            String optA = extractFieldByAliases(d, "optiona", "dapana", "a");
+            String optB = extractFieldByAliases(d, "optionb", "dapanb", "b");
+            String optC = extractFieldByAliases(d, "optionc", "dapanc", "c");
+            String optD = extractFieldByAliases(d, "optiond", "dapand", "d");
+            if (!optA.isBlank() || !optB.isBlank() || !optC.isBlank() || !optD.isBlank()) {
+                ObjectNode opts = objectMapper.createObjectNode();
+                if (!optA.isBlank()) opts.put("A", optA);
+                if (!optB.isBlank()) opts.put("B", optB);
+                if (!optC.isBlank()) opts.put("C", optC);
+                if (!optD.isBlank()) opts.put("D", optD);
+                out.set("options", opts);
+            } else if (d.has("options")) {
+                out.set("options", d.get("options"));
+            }
+
+            String correctAnswer = extractFieldByAliases(d, "correctanswer", "dapandung", "answer", "key");
+            if (!correctAnswer.isBlank()) out.put("correctAnswer", correctAnswer);
+
+            String explanation = extractFieldByAliases(d, "explanation", "giaithich");
+            if (!explanation.isBlank()) out.put("explanation", explanation);
+
+            String trapNote = extractFieldByAliases(d, "trapnote", "bay", "luuybay");
+            if (!trapNote.isBlank()) out.put("trapNote", trapNote);
+
+            String theorySummary = extractFieldByAliases(d, "theorysummary", "lythuyet", "tomtat");
+            if (!theorySummary.isBlank()) out.put("theorySummary", theorySummary);
+
+            String rules = extractFieldByAliases(d, "rules", "quytac", "meo");
+            if (!rules.isBlank()) out.put("rules", rules);
+
+            String durationSeconds = extractFieldByAliases(d, "durationseconds", "thoiluong");
+            if (!durationSeconds.isBlank()) out.put("durationSeconds", durationSeconds);
+
+            String difficulty = extractFieldByAliases(d, "difficulty", "dokho");
+            if (!difficulty.isBlank()) out.put("difficulty", difficulty);
+
+            String source = extractFieldByAliases(d, "source", "nguon");
+            if (!source.isBlank()) out.put("source", source);
+
+            String vocabRaw = extractFieldByAliases(d, "vocablist", "vocabbag", "tuvung", "vocab");
+            if (!vocabRaw.isBlank()) {
+                if (vocabRaw.trim().startsWith("[")) {
+                    out.put("vocabList", vocabRaw);
+                } else {
+                    ArrayNode vocabArr = parseTabularVocabList(vocabRaw);
+                    if (!vocabArr.isEmpty()) out.set("vocabList", vocabArr);
+                }
+            }
+
+            normalized.add(new ParsedImportRow(row.rowNumber(), out));
+        }
+        return normalized;
     }
 
     private String extractFieldByAliases(JsonNode rowData, String... aliases) {

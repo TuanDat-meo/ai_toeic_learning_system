@@ -26,13 +26,25 @@ import {
   Plus,
   CheckCircle2,
   ArrowRight,
+  Bookmark,
+  History,
 } from "lucide-react";
 import { LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
-import { saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
+import { getItemProgress, saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
+import { saveListeningUnitProgress, recordListeningAttempt } from "@/lib/api/listening";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
+import {
+  ListeningDictionaryModal,
+  ListeningPersonalVocabBagModal,
+  ListeningAiTutorModal,
+  ListeningAttemptHistoryModal,
+  loadSavedListeningVocabItems,
+  saveListeningVocabItemsToStorage,
+  type SavedListeningVocabItem,
+} from "./ListeningStudyToolsModals";
 
 interface ListeningQuizModalProps {
   quizModalCard: LevelCategoryCardData;
@@ -62,6 +74,8 @@ interface ListeningQuizModalProps {
   setPart3Categories: React.Dispatch<React.SetStateAction<LevelCategoryCardData[]>>;
   setPart4Levels: React.Dispatch<React.SetStateAction<LevelCategoryCardData[]>>;
   setPart4Categories: React.Dispatch<React.SetStateAction<LevelCategoryCardData[]>>;
+  initialRealExamMode?: boolean;
+  onCompletedAttempt?: () => void;
 }
 
 export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
@@ -92,14 +106,114 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   setPart3Categories,
   setPart4Levels,
   setPart4Categories,
+  initialRealExamMode = false,
+  onCompletedAttempt,
 }) => {
+  const [isRealExamMode, setIsRealExamMode] = useState<boolean>(Boolean(initialRealExamMode));
+  const [isExamSubmitted, setIsExamSubmitted] = useState<boolean>(false);
+  const [showExamResultModal, setShowExamResultModal] = useState<boolean>(false);
+  const examTimeLimitSeconds = Math.max(120, quizModalCard.questions.length * 45);
   const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
   const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: number]: string }>({});
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const quizNotesKey = `toeic_listening_quiz_notes_${quizModalCard.id}`;
+  const [practiceUserNotes, setPracticeUserNotes] = useState<{ [qId: string]: string }>(() => {
+    const dbNotes = quizModalCard.userNotes || {};
+    if (typeof window === "undefined") return { ...dbNotes };
+    try {
+      const raw = localStorage.getItem(quizNotesKey);
+      const local = raw ? JSON.parse(raw) : {};
+      return { ...local, ...dbNotes };
+    } catch {
+      return { ...dbNotes };
+    }
+  });
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(quizNotesKey, JSON.stringify(practiceUserNotes));
+    } catch {}
+  }, [quizNotesKey, practiceUserNotes]);
+
+  const syncUnitMetadataToDb = (nextNotes: { [qId: string]: string }, nextFlagged?: number[]) => {
+    const totalQ = quizModalCard.originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 0;
+    const progress = getItemProgress(`listening-quiz-${quizModalCard.id}`, totalQ);
+    void saveListeningUnitProgress({
+      unitId: quizModalCard.id,
+      completedQuestions: progress.completedQuestions,
+      totalQuestions: totalQ,
+      correctCount: progress.correctAnswers || 0,
+      wrongCount: progress.wrongAnswers || 0,
+      wrongQuestionIds: progress.wrongQuestionIds || [],
+      answeredQuestionIds: progress.answeredQuestionIds || [],
+      flaggedQuestionIds: nextFlagged ?? flaggedReviewIds,
+      userNotes: nextNotes,
+      status: progress.status === "completed" ? "COMPLETED" : progress.completedQuestions > 0 ? "IN_PROGRESS" : "NOT_STARTED",
+      lastQuestionIndex: activeQuizQIndex,
+    });
+  };
   const [isQuestionGridOpen, setIsQuestionGridOpen] = useState(false);
-  const [addedVocabItems, setAddedVocabItems] = useState<string[]>([]);
+  const [savedVocabItems, setSavedVocabItems] = useState<SavedListeningVocabItem[]>(() => loadSavedListeningVocabItems());
+  const [isDictionaryModalOpen, setIsDictionaryModalOpen] = useState(false);
+  const [dictionaryInitialWord, setDictionaryInitialWord] = useState("");
+  const [isVocabBagModalOpen, setIsVocabBagModalOpen] = useState(false);
+  const [isAiTutorModalOpen, setIsAiTutorModalOpen] = useState(false);
+  const [annotations, setAnnotations] = useState<Record<string, "yellow" | "green" | "pink" | "blue">>({});
   const [quizTimerSeconds, setQuizTimerSeconds] = useState(0);
+
+  const formatTimer = (sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const rem = sec % 60;
+    if (mins === 0) return `${rem}s`;
+    return `${mins}m ${rem < 10 ? `0${rem}` : rem}s`;
+  };
+
+  const handleSaveWordToBag = (item: SavedListeningVocabItem) => {
+    setSavedVocabItems((prev) => {
+      const exists = prev.some((w) => w.word.toLowerCase() === item.word.toLowerCase());
+      if (exists) {
+        triggerToast(`Từ "${item.word}" đã có trong Giỏ từ cá nhân!`);
+        return prev;
+      }
+      const next = [item, ...prev];
+      saveListeningVocabItemsToStorage(next);
+      triggerToast(`Đã lưu "${item.word}" vào Giỏ từ cá nhân!`);
+      return next;
+    });
+  };
+
+  const handleRemoveWordFromBag = (word: string) => {
+    setSavedVocabItems((prev) => {
+      const next = prev.filter((w) => w.word.toLowerCase() !== word.toLowerCase());
+      saveListeningVocabItemsToStorage(next);
+      triggerToast(`Đã xóa "${word}" khỏi Giỏ từ!`);
+      return next;
+    });
+  };
+
+  const toggleAnnotationKey = (key: string) => {
+    if (!isAnnotatorActive) return false;
+    setAnnotations((prev) => {
+      const next = { ...prev };
+      if (next[key] === annotatorColor) {
+        delete next[key];
+      } else {
+        next[key] = annotatorColor;
+      }
+      return next;
+    });
+    return true;
+  };
+
+  const getAnnotationHighlightClass = (key: string) => {
+    const color = annotations[key];
+    if (!color) return "";
+    if (color === "yellow") return "bg-yellow-200/80 ring-1 ring-yellow-400 rounded px-1";
+    if (color === "green") return "bg-emerald-200/80 ring-1 ring-emerald-400 rounded px-1";
+    if (color === "pink") return "bg-pink-200/80 ring-1 ring-pink-400 rounded px-1";
+    return "bg-sky-200/80 ring-1 ring-sky-400 rounded px-1";
+  };
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -140,6 +254,35 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     const isCorrect = chosen === q.correctAnswer;
     const totalQ = quizModalCard.originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 0;
     const progress = recordQuestionAnswer(`listening-quiz-${quizModalCard.id}`, q.id, isCorrect, totalQ);
+    void saveListeningUnitProgress({
+      unitId: quizModalCard.id,
+      completedQuestions: progress.completedQuestions,
+      totalQuestions: totalQ,
+      correctCount: progress.correctAnswers || 0,
+      wrongCount: progress.wrongAnswers || 0,
+      wrongQuestionIds: progress.wrongQuestionIds || [],
+      answeredQuestionIds: progress.answeredQuestionIds || [],
+      flaggedQuestionIds: flaggedReviewIds,
+      userNotes: practiceUserNotes,
+      status: progress.status === "completed" ? "COMPLETED" : "IN_PROGRESS",
+      lastQuestionIndex: activeQuizQIndex,
+    });
+    void recordListeningAttempt({
+      targetType: "UNIT",
+      targetId: quizModalCard.id,
+      targetTitle: quizModalCard.title,
+      part: quizModalCard.part,
+      mode: "PART_PRACTICE",
+      totalQuestions: 1,
+      completedQuestions: 1,
+      correctCount: isCorrect ? 1 : 0,
+      wrongCount: isCorrect ? 0 : 1,
+      durationSeconds: quizTimerSeconds,
+      xpEarned: isCorrect ? 10 : 0,
+      details: { questionId: q.id, chosenOption: chosen, correctAnswer: q.correctAnswer },
+    }).then(() => {
+      onCompletedAttempt?.();
+    });
     const updateCard = (c: LevelCategoryCardData): LevelCategoryCardData => {
       if (c.id === quizModalCard.id) {
         return {
@@ -162,10 +305,114 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
     setPart4Categories((prev) => prev.map(updateCard));
   };
 
+  const handleSubmitRealExam = () => {
+    if (isExamSubmitted) return;
+    const totalQ = quizModalCard.originalTotalQuestions || quizModalCard.totalQuestions || quizModalCard.questions?.length || 0;
+    const nextChecked: { [qId: number]: boolean } = { ...quizAnswerChecked };
+    let correctCount = 0;
+    let wrongCount = 0;
+    let answeredCount = 0;
+    let latestProgress = getItemProgress(`listening-quiz-${quizModalCard.id}`, totalQ);
+
+    quizModalCard.questions.forEach((q) => {
+      nextChecked[q.id] = true;
+      const chosen = quizSelectedOption[q.id];
+      const isCorrect = chosen !== undefined && chosen === q.correctAnswer;
+      if (chosen !== undefined) {
+        answeredCount += 1;
+      }
+      if (isCorrect) {
+        correctCount += 1;
+      } else {
+        wrongCount += 1;
+      }
+      latestProgress = recordQuestionAnswer(`listening-quiz-${quizModalCard.id}`, q.id, isCorrect, totalQ);
+    });
+
+    setQuizAnswerChecked(nextChecked);
+    setIsExamSubmitted(true);
+    setShowExamResultModal(true);
+    playSfx(correctCount >= Math.ceil(quizModalCard.questions.length * 0.6) ? "correct" : "wrong");
+
+    void saveListeningUnitProgress({
+      unitId: quizModalCard.id,
+      completedQuestions: latestProgress.completedQuestions,
+      totalQuestions: totalQ,
+      correctCount: latestProgress.correctAnswers || correctCount,
+      wrongCount: latestProgress.wrongAnswers || wrongCount,
+      wrongQuestionIds: latestProgress.wrongQuestionIds || [],
+      answeredQuestionIds: latestProgress.answeredQuestionIds || [],
+      flaggedQuestionIds: flaggedReviewIds,
+      userNotes: practiceUserNotes,
+      status: latestProgress.status === "completed" ? "COMPLETED" : "IN_PROGRESS",
+      lastQuestionIndex: activeQuizQIndex,
+    });
+
+    void recordListeningAttempt({
+      targetType: "UNIT",
+      targetId: quizModalCard.id,
+      targetTitle: `${quizModalCard.title} (Chế độ Thi thật)`,
+      part: quizModalCard.part,
+      mode: "REAL_EXAM",
+      totalQuestions: quizModalCard.questions.length,
+      completedQuestions: answeredCount,
+      correctCount,
+      wrongCount,
+      durationSeconds: quizTimerSeconds,
+      xpEarned: correctCount * 15,
+      details: {
+        examMode: true,
+        answers: quizSelectedOption,
+      },
+    }).then(() => {
+      onCompletedAttempt?.();
+    });
+
+    const updateCard = (c: LevelCategoryCardData): LevelCategoryCardData => {
+      if (c.id === quizModalCard.id) {
+        return {
+          ...c,
+          completedQuestions: latestProgress.completedQuestions,
+          correctCount: latestProgress.correctAnswers || correctCount,
+          wrongCount: latestProgress.wrongAnswers || wrongCount,
+          status: latestProgress.status === "completed" ? "Đã hoàn thành" : "Đang học",
+        };
+      }
+      return c;
+    };
+    setPart1Levels((prev) => prev.map(updateCard));
+    setPart1Categories((prev) => prev.map(updateCard));
+    setPart2Levels((prev) => prev.map(updateCard));
+    setPart2Categories((prev) => prev.map(updateCard));
+    setPart3Levels((prev) => prev.map(updateCard));
+    setPart3Categories((prev) => prev.map(updateCard));
+    setPart4Levels((prev) => prev.map(updateCard));
+    setPart4Categories((prev) => prev.map(updateCard));
+    triggerToast(`Đã nộp bài Thi thật! Kết quả: ${correctCount}/${quizModalCard.questions.length} câu đúng.`);
+  };
+
+  React.useEffect(() => {
+    if (isRealExamMode && !isExamSubmitted && quizTimerSeconds >= examTimeLimitSeconds) {
+      handleSubmitRealExam();
+    }
+  }, [isRealExamMode, isExamSubmitted, quizTimerSeconds, examTimeLimitSeconds]);
+
   const isGroupMode = quizModalCard.part === "Part 3" || quizModalCard.part === "Part 4";
-  const currentGroupQuestions = isGroupMode
-    ? quizModalCard.questions.filter((q) => q.audioUrl === (quizModalCard.questions[activeQuizQIndex]?.audioUrl || quizModalCard.questions[0]?.audioUrl))
-    : [quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0]];
+  const currentGroupQuestions = useMemo(() => {
+    const activeQ = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
+    if (!activeQ) return [];
+    if (!isGroupMode) return [activeQ];
+    const targetAudio = activeQ.audioUrl || "";
+    const targetTranscript = activeQ.fullTranscript || "";
+    const matching = quizModalCard.questions.filter(
+      (item) => item.audioUrl === targetAudio && (targetTranscript ? item.fullTranscript === targetTranscript : true)
+    );
+    if (matching.length > 0 && matching.length <= 4) {
+      return matching;
+    }
+    const groupStart = Math.floor(activeQuizQIndex / 3) * 3;
+    return quizModalCard.questions.slice(groupStart, groupStart + 3);
+  }, [isGroupMode, quizModalCard.questions, activeQuizQIndex]);
   const isGroupChecked = isGroupMode
     ? currentGroupQuestions.length > 0 && currentGroupQuestions.every((q) => !!quizAnswerChecked[q.id])
     : !!quizAnswerChecked[quizModalCard.questions[activeQuizQIndex]?.id];
@@ -236,18 +483,59 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              const next = !showBilingualQuiz;
-              setShowBilingualQuiz(next);
-              triggerToast(next ? "Đã bật dịch song ngữ Tiếng Việt 👑" : "Đã tắt hiển thị song ngữ");
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 text-amber-950 ring-2 ring-amber-300 text-xs font-bold transition-all shadow-xs cursor-pointer"
-          >
-            <Languages className="w-3.5 h-3.5" />
-            <span>Song ngữ 👑</span>
-          </button>
+          {/* Toggle Practice Mode vs Real Exam Mode */}
+          <div className="inline-flex items-center rounded-xl bg-white/15 p-0.5 border border-white/25">
+            <button
+              type="button"
+              onClick={() => {
+                if (isRealExamMode) {
+                  setIsRealExamMode(false);
+                  triggerToast("Đã chuyển sang Chế độ Luyện tập 🎯");
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition cursor-pointer ${
+                !isRealExamMode ? "bg-white text-blue-700 shadow-xs" : "text-white/90 hover:text-white"
+              }`}
+            >
+              🎯 Luyện tập
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!isRealExamMode) {
+                  setIsRealExamMode(true);
+                  setIsExamSubmitted(false);
+                  setShowExamResultModal(false);
+                  setShowBilingualQuiz(false);
+                  setQuizAnswerChecked({});
+                  setQuizSelectedOption({});
+                  setQuizTimerSeconds(0);
+                  setActiveQuizQIndex(0);
+                  triggerToast("Đã bật Chế độ Thi thật ⏱: Audio nghe 1 lần, chấm điểm khi Nộp bài!");
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition cursor-pointer ${
+                isRealExamMode ? "bg-rose-600 text-white shadow-xs" : "text-white/90 hover:text-white"
+              }`}
+            >
+              ⏱ Thi thật
+            </button>
+          </div>
+
+          {(!isRealExamMode || isExamSubmitted) && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showBilingualQuiz;
+                setShowBilingualQuiz(next);
+                triggerToast(next ? "Đã bật dịch song ngữ Tiếng Việt 👑" : "Đã tắt hiển thị song ngữ");
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 text-amber-950 ring-2 ring-amber-300 text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Languages className="w-3.5 h-3.5" />
+              <span>Song ngữ 👑</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -268,13 +556,37 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           </button>
 
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/90 text-white text-xs font-extrabold shadow-2xs">
-              <Zap className="w-3.5 h-3.5 fill-white" />
-              +50 XP
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-white text-xs font-bold shadow-2xs ${
+                isRealExamMode && !isExamSubmitted ? "bg-rose-600 ring-2 ring-rose-300" : "bg-white/15"
+              }`}
+              title={isRealExamMode && !isExamSubmitted ? "Thời gian đếm ngược Chế độ Thi thật" : "Thời gian làm bài"}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              {isRealExamMode && !isExamSubmitted
+                ? `Còn ${formatTimer(Math.max(0, examTimeLimitSeconds - quizTimerSeconds))}`
+                : formatTimer(quizTimerSeconds)}
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/90 text-white text-xs font-extrabold shadow-2xs">
-              ✓ {sessionCorrectCount}/{quizModalCard.questions.length}
-            </span>
+            {(!isRealExamMode || isExamSubmitted) ? (
+              <>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/90 text-white text-xs font-extrabold shadow-2xs">
+                  <Zap className="w-3.5 h-3.5 fill-white" />
+                  +{sessionCorrectCount * (isRealExamMode ? 15 : 10)} XP
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/90 text-white text-xs font-extrabold shadow-2xs">
+                  ✓ {sessionCorrectCount}/{quizModalCard.questions.length}
+                </span>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmitRealExam}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-md ring-2 ring-white/40 transition cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>🏁 Nộp bài thi ({Object.keys(quizSelectedOption).length}/{quizModalCard.questions.length})</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -285,7 +597,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           <div className="flex items-center gap-3">
             <span className="font-extrabold text-amber-900 flex items-center gap-1.5">
               <Pencil className="w-4 h-4 text-amber-700" />
-              Công cụ Bút vẽ Highlighting:
+              Công cụ Bút vẽ Highlighting (Nhấn vào câu hỏi, đáp án hoặc lời thoại để tô màu):
             </span>
             <div className="flex items-center gap-1.5">
               {(["yellow", "green", "pink", "blue"] as const).map((color) => (
@@ -310,10 +622,13 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => triggerToast("Đã xóa tất cả nét vẽ")}
+              onClick={() => {
+                setAnnotations({});
+                triggerToast("Đã xóa tất cả đánh dấu highlight!");
+              }}
               className="px-3 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold transition cursor-pointer"
             >
-              🧹 Xóa đánh dấu
+              🧹 Xóa đánh dấu ({Object.keys(annotations).length})
             </button>
             <button
               type="button"
@@ -351,8 +666,8 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
             <textarea
               rows={5}
-              value={practiceUserNotes[currentQ.id] || ""}
-              onChange={(e) => setPracticeUserNotes({ ...practiceUserNotes, [currentQ.id]: e.target.value })}
+              value={practiceUserNotes[String(currentQ.id)] || ""}
+              onChange={(e) => setPracticeUserNotes({ ...practiceUserNotes, [String(currentQ.id)]: e.target.value })}
               placeholder="Nhập ghi chú hoặc kiến thức cần nhớ..."
               className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
             />
@@ -362,9 +677,10 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                 type="button"
                 onClick={() => {
                   const updated = { ...practiceUserNotes };
-                  delete updated[currentQ.id];
+                  delete updated[String(currentQ.id)];
                   setPracticeUserNotes(updated);
-                  triggerToast("Đã xóa ghi chú của câu hỏi này!");
+                  syncUnitMetadataToDb(updated);
+                  triggerToast("Đã xóa ghi chú của câu hỏi này trên hệ thống!");
                 }}
                 className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
               >
@@ -383,7 +699,8 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                   type="button"
                   onClick={() => {
                     setIsNotesModalOpen(false);
-                    triggerToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                    syncUnitMetadataToDb(practiceUserNotes);
+                    triggerToast("Đã đồng bộ ghi chú cá nhân lên cơ sở dữ liệu! 💾");
                   }}
                   className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
                 >
@@ -649,8 +966,9 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     audioUrl={resolvedAudioUrl}
                     isPlaying={isPlayingAudio}
                     onPlayPauseChange={(playing) => setIsPlayingAudio(playing)}
-                    showSpeedControl={true}
-                    showReplayButton={true}
+                    showSpeedControl={!isRealExamMode || isExamSubmitted}
+                    showReplayButton={!isRealExamMode || isExamSubmitted}
+                    examMode={isRealExamMode && !isExamSubmitted}
                     title={`Audio ${quizModalCard.part || "Part 1"} • Câu ${activeQuizQIndex + 1}`}
                   />
 
@@ -677,7 +995,12 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                           English
                         </span>
                       </div>
-                      <p className="text-base sm:text-lg font-medium text-slate-900 whitespace-pre-line leading-relaxed sm:leading-loose select-text">
+                      <p
+                        onClick={() => toggleAnnotationKey(`transcript-${q.id}`)}
+                        className={`text-base sm:text-lg font-medium text-slate-900 whitespace-pre-line leading-relaxed sm:leading-loose select-text ${
+                          isAnnotatorActive ? "cursor-pointer hover:bg-amber-100/50 rounded-lg p-1 transition" : ""
+                        } ${getAnnotationHighlightClass(`transcript-${q.id}`)}`}
+                      >
                         {q.fullTranscript}
                       </p>
 
@@ -719,11 +1042,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => triggerToast("Trợ lý AI đang sẵn sàng giải đáp!")}
+                        onClick={() => setIsAiTutorModalOpen(true)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
                       >
                         <HelpCircle className="w-3.5 h-3.5" />
-                        <span>Hỏi bài</span>
+                        <span>Hỏi bài AI</span>
                       </button>
                     </div>
 
@@ -736,7 +1059,12 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                         return (
                           <div key={qItem.id} className="p-5 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs space-y-4">
                             <div className="flex items-start justify-between gap-3">
-                              <div className="text-sm font-extrabold text-slate-900 leading-snug">
+                              <div
+                                onClick={() => toggleAnnotationKey(`stem-${qItem.id}`)}
+                                className={`text-sm font-extrabold text-slate-900 leading-snug ${
+                                  isAnnotatorActive ? "cursor-pointer hover:bg-amber-100/60 rounded px-1 transition" : ""
+                                } ${getAnnotationHighlightClass(`stem-${qItem.id}`)}`}
+                              >
                                 {qNumDisplay}. {qItem.question || qItem.fullTranscript}
                               </div>
                               <button
@@ -802,10 +1130,17 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                     <div
                                       key={optKey}
                                       onClick={() => {
+                                        if (isAnnotatorActive) {
+                                          toggleAnnotationKey(`opt-${qItem.id}-${optKey}`);
+                                          return;
+                                        }
                                         playSfx("click");
                                         if (isChecked) return;
                                         const nextSelected = { ...quizSelectedOption, [qItem.id]: optKey };
                                         setQuizSelectedOption(nextSelected);
+                                        if (isRealExamMode && !isExamSubmitted) {
+                                          return;
+                                        }
 
                                         // Auto-check only when all questions in group are answered
                                         const allGroupDone = currentGroupQuestions.length > 0 && currentGroupQuestions.every((item) => !!nextSelected[item.id]);
@@ -826,11 +1161,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                     >
                                       <div className="flex items-center gap-3">
                                         {iconNode}
-                                        <span className={`text-sm ${textColor}`}>
+                                        <span className={`text-sm ${textColor} ${getAnnotationHighlightClass(`opt-${qItem.id}-${optKey}`)}`}>
                                           ({optKey}) {optVal}
                                         </span>
                                       </div>
-                                      {isChecked && optTrans && (
+                                      {(isChecked || showBilingualQuiz) && optTrans && (
                                         <div className="flex items-center gap-2 pl-7 pt-0.5">
                                           <span className="text-blue-500 font-bold text-xs">|</span>
                                           <span className="text-xs font-semibold text-blue-700">
@@ -867,32 +1202,45 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     {/* GROUP ACTION BUTTONS */}
                     {!isGroupChecked && (
                       <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const answeredCount = currentGroupQuestions.filter((item) => !!quizSelectedOption[item.id]).length;
-                            if (answeredCount === 0) {
-                              triggerToast("Vui lòng chọn đáp án trước khi kiểm tra!");
-                              return;
-                            }
-                            const nextChecked = { ...quizAnswerChecked };
-                            currentGroupQuestions.forEach((item) => {
-                              nextChecked[item.id] = true;
-                              if (quizSelectedOption[item.id]) {
-                                updateCardStats(item, quizSelectedOption[item.id]);
+                        {isRealExamMode && !isExamSubmitted ? (
+                          <button
+                            type="button"
+                            onClick={handleSubmitRealExam}
+                            className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              🏁 Nộp bài thi & Chấm toàn bộ ({Object.keys(quizSelectedOption).length}/{quizModalCard.questions.length} câu đã chọn)
+                            </span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const answeredCount = currentGroupQuestions.filter((item) => !!quizSelectedOption[item.id]).length;
+                              if (answeredCount === 0) {
+                                triggerToast("Vui lòng chọn đáp án trước khi kiểm tra!");
+                                return;
                               }
-                            });
-                            setQuizAnswerChecked(nextChecked);
-                            playSfx("correct");
-                            triggerToast("Đã kiểm tra đáp án toàn bộ nhóm câu!");
-                          }}
-                          className="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>
-                            Kiểm tra đáp án nhóm ({currentGroupQuestions.filter((item) => !!quizSelectedOption[item.id]).length}/{currentGroupQuestions.length} câu đã chọn)
-                          </span>
-                        </button>
+                              const nextChecked = { ...quizAnswerChecked };
+                              currentGroupQuestions.forEach((item) => {
+                                nextChecked[item.id] = true;
+                                if (quizSelectedOption[item.id]) {
+                                  updateCardStats(item, quizSelectedOption[item.id]);
+                                }
+                              });
+                              setQuizAnswerChecked(nextChecked);
+                              playSfx("correct");
+                              triggerToast("Đã kiểm tra đáp án toàn bộ nhóm câu!");
+                            }}
+                            className="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              Kiểm tra đáp án nhóm ({currentGroupQuestions.filter((item) => !!quizSelectedOption[item.id]).length}/{currentGroupQuestions.length} câu đã chọn)
+                            </span>
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -934,8 +1282,29 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                       type="button"
                                       onClick={() => playAudio(v.word)}
                                       className="p-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition cursor-pointer"
+                                      title="Nghe phát âm"
                                     >
                                       <Volume2 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleSaveWordToBag({
+                                          word: v.word,
+                                          pos: v.pos,
+                                          ipa: v.ipa,
+                                          meaning: v.meaning,
+                                        })
+                                      }
+                                      className={`p-1 rounded-lg border transition cursor-pointer ${
+                                        savedVocabItems.some((item) => item.word.toLowerCase() === v.word.toLowerCase())
+                                          ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+                                      }`}
+                                      title="Lưu vào Giỏ từ"
+                                    >
+                                      <Bookmark className="w-3.5 h-3.5" />
                                     </button>
 
                                     <button
@@ -947,6 +1316,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                       <span>{isExpanded ? "Thu gọn" : "🔍 Xem chi tiết"}</span>
                                     </button>
                                   </div>
+
                                 </div>
 
                                 <p className="font-bold text-slate-800">{v.meaning}</p>
@@ -1016,11 +1386,11 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => triggerToast("Trợ lý AI đang sẵn sàng giải đáp!")}
+                            onClick={() => setIsAiTutorModalOpen(true)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
                           >
                             <HelpCircle className="w-3.5 h-3.5" />
-                            <span>Hỏi bài</span>
+                            <span>Hỏi bài AI</span>
                           </button>
                           <button
                             type="button"
@@ -1050,7 +1420,12 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                         }
 
                         return (
-                          <div className="text-base font-extrabold text-slate-900">
+                          <div
+                            onClick={() => toggleAnnotationKey(`stem-${q.id}`)}
+                            className={`text-base font-extrabold text-slate-900 ${
+                              isAnnotatorActive ? "cursor-pointer hover:bg-amber-100/60 rounded px-1 transition" : ""
+                            } ${getAnnotationHighlightClass(`stem-${q.id}`)}`}
+                          >
                             {activeQuizQIndex + 1}.{promptText ? ` ${promptText}` : ""}
                           </div>
                         );
@@ -1116,10 +1491,17 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                 <div
                                   key={optKey}
                                   onClick={() => {
+                                    if (isAnnotatorActive) {
+                                      toggleAnnotationKey(`opt-${q.id}-${optKey}`);
+                                      return;
+                                    }
                                     playSfx("click");
                                     if (isChecked) return;
                                     const nextSelected = { ...quizSelectedOption, [q.id]: optKey };
                                     setQuizSelectedOption(nextSelected);
+                                    if (isRealExamMode && !isExamSubmitted) {
+                                      return;
+                                    }
                                     setQuizAnswerChecked({ ...quizAnswerChecked, [q.id]: true });
                                     updateCardStats(q, optKey);
 
@@ -1128,7 +1510,7 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                 >
                                   <div className="flex items-center gap-3">
                                     {iconNode}
-                                    <span className={`text-sm ${textColor}`}>{labelText}</span>
+                                    <span className={`text-sm ${textColor} ${getAnnotationHighlightClass(`opt-${q.id}-${optKey}`)}`}>{labelText}</span>
                                   </div>
 
                                   {isChecked && optTrans && (
@@ -1217,8 +1599,29 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                                             type="button"
                                             onClick={() => playAudio(v.word)}
                                             className="p-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition cursor-pointer"
+                                            title="Nghe phát âm"
                                           >
                                             <Volume2 className="w-3.5 h-3.5" />
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleSaveWordToBag({
+                                                word: v.word,
+                                                pos: v.pos,
+                                                ipa: v.ipa,
+                                                meaning: v.meaning,
+                                              })
+                                            }
+                                            className={`p-1 rounded-lg border transition cursor-pointer ${
+                                              savedVocabItems.some((item) => item.word.toLowerCase() === v.word.toLowerCase())
+                                                ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                                                : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+                                            }`}
+                                            title="Lưu vào Giỏ từ"
+                                          >
+                                            <Bookmark className="w-3.5 h-3.5" />
                                           </button>
 
                                           <button
@@ -1309,20 +1712,32 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
           <button
             type="button"
-            onClick={() => triggerToast("Mở giỏ từ vựng cá nhân!")}
+            onClick={() => setIsVocabBagModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
           >
             <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
-            <span>Giỏ từ ({addedVocabItems.length})</span>
+            <span>Giỏ từ ({savedVocabItems.length})</span>
           </button>
 
           <button
             type="button"
-            onClick={() => triggerToast("Mở công cụ tra từ nhanh!")}
+            onClick={() => {
+              setDictionaryInitialWord("");
+              setIsDictionaryModalOpen(true);
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
           >
             <Search className="w-3.5 h-3.5 text-slate-500" />
             <span>Tra từ</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Lịch sử</span>
           </button>
         </div>
 
@@ -1385,6 +1800,133 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
           </button>
         </div>
       </footer>
+
+      <ListeningDictionaryModal
+        isOpen={isDictionaryModalOpen}
+        onClose={() => setIsDictionaryModalOpen(false)}
+        savedWords={savedVocabItems}
+        onSaveWord={handleSaveWordToBag}
+        playAudio={playAudio}
+      />
+
+      <ListeningPersonalVocabBagModal
+        isOpen={isVocabBagModalOpen}
+        onClose={() => setIsVocabBagModalOpen(false)}
+        savedWords={savedVocabItems}
+        lessonVocab={combinedVocabItems.map((v) => ({
+          word: v.word,
+          ipa: v.ipa,
+          pos: v.pos,
+          meaning: v.meaning,
+          example: typeof v.example === "object" ? v.example?.en : v.example,
+        }))}
+        onToggleSaveWord={(item) => {
+          const exists = savedVocabItems.some((w) => w.word.toLowerCase() === item.word.toLowerCase());
+          if (exists) {
+            handleRemoveWordFromBag(item.word);
+          } else {
+            handleSaveWordToBag(item);
+          }
+        }}
+        playAudio={playAudio}
+        isLocked={!isGroupChecked}
+      />
+
+      <ListeningAiTutorModal
+        isOpen={isAiTutorModalOpen}
+        onClose={() => setIsAiTutorModalOpen(false)}
+        part={currentQ?.part || quizModalCard.part}
+        questionText={currentQ?.question}
+        transcript={currentQ?.fullTranscript}
+        options={currentQ?.options}
+        correctAnswer={currentQ?.correctAnswer}
+        explanation={currentQ?.explanation}
+        trapNote={currentQ?.trapNote}
+        isAnswerUnlocked={isGroupChecked}
+      />
+
+      <ListeningAttemptHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        targetId={quizModalCard.id}
+        title={`Lịch sử làm bài • ${quizModalCard.part} · ${quizModalCard.title}`}
+      />
+
+      {/* REAL EXAM RESULT SUMMARY MODAL */}
+      {showExamResultModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in duration-150">
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-black shadow-xs">
+                🏁
+              </div>
+              <h3 className="text-lg font-black text-slate-900">Kết quả Chế độ Thi thật</h3>
+              <p className="text-xs text-slate-500">
+                {quizModalCard.part} • {quizModalCard.title}
+              </p>
+            </div>
+
+            {(() => {
+              const total = quizModalCard.questions.length;
+              const correct = sessionCorrectCount;
+              const accuracy = total > 0 ? Math.round((correct * 100) / total) : 0;
+              const estListeningScore = Math.min(495, Math.max(5, Math.round((5 + (accuracy / 100) * 490) / 5) * 5));
+              return (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+                    <div className="text-[11px] font-bold text-emerald-800 uppercase">Số câu đúng</div>
+                    <div className="text-xl font-black text-emerald-700 mt-1">
+                      {correct}/{total} ({accuracy}%)
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-center">
+                    <div className="text-[11px] font-bold text-blue-800 uppercase">Điểm LC quy đổi</div>
+                    <div className="text-xl font-black text-blue-700 mt-1">
+                      ~{estListeningScore}/495
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-center">
+                    <div className="text-[11px] font-bold text-amber-800 uppercase">Thời gian làm</div>
+                    <div className="text-base font-black text-amber-700 mt-1">
+                      {formatTimer(quizTimerSeconds)}
+                    </div>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-center">
+                    <div className="text-[11px] font-bold text-indigo-800 uppercase">Điểm thưởng XP</div>
+                    <div className="text-base font-black text-indigo-700 mt-1">
+                      +{correct * 15} XP
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+              💡 Kết quả bài thi thật đã được đồng bộ vào hệ thống <strong>Analytics &amp; BKT Recommendation</strong> để cập nhật lộ trình ôn tập cá nhân hóa của bạn.
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowExamResultModal(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer"
+              >
+                📖 Xem giải thích &amp; Transcript
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExamResultModal(false);
+                  setQuizModalCard(null);
+                }}
+                className="py-2.5 px-4 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Thoát
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

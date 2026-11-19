@@ -43,6 +43,7 @@ import {
   getTodayDateString,
   StudyTrackerData,
 } from "@/lib/studyTracker";
+import { fetchListeningAnalytics, type ListeningAnalyticsSummary } from "@/lib/api/listening";
 import {
   getCurrentUser,
   getLearningOnboardingStatus,
@@ -180,9 +181,29 @@ export default function StudentDashboardPage() {
   const [progressMap, setProgressMap] = useState<Record<string, ItemProgress>>(readPracticeProgressMap);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [editDailyMinutes, setEditDailyMinutes] = useState(
-    () => getStudyTrackerData().dailyTargetMinutes
-  );
+  const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
+  const [listeningAnalytics, setListeningAnalytics] = useState<ListeningAnalyticsSummary | null>(null);
+
+  useEffect(() => {
+    fetchListeningAnalytics()
+      .then((res) => setListeningAnalytics(res))
+      .catch(() => {});
+  }, []);
+
+  // Lắng nghe cập nhật thời gian học thực tế theo thời gian thực
+  useEffect(() => {
+    const handleTrackerUpdate = () => {
+      setTrackerData(getStudyTrackerData());
+    };
+    window.addEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+    window.addEventListener("storage", handleTrackerUpdate);
+    window.addEventListener("focus", handleTrackerUpdate);
+    return () => {
+      window.removeEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+      window.removeEventListener("storage", handleTrackerUpdate);
+      window.removeEventListener("focus", handleTrackerUpdate);
+    };
+  }, []);
 
   // Latest Score & Target Goal State
   const [latestScore, setLatestScore] = useState<LatestScoreData | null>(() => {
@@ -1501,7 +1522,75 @@ export default function StudentDashboardPage() {
       </section>
 
       {/* ===================================================================== */}
-      {/* 5. LỐI TẮT HỖ TRỢ: CỘNG ĐỒNG & LỊCH SỬ HỌC TẬP                        */}
+      {/* 5. ĐỀ XUẤT LỘ TRÌNH BKT & ANALYTICS LISTENING CÁ NHÂN HÓA             */}
+      {/* ===================================================================== */}
+      <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/70 via-sky-50/50 to-indigo-50/40 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-800">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              Đề xuất Lộ trình BKT &amp; Analytics Cá nhân hóa
+            </span>
+            <h4 className="text-sm font-bold text-slate-900">
+              {listeningAnalytics && listeningAnalytics.recommendations.length > 0
+                ? listeningAnalytics.recommendations[0].title
+                : "Chọn học phần phù hợp với mục tiêu của bạn"}
+            </h4>
+            <p className="text-xs text-slate-600">
+              {listeningAnalytics && listeningAnalytics.recommendations.length > 0
+                ? listeningAnalytics.recommendations[0].reason
+                : "Danh sách bài học và đề luyện tập được tải từ dữ liệu của hệ thống."}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/listening"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
+            >
+              Luyện nghe ngay
+            </Link>
+            <Link
+              href="/vocabulary"
+              className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition"
+            >
+              Học từ vựng
+            </Link>
+          </div>
+        </div>
+
+        {listeningAnalytics && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-blue-200/60">
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Điểm Listening quy đổi</div>
+              <div className="text-base font-black text-blue-700 font-mono mt-0.5">
+                {listeningAnalytics.estimatedListeningScore}/495
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Độ chính xác Listening</div>
+              <div className="text-base font-black text-emerald-700 font-mono mt-0.5">
+                {listeningAnalytics.overallAccuracyPercent}% ({listeningAnalytics.totalCorrect}/{listeningAnalytics.totalQuestionsAnswered})
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Số lượt Chế độ Thi thật</div>
+              <div className="text-base font-black text-rose-600 font-mono mt-0.5">
+                {listeningAnalytics.realExamAttempts} lượt
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Tổng XP Listening</div>
+              <div className="text-base font-black text-amber-600 font-mono mt-0.5">
+                +{listeningAnalytics.totalXpEarned} XP
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ===================================================================== */}
+      {/* 6. LỐI TẮT HỖ TRỢ: CỘNG ĐỒNG & LỊCH SỬ HỌC TẬP                        */}
       {/* ===================================================================== */}
       <section className="grid gap-4 sm:grid-cols-2">
         <Link
