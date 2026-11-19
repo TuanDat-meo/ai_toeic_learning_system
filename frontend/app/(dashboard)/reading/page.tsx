@@ -206,7 +206,7 @@ export default function StudentReadingPage() {
           }}
           playSfx={playSfx}
           showToast={showToast}
-          showTimer={false}
+          showTimer={true}
         />
       )}
     </div>

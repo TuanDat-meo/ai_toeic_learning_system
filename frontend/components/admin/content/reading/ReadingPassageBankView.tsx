@@ -330,26 +330,26 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
   return (
     <div className="space-y-4">
       {/* 1. TOP STATS CARDS & QUICK FILTER PILLS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Passages Card */}
         <button
           type="button"
           onClick={handleResetFilters}
-          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+          className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
             filterType === "ALL" && bilingualFilter === "ALL" && !search
               ? "bg-blue-50/70 border-blue-200 ring-2 ring-blue-500/20"
               : "bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng kho bài đọc</span>
-            <FileText className="w-4 h-4 text-blue-600" />
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Tổng kho bài đọc</span>
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-extrabold text-slate-900">{statsCounts.total}</span>
-            <span className="text-[11px] font-medium text-slate-500">đoạn văn</span>
+          <div className="mt-2 sm:mt-3 flex items-baseline gap-2">
+            <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{statsCounts.total}</span>
+            <span className="text-xs font-medium text-slate-500">đoạn văn</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Ước tính ~{statsCounts.totalWords.toLocaleString()} từ</p>
+          <p className="text-[11px] text-slate-400 mt-1">Ước tính ~{statsCounts.totalWords.toLocaleString()} từ</p>
         </button>
 
         {/* Part 6 Card */}
@@ -358,21 +358,21 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
           onClick={() => {
             setFilterType(filterType === "Part 6" ? "ALL" : "Part 6");
           }}
-          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+          className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
             filterType === "Part 6"
               ? "bg-purple-50 border-purple-200 ring-2 ring-purple-500/20"
               : "bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">Part 6 (Điền đoạn)</span>
-            <span className="w-2 h-2 rounded-full bg-purple-500" />
+            <span className="text-[11px] sm:text-xs font-bold text-purple-700 uppercase tracking-wider">Part 6 (Điền đoạn)</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-extrabold text-purple-900">{statsCounts.p6}</span>
-            <span className="text-[11px] font-medium text-purple-600">bài thi</span>
+          <div className="mt-2 sm:mt-3 flex items-baseline gap-2">
+            <span className="text-xl sm:text-2xl font-extrabold text-purple-900">{statsCounts.p6}</span>
+            <span className="text-xs font-medium text-purple-600">bài thi</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Text Completion chuẩn ETS</p>
+          <p className="text-[11px] text-slate-400 mt-1">Text Completion chuẩn ETS</p>
         </button>
 
         {/* Part 7 Card */}
@@ -381,21 +381,21 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
           onClick={() => {
             setFilterType(filterType === "Part 7 All" ? "ALL" : "Part 7 All");
           }}
-          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+          className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
             filterType === "Part 7 All"
               ? "bg-indigo-50 border-indigo-200 ring-2 ring-indigo-500/20"
               : "bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Part 7 (Đọc hiểu)</span>
-            <Layers className="w-4 h-4 text-indigo-600" />
+            <span className="text-[11px] sm:text-xs font-bold text-indigo-700 uppercase tracking-wider">Part 7 (Đọc hiểu)</span>
+            <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-extrabold text-indigo-900">{statsCounts.p7Single + statsCounts.p7Multi + statsCounts.p7Full}</span>
-            <span className="text-[11px] font-medium text-indigo-600">bài đọc</span>
+          <div className="mt-2 sm:mt-3 flex items-baseline gap-2">
+            <span className="text-xl sm:text-2xl font-extrabold text-indigo-900">{statsCounts.p7Single + statsCounts.p7Multi + statsCounts.p7Full}</span>
+            <span className="text-xs font-medium text-indigo-600">bài đọc</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Đoạn đơn, đôi, ba &amp; đề 54 câu</p>
+          <p className="text-[11px] text-slate-400 mt-1">Đoạn đơn, đôi, ba &amp; đề 54 câu</p>
         </button>
 
         {/* Bilingual Coverage Card */}
@@ -404,35 +404,35 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
           onClick={() => {
             setBilingualFilter(bilingualFilter === "BILINGUAL" ? "ALL" : "BILINGUAL");
           }}
-          className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+          className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
             bilingualFilter === "BILINGUAL"
               ? "bg-emerald-50 border-emerald-200 ring-2 ring-emerald-500/20"
               : "bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Độ phủ Song ngữ EN-VI</span>
-            <Languages className="w-4 h-4 text-emerald-600" />
+            <span className="text-[11px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">Độ phủ Song ngữ EN-VI</span>
+            <Languages className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-extrabold text-emerald-900">{statsCounts.bilingual}</span>
-            <span className="text-[11px] font-bold text-emerald-600">({statsCounts.bilingualPercent}%)</span>
+          <div className="mt-2 sm:mt-3 flex items-baseline gap-2">
+            <span className="text-xl sm:text-2xl font-extrabold text-emerald-900">{statsCounts.bilingual}</span>
+            <span className="text-xs font-bold text-emerald-600">({statsCounts.bilingualPercent}%)</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">{statsCounts.untranslated} bài chưa có bản dịch</p>
+          <p className="text-[11px] text-slate-400 mt-1">{statsCounts.untranslated} bài chưa có bản dịch</p>
         </button>
       </div>
 
       {/* 2. FILTER & ACTION BAR */}
-      <div className="p-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="p-3.5 sm:p-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
         {/* Search */}
-        <div className="relative w-full md:w-80">
+        <div className="relative w-full xl:w-96 shrink-0">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo tiêu đề, bài đọc, câu hỏi, mã..."
-            className="w-full pl-10 pr-9 py-2.5 rounded-2xl border border-slate-200 text-xs font-medium bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition"
+            className="w-full pl-10 pr-9 py-2.5 rounded-2xl border border-slate-200 text-xs sm:text-sm font-medium bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition"
           />
           {search && (
             <button
@@ -447,12 +447,12 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
         </div>
 
         {/* Filter Selects & Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full xl:w-auto justify-start xl:justify-end">
           {/* Format / Part filter */}
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer hover:border-slate-300 transition"
+            className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer hover:border-slate-300 transition"
           >
             <option value="ALL">Tất cả định dạng đoạn văn ({statsCounts.total})</option>
             <option value="Part 6">Part 6 - Hoàn thành đoạn văn ({statsCounts.p6})</option>
@@ -466,7 +466,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
           <select
             value={bilingualFilter}
             onChange={(e) => setBilingualFilter(e.target.value as "ALL" | "BILINGUAL" | "UNTRANSLATED")}
-            className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer hover:border-slate-300 transition"
+            className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-700 bg-slate-50 focus:bg-white outline-none cursor-pointer hover:border-slate-300 transition"
           >
             <option value="ALL">Tất cả trạng thái dịch ({statsCounts.total})</option>
             <option value="BILINGUAL">✓ Đã có dịch song ngữ EN-VI ({statsCounts.bilingual})</option>
@@ -478,7 +478,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
             <button
               type="button"
               onClick={handleResetFilters}
-              className="px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer flex items-center gap-1"
+              className="px-3 py-2.5 rounded-2xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer flex items-center gap-1.5"
               title="Đặt lại toàn bộ bộ lọc"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -491,7 +491,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
             <button
               type="button"
               onClick={onOpenCreatePassage}
-              className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0"
+              className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>Thêm đoạn văn mới</span>
@@ -533,18 +533,20 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
 
       {/* 3. MAIN TABLE */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs min-w-[980px]">
+        <div className="overflow-x-auto relative">
+          <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[1020px]">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
-                <th className="py-3.5 px-4 w-24">Mã</th>
-                <th className="py-3.5 px-4 min-w-[260px]">Tiêu đề bài đọc TOEIC</th>
-                <th className="py-3.5 px-4 min-w-[150px]">Định dạng</th>
-                <th className="py-3.5 px-4 min-w-[150px]">Chủ đề bài đọc</th>
-                <th className="py-3.5 px-4 text-center min-w-[120px]">Độ dài</th>
-                <th className="py-3.5 px-4 text-center min-w-[100px]">Số câu &amp; Từ</th>
-                <th className="py-3.5 px-4 text-center min-w-[130px]">Bản dịch song ngữ</th>
-                <th className="py-3.5 px-4 text-center min-w-[140px]">Thao tác</th>
+              <tr className="bg-slate-50/90 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] sm:text-xs">
+                <th className="py-3.5 px-3 sm:px-4 w-20 sm:w-24 whitespace-nowrap">Mã</th>
+                <th className="py-3.5 px-3 sm:px-4 min-w-[220px] sm:min-w-[260px]">Tiêu đề bài đọc TOEIC</th>
+                <th className="py-3.5 px-3 sm:px-4 min-w-[130px] sm:min-w-[150px] whitespace-nowrap">Định dạng</th>
+                <th className="py-3.5 px-3 sm:px-4 min-w-[140px] sm:min-w-[160px] whitespace-nowrap">Chủ đề bài đọc</th>
+                <th className="py-3.5 px-3 sm:px-4 text-center min-w-[85px] sm:min-w-[105px] whitespace-nowrap">Độ dài</th>
+                <th className="py-3.5 px-3 sm:px-4 text-center min-w-[95px] sm:min-w-[115px] whitespace-nowrap">Số câu &amp; Từ</th>
+                <th className="py-3.5 px-3 sm:px-4 text-center min-w-[145px] sm:min-w-[165px] whitespace-nowrap">Bản dịch song ngữ</th>
+                <th className="sticky right-0 z-20 bg-slate-50/95 backdrop-blur-xs py-3.5 px-3 sm:px-4 text-center min-w-[135px] sm:min-w-[145px] border-l border-slate-200/80 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.06)] whitespace-nowrap">
+                  Thao tác
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -585,16 +587,16 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                     : "bg-blue-50 text-blue-700 border-blue-200";
 
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50/70 transition">
+                    <tr key={p.id} className="hover:bg-slate-50/70 transition group">
                       {/* 1. MÃ BÀI */}
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-700 whitespace-nowrap text-[11px]">
+                      <td className="py-3.5 px-3 sm:px-4 font-mono font-bold text-slate-700 whitespace-nowrap text-[11px] sm:text-xs">
                         {p.id}
                       </td>
 
                       {/* 2. TIÊU ĐỀ & PART BADGE */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-3 sm:px-4">
                         <p
-                          className="font-bold text-slate-900 leading-snug hover:text-blue-600 transition cursor-pointer"
+                          className="font-bold text-slate-900 leading-snug hover:text-blue-600 transition cursor-pointer text-xs sm:text-sm"
                           onClick={() => {
                             setPreviewPassage(p);
                             setPreviewTab("passage");
@@ -604,7 +606,7 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                         </p>
                         <div className="flex items-center gap-1.5 mt-1">
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap border ${badgeColor}`}
+                            className={`text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap border ${badgeColor}`}
                           >
                             {p.typeLabel}
                           </span>
@@ -612,48 +614,48 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                       </td>
 
                       {/* 3. ĐỊNH DẠNG */}
-                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap font-medium text-xs">
+                      <td className="py-3.5 px-3 sm:px-4 text-slate-600 whitespace-nowrap font-medium text-xs sm:text-sm">
                         {p.format}
                       </td>
 
                       {/* 4. CHỦ ĐỀ */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 whitespace-nowrap inline-flex items-center">
+                      <td className="py-3.5 px-3 sm:px-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-slate-100 text-slate-700 whitespace-nowrap inline-flex items-center">
                           {p.topic}
                         </span>
                       </td>
 
                       {/* 5. ĐỘ DÀI */}
-                      <td className="py-3.5 px-4 text-center font-mono text-slate-800 whitespace-nowrap text-xs">
+                      <td className="py-3.5 px-3 sm:px-4 text-center font-mono text-slate-800 whitespace-nowrap text-xs sm:text-sm">
                         <span className="font-bold text-slate-800">{p.displayWordCount}</span>
                       </td>
 
                       {/* 6. SỐ CÂU & TỪ VỰNG */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className="font-bold text-slate-900 block">{p.questionsCount} câu</span>
+                      <td className="py-3.5 px-3 sm:px-4 text-center whitespace-nowrap">
+                        <span className="font-bold text-slate-900 block text-xs sm:text-sm">{p.questionsCount} câu</span>
                         {p.vocabCount > 0 && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded font-semibold border border-amber-200 inline-block mt-0.5">
+                          <span className="text-[10px] sm:text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-semibold border border-amber-200 inline-block mt-0.5">
                             {p.vocabCount} từ vựng
                           </span>
                         )}
                       </td>
 
                       {/* 7. BẢN DỊCH SONG NGỮ */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                      <td className="py-3.5 px-3 sm:px-4 text-center whitespace-nowrap">
                         {p.hasBilingual ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Song ngữ EN-VI</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
                             Chưa có bản dịch
                           </span>
                         )}
                       </td>
 
-                      {/* 8. THAO TÁC (XEM TRƯỚC, LUYỆN TẬP, SỬA, XÓA) */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                      {/* 8. THAO TÁC (XEM TRƯỚC, LUYỆN TẬP, SỬA, XÓA) - STICKY RIGHT */}
+                      <td className="sticky right-0 z-10 bg-white/95 group-hover:bg-slate-50/95 backdrop-blur-xs py-3.5 px-3 sm:px-4 text-center whitespace-nowrap border-l border-slate-100 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.06)]">
                         <div className="flex items-center justify-center gap-1.5">
                           {/* 1. XEM TRƯỚC (PREVIEW) */}
                           <button
@@ -662,10 +664,10 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                               setPreviewPassage(p);
                               setPreviewTab("passage");
                             }}
-                            className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-blue-600 transition cursor-pointer shadow-2xs"
+                            className="p-1.5 sm:p-2 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-blue-600 transition cursor-pointer shadow-2xs"
                             title="Xem trước bài đọc song ngữ & câu hỏi"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </button>
 
                           {/* 2. VÀO LUYỆN TẬP / LÀM THỬ (PRACTICE) */}
@@ -673,10 +675,10 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                             <button
                               type="button"
                               onClick={() => onStartPractice(p.card)}
-                              className="p-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="p-1.5 sm:p-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Kiểm duyệt & xem chi tiết đề thi"
                             >
-                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
                             </button>
                           )}
 
@@ -685,10 +687,10 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                             <button
                               type="button"
                               onClick={(e) => onOpenEditCard(p.card, e)}
-                              className="p-1.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 transition cursor-pointer shadow-2xs"
+                              className="p-1.5 sm:p-2 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 transition cursor-pointer shadow-2xs"
                               title="Chỉnh sửa bài đọc, câu hỏi & từ vựng"
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
+                              <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           )}
 
@@ -697,10 +699,10 @@ export const ReadingPassageBankView: React.FC<ReadingPassageBankViewProps> = ({
                             <button
                               type="button"
                               onClick={() => onOpenDeleteConfirm(p.card)}
-                              className="p-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 transition cursor-pointer shadow-2xs"
+                              className="p-1.5 sm:p-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 transition cursor-pointer shadow-2xs"
                               title="Xóa bài đọc này khỏi hệ thống"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           )}
                         </div>

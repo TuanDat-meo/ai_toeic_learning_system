@@ -105,7 +105,7 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
         />
       ) : null}
-      <aside className={`fixed left-0 top-16 z-50 flex h-[calc(100dvh-4rem)] w-80 md:top-[76px] md:h-[calc(100dvh-76px)] flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-16 z-50 flex h-[calc(100dvh-4rem)] w-72 xl:w-80 md:top-[76px] md:h-[calc(100dvh-76px)] flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
       <div className="flex h-12 shrink-0 items-center justify-end border-b border-slate-100 px-4 md:hidden">
         <button type="button" aria-label="Đóng điều hướng" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
           <X aria-hidden="true" className="h-4 w-4" />

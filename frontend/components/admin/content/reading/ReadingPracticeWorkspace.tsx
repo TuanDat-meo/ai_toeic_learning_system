@@ -35,6 +35,7 @@ import {
   FolderPlus,
   Info,
   Loader2,
+  Target,
 } from "lucide-react";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
 import { lookupEnglishDictionary } from "@/lib/api/english-dictionary";
@@ -507,11 +508,33 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     part7SingleMinutes: number;
     part7MultiMinutes: number;
     targetWpm: number;
+    part5TimeoutSeconds?: number;
+    part6TimeoutSeconds?: number;
+    part7TimeoutSeconds?: number;
+    targetScoreBand?: string;
     enableBilingualByDefault: boolean;
     enablePacingTimer: boolean;
     enableTimeoutAlert: boolean;
     speedDrillMode: boolean;
+    showTargetPaceBadge?: boolean;
   } | null>(null);
+
+  // Thời gian dừng tại câu / nhóm câu hiện tại (đếm giây thực tế)
+  const [timeSpentOnCurrentGroup, setTimeSpentOnCurrentGroup] = useState(0);
+
+  // Reset thời gian câu hỏi khi chuyển câu / cụm câu
+  useEffect(() => {
+    setTimeSpentOnCurrentGroup(0);
+  }, [currentGroupIndex]);
+
+  // Bộ đếm thời gian cho câu hiện tại (tạm dừng khi đã chấm hoặc đang mở modal)
+  useEffect(() => {
+    if (showResumePromptModal || isCurrentGroupChecked) return;
+    const interval = setInterval(() => {
+      setTimeSpentOnCurrentGroup((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showResumePromptModal, isCurrentGroupChecked]);
 
   useEffect(() => {
     const handleConfigSync = (e?: any) => {
@@ -623,6 +646,53 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return "PART 5";
   }, [card]);
 
+  // Cấu hình thời gian được đồng bộ động từ Admin sang
+  const configuredPart5Minutes = readingConfig?.part5Minutes ?? 12;
+  const configuredPart6Minutes = readingConfig?.part6Minutes ?? 10;
+  const configuredPart7SingleMinutes = readingConfig?.part7SingleMinutes ?? 27;
+  const configuredPart7MultiMinutes = readingConfig?.part7MultiMinutes ?? 26;
+  const configuredPart7TotalMinutes = configuredPart7SingleMinutes + configuredPart7MultiMinutes;
+  const configuredWpm = readingConfig?.targetWpm ?? 160;
+
+  // Tính nhịp độ mục tiêu và ngưỡng cảnh báo quá giờ theo từng Part
+  const currentPaceMetrics = useMemo(() => {
+    const isP5 = workspacePart === "PART 5";
+    const isP6 = workspacePart === "PART 6";
+    const isP7 = workspacePart === "PART 7";
+    const qCount = currentGroup?.questions?.length || 1;
+
+    let targetSecPerQ = 24;
+    let timeoutThreshold = 40;
+
+    if (isP5) {
+      targetSecPerQ = Math.round((configuredPart5Minutes * 60) / 30);
+      timeoutThreshold = readingConfig?.part5TimeoutSeconds ?? 40;
+    } else if (isP6) {
+      targetSecPerQ = Math.round((configuredPart6Minutes * 60) / 16);
+      timeoutThreshold = (readingConfig?.part6TimeoutSeconds ?? 60) * Math.min(2, qCount);
+    } else if (isP7) {
+      const isMulti = qCount > 3;
+      const targetMins = isMulti ? configuredPart7MultiMinutes : configuredPart7SingleMinutes;
+      const totalQs = isMulti ? 25 : 29;
+      targetSecPerQ = Math.round((targetMins * 60) / totalQs);
+      timeoutThreshold = (readingConfig?.part7TimeoutSeconds ?? 90) * Math.min(2, qCount);
+    }
+
+    return {
+      targetSecPerQ,
+      targetGroupSec: targetSecPerQ * qCount,
+      timeoutThreshold,
+    };
+  }, [
+    workspacePart,
+    configuredPart5Minutes,
+    configuredPart6Minutes,
+    configuredPart7SingleMinutes,
+    configuredPart7MultiMinutes,
+    readingConfig,
+    currentGroup,
+  ]);
+
   const partDirections = useMemo(() => {
     const configs = {
       "PART 5": {
@@ -634,7 +704,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
         directionsVi:
           "Hướng dẫn: Mỗi câu dưới đây bị khuyết một từ hoặc cụm từ. Bốn phương án trả lời được cung cấp bên dưới mỗi câu. Chọn đáp án thích hợp nhất để hoàn thành câu và đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
-        timing: "Thời gian đề xuất: 10 – 12 phút (tối đa 30s/câu)",
+        timing: `Thời gian cấu hình: ${configuredPart5Minutes} phút (~${Math.round((configuredPart5Minutes * 60) / 30)}s/câu)`,
         tips: [
           "Xác định từ loại xung quanh chỗ trống (danh từ, động từ, tính từ, trạng từ).",
           "Phân biệt câu hỏi ngữ pháp (nhìn dấu hiệu) và từ vựng (cần dịch nghĩa).",
@@ -650,7 +720,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           "Directions: Read the texts that follow. A word, phrase, or sentence is missing in parts of each text. Four answer choices for each question are given below the text. Select the best answer to complete the text. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
         directionsVi:
           "Hướng dẫn: Đọc các đoạn văn sau. Một từ, cụm từ hoặc câu bị khuyết ở các phần của mỗi đoạn văn. Bốn lựa chọn trả lời cho mỗi câu hỏi được đưa ra bên dưới đoạn văn. Chọn câu trả lời tốt nhất để hoàn thành đoạn văn. Sau đó đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
-        timing: "Thời gian đề xuất: 8 – 10 phút (khoảng 2 phút/đoạn văn)",
+        timing: `Thời gian cấu hình: ${configuredPart6Minutes} phút (~${Math.round((configuredPart6Minutes * 60) / 16)}s/câu, ~${(configuredPart6Minutes / 4).toFixed(1)}p/đoạn)`,
         tips: [
           "Mỗi đoạn gồm 4 câu khuyết, trong đó có 3 câu điền từ/ngữ pháp và 1 câu điền nguyên câu văn.",
           "Với câu điền cả câu (sentence insertion), luôn đọc kỹ câu phía trước và câu phía sau để đảm bảo mạch liên kết ngữ nghĩa.",
@@ -666,7 +736,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           "Directions: In this part you will read a selection of texts, such as magazine and newspaper articles, letters, and advertisements. Each text is followed by several questions. Select the best answer for each question and mark the letter (A), (B), (C), or (D) on your answer sheet.",
         directionsVi:
           "Hướng dẫn: Trong phần này bạn sẽ đọc tuyển tập các văn bản, chẳng hạn như bài báo, thư từ, quảng cáo, email, tin nhắn trực tuyến và hoá đơn. Mỗi bài đọc có một số câu hỏi đi kèm. Chọn phương án trả lời chính xác nhất cho mỗi câu hỏi và đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
-        timing: "Thời gian đề xuất: 50 – 55 phút (~1 phút/câu)",
+        timing: `Thời gian cấu hình: ${configuredPart7TotalMinutes} phút (Đoạn đơn: ${configuredPart7SingleMinutes}p, Đoạn kép/ba: ${configuredPart7MultiMinutes}p)`,
         tips: [
           "Bao gồm đoạn đơn (147-175), đoạn kép (176-185) và đoạn ba (186-200).",
           "Đọc lướt tiêu đề, đối tượng người gửi/nhận trước khi đọc câu hỏi.",
@@ -675,7 +745,14 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       },
     };
     return configs[workspacePart] || configs["PART 5"];
-  }, [workspacePart]);
+  }, [
+    workspacePart,
+    configuredPart5Minutes,
+    configuredPart6Minutes,
+    configuredPart7SingleMinutes,
+    configuredPart7MultiMinutes,
+    configuredPart7TotalMinutes,
+  ]);
 
   // Timer effect (pauses while Resume/Restart confirmation dialog is visible or when timer is hidden)
   React.useEffect(() => {
@@ -1538,6 +1615,15 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 {formatTimer(timerSeconds)}
               </span>
             )}
+            {readingConfig?.enablePacingTimer && (
+              <span
+                className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-500/30 text-blue-100 text-xs font-mono font-bold border border-blue-300/30 shadow-2xs"
+                title={`Mục tiêu nhịp độ chiến lược: ~${currentPaceMetrics.targetSecPerQ}s / câu`}
+              >
+                <Target className="w-3.5 h-3.5 text-blue-300" />
+                <span>~{currentPaceMetrics.targetSecPerQ}s/câu</span>
+              </span>
+            )}
             {readingConfig?.speedDrillMode && (
               <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500 text-white text-[10px] font-bold">
                 ⚡ Speed Drill
@@ -1758,9 +1844,22 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                               </span>
                             )}
                           </div>
-                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
-                            English
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {readingConfig?.showTargetPaceBadge && sub.text && (() => {
+                              const words = sub.text.trim().split(/\s+/).filter(Boolean).length;
+                              const estMinutes = (words / configuredWpm).toFixed(1);
+                              return (
+                                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                                  <span>{words} từ</span>
+                                  <span>•</span>
+                                  <span>~{estMinutes}p ({configuredWpm} WPM)</span>
+                                </span>
+                              );
+                            })()}
+                            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
+                              English
+                            </span>
+                          </div>
                         </div>
 
                         {/* Đoạn văn tiếng Anh: hỗ trợ bấm trực tiếp các ô trống [131]-[146] trong Part 6 */}
@@ -1859,6 +1958,19 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6"
         >
           <div className="space-y-6">
+            {/* TIMEOUT ALERT & PACING BANNER */}
+            {readingConfig?.enableTimeoutAlert && !isCurrentGroupChecked && timeSpentOnCurrentGroup >= currentPaceMetrics.timeoutThreshold && (
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold flex items-center gap-2.5 animate-pulse shadow-xs">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold">Nhắc nhở nhịp độ chiến lược: </span>
+                  <span>
+                    Bạn đã dừng ở câu này {timeSpentOnCurrentGroup}s (khuyến nghị ~{currentPaceMetrics.targetSecPerQ}s/câu, tối đa {currentPaceMetrics.timeoutThreshold}s). Hãy chọn đáp án để giữ đúng thời gian hoàn thành 75 phút!
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* RENDER EVERY QUESTION IN CURRENT GROUP */}
             {currentGroup.questions.map((item, qIdxInGroup) => {
               const q = item.question;
@@ -1889,6 +2001,11 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                       <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
                         Câu {q.questionNum || gIdx + 1}
                       </span>
+                      {readingConfig?.showTargetPaceBadge && !isCardChecked && (
+                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                          Mục tiêu: ~{currentPaceMetrics.targetSecPerQ}s
+                        </span>
+                      )}
                       {isCardChecked && (
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
