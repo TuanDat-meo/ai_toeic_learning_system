@@ -105,39 +105,39 @@ function ReadingTableRow({
         )}
       </td>
 
-      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-        <div className="flex items-center justify-center gap-1">
+      <td className="sticky right-0 z-10 bg-white/95 group-hover:bg-slate-50/95 backdrop-blur-xs py-3.5 px-3 sm:px-4 text-center whitespace-nowrap border-l border-slate-100 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.06)]">
+        <div className="flex items-center justify-center gap-1.5">
           <button
             type="button"
             onClick={() => onOpenTheory(card)}
-            className="p-1.5 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100 text-blue-700 transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100 text-blue-700 transition cursor-pointer"
             title="Xem chi tiết bài đọc & đáp án (Part 5, 6, 7)"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
           <button
             type="button"
             onClick={() => onStartPractice(card)}
-            className="p-1.5 rounded-xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-700 transition cursor-pointer"
             title="Kiểm duyệt & đối soát đề thi"
           >
-            <ClipboardCheck className="w-3.5 h-3.5" />
+            <ClipboardCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
           <button
             type="button"
             onClick={(e) => onOpenEditCard(card, e)}
-            className="p-1.5 rounded-xl border border-slate-200 hover:bg-amber-50 text-amber-600 transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl border border-slate-200 hover:bg-amber-50 text-amber-600 transition cursor-pointer"
             title="Chỉnh sửa thông tin"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
           <button
             type="button"
             onClick={() => onOpenDeleteConfirm(card)}
-            className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-600 transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl border border-slate-200 hover:bg-rose-50 text-rose-600 transition cursor-pointer"
             title="Xóa bài đọc"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </td>
@@ -337,14 +337,16 @@ export const ReadingCardGrid: React.FC<ReadingCardGridProps> = ({
       return (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[760px]">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
-                  <th className="py-3.5 px-4 min-w-[260px]">Chuyên đề bài đọc</th>
-                  <th className="py-3.5 px-4 min-w-[150px]">Phần thi / Dạng bài</th>
-                  <th className="py-3.5 px-4 text-center min-w-[100px]">Số câu hỏi</th>
-                  <th className="py-3.5 px-4 min-w-[130px]">Trạng thái</th>
-                  <th className="py-3.5 px-4 text-center min-w-[160px]">Thao tác quản trị</th>
+                <tr className="bg-slate-50/90 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px] sm:text-xs whitespace-nowrap">
+                  <th className="py-3.5 px-3 sm:px-4 min-w-[240px] sm:min-w-[280px]">Chuyên đề bài đọc</th>
+                  <th className="py-3.5 px-3 sm:px-4 min-w-[130px] sm:min-w-[150px]">Phần thi / Dạng bài</th>
+                  <th className="py-3.5 px-3 sm:px-4 text-center min-w-[90px] sm:min-w-[110px]">Số câu hỏi</th>
+                  <th className="py-3.5 px-3 sm:px-4 min-w-[120px] sm:min-w-[140px]">Trạng thái</th>
+                  <th className="sticky right-0 z-20 bg-slate-50/95 backdrop-blur-xs py-3.5 px-3 sm:px-4 text-center min-w-[140px] sm:min-w-[160px] border-l border-slate-200/80 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.06)]">
+                    Thao tác quản trị
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">

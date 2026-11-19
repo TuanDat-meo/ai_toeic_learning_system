@@ -155,6 +155,22 @@ export function exportToExcel(options: ExportExcelOptions): void {
       border-radius: 4px;
       text-align: center;
     }
+    .badge-inprogress {
+      background-color: #DBEAFE;
+      color: #1E40AF;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .badge-rejected {
+      background-color: #FFE4E6;
+      color: #9F1239;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -217,10 +233,14 @@ export function exportToExcel(options: ExportExcelOptions): void {
         let cellContent = escapeHtml(val);
 
         // Hiển thị badge cho trạng thái
-        if (val === "PUBLISHED" || val === "Đã xuất bản" || val === "Hoạt động") {
+        if (val === "PUBLISHED" || val === "Đã xuất bản" || val === "Hoạt động" || val === "Đã giải quyết") {
           cellContent = `<span class="badge-published">${escapeHtml(val)}</span>`;
-        } else if (val === "DRAFT" || val === "Bản nháp" || val === "Chưa xuất bản") {
+        } else if (val === "DRAFT" || val === "Bản nháp" || val === "Chưa xuất bản" || val === "Chờ xử lý") {
           cellContent = `<span class="badge-draft">${escapeHtml(val)}</span>`;
+        } else if (val === "Đang xử lý") {
+          cellContent = `<span class="badge-inprogress">${escapeHtml(val)}</span>`;
+        } else if (val === "Từ chối" || val === "Khẩn cấp") {
+          cellContent = `<span class="badge-rejected">${escapeHtml(val)}</span>`;
         }
 
         html += `        <td class="data-cell ${alignClass}">${cellContent}</td>\n`;

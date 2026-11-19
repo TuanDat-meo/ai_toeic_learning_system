@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Sparkles,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 
 import { ExerciseCardData, SampleQuestion, VocabItem } from "./types";
@@ -67,36 +70,38 @@ export default function ReadingLearningPage() {
     }
   };
 
-  useEffect(() => {
-    let active = true;
-
-    const loadCards = async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const backendCards = await fetchAdminReadingCards();
-        if (!active) return;
-        cardsRef.current = backendCards;
-        setCards(backendCards);
-      } catch (error) {
-        if (!active) return;
-        cardsRef.current = [];
-        setCards([]);
-        setLoadError(error instanceof Error ? error.message : "Không thể tải nội dung Reading từ máy chủ.");
-      } finally {
-        if (active) setLoading(false);
+  const loadCards = useCallback(async (isRetry = false) => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const backendCards = await fetchAdminReadingCards();
+      cardsRef.current = backendCards;
+      setCards(backendCards);
+    } catch (error) {
+      cardsRef.current = [];
+      setCards([]);
+      const errMsg = error instanceof Error ? error.message : "Không thể tải nội dung Reading từ máy chủ.";
+      setLoadError(errMsg);
+      // Auto-retry once after 3 seconds if initial load failed (e.g. backend container is still starting up)
+      if (!isRetry && !errMsg.includes("quyền") && !errMsg.includes("hết hạn")) {
+        window.setTimeout(() => {
+          void loadCards(true);
+        }, 3000);
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
+  useEffect(() => {
     void loadCards();
-    const handleUpdated = () => { void loadCards(); };
+    const handleUpdated = () => { void loadCards(true); };
 
     window.addEventListener("toeic-reading-cards-updated", handleUpdated);
     return () => {
-      active = false;
       window.removeEventListener("toeic-reading-cards-updated", handleUpdated);
     };
-  }, []);
+  }, [loadCards]);
 
   const ensureCardDetails = async (card: ExerciseCardData): Promise<ExerciseCardData> => {
     if (card.detailsLoaded || (card.sampleQuestions && card.sampleQuestions.length > 0)) {
@@ -203,6 +208,7 @@ export default function ReadingLearningPage() {
   const [theoryCard, setTheoryCard] = useState<ExerciseCardData | null>(null);
   const [deleteCardConfirm, setDeleteCardConfirm] = useState<ExerciseCardData | null>(null);
   const [showCreateCardModal, setShowCreateCardModal] = useState(false);
+  const [isPassageOnlyMode, setIsPassageOnlyMode] = useState(false);
   const [editingCard, setEditingCard] = useState<ExerciseCardData | null>(null);
 
   // Form State
@@ -235,8 +241,10 @@ export default function ReadingLearningPage() {
 
   // Handlers
   const openCreateCardModal = (
-    initialCategory: "grammar" | "part5" | "part6" | "part7" = "part5"
+    initialCategory: "grammar" | "part5" | "part6" | "part7" = "part5",
+    isPassageMode = false
   ) => {
+    setIsPassageOnlyMode(isPassageMode);
     setEditingCard(null);
     setCardFormTitle("");
     setCardFormCategory(initialCategory);
@@ -247,17 +255,28 @@ export default function ReadingLearningPage() {
         ? "levels"
         : "word_types"
     );
-    setCardFormTag("");
+    setCardFormTag(
+      initialCategory === "part6"
+        ? "Part 6 - Hoàn thành đoạn văn"
+        : initialCategory === "part7"
+        ? "Part 7 - Đọc hiểu văn bản"
+        : ""
+    );
     setCardFormTheorySummary("");
     setCardFormTheoryRules("");
     setCardFormTheoryExample("");
     setCardFormPassageText("");
     setCardFormPassageTextVi("");
-    setCardFormTotalQuestions(1);
+    const startQ =
+      initialCategory === "part6" ? "131" : initialCategory === "part7" ? "147" : "101";
+    const totalQ =
+      initialCategory === "part6" ? 16 : initialCategory === "part7" ? 54 : 30;
+
+    setCardFormTotalQuestions(totalQ);
     setCardFormVocabList([]);
     setCardFormSampleQuestions([
       {
-        questionNum: "101",
+        questionNum: startQ,
         question: "",
         bilingual: "",
         options: ["", "", "", ""],
@@ -272,12 +291,20 @@ export default function ReadingLearningPage() {
   };
 
   const handleOpenCreateCard = () => {
-    openCreateCardModal(selectedCategory === "all" || selectedCategory === "grammar" ? "part5" : selectedCategory);
+    openCreateCardModal(
+      selectedCategory === "all" || selectedCategory === "grammar" ? "part5" : selectedCategory,
+      false
+    );
   };
 
   const handleOpenEditCard = async (card: ExerciseCardData, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const resolved = await ensureCardDetails(card);
+    setIsPassageOnlyMode(
+      resolved.category === "part6" ||
+      resolved.category === "part7" ||
+      Boolean(resolved.passageText?.trim())
+    );
     setEditingCard(resolved);
     setCardFormTotalQuestions(resolved.totalQuestions);
     const cleanInitialTitle = normalizeReadingCardTitle(resolved.title, resolved.category, resolved.totalQuestions);
@@ -372,6 +399,12 @@ export default function ReadingLearningPage() {
     }
 
     const validQuestions = cardFormSampleQuestions;
+
+    // 0. Nếu đang ở chế độ Kho đoạn văn (isPassageOnlyMode): Bắt buộc chỉ Part 6 hoặc Part 7
+    if (isPassageOnlyMode && (cardFormCategory === "part5" || cardFormCategory === "grammar")) {
+      showToast("❌ Không thể lưu: Kho đoạn văn chỉ chấp nhận Part 6 hoặc Part 7 (bài có đoạn văn đọc hiểu)!");
+      return;
+    }
 
     // KIỂM TRA ĐỊNH DẠNG THEO CHUẨN TOEIC (PART NÀO ĐI VỚI NỘI DUNG ĐÓ)
     const hasAnyPassage = !!cardFormPassageText.trim() || validQuestions.some((q) => !!q.passageText);
@@ -576,8 +609,34 @@ export default function ReadingLearningPage() {
         </div>
       ) : null}
       {loadError ? (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Không thể tải nội dung Reading từ backend: {loadError}
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="font-semibold">Không thể tải nội dung Reading: {loadError}</p>
+              <p className="text-xs text-red-600/80 mt-0.5">
+                Nếu máy tính hoặc Docker vừa khởi động, hệ thống đang tự động kết nối lại (hoặc bấm thử lại ngay).
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {loadError.includes("quyền") || loadError.includes("hết hạn") ? (
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition"
+              >
+                Đăng nhập lại
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void loadCards(true)}
+              className="px-3 py-1.5 rounded-lg border border-red-300 bg-white hover:bg-red-100/50 text-red-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Thử lại ngay</span>
+            </button>
+          </div>
         </div>
       ) : null}
       {!loading && !loadError && cards.length === 0 ? (
@@ -636,8 +695,7 @@ export default function ReadingLearningPage() {
           onOpenDeleteConfirm={(card) => setDeleteCardConfirm(card)}
           onEnsureCardDetails={ensureCardDetails}
           onOpenCreatePassage={() => {
-            openCreateCardModal("part7");
-
+            openCreateCardModal("part6", true);
           }}
         />
       )}
@@ -743,6 +801,7 @@ export default function ReadingLearningPage() {
       {showCreateCardModal && (
         <ReadingCreateCardModal
           editingCard={editingCard}
+          isPassageOnlyMode={isPassageOnlyMode}
           cardFormTitle={cardFormTitle}
           setCardFormTitle={setCardFormTitle}
           cardFormCategory={cardFormCategory}

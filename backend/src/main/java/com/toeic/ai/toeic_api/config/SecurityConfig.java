@@ -84,13 +84,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/chat/discussion").permitAll()
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/support-reports/**").authenticated()
+                        .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/api/community/**").authenticated()
-                        .requestMatchers("/api/announcements/**").hasRole("STUDENT")
+                        .requestMatchers("/api/announcements/**").authenticated()
                         .requestMatchers("/api/question-corrections/**").authenticated()
                         .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
                             "/api/admin/announcements", "/api/admin/announcements/**",
                             "/api/admin/settings", "/api/admin/settings/**",
                             "/api/admin/mock-tests/**", "/api/admin/reading/**",
+                            "/api/admin/ai-review/**",
                             "/api/admin/question-bank/**")
                             .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers(HttpMethod.POST, "/api/admin/data/import/preview")

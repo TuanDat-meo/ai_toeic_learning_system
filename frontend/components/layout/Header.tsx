@@ -26,7 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/api/auth';
-import { getStudentAnnouncements } from '@/lib/api/support';
+import { getStudentAnnouncements, getUnreadNotificationCount } from '@/lib/api/support';
 import { computeRealStreaks, getTodayDateString, type StudyTrackerData } from '@/lib/studyTracker';
 import {
   DOUBLE_CLICK_LOOKUP_EVENT,
@@ -188,8 +188,12 @@ export function Header() {
     let active = true;
     const refreshUnreadCount = async () => {
       try {
-        const announcements = await getStudentAnnouncements();
-        if (active) setUnreadAnnouncementCount(announcements.filter((item) => !item.isRead).length);
+        const [announcements, personalUnread] = await Promise.all([
+          getStudentAnnouncements().catch(() => []),
+          getUnreadNotificationCount().catch(() => 0),
+        ]);
+        const unreadAnn = announcements.filter((item) => !item.isRead).length;
+        if (active) setUnreadAnnouncementCount(unreadAnn + personalUnread);
       } catch {
         if (active) setUnreadAnnouncementCount(0);
       }
@@ -199,11 +203,15 @@ export function Header() {
     const interval = window.setInterval(() => void refreshUnreadCount(), 30_000);
     window.addEventListener('focus', refreshUnreadCount);
     window.addEventListener('announcement-read-updated', refreshUnreadCount);
+    window.addEventListener('announcement-updated', refreshUnreadCount);
+    window.addEventListener('notification-updated', refreshUnreadCount);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener('focus', refreshUnreadCount);
       window.removeEventListener('announcement-read-updated', refreshUnreadCount);
+      window.removeEventListener('announcement-updated', refreshUnreadCount);
+      window.removeEventListener('notification-updated', refreshUnreadCount);
     };
   }, [user, pathname]);
 

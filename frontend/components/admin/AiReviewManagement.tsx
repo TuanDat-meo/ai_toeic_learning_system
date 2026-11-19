@@ -328,9 +328,14 @@ export function AiReviewManagement() {
       })
       .catch((error: unknown) => {
         if (active) {
-          setLoadError(
-            error instanceof Error ? error.message : "Không thể tải danh sách kiểm duyệt AI.",
-          );
+          const errMsg = error instanceof Error ? error.message : "Không thể tải danh sách kiểm duyệt AI.";
+          setLoadError(errMsg);
+          // Auto-retry once after 3 seconds if initial load failed (e.g. backend container is still starting up)
+          if (!errMsg.includes("quyền") && !errMsg.includes("hết hạn")) {
+            window.setTimeout(() => {
+              if (active) setReloadKey((k) => k + 1);
+            }, 3000);
+          }
         }
       })
       .finally(() => {
@@ -710,104 +715,112 @@ export function AiReviewManagement() {
         </div>
       )}
 
-      {/* 1. 4 KPI Cards (giữ bố cục 4 thẻ trực quan + cập nhật tức thì) */}
-      <section className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+      {/* 1. 4 KPI Cards (bố cục co giãn linh hoạt cho màn hình nhỏ & lớn) */}
+      <section className="grid gap-3 sm:gap-3.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
           onClick={() => selectStatus("PENDING")}
-          className={`rounded-2xl border bg-white p-4 text-left shadow-2xs transition cursor-pointer ${
+          className={`rounded-2xl border bg-white p-3.5 sm:p-4 text-left shadow-2xs transition cursor-pointer flex flex-col justify-between h-full ${
             status === "PENDING"
               ? "border-amber-300 ring-1 ring-amber-200"
               : "border-slate-200/80 hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Chờ kiểm duyệt</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
-              <Clock className="h-4 w-4" />
-            </span>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-500 truncate">Chờ kiểm duyệt</span>
+              <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+                <Clock className="h-4 w-4" />
+              </span>
+            </div>
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-amber-800 tabular-nums">
+              {queue?.counts.pending ?? 0}
+            </p>
           </div>
-          <p className="mt-2.5 text-2xl font-bold tracking-tight text-amber-800 tabular-nums">
-            {queue?.counts.pending ?? 0}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">Đầu ra AI đang chờ Admin đánh giá</p>
+          <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">Đầu ra AI đang chờ Admin đánh giá</p>
         </button>
 
         <button
           type="button"
           onClick={() => selectStatus("APPROVED")}
-          className={`rounded-2xl border bg-white p-4 text-left shadow-2xs transition cursor-pointer ${
+          className={`rounded-2xl border bg-white p-3.5 sm:p-4 text-left shadow-2xs transition cursor-pointer flex flex-col justify-between h-full ${
             status === "APPROVED"
               ? "border-emerald-300 ring-1 ring-emerald-200"
               : "border-slate-200/80 hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Đạt chuẩn</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-              <FileCheck2 className="h-4 w-4" />
-            </span>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-500 truncate">Đạt chuẩn</span>
+              <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                <FileCheck2 className="h-4 w-4" />
+              </span>
+            </div>
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-emerald-700 tabular-nums">
+              {queue?.counts.approved ?? 0}
+            </p>
           </div>
-          <p className="mt-2.5 text-2xl font-bold tracking-tight text-emerald-700 tabular-nums">
-            {queue?.counts.approved ?? 0}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">Đã kiểm định &amp; áp dụng cho học viên</p>
+          <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">Đã kiểm định &amp; áp dụng cho học viên</p>
         </button>
 
         <button
           type="button"
           onClick={() => selectStatus("REJECTED")}
-          className={`rounded-2xl border bg-white p-4 text-left shadow-2xs transition cursor-pointer ${
+          className={`rounded-2xl border bg-white p-3.5 sm:p-4 text-left shadow-2xs transition cursor-pointer flex flex-col justify-between h-full ${
             status === "REJECTED"
               ? "border-rose-300 ring-1 ring-rose-200"
               : "border-slate-200/80 hover:border-slate-300"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Đã từ chối</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
-              <XCircle className="h-4 w-4" />
-            </span>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-500 truncate">Đã từ chối</span>
+              <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                <XCircle className="h-4 w-4" />
+              </span>
+            </div>
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-rose-700 tabular-nums">
+              {queue?.counts.rejected ?? 0}
+            </p>
           </div>
-          <p className="mt-2.5 text-2xl font-bold tracking-tight text-rose-700 tabular-nums">
-            {queue?.counts.rejected ?? 0}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">Bị chặn do sai lệch hoặc chưa đạt</p>
+          <p className="mt-1.5 text-[11px] text-slate-500 leading-snug">Bị chặn do sai lệch hoặc chưa đạt</p>
         </button>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tỷ lệ AI đạt chuẩn</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-[#1b41ae]">
-              <ShieldCheck className="h-4 w-4" />
-            </span>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between h-full">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-500 truncate">Tỷ lệ AI đạt chuẩn</span>
+              <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#1b41ae]">
+                <ShieldCheck className="h-4 w-4" />
+              </span>
+            </div>
+            <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
+              {approvalRate !== null ? `${approvalRate}%` : "—"}
+            </p>
           </div>
-          <p className="mt-2.5 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
-            {approvalRate !== null ? `${approvalRate}%` : "—"}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500 tabular-nums">
+          <p className="mt-1.5 text-[11px] text-slate-500 tabular-nums leading-snug">
             {reviewedTotal > 0
-              ? `${queue?.counts.approved ?? 0}/${reviewedTotal} mục đạt chuẩn sau kiểm duyệt`
-              : "Tự động tính sau khi xử lý mục đầu tiên"}
+              ? `${queue?.counts.approved ?? 0}/${reviewedTotal} mục đạt chuẩn`
+              : "Tự động tính sau khi xử lý"}
           </p>
         </div>
       </section>
 
-      {/* 2. Moderation Gate Policy Bar (tập trung kiểm soát AI, không giống khung đăng bài) */}
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-2xs">
-        <div className="flex items-start gap-3">
+      {/* 2. Moderation Gate Policy Bar (tập trung kiểm soát AI, co giãn mượt mà theo kích thước màn hình) */}
+      <section className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:px-5 sm:py-4 shadow-2xs">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
           <span
-            className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+            className={`mt-0.5 flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl ${
               settings?.aiModerationEnabled !== false
                 ? "bg-blue-50 text-[#1b41ae]"
                 : "bg-amber-50 text-amber-700"
             }`}
           >
-            <ShieldCheck className="h-5 w-5" />
+            <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
                 Cơ chế kiểm soát đầu ra AI
               </h2>
               <span
@@ -824,7 +837,7 @@ export function AiReviewManagement() {
                   : "Tự động bỏ qua duyệt"}
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-500 leading-relaxed">
               {settings?.aiModerationEnabled === false
                 ? "Đang tắt: đầu ra AI mới được áp dụng trực tiếp cho hệ thống học tập mà không dừng ở hàng chờ."
                 : "Đang bật: mọi đầu ra AI mới đều bị giữ tại đây để Admin thẩm định và ghi nhật ký kiểm toán trước khi tới học viên."}
@@ -833,7 +846,7 @@ export function AiReviewManagement() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2.5 lg:pt-0 border-t border-slate-100 lg:border-0 w-full lg:w-auto justify-start lg:justify-end">
           {settings && (
             <button
               type="button"
@@ -841,7 +854,7 @@ export function AiReviewManagement() {
               aria-checked={settings.aiModerationEnabled}
               disabled={togglingModeration}
               onClick={() => void handleToggleModeration()}
-              className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 sm:gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
             >
               <span>Kiểm duyệt AI</span>
               <span
@@ -865,7 +878,7 @@ export function AiReviewManagement() {
               setActionError("");
               setShowTestModal(true);
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 cursor-pointer"
           >
             <Bot aria-hidden="true" className="h-3.5 w-3.5 text-[#1b41ae]" />
             <span>Kiểm thử AI</span>
@@ -875,7 +888,7 @@ export function AiReviewManagement() {
             type="button"
             onClick={refreshQueue}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             <span>Tải lại</span>
@@ -883,9 +896,9 @@ export function AiReviewManagement() {
         </div>
       </section>
 
-      {/* 3. Filter & Search Toolbar */}
-      <section className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Lọc trạng thái kiểm duyệt">
+      {/* 3. Filter & Search Toolbar (Thanh công cụ co giãn thông minh không lo tràn vỡ) */}
+      <section className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 sm:gap-4 rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-2xs">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 2xl:pb-0 scrollbar-none max-w-full" role="tablist" aria-label="Lọc trạng thái kiểm duyệt">
           {STATUS_FILTERS.map((filter) => (
             <button
               key={filter.value}
@@ -893,7 +906,7 @@ export function AiReviewManagement() {
               role="tab"
               aria-selected={activeView === "QUEUE" && status === filter.value}
               onClick={() => selectStatus(filter.value)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+              className={`whitespace-nowrap shrink-0 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold transition cursor-pointer ${
                 activeView === "QUEUE" && status === filter.value
                   ? "bg-[#1b41ae] text-white shadow-2xs"
                   : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -911,7 +924,7 @@ export function AiReviewManagement() {
             role="tab"
             aria-selected={activeView === "AUDIT"}
             onClick={openAuditView}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+            className={`whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-semibold transition cursor-pointer ${
               activeView === "AUDIT"
                 ? "bg-slate-900 text-white shadow-2xs"
                 : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -923,15 +936,15 @@ export function AiReviewManagement() {
         </div>
 
         {activeView === "QUEUE" && (
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/70 p-1">
-              <Filter className="ml-1.5 h-3.5 w-3.5 text-slate-400" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-2 2xl:pt-0 border-t border-slate-100 2xl:border-0 w-full 2xl:w-auto">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/70 p-1 overflow-x-auto max-w-full shrink-0 scrollbar-none">
+              <Filter className="ml-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
               {CONTENT_TYPE_FILTERS.map((ct) => (
                 <button
                   key={ct.value}
                   type="button"
                   onClick={() => setContentTypeFilter(ct.value)}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                  className={`whitespace-nowrap shrink-0 rounded-lg px-2 sm:px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
                     contentTypeFilter === ct.value
                       ? "bg-white text-slate-900 shadow-2xs"
                       : "text-slate-500 hover:text-slate-800"
@@ -942,7 +955,7 @@ export function AiReviewManagement() {
               ))}
             </div>
 
-            <div className="relative min-w-[200px] flex-1 sm:w-56 sm:flex-none">
+            <div className="relative min-w-0 w-full sm:w-64 flex-1 sm:flex-none">
               <Search className="pointer-events-none absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
               <input
                 type="text"
@@ -974,13 +987,23 @@ export function AiReviewManagement() {
             <div>
               <h2 className="text-sm font-bold">Không thể tải danh sách kiểm duyệt</h2>
               <p className="mt-1 text-xs">{loadError}</p>
-              <button
-                type="button"
-                onClick={refreshQueue}
-                className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer"
-              >
-                Thử lại
-              </button>
+              <div className="mt-3 flex items-center gap-2">
+                {loadError.includes("quyền") || loadError.includes("hết hạn") ? (
+                  <Link
+                    href="/login"
+                    className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition"
+                  >
+                    Đăng nhập lại với quyền Admin
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={refreshQueue}
+                  className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer"
+                >
+                  Thử lại
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -1012,55 +1035,63 @@ export function AiReviewManagement() {
         ) : (
           <section className="space-y-4">
             {/* AI Telemetry Strip */}
-            <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-                  <span>Tổng lượt AI hoạt động</span>
-                  <Activity className="h-4 w-4 text-[#1b41ae]" />
+            <div className="grid gap-3 sm:gap-3.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex flex-col justify-between h-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>Tổng lượt AI hoạt động</span>
+                    <Activity className="h-4 w-4 text-[#1b41ae]" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
+                    {auditOverview?.stats.total ?? 0}
+                  </p>
                 </div>
-                <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
-                  {auditOverview?.stats.total ?? 0}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-2 text-[11px] text-slate-500">
                   Ghi nhận trong bảng <code>ai_interactions</code>
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-                  <span>Phản hồi thành công</span>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <div className="flex flex-col justify-between h-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>Phản hồi thành công</span>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-emerald-700 tabular-nums">
+                    {auditOverview && auditOverview.stats.total > 0
+                      ? `${Math.round((auditOverview.stats.successCount / auditOverview.stats.total) * 100)}%`
+                      : "—"}
+                  </p>
                 </div>
-                <p className="mt-2 text-2xl font-bold text-emerald-700 tabular-nums">
-                  {auditOverview && auditOverview.stats.total > 0
-                    ? `${Math.round((auditOverview.stats.successCount / auditOverview.stats.total) * 100)}%`
-                    : "—"}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-500 tabular-nums">
+                <p className="mt-2 text-[11px] text-slate-500 tabular-nums">
                   {auditOverview?.stats.successCount ?? 0} thành công · {auditOverview?.stats.failedCount ?? 0} lỗi
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-                  <span>AI sinh học liệu</span>
-                  <Sparkles className="h-4 w-4 text-amber-600" />
+              <div className="flex flex-col justify-between h-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>AI sinh học liệu</span>
+                    <Sparkles className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
+                    {auditOverview?.stats.contentGenerationCount ?? 0}
+                  </p>
                 </div>
-                <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
-                  {auditOverview?.stats.contentGenerationCount ?? 0}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-500">Câu hỏi, Bài đọc, Bài tập</p>
+                <p className="mt-2 text-[11px] text-slate-500">Câu hỏi, Bài đọc, Bài tập</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-                  <span>Gia sư Chat AI học viên</span>
-                  <Bot className="h-4 w-4 text-indigo-600" />
+              <div className="flex flex-col justify-between h-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>Gia sư Chat AI học viên</span>
+                    <Bot className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
+                    {auditOverview?.stats.tutorChatCount ?? 0}
+                  </p>
                 </div>
-                <p className="mt-2 text-2xl font-bold text-slate-900 tabular-nums">
-                  {auditOverview?.stats.tutorChatCount ?? 0}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-500">Lượt học viên hỏi đáp trực tiếp</p>
+                <p className="mt-2 text-[11px] text-slate-500">Lượt học viên hỏi đáp trực tiếp</p>
               </div>
             </div>
 
@@ -1624,10 +1655,10 @@ export function AiReviewManagement() {
                 </div>
 
                 {/* Card Footer: Seamless Inline Decision Bar with Rejection Reason Taxonomy */}
-                <footer className="border-t border-slate-100 bg-slate-50/70 px-5 py-3">
+                <footer className="border-t border-slate-100 bg-slate-50/70 p-3.5 sm:px-5 sm:py-3">
                   {item.status === "PENDING" ? (
                     <div className="space-y-3">
-                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[11px] font-semibold text-slate-500">Thẩm định:</span>
                           {QA_CRITERIA.map((criterion) => {
@@ -1655,7 +1686,7 @@ export function AiReviewManagement() {
                           })}
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 shrink-0 pt-2 lg:pt-0 border-t border-slate-200/60 lg:border-0 w-full lg:w-auto">
                           <button
                             type="button"
                             onClick={() => {
@@ -1811,14 +1842,14 @@ export function AiReviewManagement() {
 
       {/* 5. Secondary Modal: On-Demand AI Pipeline Test (tách riêng, không làm loãng màn hình kiểm duyệt) */}
       {showTestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3.5 sm:p-4 backdrop-blur-xs">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="ai-test-modal-title"
-            className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3.5 sm:px-6 sm:py-4">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#1b41ae]">
                   <Bot className="h-5 w-5" />
@@ -1842,7 +1873,7 @@ export function AiReviewManagement() {
               </button>
             </div>
 
-            <form onSubmit={(e) => void handleGenerateTestSample(e)} className="space-y-4 p-6">
+            <form onSubmit={(e) => void handleGenerateTestSample(e)} className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               <div
                 className={`rounded-xl border px-3.5 py-2.5 text-xs leading-relaxed ${
                   settings?.aiModerationEnabled === false

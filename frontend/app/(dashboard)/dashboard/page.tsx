@@ -27,7 +27,14 @@ import {
   History,
   ChevronRight,
   AlertCircle,
+  Megaphone,
+  ExternalLink,
 } from "lucide-react";
+import {
+  getStudentAnnouncements,
+  markAnnouncementRead,
+  type Announcement,
+} from "@/lib/api/support";
 import {
   getStudyTrackerData,
   saveStudyTrackerData,
@@ -241,6 +248,43 @@ export default function StudentDashboardPage() {
       setToastMessage(null);
     }, 3200);
   };
+
+  // Active pinned announcement banner
+  const [pinnedAnnouncement, setPinnedAnnouncement] = useState<Announcement | null>(null);
+  const [announcementDismissed, setAnnouncementDismissed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const fetchAnnouncement = async () => {
+      try {
+        const list = await getStudentAnnouncements();
+        if (!active) return;
+        const pinned = list.find((a) => a.isPinned && a.status === "ACTIVE");
+        if (pinned) {
+          const dismissedId =
+            typeof window !== "undefined"
+              ? sessionStorage.getItem(`dismissed_announcement_${pinned.id}`)
+              : null;
+          if (!dismissedId) {
+            setPinnedAnnouncement(pinned);
+          }
+        } else {
+          setPinnedAnnouncement(null);
+        }
+      } catch {
+        // Silently skip if student cannot load announcements
+      }
+    };
+    void fetchAnnouncement();
+    const handleUpdated = () => void fetchAnnouncement();
+    window.addEventListener("announcement-updated", handleUpdated);
+    window.addEventListener("announcement-read-updated", handleUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener("announcement-updated", handleUpdated);
+      window.removeEventListener("announcement-read-updated", handleUpdated);
+    };
+  }, []);
 
   // Sync live updates from studyTracker & practiceProgress
   useEffect(() => {
@@ -730,6 +774,68 @@ export default function StudentDashboardPage() {
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-lg">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Pinned Announcement Banner */}
+      {pinnedAnnouncement && !announcementDismissed && (
+        <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-white p-4 shadow-xs transition-all animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+                <Megaphone className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-blue-600/10 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                    Tin nổi bật
+                  </span>
+                  <span className="text-xs font-bold text-slate-900 truncate">
+                    {pinnedAnnouncement.title}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-600 line-clamp-1 leading-relaxed">
+                  {pinnedAnnouncement.summary || pinnedAnnouncement.content}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              {pinnedAnnouncement.actionUrl && (
+                <Link
+                  href={pinnedAnnouncement.actionUrl}
+                  onClick={() => {
+                    if (!pinnedAnnouncement.isRead) {
+                      void markAnnouncementRead(pinnedAnnouncement.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
+                >
+                  <span>Khám phá ngay</span>
+                  <ExternalLink className="size-3" />
+                </Link>
+              )}
+              <Link
+                href="/notifications"
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                <span>Xem tất cả</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setAnnouncementDismissed(true);
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(`dismissed_announcement_${pinnedAnnouncement.id}`, "true");
+                  }
+                }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200/60 hover:text-slate-600 transition cursor-pointer"
+                title="Tạm ẩn thông báo này"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
