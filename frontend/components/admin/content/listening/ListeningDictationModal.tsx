@@ -22,14 +22,30 @@ import {
   Check,
   Languages,
   Headphones,
+  Play,
+  Repeat,
+  History,
 } from "lucide-react";
-import { DictationCardData } from "@/app/admin/content/listening/types";
+import { DictationCardData, TranscriptSegment } from "@/app/admin/content/listening/types";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
 import { getQuestionCorrection, type QuestionCorrection } from "@/lib/api/support";
-import { saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
-import { saveListeningProgress } from "@/lib/api/listening";
+import { getItemProgress, saveItemProgress, recordQuestionAnswer } from "@/lib/practiceProgress";
+import {
+  saveListeningProgress,
+  recordListeningAttempt,
+  buildTranscriptSegmentsFromText,
+} from "@/lib/api/listening";
 import { getEnrichedVocabDetail } from "@/lib/toeicVocabDetailEnricher";
+import {
+  ListeningDictionaryModal,
+  ListeningPersonalVocabBagModal,
+  ListeningAiTutorModal,
+  ListeningAttemptHistoryModal,
+  loadSavedListeningVocabItems,
+  saveListeningVocabItemsToStorage,
+  type SavedListeningVocabItem,
+} from "./ListeningStudyToolsModals";
 
 function isNonBlankableToken(token: string): boolean {
   const trimmed = token.trim();
@@ -105,27 +121,101 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   const [expandedVocab, setExpandedVocab] = useState<Record<string, boolean>>({});
   const [isLocalQuestionGridOpen, setIsLocalQuestionGridOpen] = useState(false);
   const [isLocalNotesModalOpen, setIsLocalNotesModalOpen] = useState(false);
+  const [isVocabBagOpen, setIsVocabBagOpen] = useState(false);
+  const [isDictionaryOpen, setIsDictionaryOpen] = useState(false);
+  const [isAiTutorOpen, setIsAiTutorOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [activeSegmentIdx, setActiveSegmentIdx] = useState<number | "ALL">("ALL");
+  const [isLoopingSegment, setIsLoopingSegment] = useState(false);
+  const [seekCommand, setSeekCommand] = useState<{
+    startTime: number;
+    endTime?: number;
+    loop?: boolean;
+    nonce: number;
+  } | null>(null);
+  const [savedVocabItems, setSavedVocabItems] = useState<SavedListeningVocabItem[]>(() =>
+    loadSavedListeningVocabItems()
+  );
+
+  const formatMmSs = (sec: number) => {
+    if (!Number.isFinite(sec) || sec < 0) return "00:00";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const handleToggleSaveVocabItem = (item: SavedListeningVocabItem) => {
+    setSavedVocabItems((prev) => {
+      const exists = prev.some((w) => w.word.toLowerCase() === item.word.toLowerCase());
+      const next = exists
+        ? prev.filter((w) => w.word.toLowerCase() !== item.word.toLowerCase())
+        : [item, ...prev];
+      saveListeningVocabItemsToStorage(next);
+      triggerToast(
+        exists ? `Đã bỏ "${item.word}" khỏi Giỏ từ.` : `✨ Đã lưu "${item.word}" vào Giỏ từ vựng cá nhân!`
+      );
+      return next;
+    });
+  };
   const notesStorageKey = `toeic_listening_dictation_notes_${dictationModalCard.id}`;
   const selfAssessStorageKey = `toeic_listening_dictation_self_${dictationModalCard.id}`;
-  const [userNotes, setUserNotes] = useState<{ [qId: number]: string }>(() => {
-    if (typeof window === "undefined") return {};
+  const [userNotes, setUserNotes] = useState<{ [qId: string]: string }>(() => {
+    const dbNotes = dictationModalCard.userNotes || {};
+    if (typeof window === "undefined") return { ...dbNotes };
     try {
       const raw = localStorage.getItem(notesStorageKey);
-      return raw ? JSON.parse(raw) : {};
+      const local = raw ? JSON.parse(raw) : {};
+      return { ...local, ...dbNotes };
     } catch {
-      return {};
+      return { ...dbNotes };
     }
   });
-  const [selfAssessment, setSelfAssessment] = useState<{ [qId: number]: "clear" | "partial" | "hard" }>(() => {
-    if (typeof window === "undefined") return {};
+  const [selfAssessment, setSelfAssessment] = useState<{ [qId: string]: "clear" | "partial" | "hard" }>(() => {
+    const dbSelf = (dictationModalCard.selfAssessments || {}) as { [qId: string]: "clear" | "partial" | "hard" };
+    if (typeof window === "undefined") return { ...dbSelf };
     try {
       const raw = localStorage.getItem(selfAssessStorageKey);
-      return raw ? JSON.parse(raw) : {};
+      const local = raw ? JSON.parse(raw) : {};
+      return { ...local, ...dbSelf };
     } catch {
-      return {};
+      return { ...dbSelf };
     }
   });
   const [dictationTimerSeconds, setDictationTimerSeconds] = useState(0);
+
+  const syncCardMetadataToDb = (
+    nextNotes: { [qId: string]: string },
+    nextSelf: { [qId: string]: "clear" | "partial" | "hard" },
+    nextFlagged?: number[]
+  ) => {
+    const totalCardQuestions =
+      dictationModalCard.originalTotalQuestions ||
+      dictationModalCard.totalQuestions ||
+      dictationModalCard.questions.length ||
+      1;
+    const localProg = getItemProgress(`listening-dictation-${dictationModalCard.id}`, totalCardQuestions);
+    void saveListeningProgress({
+      cardId: dictationModalCard.id,
+      completedQuestions: localProg.completedQuestions,
+      totalQuestions: totalCardQuestions,
+      correctCount: localProg.correctAnswers,
+      wrongCount: localProg.wrongAnswers,
+      answeredQuestionIds: localProg.answeredQuestionIds,
+      wrongQuestionIds: localProg.wrongQuestionIds,
+      flaggedQuestionIds: nextFlagged ?? flaggedReviewIds,
+      userNotes: nextNotes,
+      selfAssessments: nextSelf,
+      lastQuestionIndex: activeDictationQIndex,
+      status:
+        localProg.completedQuestions >= totalCardQuestions
+          ? "Đã hoàn thành"
+          : localProg.completedQuestions > 0
+          ? "Đang luyện tập"
+          : "Chưa bắt đầu",
+    });
+  };
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -174,6 +264,10 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   React.useEffect(() => {
     setIsPlayingAudio(false);
     setRevealedWordCount(0);
+    setActiveSegmentIdx("ALL");
+    setSeekCommand(null);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
   }, [activeDictationQIndex, setIsPlayingAudio, setRevealedWordCount]);
 
   React.useEffect(() => {
@@ -185,11 +279,19 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
         setActiveDictationQIndex(Math.max(0, activeDictationQIndex - 1));
       } else if (e.key === "ArrowRight") {
         setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
+      } else if (e.key === "Control") {
+        setIsPlayingAudio(!isPlayingAudio);
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        const wordCount = (q?.fullTranscript || "").trim().split(/\s+/).filter(Boolean).length;
+        setRevealedWordCount((r) => Math.min(wordCount, r + 1));
+      } else if (e.key === "Enter") {
+        setActiveDictationQIndex(Math.min(dictationModalCard.questions.length - 1, activeDictationQIndex + 1));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeDictationQIndex, dictationModalCard.questions.length, setActiveDictationQIndex]);
+  }, [activeDictationQIndex, dictationModalCard.questions.length, isPlayingAudio, q?.fullTranscript, setActiveDictationQIndex, setIsPlayingAudio, setRevealedWordCount]);
 
   const [localChecked, setLocalChecked] = useState<{ [qId: number]: boolean }>({});
   const [inputsByQuestion, setInputsByQuestion] = useState<{ [qId: number]: { [wordIdx: number]: string } }>({});
@@ -200,10 +302,48 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   const isChecked = !!dictationChecked[q.id] || !!localChecked[q.id];
   const selectedFullOpt = fullSelectedOption[q.id];
   const isFlagged = flaggedReviewIds.includes(q.id);
-  const words = q.fullTranscript.trim().split(/\s+/).filter(Boolean);
+
+  // Chia câu kèm Timestamp cho câu hiện tại
+  const questionSegments: TranscriptSegment[] = (() => {
+    const rawSegs = q.segments && q.segments.length > 0
+      ? q.segments
+      : buildTranscriptSegmentsFromText(q.fullTranscript, q.vietnameseTranslation, audioDuration);
+    if (audioDuration > 1.5 && rawSegs.length > 0) {
+      const lastEnd = rawSegs[rawSegs.length - 1]?.endTime || 0;
+      if (lastEnd > 0 && Math.abs(lastEnd - audioDuration) > 1.2) {
+        const scale = audioDuration / lastEnd;
+        return rawSegs.map((seg, i) => ({
+          ...seg,
+          startTime: Math.round(seg.startTime * scale * 10) / 10,
+          endTime:
+            i === rawSegs.length - 1
+              ? Math.round(audioDuration * 10) / 10
+              : Math.round(seg.endTime * scale * 10) / 10,
+        }));
+      }
+    }
+    return rawSegs;
+  })();
+
+  const activeTranscriptText =
+    activeSegmentIdx !== "ALL" && questionSegments[activeSegmentIdx]
+      ? questionSegments[activeSegmentIdx].text
+      : q.fullTranscript;
+
+  const words = activeTranscriptText.trim().split(/\s+/).filter(Boolean);
   const totalWords = words.length;
   const isAnswerUnlocked = isChecked || revealedWordCount >= totalWords || selectedFullOpt !== undefined;
   const isVocabLocked = !isAnswerUnlocked;
+
+  const handlePlaySegment = (seg: TranscriptSegment, idx: number, loopOverride?: boolean) => {
+    const shouldLoop = loopOverride !== undefined ? loopOverride : isLoopingSegment;
+    setSeekCommand({
+      startTime: seg.startTime,
+      endTime: seg.endTime,
+      loop: shouldLoop,
+      nonce: Date.now(),
+    });
+  };
 
   const handleSelectFullOption = (optKey: string) => {
     if (selectedFullOpt !== undefined) return;
@@ -221,12 +361,33 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
       isRight,
       totalCardQuestions
     );
-    saveListeningProgress({
+    void saveListeningProgress({
       cardId: dictationModalCard.id,
       completedQuestions: updatedProgress.completedQuestions,
       totalQuestions: totalCardQuestions,
+      correctCount: updatedProgress.correctAnswers,
+      wrongCount: updatedProgress.wrongAnswers,
+      answeredQuestionIds: updatedProgress.answeredQuestionIds,
+      wrongQuestionIds: updatedProgress.wrongQuestionIds,
+      flaggedQuestionIds: flaggedReviewIds,
+      userNotes,
+      selfAssessments: selfAssessment,
       lastQuestionIndex: activeDictationQIndex,
       status: updatedProgress.completedQuestions >= totalCardQuestions ? "Đã hoàn thành" : "Đang luyện tập",
+    });
+    void recordListeningAttempt({
+      targetType: "DICTATION",
+      targetId: dictationModalCard.id,
+      targetTitle: dictationModalCard.title || `Test ${dictationModalCard.testNumber} - ${dictationModalCard.part}`,
+      part: dictationModalCard.part,
+      mode: "DICTATION_FULL",
+      totalQuestions: 1,
+      completedQuestions: 1,
+      correctCount: isRight ? 1 : 0,
+      wrongCount: isRight ? 0 : 1,
+      durationSeconds: dictationTimerSeconds,
+      xpEarned: isRight ? 10 : 0,
+      details: { questionId: q.id, chosenOption: optKey, correctAnswer: q.correctAnswer },
     });
     if (isRight) {
       playSfx("correct");
@@ -283,12 +444,33 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
       isAllCorrect,
       totalCardQuestions
     );
-    saveListeningProgress({
+    void saveListeningProgress({
       cardId: dictationModalCard.id,
       completedQuestions: updatedProgress.completedQuestions,
       totalQuestions: totalCardQuestions,
+      correctCount: updatedProgress.correctAnswers,
+      wrongCount: updatedProgress.wrongAnswers,
+      answeredQuestionIds: updatedProgress.answeredQuestionIds,
+      wrongQuestionIds: updatedProgress.wrongQuestionIds,
+      flaggedQuestionIds: flaggedReviewIds,
+      userNotes,
+      selfAssessments: selfAssessment,
       lastQuestionIndex: activeDictationQIndex,
       status: updatedProgress.completedQuestions >= totalCardQuestions ? "Đã hoàn thành" : "Đang luyện tập",
+    });
+    void recordListeningAttempt({
+      targetType: "DICTATION",
+      targetId: dictationModalCard.id,
+      targetTitle: dictationModalCard.title || `Test ${dictationModalCard.testNumber} - ${dictationModalCard.part}`,
+      part: dictationModalCard.part,
+      mode: "DICTATION_FILL",
+      totalQuestions: blankCount > 0 ? blankCount : 1,
+      completedQuestions: blankCount > 0 ? blankCount : 1,
+      correctCount: blankCount > 0 ? correctCount : 1,
+      wrongCount: Math.max(0, blankCount - correctCount),
+      durationSeconds: dictationTimerSeconds,
+      xpEarned: isAllCorrect ? 10 : Math.round((correctCount / Math.max(1, blankCount)) * 10),
+      details: { questionId: q.id, fillPercentage, segmentIndex: activeSegmentIdx },
     });
 
     if (isAllCorrect) {
@@ -314,6 +496,14 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
   };
 
   const vocabItems = q.vocabList || [];
+  const completedSessionCount = dictationModalCard.questions.filter(
+    (item) => !!dictationChecked[item.id] || !!localChecked[item.id] || fullSelectedOption[item.id] !== undefined
+  ).length;
+  const earnedDictationXp = completedSessionCount * 10;
+  const formattedTimer =
+    dictationTimerSeconds < 60
+      ? `${dictationTimerSeconds}s`
+      : `${Math.floor(dictationTimerSeconds / 60)}m${String(dictationTimerSeconds % 60).padStart(2, "0")}s`;
 
   return (
     <div className="fixed inset-0 z-50 bg-[#f8fafc] flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-150 font-sans text-slate-800">
@@ -376,10 +566,10 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
           <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-bold shadow-2xs">
             <Clock className="w-3.5 h-3.5 text-amber-500" />
-            <span>2s</span>
+            <span>{formattedTimer}</span>
             <span className="text-amber-300 font-bold">•</span>
             <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            <span>+0 XP</span>
+            <span>+{earnedDictationXp} XP</span>
           </div>
         </header>
 
@@ -396,7 +586,104 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                 showSpeedControl={true}
                 showReplayButton={false}
                 title={`Bài chép chính tả • Câu ${activeDictationQIndex + 1}`}
+                seekCommand={seekCommand}
+                onTimeUpdateCallback={(cur, dur) => {
+                  setAudioCurrentTime(cur);
+                  if (Number.isFinite(dur) && dur > 0 && Math.abs(dur - audioDuration) > 0.2) {
+                    setAudioDuration(dur);
+                  }
+                }}
               />
+
+              {/* THANH CHIA CÂU KÈM TIMESTAMP CHO DICTATION */}
+              {questionSegments.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-extrabold text-slate-700">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Chia câu theo Timestamp ({questionSegments.length} đoạn câu)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextLoop = !isLoopingSegment;
+                          setIsLoopingSegment(nextLoop);
+                          if (activeSegmentIdx !== "ALL" && questionSegments[activeSegmentIdx]) {
+                            handlePlaySegment(questionSegments[activeSegmentIdx], activeSegmentIdx, nextLoop);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                          isLoopingSegment
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                        title="Tự động lặp lại đoạn câu đang chọn"
+                      >
+                        <Repeat className="w-3 h-3" />
+                        <span>{isLoopingSegment ? "Đang lặp câu" : "Lặp câu"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSegmentIdx("ALL");
+                          setRevealedWordCount(0);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                          activeSegmentIdx === "ALL"
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        Cả bài ({questionSegments.length} câu)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {questionSegments.map((seg, sIdx) => {
+                      const isCurrentTimeInSeg =
+                        isPlayingAudio &&
+                        audioCurrentTime >= seg.startTime &&
+                        audioCurrentTime < seg.endTime;
+                      const isSelectedSeg = activeSegmentIdx === sIdx;
+
+                      return (
+                        <div
+                          key={seg.id || sIdx}
+                          className={`inline-flex items-center rounded-xl border text-xs font-bold transition overflow-hidden ${
+                            isSelectedSeg
+                              ? "border-blue-600 bg-blue-50 text-blue-900 ring-1 ring-blue-300"
+                              : isCurrentTimeInSeg
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                              : "border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSegmentIdx(sIdx);
+                              setRevealedWordCount(0);
+                              handlePlaySegment(seg, sIdx);
+                            }}
+                            className="px-2.5 py-1.5 inline-flex items-center gap-1.5 cursor-pointer"
+                            title="Chọn chép riêng câu này và phát theo Timestamp"
+                          >
+                            <Play className="w-3 h-3 text-blue-600 fill-blue-600" />
+                            <span>
+                              Câu {sIdx + 1}
+                              {seg.speaker ? ` (${seg.speaker})` : ""}
+                            </span>
+                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white/90 border border-slate-200 text-slate-600">
+                              {formatMmSs(seg.startTime)}–{formatMmSs(seg.endTime)}
+                            </span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* CHẾ ĐỘ 1: NGHE CHÉP (DICTATION / ĐỤC LỖ) */}
               {dictationSubTab === "chep" && (
@@ -428,7 +715,11 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                           type="button"
                           onClick={() => {
                             playSfx("click");
+                            const nextFlagged = flaggedReviewIds.includes(q.id)
+                              ? flaggedReviewIds.filter((id) => id !== q.id)
+                              : [...flaggedReviewIds, q.id];
                             handleToggleFlagReview(q.id);
+                            syncCardMetadataToDb(userNotes, selfAssessment, nextFlagged);
                           }}
                           title="Lưu câu hỏi"
                           className={`p-2 rounded-xl border border-slate-200/90 transition cursor-pointer ${
@@ -743,6 +1034,52 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                           </p>
                         </div>
 
+                        {/* DANH SÁCH TỪNG CÂU KÈM TIMESTAMP TRONG TAB NGHE CHECK */}
+                        {questionSegments.length > 0 && (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                PHÂN TÁCH TỪNG CÂU KÈM TIMESTAMP (BẤM ĐỂ NGHE TỪNG ĐOẠN)
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              {questionSegments.map((seg, sIdx) => (
+                                <div
+                                  key={seg.id || sIdx}
+                                  className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 hover:border-blue-300 transition space-y-1.5"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePlaySegment(seg, sIdx, false)}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-2xs"
+                                    >
+                                      <Play className="w-3 h-3 fill-white" />
+                                      <span className="font-mono">
+                                        {formatMmSs(seg.startTime)} – {formatMmSs(seg.endTime)}
+                                      </span>
+                                      <span>• Câu {sIdx + 1}</span>
+                                    </button>
+                                    {seg.speaker && (
+                                      <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold">
+                                        {seg.speaker}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-bold text-slate-900 leading-relaxed">
+                                    {seg.text}
+                                  </p>
+                                  {seg.translation && (
+                                    <p className="text-xs font-semibold text-emerald-800 italic">
+                                      👉 {seg.translation}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* KHUNG TỰ ĐÁNH GIÁ MỨC ĐỘ TỰ TIN (SELF-ASSESSMENT) */}
                         <div className="pt-2 border-t border-slate-100 space-y-2.5">
                           <div className="flex items-center justify-between text-xs">
@@ -756,11 +1093,13 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                               type="button"
                               onClick={() => {
                                 playSfx("click");
-                                setSelfAssessment((prev) => ({ ...prev, [q.id]: "clear" }));
-                                triggerToast("Tuyệt vời! Bạn đã nắm chắc câu này.");
+                                const nextSelf = { ...selfAssessment, [String(q.id)]: "clear" as const };
+                                setSelfAssessment(nextSelf);
+                                syncCardMetadataToDb(userNotes, nextSelf);
+                                triggerToast("Tuyệt vời! Đã lưu đánh giá lên hệ thống.");
                               }}
                               className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                                selfAssessment[q.id] === "clear"
+                                selfAssessment[String(q.id)] === "clear"
                                   ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                                   : "bg-emerald-50/60 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                               }`}
@@ -771,11 +1110,13 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                               type="button"
                               onClick={() => {
                                 playSfx("click");
-                                setSelfAssessment((prev) => ({ ...prev, [q.id]: "partial" }));
-                                triggerToast("Ghi nhận! Cần chú ý thêm một số từ vựng nối âm.");
+                                const nextSelf = { ...selfAssessment, [String(q.id)]: "partial" as const };
+                                setSelfAssessment(nextSelf);
+                                syncCardMetadataToDb(userNotes, nextSelf);
+                                triggerToast("Ghi nhận! Đã đồng bộ đánh giá lên hệ thống.");
                               }}
                               className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                                selfAssessment[q.id] === "partial"
+                                selfAssessment[String(q.id)] === "partial"
                                   ? "bg-amber-500 text-white border-amber-500 shadow-xs"
                                   : "bg-amber-50/60 border-amber-200 text-amber-800 hover:bg-amber-100"
                               }`}
@@ -786,11 +1127,13 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                               type="button"
                               onClick={() => {
                                 playSfx("click");
-                                setSelfAssessment((prev) => ({ ...prev, [q.id]: "hard" }));
+                                const nextSelf = { ...selfAssessment, [String(q.id)]: "hard" as const };
+                                setSelfAssessment(nextSelf);
+                                syncCardMetadataToDb(userNotes, nextSelf);
                                 triggerToast("Đã lưu lại! Hãy luyện chép lại ở tab Nghe chép nhé.");
                               }}
                               className={`py-2 px-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                                selfAssessment[q.id] === "hard"
+                                selfAssessment[String(q.id)] === "hard"
                                   ? "bg-rose-500 text-white border-rose-500 shadow-xs"
                                   : "bg-rose-50/60 border-rose-200 text-rose-800 hover:bg-rose-100"
                               }`}
@@ -1060,6 +1403,32 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
+                                onClick={() =>
+                                  handleToggleSaveVocabItem({
+                                    word: v.word,
+                                    ipa: v.ipa,
+                                    pos: v.pos,
+                                    meaning: v.meaning,
+                                    example: typeof v.example === "string" ? v.example : v.example?.en,
+                                  })
+                                }
+                                className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                  savedVocabItems.some((w) => w.word.toLowerCase() === v.word.toLowerCase())
+                                    ? "bg-amber-100 text-amber-700 border-amber-300"
+                                    : "bg-white text-slate-400 border-blue-200 hover:text-blue-600"
+                                }`}
+                                title="Lưu vào Giỏ từ"
+                              >
+                                <Bookmark
+                                  className={`w-3.5 h-3.5 ${
+                                    savedVocabItems.some((w) => w.word.toLowerCase() === v.word.toLowerCase())
+                                      ? "fill-amber-600"
+                                      : ""
+                                  }`}
+                                />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => playAudio(v.word)}
                                 className="p-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition cursor-pointer"
                               >
@@ -1147,11 +1516,38 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
             <button
               type="button"
-              onClick={() => triggerToast("Đã mở giỏ từ vựng cá nhân")}
+              onClick={() => setIsVocabBagOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
             >
-              <ShoppingBag className="w-3.5 h-3.5 text-slate-500" />
-              <span>Giỏ từ</span>
+              <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
+              <span>Giỏ từ ({savedVocabItems.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsDictionaryOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-500" />
+              <span>Tra từ</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsAiTutorOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/70 text-blue-700 text-xs font-bold hover:bg-blue-100 transition cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>Hỏi AI</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/90 text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Lịch sử</span>
             </button>
           </div>
 
@@ -1294,8 +1690,8 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
 
               <textarea
                 rows={5}
-                value={userNotes[q.id] || ""}
-                onChange={(e) => setUserNotes({ ...userNotes, [q.id]: e.target.value })}
+                value={userNotes[String(q.id)] || ""}
+                onChange={(e) => setUserNotes({ ...userNotes, [String(q.id)]: e.target.value })}
                 placeholder="Nhập ghi chú hoặc kiến thức cần nhớ cho câu này..."
                 className="w-full p-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs sm:text-sm text-slate-800 outline-none resize-none"
               />
@@ -1305,9 +1701,10 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                   type="button"
                   onClick={() => {
                     const updated = { ...userNotes };
-                    delete updated[q.id];
+                    delete updated[String(q.id)];
                     setUserNotes(updated);
-                    triggerToast("Đã xóa ghi chú của câu hỏi này!");
+                    syncCardMetadataToDb(updated, selfAssessment);
+                    triggerToast("Đã xóa ghi chú của câu hỏi này trên hệ thống!");
                   }}
                   className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
                 >
@@ -1326,7 +1723,8 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
                     type="button"
                     onClick={() => {
                       setIsLocalNotesModalOpen(false);
-                      triggerToast("Đã lưu ghi chú cá nhân thành công! 💾");
+                      syncCardMetadataToDb(userNotes, selfAssessment);
+                      triggerToast("Đã đồng bộ ghi chú cá nhân lên cơ sở dữ liệu! 💾");
                     }}
                     className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-xs cursor-pointer"
                   >
@@ -1337,6 +1735,49 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
             </div>
           </div>
         )}
+        {/* MODAL TRA TỪ, GIỎ TỪ, HỎI AI & LỊCH SỬ LÀM BÀI */}
+        <ListeningAttemptHistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+          targetId={dictationModalCard.id}
+          title={`Lịch sử làm bài • ${dictationModalCard.title || `Test ${dictationModalCard.testNumber} - ${dictationModalCard.part}`}`}
+        />
+        <ListeningDictionaryModal
+          isOpen={isDictionaryOpen}
+          onClose={() => setIsDictionaryOpen(false)}
+          onSaveWord={handleToggleSaveVocabItem}
+          savedWords={savedVocabItems}
+          playAudio={playAudio}
+        />
+
+        <ListeningPersonalVocabBagModal
+          isOpen={isVocabBagOpen}
+          onClose={() => setIsVocabBagOpen(false)}
+          savedWords={savedVocabItems}
+          lessonVocab={vocabItems.map((v) => ({
+            word: v.word,
+            ipa: v.ipa,
+            pos: v.pos,
+            meaning: v.meaning,
+            example: typeof v.example === "string" ? v.example : v.example?.en,
+          }))}
+          onToggleSaveWord={handleToggleSaveVocabItem}
+          playAudio={playAudio}
+          isLocked={isVocabLocked}
+        />
+
+        <ListeningAiTutorModal
+          isOpen={isAiTutorOpen}
+          onClose={() => setIsAiTutorOpen(false)}
+          part={q.part || dictationModalCard.part}
+          questionText={q.question}
+          transcript={q.fullTranscript}
+          options={q.options}
+          correctAnswer={q.correctAnswer}
+          explanation={q.explanation}
+          trapNote={q.trapNote}
+          isAnswerUnlocked={isAnswerUnlocked}
+        />
       </div>
     </div>
   );

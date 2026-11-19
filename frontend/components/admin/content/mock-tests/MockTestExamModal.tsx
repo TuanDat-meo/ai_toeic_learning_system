@@ -590,12 +590,12 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                         </div>
                       )}
 
-                      {/* Đối với Part 1: Hiển thị ảnh chụp */}
-                      {qPart === "Part 1" && currentQ.imageUrl && (
+                      {/* Đối với Part 1 và các câu hỏi có biểu đồ (Part 3, 4, 7): Hiển thị ảnh chụp / biểu đồ */}
+                      {currentQ.imageUrl && (
                         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
                           <img
                             src={currentQ.imageUrl}
-                            alt="Photograph"
+                            alt="Question stimulus"
                             className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
                           />
                         </div>
@@ -1054,12 +1054,12 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                                   </div>
                                 )}
 
-                                {/* Hình ảnh Part 1 */}
-                                {qPart === "Part 1" && q.imageUrl && (
+                                {/* Hình ảnh Part 1 & biểu đồ */}
+                                {q.imageUrl && (
                                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
                                     <img
                                       src={q.imageUrl}
-                                      alt="Part 1 Photograph"
+                                      alt="Question stimulus"
                                       className="max-h-60 w-auto rounded-xl object-contain"
                                     />
                                   </div>

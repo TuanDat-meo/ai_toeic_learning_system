@@ -30,6 +30,7 @@ import {
   getTodayDateString,
   StudyTrackerData,
 } from "@/lib/studyTracker";
+import { fetchListeningAnalytics, type ListeningAnalyticsSummary } from "@/lib/api/listening";
 
 interface LatestScoreData {
   lc: number;
@@ -49,6 +50,13 @@ export default function Home() {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
   const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
+  const [listeningAnalytics, setListeningAnalytics] = useState<ListeningAnalyticsSummary | null>(null);
+
+  useEffect(() => {
+    fetchListeningAnalytics()
+      .then((res) => setListeningAnalytics(res))
+      .catch(() => {});
+  }, []);
 
   // Lắng nghe cập nhật thời gian học thực tế theo thời gian thực
   useEffect(() => {
@@ -522,19 +530,23 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. LỜI KHUYÊN & MẸO HỌC TẬP HÔM NAY */}
-      <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/70 via-sky-50/50 to-indigo-50/40 p-5 sm:p-6 shadow-2xs">
+      {/* 3. LỜI KHUYÊN & ĐỀ XUẤT BKT CÁ NHÂN HÓA */}
+      <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/70 via-sky-50/50 to-indigo-50/40 p-5 sm:p-6 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-800">
               <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              Gợi ý học tập hôm nay
+              Đề xuất Lộ trình BKT &amp; Analytics Cá nhân hóa
             </span>
             <h4 className="text-sm font-bold text-slate-900">
-              Chọn học phần phù hợp với mục tiêu của bạn
+              {listeningAnalytics && listeningAnalytics.recommendations.length > 0
+                ? listeningAnalytics.recommendations[0].title
+                : "Chọn học phần phù hợp với mục tiêu của bạn"}
             </h4>
             <p className="text-xs text-slate-600">
-              Danh sách bài học và đề luyện tập được tải từ dữ liệu của hệ thống.
+              {listeningAnalytics && listeningAnalytics.recommendations.length > 0
+                ? listeningAnalytics.recommendations[0].reason
+                : "Danh sách bài học và đề luyện tập được tải từ dữ liệu của hệ thống."}
             </p>
           </div>
 
@@ -553,6 +565,35 @@ export default function Home() {
             </Link>
           </div>
         </div>
+
+        {listeningAnalytics && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-blue-200/60">
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Điểm Listening quy đổi</div>
+              <div className="text-base font-black text-blue-700 font-mono mt-0.5">
+                {listeningAnalytics.estimatedListeningScore}/495
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Độ chính xác Listening</div>
+              <div className="text-base font-black text-emerald-700 font-mono mt-0.5">
+                {listeningAnalytics.overallAccuracyPercent}% ({listeningAnalytics.totalCorrect}/{listeningAnalytics.totalQuestionsAnswered})
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Số lượt Chế độ Thi thật</div>
+              <div className="text-base font-black text-rose-600 font-mono mt-0.5">
+                {listeningAnalytics.realExamAttempts} lượt
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Tổng XP Listening</div>
+              <div className="text-base font-black text-amber-600 font-mono mt-0.5">
+                +{listeningAnalytics.totalXpEarned} XP
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ========================================================================= */}

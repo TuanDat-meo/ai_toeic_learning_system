@@ -1,6 +1,20 @@
 import React, { useState } from "react";
-import { ShoppingBag, Bookmark, FileText, Trash2, X } from "lucide-react";
-import { DictationCardData, LevelCategoryCardData, DictationQuestion } from "@/app/admin/content/listening/types";
+import {
+  ShoppingBag,
+  Bookmark,
+  FileText,
+  Trash2,
+  X,
+  Plus,
+  Upload,
+  Copy,
+  Layers,
+  Loader2,
+  CheckCircle2,
+  Image as ImageIcon,
+} from "lucide-react";
+import { DictationCardData, LevelCategoryCardData, DictationQuestion, TranscriptSegment } from "@/app/admin/content/listening/types";
+import { uploadListeningMediaFile, buildTranscriptSegmentsFromText } from "@/lib/api/listening";
 
 // --- 1. MODAL GIỎ TỪ VỰNG ---
 interface VocabBagModalProps {
@@ -317,7 +331,11 @@ interface DictationFormModalProps {
   setDictationFormYear: (val: "2026" | "2024" | "2023" | "2022") => void;
   dictationFormQuestions: number;
   setDictationFormQuestions: (val: number) => void;
-  handleSaveDictation: (e: React.FormEvent) => void;
+  dictationFormContentStatus: "DRAFT" | "PUBLISHED";
+  setDictationFormContentStatus: (val: "DRAFT" | "PUBLISHED") => void;
+  dictationQuestionsList: DictationQuestion[];
+  setDictationQuestionsList: React.Dispatch<React.SetStateAction<DictationQuestion[]>>;
+  handleSaveDictation: (e: React.FormEvent, statusOverride?: "DRAFT" | "PUBLISHED") => void;
 }
 
 export const DictationFormModal: React.FC<DictationFormModalProps> = ({
@@ -326,47 +344,126 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
   editingDictationCard,
   dictationFormTitle,
   setDictationFormTitle,
-  dictationFormAudioUrl,
-  setDictationFormAudioUrl,
-  dictationFormTranscript,
-  setDictationFormTranscript,
-  dictationFormTranslation,
-  setDictationFormTranslation,
   dictationFormTestNum,
   setDictationFormTestNum,
   dictationFormPart,
   setDictationFormPart,
   dictationFormYear,
   setDictationFormYear,
-  dictationFormQuestions,
   setDictationFormQuestions,
+  dictationFormContentStatus,
+  setDictationFormContentStatus,
+  dictationQuestionsList,
+  setDictationQuestionsList,
   handleSaveDictation,
 }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [uploadingField, setUploadingField] = useState<"audio" | "image" | null>(null);
 
   if (!showDictationModal) return null;
 
-  const onSubmit = (e: React.FormEvent) => {
+  const safeIdx = Math.min(activeIdx, Math.max(0, dictationQuestionsList.length - 1));
+  const currentQ: DictationQuestion = dictationQuestionsList[safeIdx] || {
+    id: 1,
+    part: dictationFormPart,
+    audioUrl: "",
+    fullTranscript: "",
+    vietnameseTranslation: "",
+    explanation: "",
+  };
+
+  const updateCurrentQuestion = (patch: Partial<DictationQuestion>) => {
+    setDictationQuestionsList((prev) => {
+      if (prev.length === 0) {
+        return [{ id: 1, part: dictationFormPart, audioUrl: "", fullTranscript: "", vietnameseTranslation: "", explanation: "", ...patch }];
+      }
+      return prev.map((item, idx) => (idx === safeIdx ? { ...item, ...patch } : item));
+    });
+  };
+
+  const handleAddQuestion = () => {
+    const nextList: DictationQuestion[] = [
+      ...dictationQuestionsList,
+      {
+        id: dictationQuestionsList.length + 1,
+        part: dictationFormPart,
+        audioUrl: currentQ.audioUrl || "",
+        fullTranscript: "",
+        vietnameseTranslation: "",
+        explanation: "",
+      },
+    ];
+    setDictationQuestionsList(nextList);
+    setDictationFormQuestions(nextList.length);
+    setActiveIdx(nextList.length - 1);
+  };
+
+  const handleDuplicateQuestion = () => {
+    const cloned: DictationQuestion = {
+      ...currentQ,
+      id: dictationQuestionsList.length + 1,
+    };
+    const nextList = [...dictationQuestionsList];
+    nextList.splice(safeIdx + 1, 0, cloned);
+    const reindexed = nextList.map((q, idx) => ({ ...q, id: idx + 1 }));
+    setDictationQuestionsList(reindexed);
+    setDictationFormQuestions(reindexed.length);
+    setActiveIdx(safeIdx + 1);
+  };
+
+  const handleRemoveQuestion = (idxToRemove: number) => {
+    if (dictationQuestionsList.length <= 1) return;
+    const nextList = dictationQuestionsList
+      .filter((_, idx) => idx !== idxToRemove)
+      .map((q, idx) => ({ ...q, id: idx + 1 }));
+    setDictationQuestionsList(nextList);
+    setDictationFormQuestions(nextList.length);
+    setActiveIdx(Math.max(0, Math.min(safeIdx, nextList.length - 1)));
+  };
+
+  const handleFileUpload = async (file: File | undefined, kind: "audio" | "image") => {
+    if (!file) return;
+    setUploadingField(kind);
+    setErrorMsg(null);
+    try {
+      const uploaded = await uploadListeningMediaFile(file);
+      if (kind === "audio") {
+        updateCurrentQuestion({ audioUrl: uploaded.url });
+      } else {
+        updateCurrentQuestion({ imageUrl: uploaded.url });
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Tải tệp lên thất bại.");
+    } finally {
+      setUploadingField(null);
+    }
+  };
+
+  const triggerSubmitWithStatus = (e: React.FormEvent, targetStatus: "DRAFT" | "PUBLISHED") => {
     e.preventDefault();
+    setDictationFormContentStatus(targetStatus);
     if (!dictationFormTitle.trim()) {
       setErrorMsg("Vui lòng nhập tiêu đề bài nghe chép chính tả.");
       return;
     }
-    if (!dictationFormTranscript.trim()) {
-      setErrorMsg("Vui lòng nhập đoạn Transcript tiếng Anh để học viên nghe chép.");
-      return;
-    }
-    if (!dictationFormAudioUrl.trim()) {
-      setErrorMsg("Vui lòng cung cấp link file âm thanh (Audio URL / MP3).");
-      return;
+    if (targetStatus === "PUBLISHED") {
+      const invalidIdx = dictationQuestionsList.findIndex(
+        (q) => !q.audioUrl?.trim() || !q.fullTranscript?.trim()
+      );
+      if (invalidIdx !== -1) {
+        setActiveIdx(invalidIdx);
+        setErrorMsg(`Để xuất bản, câu số ${invalidIdx + 1} cần có đủ Audio URL và Transcript tiếng Anh (hoặc chọn "Lưu bản nháp").`);
+        return;
+      }
     }
     setErrorMsg(null);
-    handleSaveDictation(e);
+    handleSaveDictation(e, targetStatus);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto custom-scrollbar">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Listening Studio • Dictation</span>
@@ -389,21 +486,38 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-3.5 text-xs font-medium">
-          <div>
-            <label className="block text-slate-700 font-bold mb-1">
-              Tiêu đề bài nghe <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Ví dụ: Test 1 - Part 1: Bối cảnh làm việc văn phòng"
-              value={dictationFormTitle}
-              onChange={(e) => {
-                setDictationFormTitle(e.target.value);
-                if (errorMsg) setErrorMsg(null);
-              }}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
-            />
+        <form onSubmit={(e) => triggerSubmitWithStatus(e, dictationFormContentStatus)} className="space-y-3.5 text-xs font-medium">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-slate-700 font-bold mb-1">
+                Tiêu đề bài nghe <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ví dụ: Test 1 - Part 1: Bối cảnh làm việc văn phòng"
+                value={dictationFormTitle}
+                onChange={(e) => {
+                  setDictationFormTitle(e.target.value);
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">Trạng thái hiển thị</label>
+              <select
+                value={dictationFormContentStatus}
+                onChange={(e) => setDictationFormContentStatus(e.target.value as "DRAFT" | "PUBLISHED")}
+                className={`w-full px-3 py-2.5 rounded-xl border text-xs font-bold focus:outline-hidden ${
+                  dictationFormContentStatus === "PUBLISHED"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : "border-amber-300 bg-amber-50 text-amber-800"
+                }`}
+              >
+                <option value="PUBLISHED">🟢 Đã xuất bản</option>
+                <option value="DRAFT">🟡 Bản nháp (Ẩn)</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -446,67 +560,323 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Số câu chép</label>
+              <label className="block text-slate-700 font-bold mb-1">Tổng số câu</label>
               <input
                 type="number"
-                min={1}
-                max={100}
-                value={dictationFormQuestions}
-                onChange={(e) => setDictationFormQuestions(Number(e.target.value))}
-                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+                readOnly
+                value={dictationQuestionsList.length}
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-blue-700 bg-slate-50"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-slate-700 font-bold mb-1">
-              Liên kết Audio MP3 <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="https://example.com/audio/ets2024-test1-p1.mp3"
-              value={dictationFormAudioUrl}
-              onChange={(e) => {
-                setDictationFormAudioUrl(e.target.value);
-                if (errorMsg) setErrorMsg(null);
-              }}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">Đường dẫn tệp âm thanh chuẩn tiếng Anh bản ngữ để học viên nghe chép.</p>
+          {/* DANH SÁCH CÂU HỎI TRONG BÀI CHÉP CHÍNH TẢ */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {dictationQuestionsList.map((qItem, idx) => {
+                  const isReady = Boolean(qItem.audioUrl?.trim() && qItem.fullTranscript?.trim());
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveIdx(idx)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 ${
+                        idx === safeIdx
+                          ? "bg-blue-600 text-white shadow-2xs"
+                          : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span>Câu {idx + 1}</span>
+                      {isReady && <CheckCircle2 className={`w-3 h-3 ${idx === safeIdx ? "text-emerald-200" : "text-emerald-600"}`} />}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={handleAddQuestion}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Thêm câu</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDuplicateQuestion}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition cursor-pointer"
+                  title="Nhân bản câu hiện tại"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Nhân bản</span>
+                </button>
+              </div>
+
+              {dictationQuestionsList.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveQuestion(safeIdx)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa câu {safeIdx + 1}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-slate-700 font-bold">
+                  Tệp âm thanh Audio MP3/WAV (Câu {safeIdx + 1}) <span className="text-red-500">*</span>
+                </label>
+                <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold cursor-pointer transition">
+                  {uploadingField === "audio" ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5" />
+                  )}
+                  <span>{uploadingField === "audio" ? "Đang tải lên..." : "Tải file Audio lên"}</span>
+                  <input
+                    type="file"
+                    accept=".mp3,.wav,.ogg,.m4a,audio/*"
+                    className="hidden"
+                    disabled={uploadingField !== null}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      void handleFileUpload(f, "audio");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <input
+                type="text"
+                placeholder="/ets_2024_lc/test_1/audio/test1_q1.mp3 hoặc bấm 'Tải file Audio lên'"
+                value={currentQ.audioUrl || ""}
+                onChange={(e) => {
+                  updateCurrentQuestion({ audioUrl: e.target.value });
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+              />
+              {currentQ.audioUrl?.trim() && (
+                <audio controls src={currentQ.audioUrl} className="w-full h-8 mt-1" preload="metadata" />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-slate-700 font-bold">
+                  Hình ảnh minh họa (Part 1 / Sơ đồ nếu có)
+                </label>
+                <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] font-bold cursor-pointer transition">
+                  {uploadingField === "image" ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  )}
+                  <span>{uploadingField === "image" ? "Đang tải ảnh..." : "Tải ảnh lên"}</span>
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,image/*"
+                    className="hidden"
+                    disabled={uploadingField !== null}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      void handleFileUpload(f, "image");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <input
+                type="text"
+                placeholder="/ets_2024_lc/test_1/images/test1_q1.png hoặc bấm 'Tải ảnh lên'"
+                value={currentQ.imageUrl || ""}
+                onChange={(e) => updateCurrentQuestion({ imageUrl: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white"
+              />
+              {currentQ.imageUrl?.trim() && (
+                <div className="pt-1">
+                  <img
+                    src={currentQ.imageUrl}
+                    alt="Preview"
+                    className="h-24 w-auto rounded-xl border border-slate-200 object-contain bg-white p-1"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">
+                Đoạn Transcript Tiếng Anh (Câu {safeIdx + 1}) <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Ví dụ: Some workers are setting up a conference room for the annual shareholders meeting."
+                value={currentQ.fullTranscript || ""}
+                onChange={(e) => {
+                  updateCurrentQuestion({ fullTranscript: e.target.value });
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-bold mb-1">Bản dịch nghĩa Tiếng Việt (Câu {safeIdx + 1})</label>
+              <textarea
+                rows={2}
+                placeholder="Ví dụ: Một số công nhân đang sắp xếp phòng hội thảo cho cuộc họp cổ đông thường niên."
+                value={currentQ.vietnameseTranslation || ""}
+                onChange={(e) => updateCurrentQuestion({ vietnameseTranslation: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white resize-none"
+              />
+            </div>
+
+            {/* CHIA CÂU KÈM TIMESTAMP CHO DICTATION */}
+            <div className="rounded-xl border border-blue-200/80 bg-white p-3.5 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-slate-800 text-xs">
+                    ⏱ Chia câu kèm Timestamp ({(currentQ.segments || []).length} đoạn câu)
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    Tách đoạn nghe thành từng câu nhỏ kèm giây bắt đầu – kết thúc để học viên luyện chép theo từng câu
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const autoSegs = buildTranscriptSegmentsFromText(
+                        currentQ.fullTranscript || "",
+                        currentQ.vietnameseTranslation || ""
+                      );
+                      updateCurrentQuestion({ segments: autoSegs });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold cursor-pointer transition"
+                  >
+                    ⚡ Tự động chia câu &amp; Timestamp
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prevSegs = currentQ.segments || [];
+                      const lastEnd = prevSegs.length > 0 ? prevSegs[prevSegs.length - 1].endTime : 0;
+                      const nextSeg: TranscriptSegment = {
+                        id: prevSegs.length + 1,
+                        startTime: lastEnd,
+                        endTime: Math.round((lastEnd + 3.0) * 10) / 10,
+                        text: "",
+                        translation: "",
+                      };
+                      updateCurrentQuestion({ segments: [...prevSegs, nextSeg] });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold cursor-pointer transition"
+                  >
+                    + Thêm đoạn
+                  </button>
+                </div>
+              </div>
+
+              {(currentQ.segments || []).length > 0 && (
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {(currentQ.segments || []).map((seg, sIdx) => (
+                    <div
+                      key={seg.id || sIdx}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-bold text-[10px]">
+                            Đoạn {sIdx + 1}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-slate-500">Từ (s):</span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              value={seg.startTime}
+                              onChange={(e) => {
+                                const val = Number(e.target.value) || 0;
+                                const next = (currentQ.segments || []).map((item, i) =>
+                                  i === sIdx ? { ...item, startTime: val } : item
+                                );
+                                updateCurrentQuestion({ segments: next });
+                              }}
+                              className="w-16 px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-slate-500">Đến (s):</span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              value={seg.endTime}
+                              onChange={(e) => {
+                                const val = Number(e.target.value) || 0;
+                                const next = (currentQ.segments || []).map((item, i) =>
+                                  i === sIdx ? { ...item, endTime: val } : item
+                                );
+                                updateCurrentQuestion({ segments: next });
+                              }}
+                              className="w-16 px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = (currentQ.segments || [])
+                              .filter((_, i) => i !== sIdx)
+                              .map((item, i) => ({ ...item, id: i + 1 }));
+                            updateCurrentQuestion({ segments: next });
+                          }}
+                          className="text-rose-500 hover:text-rose-700 text-[11px] font-bold cursor-pointer"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+
+                      <input
+                        type="text"
+                        placeholder="Câu tiếng Anh của đoạn này..."
+                        value={seg.text}
+                        onChange={(e) => {
+                          const next = (currentQ.segments || []).map((item, i) =>
+                            i === sIdx ? { ...item, text: e.target.value } : item
+                          );
+                          updateCurrentQuestion({ segments: next });
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Dịch nghĩa tiếng Việt của đoạn này (tùy chọn)..."
+                        value={seg.translation || ""}
+                        onChange={(e) => {
+                          const next = (currentQ.segments || []).map((item, i) =>
+                            i === sIdx ? { ...item, translation: e.target.value } : item
+                          );
+                          updateCurrentQuestion({ segments: next });
+                        }}
+                        className="w-full px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] text-slate-600"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div>
-            <label className="block text-slate-700 font-bold mb-1">
-              Đoạn Transcript Tiếng Anh (Nội dung nghe chép) <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              rows={4}
-              placeholder="Ví dụ: Some workers are setting up a conference room for the annual shareholders meeting."
-              value={dictationFormTranscript}
-              onChange={(e) => {
-                setDictationFormTranscript(e.target.value);
-                if (errorMsg) setErrorMsg(null);
-              }}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-bold mb-1">Bản dịch nghĩa Tiếng Việt</label>
-            <textarea
-              rows={2}
-              placeholder="Ví dụ: Một số công nhân đang sắp xếp phòng hội thảo cho cuộc họp cổ đông thường niên."
-              value={dictationFormTranslation}
-              onChange={(e) => setDictationFormTranslation(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 bg-white resize-none"
-            />
-          </div>
-
-          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-            <span className="text-[11px] text-slate-400">
-              <span className="text-red-500 font-bold">*</span> Bắt buộc nhập đầy đủ dữ liệu
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+            <span className="text-[11px] text-slate-500">
+              Tổng cộng <strong>{dictationQuestionsList.length} câu</strong> trong bài nghe chép này
             </span>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setShowDictationModal(false)}
@@ -515,10 +885,18 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
                 Hủy
               </button>
               <button
-                type="submit"
+                type="button"
+                onClick={(e) => triggerSubmitWithStatus(e, "DRAFT")}
+                className="px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold cursor-pointer"
+              >
+                📝 Lưu bản nháp
+              </button>
+              <button
+                type="button"
+                onClick={(e) => triggerSubmitWithStatus(e, "PUBLISHED")}
                 className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
               >
-                {editingDictationCard ? "Lưu thay đổi" : "Tạo bài nghe"}
+                🚀 {editingDictationCard ? "Lưu & Xuất bản" : "Tạo & Xuất bản"}
               </button>
             </div>
           </div>
@@ -590,9 +968,11 @@ interface LevelFormModalProps {
   setLevelFormTheory: (theory: string) => void;
   levelFormRules: string;
   setLevelFormRules: (rules: string) => void;
-  levelFormQuestion: DictationQuestion;
-  setLevelFormQuestion: React.Dispatch<React.SetStateAction<DictationQuestion>>;
-  handleSaveLevel: (e: React.FormEvent) => void;
+  levelFormContentStatus: "DRAFT" | "PUBLISHED";
+  setLevelFormContentStatus: (status: "DRAFT" | "PUBLISHED") => void;
+  levelFormQuestionsList: DictationQuestion[];
+  setLevelFormQuestionsList: React.Dispatch<React.SetStateAction<DictationQuestion[]>>;
+  handleSaveLevel: (e: React.FormEvent, statusOverride?: "DRAFT" | "PUBLISHED") => void;
 }
 
 export const LevelFormModal: React.FC<LevelFormModalProps> = ({
@@ -603,21 +983,189 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
   setLevelFormPart,
   levelFormTitle,
   setLevelFormTitle,
-  levelFormQuestions,
   setLevelFormQuestions,
   levelFormTheory,
   setLevelFormTheory,
   levelFormRules,
   setLevelFormRules,
-  levelFormQuestion,
-  setLevelFormQuestion,
+  levelFormContentStatus,
+  setLevelFormContentStatus,
+  levelFormQuestionsList,
+  setLevelFormQuestionsList,
   handleSaveLevel,
 }) => {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [uploadingField, setUploadingField] = useState<"audio" | "image" | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   if (!showLevelModal) return null;
+
+  const safeIdx = Math.min(activeIdx, Math.max(0, levelFormQuestionsList.length - 1));
+  const currentQ: DictationQuestion = levelFormQuestionsList[safeIdx] || {
+    id: 1,
+    part: levelFormPart,
+    audioUrl: "",
+    fullTranscript: "",
+    vietnameseTranslation: "",
+    options: { A: "", B: "", C: "", D: "" },
+    optionTranslations: { A: "", B: "", C: "", D: "" },
+    correctAnswer: "A",
+    explanation: "",
+    trapNote: "",
+  };
+
+  const updateCurrentQuestion = (patch: Partial<DictationQuestion>) => {
+    setLevelFormQuestionsList((prev) => {
+      if (prev.length === 0) {
+        return [{
+          id: 1,
+          part: levelFormPart,
+          audioUrl: "",
+          fullTranscript: "",
+          vietnameseTranslation: "",
+          options: { A: "", B: "", C: "", D: "" },
+          optionTranslations: { A: "", B: "", C: "", D: "" },
+          correctAnswer: "A",
+          explanation: "",
+          trapNote: "",
+          ...patch,
+        }];
+      }
+      return prev.map((item, idx) => (idx === safeIdx ? { ...item, ...patch } : item));
+    });
+  };
+
+  const handleAddQuestion = () => {
+    const nextList: DictationQuestion[] = [
+      ...levelFormQuestionsList,
+      {
+        id: levelFormQuestionsList.length + 1,
+        part: levelFormPart,
+        audioUrl: currentQ.audioUrl || "",
+        fullTranscript: levelFormPart === "Part 3" || levelFormPart === "Part 4" ? currentQ.fullTranscript || "" : "",
+        vietnameseTranslation: levelFormPart === "Part 3" || levelFormPart === "Part 4" ? currentQ.vietnameseTranslation || "" : "",
+        question: "",
+        options: { A: "", B: "", C: "", D: "" },
+        optionTranslations: { A: "", B: "", C: "", D: "" },
+        correctAnswer: "A",
+        explanation: "",
+        trapNote: "",
+      },
+    ];
+    setLevelFormQuestionsList(nextList);
+    setLevelFormQuestions(nextList.length);
+    setActiveIdx(nextList.length - 1);
+  };
+
+  const handleAddGroupOfThree = () => {
+    const sharedAudio = currentQ.audioUrl || "";
+    const sharedTranscript = currentQ.fullTranscript || "";
+    const sharedTranslation = currentQ.vietnameseTranslation || "";
+    const baseId = levelFormQuestionsList.length;
+    const newThree: DictationQuestion[] = [1, 2, 3].map((offset) => ({
+      id: baseId + offset,
+      part: levelFormPart,
+      audioUrl: sharedAudio,
+      fullTranscript: sharedTranscript,
+      vietnameseTranslation: sharedTranslation,
+      question: "",
+      options: { A: "", B: "", C: "", D: "" },
+      optionTranslations: { A: "", B: "", C: "", D: "" },
+      correctAnswer: "A",
+      explanation: "",
+      trapNote: "",
+    }));
+    const nextList = [...levelFormQuestionsList, ...newThree];
+    setLevelFormQuestionsList(nextList);
+    setLevelFormQuestions(nextList.length);
+    setActiveIdx(baseId);
+  };
+
+  const handleDuplicateQuestion = () => {
+    const cloned: DictationQuestion = {
+      ...currentQ,
+      id: levelFormQuestionsList.length + 1,
+      options: { ...(currentQ.options || { A: "", B: "", C: "", D: "" }) },
+      optionTranslations: { ...(currentQ.optionTranslations || { A: "", B: "", C: "", D: "" }) },
+    };
+    const nextList = [...levelFormQuestionsList];
+    nextList.splice(safeIdx + 1, 0, cloned);
+    const reindexed = nextList.map((q, idx) => ({ ...q, id: idx + 1 }));
+    setLevelFormQuestionsList(reindexed);
+    setLevelFormQuestions(reindexed.length);
+    setActiveIdx(safeIdx + 1);
+  };
+
+  const handleApplyAudioToGroupOfThree = () => {
+    const groupStart = Math.floor(safeIdx / 3) * 3;
+    setLevelFormQuestionsList((prev) =>
+      prev.map((q, idx) =>
+        idx >= groupStart && idx < groupStart + 3
+          ? {
+              ...q,
+              audioUrl: currentQ.audioUrl,
+              fullTranscript: currentQ.fullTranscript,
+              vietnameseTranslation: currentQ.vietnameseTranslation,
+            }
+          : q
+      )
+    );
+  };
+
+  const handleRemoveQuestion = (idxToRemove: number) => {
+    if (levelFormQuestionsList.length <= 1) return;
+    const nextList = levelFormQuestionsList
+      .filter((_, idx) => idx !== idxToRemove)
+      .map((q, idx) => ({ ...q, id: idx + 1 }));
+    setLevelFormQuestionsList(nextList);
+    setLevelFormQuestions(nextList.length);
+    setActiveIdx(Math.max(0, Math.min(safeIdx, nextList.length - 1)));
+  };
+
+  const handleFileUpload = async (file: File | undefined, kind: "audio" | "image") => {
+    if (!file) return;
+    setUploadingField(kind);
+    setErrorMsg(null);
+    try {
+      const uploaded = await uploadListeningMediaFile(file);
+      if (kind === "audio") {
+        updateCurrentQuestion({ audioUrl: uploaded.url });
+      } else {
+        updateCurrentQuestion({ imageUrl: uploaded.url });
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Tải tệp lên thất bại.");
+    } finally {
+      setUploadingField(null);
+    }
+  };
+
+  const triggerSubmitWithStatus = (e: React.FormEvent, targetStatus: "DRAFT" | "PUBLISHED") => {
+    e.preventDefault();
+    setLevelFormContentStatus(targetStatus);
+    if (!levelFormTitle.trim()) {
+      setErrorMsg("Vui lòng nhập tiêu đề chủ điểm luyện nghe.");
+      return;
+    }
+    if (targetStatus === "PUBLISHED") {
+      const requiredKeys = levelFormPart === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"];
+      const invalidIdx = levelFormQuestionsList.findIndex((q) => {
+        const opts = q.options || {};
+        return !q.audioUrl?.trim() || !q.fullTranscript?.trim() || !requiredKeys.every((k) => opts[k]?.trim());
+      });
+      if (invalidIdx !== -1) {
+        setActiveIdx(invalidIdx);
+        setErrorMsg(`Để xuất bản, câu số ${invalidIdx + 1} cần có đủ Audio, Transcript và các đáp án ${requiredKeys.join(", ")} (hoặc bấm "Lưu bản nháp").`);
+        return;
+      }
+    }
+    setErrorMsg(null);
+    handleSaveLevel(e, targetStatus);
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">{levelFormPart}</span>
@@ -634,17 +1182,40 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSaveLevel} className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Tiêu đề chủ điểm *</label>
-            <input
-              type="text"
-              required
-              placeholder="Ví dụ: Level 5 – 450–495 hoặc Tranh phong cảnh"
-              value={levelFormTitle}
-              onChange={(e) => setLevelFormTitle(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
-            />
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
+            ⚠️ {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={(e) => triggerSubmitWithStatus(e, levelFormContentStatus)} className="space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Tiêu đề chủ điểm *</label>
+              <input
+                type="text"
+                required
+                placeholder="Ví dụ: Level 5 – 450–495 hoặc Tranh phong cảnh"
+                value={levelFormTitle}
+                onChange={(e) => setLevelFormTitle(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Trạng thái hiển thị</label>
+              <select
+                value={levelFormContentStatus}
+                onChange={(e) => setLevelFormContentStatus(e.target.value as "DRAFT" | "PUBLISHED")}
+                className={`w-full px-3 py-2.5 rounded-xl border text-xs font-bold focus:outline-hidden ${
+                  levelFormContentStatus === "PUBLISHED"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : "border-amber-300 bg-amber-50 text-amber-800"
+                }`}
+              >
+                <option value="PUBLISHED">🟢 Đã xuất bản</option>
+                <option value="DRAFT">🟡 Bản nháp (Ẩn)</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -662,13 +1233,12 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Số câu hỏi</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Tổng số câu hỏi</label>
               <input
                 type="number"
-                min={1}
-                value={levelFormQuestions}
-                onChange={(e) => setLevelFormQuestions(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500"
+                readOnly
+                value={levelFormQuestionsList.length}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-blue-700 bg-slate-50"
               />
             </div>
           </div>
@@ -687,7 +1257,7 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Quy tắc / Mẹo làm bài (mỗi dòng 1 mẹo)</label>
             <textarea
-              rows={3}
+              rows={2}
               placeholder="Bẫy từ vựng cần tránh...&#10;Cấu trúc thường gặp..."
               value={levelFormRules}
               onChange={(e) => setLevelFormRules(e.target.value)}
@@ -695,50 +1265,212 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
             />
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
-            <h4 className="text-xs font-bold text-slate-800">Câu hỏi luyện tập</h4>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Audio URL *</label>
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {levelFormQuestionsList.map((qItem, idx) => {
+                  const reqKeys = levelFormPart === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"];
+                  const isReady = Boolean(
+                    qItem.audioUrl?.trim() &&
+                      qItem.fullTranscript?.trim() &&
+                      reqKeys.every((k) => qItem.options?.[k]?.trim())
+                  );
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveIdx(idx)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 ${
+                        idx === safeIdx
+                          ? "bg-blue-600 text-white shadow-2xs"
+                          : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span>Câu {idx + 1}</span>
+                      {isReady && <CheckCircle2 className={`w-3 h-3 ${idx === safeIdx ? "text-emerald-200" : "text-emerald-600"}`} />}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={handleAddQuestion}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Thêm câu</span>
+                </button>
+                {(levelFormPart === "Part 3" || levelFormPart === "Part 4") && (
+                  <button
+                    type="button"
+                    onClick={handleAddGroupOfThree}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-300 text-xs font-bold transition cursor-pointer"
+                    title="Thêm nhanh nhóm 3 câu dùng chung Audio hội thoại/bài nói"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>+ Cụm 3 câu</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDuplicateQuestion}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition cursor-pointer"
+                  title="Nhân bản câu hiện tại"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Nhân bản</span>
+                </button>
+              </div>
+
+              {levelFormQuestionsList.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveQuestion(safeIdx)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa câu {safeIdx + 1}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Audio URL (Câu {safeIdx + 1}) *
+                </label>
+                <div className="flex items-center gap-2">
+                  {(levelFormPart === "Part 3" || levelFormPart === "Part 4") && levelFormQuestionsList.length >= 3 && (
+                    <button
+                      type="button"
+                      onClick={handleApplyAudioToGroupOfThree}
+                      className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[11px] font-bold cursor-pointer transition"
+                      title="Sao chép Audio & Transcript của câu này sang 3 câu trong cùng nhóm hội thoại"
+                    >
+                      🔗 Đồng bộ cho nhóm 3 câu ({Math.floor(safeIdx / 3) * 3 + 1}–{Math.min(levelFormQuestionsList.length, Math.floor(safeIdx / 3) * 3 + 3)})
+                    </button>
+                  )}
+                  <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold cursor-pointer transition">
+                    {uploadingField === "audio" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>{uploadingField === "audio" ? "Đang tải lên..." : "Tải file Audio lên"}</span>
+                    <input
+                      type="file"
+                      accept=".mp3,.wav,.ogg,.m4a,audio/*"
+                      className="hidden"
+                      disabled={uploadingField !== null}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        void handleFileUpload(f, "audio");
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
               <input
                 type="text"
-                required
-                value={levelFormQuestion.audioUrl}
-                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, audioUrl: e.target.value }))}
+                placeholder="/ets_2024_lc/test_1/audio/test1_q1.mp3 hoặc bấm 'Tải file Audio lên'"
+                value={currentQ.audioUrl || ""}
+                onChange={(e) => updateCurrentQuestion({ audioUrl: e.target.value })}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
               />
+              {currentQ.audioUrl?.trim() && (
+                <audio controls src={currentQ.audioUrl} className="w-full h-8 mt-1" preload="metadata" />
+              )}
             </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Image URL (Part 1 / Bảng biểu nếu có)
+                </label>
+                <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] font-bold cursor-pointer transition">
+                  {uploadingField === "image" ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  )}
+                  <span>{uploadingField === "image" ? "Đang tải ảnh..." : "Tải ảnh lên"}</span>
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,image/*"
+                    className="hidden"
+                    disabled={uploadingField !== null}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      void handleFileUpload(f, "image");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <input
+                type="text"
+                placeholder="/ets_2024_lc/test_1/images/test1_q1.png hoặc bấm 'Tải ảnh lên'"
+                value={currentQ.imageUrl || ""}
+                onChange={(e) => updateCurrentQuestion({ imageUrl: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              />
+              {currentQ.imageUrl?.trim() && (
+                <div className="pt-1">
+                  <img
+                    src={currentQ.imageUrl}
+                    alt="Preview"
+                    className="h-24 w-auto rounded-xl border border-slate-200 object-contain bg-white p-1"
+                  />
+                </div>
+              )}
+            </div>
+
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Transcript *</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Transcript (Câu {safeIdx + 1}) *</label>
               <textarea
                 rows={2}
-                required
-                value={levelFormQuestion.fullTranscript}
-                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, fullTranscript: e.target.value }))}
+                value={currentQ.fullTranscript || ""}
+                onChange={(e) => updateCurrentQuestion({ fullTranscript: e.target.value })}
                 className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Câu dẫn (không bắt buộc)</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Câu dẫn (Câu {safeIdx + 1})</label>
               <input
                 type="text"
-                value={levelFormQuestion.question || ""}
-                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, question: e.target.value }))}
+                value={currentQ.question || ""}
+                onChange={(e) => updateCurrentQuestion({ question: e.target.value })}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {((levelFormPart === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"]) as readonly ("A" | "B" | "C" | "D")[]).map((key) => (
-                <div key={key}>
-                  <label className="mb-1 block text-xs font-semibold text-slate-700">Lựa chọn {key} *</label>
+                <div key={key} className="space-y-1 bg-white p-2.5 rounded-xl border border-slate-200/80">
+                  <label className="block text-xs font-bold text-slate-700">Lựa chọn {key} *</label>
                   <input
                     type="text"
-                    required
-                    value={levelFormQuestion.options?.[key] || ""}
-                    onChange={(e) => setLevelFormQuestion((current) => ({
-                      ...current,
-                      options: { ...current.options, [key]: e.target.value },
-                    }))}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                    placeholder={`Nội dung tiếng Anh đáp án ${key}`}
+                    value={currentQ.options?.[key] || ""}
+                    onChange={(e) =>
+                      updateCurrentQuestion({
+                        options: { ...(currentQ.options || { A: "", B: "", C: "", D: "" }), [key]: e.target.value },
+                      })
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 text-xs"
+                  />
+                  <input
+                    type="text"
+                    placeholder={`Dịch nghĩa tiếng Việt đáp án ${key} (tùy chọn)`}
+                    value={currentQ.optionTranslations?.[key] || ""}
+                    onChange={(e) =>
+                      updateCurrentQuestion({
+                        optionTranslations: {
+                          ...(currentQ.optionTranslations || { A: "", B: "", C: "", D: "" }),
+                          [key]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600"
                   />
                 </div>
               ))}
@@ -747,54 +1479,77 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">Đáp án đúng *</label>
                 <select
-                  value={levelFormQuestion.correctAnswer || "A"}
-                  onChange={(e) => setLevelFormQuestion((current) => ({
-                    ...current,
-                    correctAnswer: e.target.value as DictationQuestion["correctAnswer"],
-                  }))}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                  value={currentQ.correctAnswer || "A"}
+                  onChange={(e) =>
+                    updateCurrentQuestion({
+                      correctAnswer: e.target.value as DictationQuestion["correctAnswer"],
+                    })
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-emerald-700"
                 >
                   {(levelFormPart === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"]).map((answer) => <option key={answer}>{answer}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Dịch nghĩa</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Dịch nghĩa toàn bài / lời thoại</label>
                 <input
                   type="text"
-                  value={levelFormQuestion.vietnameseTranslation || ""}
-                  onChange={(e) => setLevelFormQuestion((current) => ({
-                    ...current,
-                    vietnameseTranslation: e.target.value,
-                  }))}
+                  value={currentQ.vietnameseTranslation || ""}
+                  onChange={(e) => updateCurrentQuestion({ vietnameseTranslation: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
                 />
               </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Giải thích</label>
-              <textarea
-                rows={2}
-                value={levelFormQuestion.explanation || ""}
-                onChange={(e) => setLevelFormQuestion((current) => ({ ...current, explanation: e.target.value }))}
-                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Giải thích chi tiết</label>
+                <textarea
+                  rows={2}
+                  value={currentQ.explanation || ""}
+                  onChange={(e) => updateCurrentQuestion({ explanation: e.target.value })}
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Bẫy đề thi cần tránh (Trap Note)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ví dụ: Bẫy đồng âm 'coffee' vs 'copy'..."
+                  value={currentQ.trapNote || ""}
+                  onChange={(e) => updateCurrentQuestion({ trapNote: e.target.value })}
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowLevelModal(false)}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-            >
-              {editingLevelCard ? "Lưu thay đổi" : "Tạo chủ điểm"}
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <span className="text-[11px] text-slate-500">
+              Tổng cộng <strong>{levelFormQuestionsList.length} câu hỏi</strong> trong chủ điểm này
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowLevelModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={(e) => triggerSubmitWithStatus(e, "DRAFT")}
+                className="px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold cursor-pointer"
+              >
+                📝 Lưu bản nháp
+              </button>
+              <button
+                type="button"
+                onClick={(e) => triggerSubmitWithStatus(e, "PUBLISHED")}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                🚀 {editingLevelCard ? "Lưu & Xuất bản" : "Tạo & Xuất bản"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

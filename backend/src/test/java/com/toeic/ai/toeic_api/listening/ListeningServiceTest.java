@@ -85,7 +85,8 @@ class ListeningServiceTest {
     void savesListeningUnitProgressForAuthenticatedUser() {
         UUID userId = UUID.randomUUID();
         var req = new ListeningService.SaveListeningUnitProgressRequest(
-                "p1-l1", 5, 10, 4, 1, List.of(102), List.of(101, 102, 103, 104, 105), "IN_PROGRESS", 4);
+                "p1-l1", 5, 10, 4, 1, List.of(102), List.of(101, 102, 103, 104, 105),
+                List.of(103), java.util.Map.of("101", "Chú ý thì hiện tại tiếp diễn"), "IN_PROGRESS", 4);
 
         listeningService.saveUnitProgress(userId, req);
 
@@ -99,8 +100,46 @@ class ListeningServiceTest {
                 eq(1),
                 eq("[102]"),
                 eq("[101,102,103,104,105]"),
+                eq("[103]"),
+                anyString(),
                 eq("IN_PROGRESS"),
-                eq(4)
+                eq(4),
+                eq("[103]"),
+                anyString()
         );
+    }
+
+    @Test
+    void buildsDefaultTimestampedSegmentsFromTranscriptAndTranslation() {
+        var segments = ListeningService.buildDefaultSegments(
+                "Man: Could you send me the quarterly report?\nWoman: Sure, I will email it right away.",
+                "Nam: Bạn có thể gửi tôi báo cáo quý không?\nNữ: Chắc chắn rồi, tôi sẽ gửi email ngay."
+        );
+
+        assertThat(segments).hasSize(2);
+        assertThat(segments.get(0).get("speaker")).isEqualTo("Man");
+        assertThat(segments.get(0).get("startTime")).isEqualTo(0.0);
+        assertThat((Double) segments.get(0).get("endTime")).isGreaterThan(0.0);
+        assertThat(segments.get(1).get("speaker")).isEqualTo("Woman");
+        assertThat(segments.get(1).get("startTime")).isEqualTo(segments.get(0).get("endTime"));
+    }
+
+    @Test
+    void normalizesPublicationStatusForDraftAndPublished() {
+        assertThat(ListeningService.normalizePublicationStatus("DRAFT")).isEqualTo("DRAFT");
+        assertThat(ListeningService.normalizePublicationStatus("draft")).isEqualTo("DRAFT");
+        assertThat(ListeningService.normalizePublicationStatus("Bản nháp")).isEqualTo("DRAFT");
+        assertThat(ListeningService.normalizePublicationStatus("PUBLISHED")).isEqualTo("PUBLISHED");
+        assertThat(ListeningService.normalizePublicationStatus(null)).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    void computesBktMasteryAndEstimatedScoreAccurately() {
+        double highMastery = ListeningService.computeBktMastery(9, 1);
+        double lowMastery = ListeningService.computeBktMastery(2, 8);
+
+        assertThat(highMastery).isGreaterThan(75.0);
+        assertThat(lowMastery).isLessThan(45.0);
+        assertThat(ListeningService.estimateToeicListeningScore(85, 40)).isBetween(250, 495);
     }
 }

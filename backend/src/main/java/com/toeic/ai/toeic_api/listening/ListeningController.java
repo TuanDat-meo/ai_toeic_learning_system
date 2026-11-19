@@ -1,16 +1,19 @@
 package com.toeic.ai.toeic_api.listening;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,7 +38,7 @@ public class ListeningController {
 
     @GetMapping("/api/admin/listening/cards")
     public List<ListeningDictationCard> adminListCards() {
-        return listeningService.listCards(null);
+        return listeningService.listAdminCards();
     }
 
     @PostMapping("/api/admin/listening/cards")
@@ -52,6 +55,13 @@ public class ListeningController {
         return listeningService.updateCard(cardId, request);
     }
 
+    @PatchMapping("/api/admin/listening/cards/{cardId}/status")
+    public ListeningDictationCard updateCardStatus(
+            @PathVariable String cardId,
+            @RequestBody Map<String, String> payload) {
+        return listeningService.updateCardPublicationStatus(cardId, payload.get("contentStatus"));
+    }
+
     @DeleteMapping("/api/admin/listening/cards/{cardId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteCard(@PathVariable String cardId) {
@@ -66,7 +76,7 @@ public class ListeningController {
 
     @GetMapping("/api/admin/listening/units")
     public List<ListeningService.ListeningUnit> adminListUnits() {
-        return listeningService.listUnits();
+        return listeningService.listAdminUnits();
     }
 
     @PostMapping("/api/admin/listening/units")
@@ -81,6 +91,13 @@ public class ListeningController {
             @PathVariable String unitId,
             @RequestBody ListeningService.ListeningUnitRequest request) {
         return listeningService.updateUnit(unitId, request);
+    }
+
+    @PatchMapping("/api/admin/listening/units/{unitId}/status")
+    public ListeningService.ListeningUnit updateUnitStatus(
+            @PathVariable String unitId,
+            @RequestBody Map<String, String> payload) {
+        return listeningService.updateUnitPublicationStatus(unitId, payload.get("contentStatus"));
     }
 
     @DeleteMapping("/api/admin/listening/units/{unitId}")
@@ -108,6 +125,35 @@ public class ListeningController {
             Authentication authentication) {
         UUID userId = extractUserId(authentication);
         listeningService.saveUnitProgress(userId, request);
+    }
+
+    @PostMapping("/api/listening/attempts")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ListeningService.ListeningAttemptRecord recordAttempt(
+            @RequestBody ListeningService.SaveListeningAttemptRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return listeningService.recordAttempt(userId, request);
+    }
+
+    @GetMapping("/api/listening/attempts")
+    public List<ListeningService.ListeningAttemptRecord> listAttempts(
+            @RequestParam(value = "targetId", required = false) String targetId,
+            @RequestParam(value = "limit", defaultValue = "30") int limit,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return listeningService.listAttempts(userId, targetId, limit);
+    }
+
+    @GetMapping("/api/listening/analytics")
+    public ListeningService.ListeningAnalyticsSummary getStudentAnalytics(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return listeningService.getStudentAnalyticsAndRecommendations(userId);
+    }
+
+    @GetMapping("/api/admin/listening/analytics")
+    public ListeningService.AdminListeningAnalyticsSummary getAdminAnalytics() {
+        return listeningService.getAdminAnalyticsAndRecommendations();
     }
 
     private UUID extractUserId(Authentication authentication) {

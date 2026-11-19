@@ -7,9 +7,8 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_ROOTS = [
   process.env.MEDIA_ROOT ? path.resolve(process.env.MEDIA_ROOT) : null,
+  process.env.MEDIA_DIR ? path.resolve(process.env.MEDIA_DIR) : null,
   path.resolve(process.cwd(), "public"),
-  path.resolve("D:/Project/Data"),
-  path.resolve("E:/Data"),
 ].filter((r): r is string => Boolean(r));
 
 const MIME_MAP: Record<string, string> = {
