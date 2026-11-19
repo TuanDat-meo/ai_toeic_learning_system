@@ -13,6 +13,7 @@ export interface WordDetail {
   ukIpa: string;
   pos: string; // "n", "v", "adj", "adv", "prep", "conj"
   contextMeaning: string;
+  extraMeanings?: { partOfSpeech: string; definition: string; example?: string }[];
   cardTabs?: { id: string; label: string; en: string; vi: string }[];
   collocations: { phrase: string; meaning: string }[];
   synonyms: { word: string; meaning: string }[];
@@ -556,6 +557,9 @@ export interface WordFallbackMeta {
   ipa?: string;
   exampleEn?: string;
   exampleVi?: string;
+  synonyms?: { word: string; meaning: string }[];
+  antonyms?: { word: string; meaning: string }[];
+  extraMeanings?: { partOfSpeech: string; definition: string; example?: string }[];
 }
 
 function findDictionaryKey<T>(dict: Record<string, T>, clean: string): T | undefined {
@@ -579,7 +583,7 @@ function findDictionaryKey<T>(dict: Record<string, T>, clean: string): T | undef
 
 /**
  * Look up rich dictionary entry from RICH_TOEIC_DICTIONARY and CURATED_TOEIC_VOCAB
- * without synthesizing fake derivatives, synonyms, or placeholder example sentences.
+ * with fallback support for dynamic dictionary results.
  */
 export function lookupWordDetail(rawWord: string, fallbackMeta?: WordFallbackMeta): WordDetail {
   const displayWord = rawWord.trim();
@@ -638,7 +642,7 @@ export function lookupWordDetail(rawWord: string, fallbackMeta?: WordFallbackMet
   const fallbackPos = fallbackMeta?.pos || "n";
   const fallbackMeaning =
     fallbackMeta?.meaning ||
-    `Từ vựng "${clean || displayWord}" chưa có mục giải thích chi tiết trong từ điển TOEIC.`;
+    `Đang tra cứu từ điển trực tuyến cho "${clean || displayWord}"...`;
   const fallbackIpa = fallbackMeta?.ipa || `/${clean || displayWord}/`;
   const cardTabs: { id: string; label: string; en: string; vi: string }[] = [
     { id: "word", label: "Từ", en: clean || displayWord, vi: fallbackMeaning },
@@ -658,9 +662,11 @@ export function lookupWordDetail(rawWord: string, fallbackMeta?: WordFallbackMet
     ukIpa: fallbackIpa,
     pos: fallbackPos,
     contextMeaning: fallbackMeaning,
+    extraMeanings: fallbackMeta?.extraMeanings,
     cardTabs,
     collocations: [],
-    synonyms: [],
+    synonyms: fallbackMeta?.synonyms || [],
+    antonyms: fallbackMeta?.antonyms || [],
     exampleEn: fallbackMeta?.exampleEn,
     exampleVi: fallbackMeta?.exampleVi,
   };

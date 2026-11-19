@@ -2,14 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  AlertCircle,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
   Download,
+  ExternalLink,
+  Filter,
   MessageSquare,
   MessageSquareWarning,
   RefreshCw,
   Search,
   Send,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -18,6 +24,8 @@ import {
   getReports,
   updateSupportReport,
   deleteSupportReport,
+  batchUpdateSupportReports,
+  batchDeleteSupportReports,
   type SupportReport,
   type SupportReportCategory,
   type SupportReportPriority,
@@ -32,6 +40,14 @@ const categoryLabels: Record<SupportReportCategory, { label: string; bg: string 
   OTHER: { label: "Vấn đề khác", bg: "bg-slate-100 text-slate-700 border-slate-200" },
 };
 
+const sourceLabels: Record<NonNullable<SupportReport["source"]>, { label: string; bg: string }> = {
+  READING: { label: "Reading (Part 5-7)", bg: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  LISTENING: { label: "Listening (Part 1-4)", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  MOCK_TEST: { label: "Đề thi thử (Mock)", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+  QUESTION_BANK: { label: "Ngân hàng câu hỏi", bg: "bg-violet-50 text-violet-700 border-violet-200" },
+  OTHER: { label: "Nguồn khác", bg: "bg-slate-50 text-slate-600 border-slate-200" },
+};
+
 const statusBadges: Record<SupportReportStatus, { label: string; className: string }> = {
   PENDING: { label: "Chờ xử lý", className: "bg-amber-50 text-amber-700 border-amber-200" },
   IN_PROGRESS: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
@@ -41,10 +57,43 @@ const statusBadges: Record<SupportReportStatus, { label: string; className: stri
 
 const priorityBadges: Record<SupportReportPriority, { label: string; className: string }> = {
   URGENT: { label: "Khẩn cấp", className: "bg-rose-600 text-white font-bold" },
-  HIGH: { label: "Cao", className: "bg-rose-100 text-rose-800 font-semibold" },
-  MEDIUM: { label: "Trung bình", className: "bg-slate-100 text-slate-700" },
+  HIGH: { label: "Cao", className: "bg-rose-100 text-rose-800 font-semibold border-rose-200" },
+  MEDIUM: { label: "Trung bình", className: "bg-slate-100 text-slate-700 border-slate-200" },
   LOW: { label: "Thấp", className: "bg-slate-50 text-slate-500 border border-slate-200" },
 };
+
+const quickReplyTemplates = [
+  {
+    title: "🎯 Sửa đáp án",
+    label: "Đã sửa đáp án câu hỏi",
+    text: "Chào bạn, ban quản trị đã kiểm tra và đính chính đáp án chính xác cho câu hỏi này. Cảm ơn bạn rất nhiều vì đã đóng góp giúp bài học hoàn thiện hơn!",
+    status: "RESOLVED" as const,
+  },
+  {
+    title: "📝 Bổ sung giải thích",
+    label: "Đã cập nhật giải thích chi tiết",
+    text: "Chào bạn, hệ thống đã cập nhật giải thích ngữ pháp và từ vựng chi tiết hơn cho câu hỏi này. Chúc bạn ôn luyện đạt điểm TOEIC mục tiêu!",
+    status: "RESOLVED" as const,
+  },
+  {
+    title: "🔊 Sửa lỗi âm thanh / Audio",
+    label: "Đã khắc phục sự cố âm thanh",
+    text: "Chào bạn, sự cố kỹ thuật về âm thanh / phát âm đã được kiểm tra và xử lý xong. Bạn vui lòng tải lại trang để làm bài mượt mà nhé.",
+    status: "RESOLVED" as const,
+  },
+  {
+    title: "ℹ️ Đáp án chuẩn ETS",
+    label: "Đáp án chính xác chuẩn ETS",
+    text: "Chào bạn, sau khi rà soát theo tiêu chuẩn đề thi ETS TOEIC, nội dung câu hỏi và đáp án hiện tại là hoàn toàn chính xác. Bạn có thể xem phần giải thích câu hỏi để nắm rõ ngữ cảnh nhé.",
+    status: "RESOLVED" as const,
+  },
+  {
+    title: "🛠️ Đang chuyển kỹ thuật",
+    label: "Đang chuyển đội ngũ kỹ thuật",
+    text: "Chào bạn, hệ thống đã tiếp nhận phản hồi của bạn và đang chuyển sang đội ngũ kỹ thuật xử lý. Chúng tôi sẽ cập nhật ngay khi hoàn tất.",
+    status: "IN_PROGRESS" as const,
+  },
+];
 
 function snapshotString(snapshot: Record<string, unknown>, key: string) {
   const value = snapshot[key];
@@ -81,20 +130,53 @@ function QuestionSnapshotCard({ title, snapshot }: { title: string; snapshot: Re
           {snapshotString(snapshot, "questionRef") && <span className="font-mono text-[10px] text-slate-500">{snapshotString(snapshot, "questionRef")}</span>}
         </div>
       </div>
-      {passage && <div className="mb-3 rounded-lg bg-slate-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Đoạn văn / ngữ cảnh</p><p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{passage}</p></div>}
-      {question ? <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-slate-900">{question}</p> : <p className="text-xs italic text-slate-500">Ticket không lưu nội dung câu hỏi.</p>}
-      {options.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {options.map(([key, value]) => {
-          const isAnswer = key.toUpperCase() === answer;
-          return <div key={key} className={`rounded-lg border px-3 py-2 text-xs ${isAnswer ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700"}`}>
-            <span className="mr-2 font-bold">{key}.</span>{value}{isAnswer && <span className="ml-2 text-[10px] font-bold text-emerald-700">ĐÁP ÁN ĐANG LƯU</span>}
-          </div>;
-        })}
-      </div>}
+      {passage && (
+        <div className="mb-3 rounded-lg bg-slate-50 p-3">
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Đoạn văn / ngữ cảnh</p>
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{passage}</p>
+        </div>
+      )}
+      {question ? (
+        <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-slate-900">{question}</p>
+      ) : (
+        <p className="text-xs italic text-slate-500">Ticket không lưu nội dung câu hỏi.</p>
+      )}
+      {options.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {options.map(([key, value]) => {
+            const isAnswer = key.toUpperCase() === answer;
+            return (
+              <div
+                key={key}
+                className={`rounded-lg border px-3 py-2 text-xs ${
+                  isAnswer ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-700"
+                }`}
+              >
+                <span className="mr-2 font-bold">{key}.</span>{value}
+                {isAnswer && <span className="ml-2 text-[10px] font-bold text-emerald-700">ĐÁP ÁN ĐANG LƯU</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {answer && options.length === 0 && <p className="mt-3 text-xs font-semibold text-emerald-700">Đáp án đang lưu: {answer}</p>}
-      {explanation && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Giải thích hiện tại</p><p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{explanation}</p></div>}
-      {transcript && <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Transcript</p><p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{transcript}</p></div>}
-      {audioUrl && <a href={audioUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-blue-700 underline">Mở audio đính kèm</a>}
+      {explanation && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Giải thích hiện tại</p>
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{explanation}</p>
+        </div>
+      )}
+      {transcript && (
+        <div className="mt-3 rounded-lg bg-slate-50 p-3">
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Transcript</p>
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{transcript}</p>
+        </div>
+      )}
+      {audioUrl && (
+        <a href={audioUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline">
+          Mở audio đính kèm <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
     </section>
   );
 }
@@ -104,12 +186,20 @@ export function AdminSupportReportsView() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"ALL" | SupportReportCategory>("ALL");
+  const [sourceFilter, setSourceFilter] = useState<"ALL" | NonNullable<SupportReport["source"]>>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | SupportReportStatus>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | SupportReportPriority>("ALL");
+  const [dateFilter, setDateFilter] = useState<"ALL" | "TODAY" | "7_DAYS" | "30_DAYS">("ALL");
 
+  // Selection for bulk actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Active reply/detail modal
   const [activeReport, setActiveReport] = useState<SupportReport | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyStatus, setReplyStatus] = useState<SupportReportStatus>("RESOLVED");
+  const [replyPriority, setReplyPriority] = useState<SupportReportPriority>("MEDIUM");
   const [deletingReport, setDeletingReport] = useState<SupportReport | null>(null);
   const [applyCorrection, setApplyCorrection] = useState(false);
   const [correctionQuestionText, setCorrectionQuestionText] = useState("");
@@ -118,6 +208,7 @@ export function AdminSupportReportsView() {
   const [correctionExplanation, setCorrectionExplanation] = useState("");
   const [correctionPassage, setCorrectionPassage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
 
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
@@ -144,6 +235,18 @@ export function AdminSupportReportsView() {
     void Promise.resolve().then(loadData);
   }, [loadData]);
 
+  // Date threshold helper
+  const now = new Date().getTime();
+  const isWithinDays = (dateStr: string, days: number) => {
+    const diff = now - new Date(dateStr).getTime();
+    return diff <= days * 24 * 60 * 60 * 1000;
+  };
+  const isToday = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    return d.toDateString() === today.toDateString();
+  };
+
   const filtered = reports.filter((r) => {
     const q = search.trim().toLowerCase();
     const matchesSearch =
@@ -152,13 +255,20 @@ export function AdminSupportReportsView() {
       r.userName.toLowerCase().includes(q) ||
       r.userEmail.toLowerCase().includes(q) ||
       r.title.toLowerCase().includes(q) ||
-      (r.relatedContent && r.relatedContent.toLowerCase().includes(q));
+      (r.relatedContent && r.relatedContent.toLowerCase().includes(q)) ||
+      (r.questionRef && r.questionRef.toLowerCase().includes(q));
 
     const matchesCat = categoryFilter === "ALL" || r.category === categoryFilter;
+    const matchesSource = sourceFilter === "ALL" || (r.source && r.source === sourceFilter);
     const matchesStatus = statusFilter === "ALL" || r.status === statusFilter;
     const matchesPriority = priorityFilter === "ALL" || r.priority === priorityFilter;
 
-    return matchesSearch && matchesCat && matchesStatus && matchesPriority;
+    let matchesDate = true;
+    if (dateFilter === "TODAY") matchesDate = isToday(r.createdAt);
+    else if (dateFilter === "7_DAYS") matchesDate = isWithinDays(r.createdAt, 7);
+    else if (dateFilter === "30_DAYS") matchesDate = isWithinDays(r.createdAt, 30);
+
+    return matchesSearch && matchesCat && matchesSource && matchesStatus && matchesPriority && matchesDate;
   });
 
   const pendingCount = reports.filter((r) => r.status === "PENDING").length;
@@ -169,44 +279,124 @@ export function AdminSupportReportsView() {
     {
       label: "Tổng phản hồi",
       value: reports.length.toString(),
-      trend: "Tất cả yêu cầu",
+      trend: "Tất cả yêu cầu gửi về",
       tone: "neutral",
       icon: <MessageSquareWarning className="h-5 w-5 text-slate-600" />,
     },
     {
       label: "Chờ xử lý",
       value: pendingCount.toString(),
-      trend: pendingCount > 0 ? "Cần hỗ trợ" : "Đã hoàn tất",
+      trend: pendingCount > 0 ? `${pendingCount} ticket cần xử lý ngay` : "Không có tồn đọng",
       tone: pendingCount > 0 ? "primary" : "neutral",
       icon: <Clock className="h-5 w-5 text-amber-600" />,
     },
     {
       label: "Đang xử lý",
       value: inProgressCount.toString(),
-      trend: "Đang kiểm tra",
+      trend: inProgressCount > 0 ? `${inProgressCount} yêu cầu đang kiểm tra` : "Không có ticket",
       tone: "secondary",
       icon: <RefreshCw className="h-5 w-5 text-blue-600" />,
     },
     {
       label: "Đã giải quyết",
       value: resolvedCount.toString(),
-      trend: `${Math.round((resolvedCount / (reports.length || 1)) * 100)}% tỷ lệ`,
+      trend: `${Math.round((resolvedCount / (reports.length || 1)) * 100)}% tỷ lệ hoàn thành`,
       tone: "tertiary",
       icon: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
     },
   ];
 
+  // Bulk actions
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((r) => r.id)));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkStatus = async (status: SupportReportStatus) => {
+    if (selectedIds.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await batchUpdateSupportReports(ids, status);
+      setReports((current) =>
+        current.map((r) => (selectedIds.has(r.id) ? { ...r, status, updatedAt: new Date().toISOString() } : r))
+      );
+      showFeedback(`Đã chuyển ${ids.length} ticket sang trạng thái ${statusBadges[status].label}.`);
+      setSelectedIds(new Set());
+    } catch {
+      showFeedback("Không thể cập nhật hàng loạt.", true);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.size} ticket đã chọn?`)) return;
+    setBulkProcessing(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await batchDeleteSupportReports(ids);
+      setReports((current) => current.filter((r) => !selectedIds.has(r.id)));
+      showFeedback(`Đã xóa thành công ${ids.length} ticket.`);
+      setSelectedIds(new Set());
+    } catch {
+      showFeedback("Không thể xóa hàng loạt.", true);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  // Quick inline status toggle
+  const handleQuickStatusChange = async (report: SupportReport, newStatus: SupportReportStatus) => {
+    try {
+      const updated = await updateSupportReport(report.id, {
+        status: newStatus,
+        priority: report.priority,
+      });
+      setReports((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+      showFeedback(`Đã đổi trạng thái ticket ${report.ticketCode} sang ${statusBadges[newStatus].label}.`);
+    } catch (err) {
+      showFeedback(err instanceof Error ? err.message : "Không thể cập nhật trạng thái.", true);
+    }
+  };
+
   function openReplyModal(report: SupportReport) {
     setActiveReport(report);
     setReplyText(report.adminReply || "");
     setReplyStatus(report.status === "PENDING" ? "RESOLVED" : report.status);
+    setReplyPriority(report.priority);
     setApplyCorrection(false);
+    setCopiedRef(false);
     const snapshot = report.correction || report.questionSnapshot || {};
     setCorrectionQuestionText(String(snapshot.questionText || ""));
     setCorrectionOptionsText(JSON.stringify(snapshot.options || {}, null, 2));
     setCorrectionAnswer(String(snapshot.correctAnswer || ""));
     setCorrectionExplanation(String(snapshot.explanation || ""));
     setCorrectionPassage(String(snapshot.passage || ""));
+  }
+
+  function applyQuickTemplate(template: (typeof quickReplyTemplates)[0]) {
+    setReplyText(template.text);
+    setReplyStatus(template.status);
+  }
+
+  function copyQuestionRef(ref: string) {
+    navigator.clipboard.writeText(ref);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2000);
   }
 
   async function handleSendReply() {
@@ -216,22 +406,34 @@ export function AdminSupportReportsView() {
       let correction: Record<string, unknown> | undefined;
       if (applyCorrection) {
         let options: unknown;
-        try { options = JSON.parse(correctionOptionsText); }
-        catch { throw new Error("Phương án phải là JSON hợp lệ, ví dụ {\"A\":\"...\",\"B\":\"...\"}."); }
+        try {
+          options = JSON.parse(correctionOptionsText);
+        } catch {
+          throw new Error('Phương án phải là JSON hợp lệ, ví dụ {"A":"...","B":"..."}.');
+        }
         if (!correctionQuestionText.trim() || !correctionAnswer.trim()) {
           throw new Error("Nội dung câu hỏi và đáp án đúng là bắt buộc để cập nhật bộ câu hỏi.");
         }
-        if (!options || typeof options !== "object") throw new Error("Danh sách phương án phải là JSON dạng object hoặc array.");
-        correction = { questionText: correctionQuestionText.trim(), options, correctAnswer: correctionAnswer.trim(), explanation: correctionExplanation.trim(), passage: correctionPassage.trim() };
+        if (!options || typeof options !== "object") {
+          throw new Error("Danh sách phương án phải là JSON dạng object hoặc array.");
+        }
+        correction = {
+          questionText: correctionQuestionText.trim(),
+          options,
+          correctAnswer: correctionAnswer.trim(),
+          explanation: correctionExplanation.trim(),
+          passage: correctionPassage.trim(),
+        };
       }
       const updatedReport = await updateSupportReport(activeReport.id, {
         status: replyStatus,
+        priority: replyPriority,
         adminReply: replyText.trim(),
         ...(correction ? { correction } : {}),
       });
-      setReports((current) => current.map((report) => report.id === updatedReport.id ? updatedReport : report));
+      setReports((current) => current.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
       setActiveReport(null);
-      showFeedback(`Đã cập nhật Ticket ${updatedReport.ticketCode}.`);
+      showFeedback(`Đã cập nhật & gửi thông báo cho Ticket ${updatedReport.ticketCode}.`);
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Không thể cập nhật ticket.", true);
     } finally {
@@ -254,12 +456,13 @@ export function AdminSupportReportsView() {
   function exportCsv() {
     const escapeCsv = (val: string) => `"${val.replaceAll('"', '""')}"`;
     const rows = [
-      ["Mã Ticket", "Người gửi", "Email", "Loại phản hồi", "Tiêu đề", "Mức ưu tiên", "Trạng thái", "Ngày gửi", "Phản hồi Admin"],
+      ["Mã Ticket", "Người gửi", "Email", "Phân loại", "Nguồn", "Tiêu đề", "Độ ưu tiên", "Trạng thái", "Ngày gửi", "Phản hồi Admin"],
       ...filtered.map((r) => [
         r.ticketCode,
         r.userName,
         r.userEmail,
         categoryLabels[r.category]?.label || r.category,
+        r.source ? sourceLabels[r.source]?.label || r.source : "Khác",
         r.title,
         priorityBadges[r.priority]?.label || r.priority,
         statusBadges[r.status]?.label || r.status,
@@ -283,21 +486,31 @@ export function AdminSupportReportsView() {
   return (
     <AdminPageFrame
       title="Phản hồi & Báo lỗi từ Học viên"
-      subtitle="Quản lý ticket báo lỗi câu hỏi, sự cố kỹ thuật và các góp ý từ người học TOEIC."
+      subtitle="Quản lý ticket báo lỗi câu hỏi, sự cố kỹ thuật và các góp ý từ người học TOEIC. Tự động thông báo 2 chiều giữa Admin và Học viên."
       metrics={metrics}
     >
       <div className="space-y-4">
+        {/* Header & Main Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Danh sách Ticket Hỗ trợ</h2>
-            <p className="text-xs text-slate-500">Hiển thị {filtered.length} trên tổng số {reports.length} phản hồi</p>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              Danh sách Ticket Hỗ trợ
+              {filtered.length > 0 && (
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                  {filtered.length}
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Hiển thị {filtered.length} trên tổng số {reports.length} phản hồi
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={exportCsv}
               disabled={filtered.length === 0}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-xs"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-xs cursor-pointer"
             >
               <Download className="h-4 w-4" /> Xuất CSV
             </button>
@@ -305,21 +518,22 @@ export function AdminSupportReportsView() {
               type="button"
               onClick={() => void loadData()}
               disabled={loading}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs cursor-pointer"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-blue-600" : ""}`} /> Làm mới
             </button>
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative">
+        {/* Filters Bar */}
+        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <div className="relative sm:col-span-2 md:col-span-1 lg:col-span-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm mã ticket, tên, email..."
+              placeholder="Tìm mã ticket, tên, email, câu hỏi..."
               className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </div>
@@ -335,6 +549,19 @@ export function AdminSupportReportsView() {
             <option value="UI_FEEDBACK">Góp ý giao diện</option>
             <option value="ACCOUNT_ISSUE">Sự cố tài khoản</option>
             <option value="OTHER">Vấn đề khác</option>
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as typeof sourceFilter)}
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="ALL">Tất cả nguồn bài học</option>
+            <option value="READING">Reading (Part 5-7)</option>
+            <option value="LISTENING">Listening (Part 1-4)</option>
+            <option value="MOCK_TEST">Đề thi thử (Mock Test)</option>
+            <option value="QUESTION_BANK">Ngân hàng câu hỏi</option>
+            <option value="OTHER">Khác</option>
           </select>
 
           <select
@@ -362,40 +589,137 @@ export function AdminSupportReportsView() {
           </select>
         </div>
 
+        {/* Date Filter Chips & Bulk Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+            <span className="text-slate-400 flex items-center gap-1 mr-1">
+              <Filter className="h-3 w-3" /> Thời gian:
+            </span>
+            {(
+              [
+                { id: "ALL", label: "Tất cả" },
+                { id: "TODAY", label: "Hôm nay" },
+                { id: "7_DAYS", label: "7 ngày qua" },
+                { id: "30_DAYS", label: "30 ngày qua" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setDateFilter(item.id)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                  dateFilter === item.id
+                    ? "bg-blue-600 text-white"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3 py-1.5 text-xs text-blue-900 animate-in fade-in">
+              <span className="font-bold">Đã chọn {selectedIds.size} ticket</span>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkStatus("RESOLVED")}
+                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+              >
+                ✓ Đã giải quyết
+              </button>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkStatus("IN_PROGRESS")}
+                className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+              >
+                Đang xử lý
+              </button>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkDelete()}
+                className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                Xóa
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          )}
+        </div>
+
         {feedbackMsg && (
           <div
             role="status"
-            className={`rounded-xl border px-4 py-3 text-xs font-semibold ${
+            className={`rounded-xl border px-4 py-3 text-xs font-semibold flex items-center justify-between ${
               feedbackIsError ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-800"
             }`}
           >
-            {feedbackMsg}
+            <span>{feedbackMsg}</span>
+            <button type="button" onClick={() => setFeedbackMsg("")} className="text-slate-400 hover:text-slate-700">
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
       </div>
 
+      {/* Main Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-xs">
+          <table className="w-full min-w-[980px] text-left text-xs">
             <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
               <tr>
+                <th className="w-10 px-4 py-3.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={handleToggleSelectAll}
+                    aria-label="Chọn tất cả"
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-4 py-3.5">Mã Ticket & Người gửi</th>
-                <th className="px-4 py-3.5">Phân loại</th>
+                <th className="px-4 py-3.5">Phân loại & Nguồn</th>
                 <th className="px-4 py-3.5">Tiêu đề & Nội dung</th>
                 <th className="px-4 py-3.5">Độ ưu tiên</th>
                 <th className="px-4 py-3.5">Trạng thái</th>
                 <th className="px-4 py-3.5">Ngày tạo</th>
-                <th className="px-4 py-3.5 text-right">Thao tác</th>
+                <th className="sticky right-0 bg-slate-50 px-4 py-3.5 text-right z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]">
+                  Thao tác
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((r) => {
                 const cat = categoryLabels[r.category] || categoryLabels.OTHER;
+                const src = r.source ? sourceLabels[r.source] : null;
                 const st = statusBadges[r.status] || statusBadges.PENDING;
                 const pr = priorityBadges[r.priority] || priorityBadges.MEDIUM;
+                const isSelected = selectedIds.has(r.id);
 
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                  <tr
+                    key={r.id}
+                    className={`transition-colors ${isSelected ? "bg-blue-50/40" : "hover:bg-slate-50/80"}`}
+                  >
+                    <td className="px-4 py-3.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelect(r.id)}
+                        aria-label={`Chọn ticket ${r.ticketCode}`}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+
                     <td className="px-4 py-3.5">
                       <span className="font-mono font-bold text-blue-700 block">{r.ticketCode}</span>
                       <p className="font-semibold text-slate-900 mt-0.5">{r.userName}</p>
@@ -406,8 +730,13 @@ export function AdminSupportReportsView() {
                       <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${cat.bg}`}>
                         {cat.label}
                       </span>
+                      {src && (
+                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-semibold ml-1.5 ${src.bg}`}>
+                          {src.label}
+                        </span>
+                      )}
                       {r.relatedContent && (
-                        <span className="block mt-1 text-[10px] text-slate-500 font-mono truncate max-w-[140px]" title={r.relatedContent}>
+                        <span className="block mt-1 text-[10px] text-slate-500 font-mono truncate max-w-[150px]" title={r.relatedContent}>
                           {r.relatedContent}
                         </span>
                       )}
@@ -418,21 +747,30 @@ export function AdminSupportReportsView() {
                       <p className="text-slate-500 line-clamp-1 mt-0.5 text-[11px]">{r.description}</p>
                       {r.adminReply && (
                         <p className="text-emerald-700 mt-1 text-[10px] font-medium flex items-center gap-1">
-                          <MessageSquare className="h-3 w-3 shrink-0" /> Đã trả lời
+                          <MessageSquare className="h-3 w-3 shrink-0" />
+                          <span className="truncate max-w-[200px]" title={r.adminReply}>Đã trả lời: {r.adminReply}</span>
                         </p>
                       )}
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] ${pr.className}`}>
+                      <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] border ${pr.className}`}>
                         {pr.label}
                       </span>
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${st.className}`}>
-                        {st.label}
-                      </span>
+                      <select
+                        aria-label="Thay đổi trạng thái nhanh"
+                        value={r.status}
+                        onChange={(e) => void handleQuickStatusChange(r, e.target.value as SupportReportStatus)}
+                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold outline-none cursor-pointer ${st.className}`}
+                      >
+                        <option value="PENDING">Chờ xử lý</option>
+                        <option value="IN_PROGRESS">Đang xử lý</option>
+                        <option value="RESOLVED">Đã giải quyết</option>
+                        <option value="REJECTED">Từ chối</option>
+                      </select>
                     </td>
 
                     <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
@@ -440,22 +778,24 @@ export function AdminSupportReportsView() {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
                       })}
                     </td>
 
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="sticky right-0 bg-white/95 backdrop-blur-sm px-4 py-3.5 text-right z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => openReplyModal(r)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition cursor-pointer"
                         >
-                          <MessageSquare className="h-3.5 w-3.5" /> Xử lý
+                          <MessageSquare className="h-3.5 w-3.5" /> Chi tiết & Trả lời
                         </button>
                         <button
                           type="button"
                           onClick={() => setDeletingReport(r)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition cursor-pointer"
                           title="Xóa ticket"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -468,8 +808,9 @@ export function AdminSupportReportsView() {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500 text-xs">
-                    Không tìm thấy ticket phản hồi phù hợp.
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500 text-xs">
+                    <AlertCircle className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    Không tìm thấy ticket phản hồi phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>
               )}
@@ -478,6 +819,7 @@ export function AdminSupportReportsView() {
         </div>
       </div>
 
+      {/* Reply & Details Modal */}
       {activeReport && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
@@ -485,84 +827,142 @@ export function AdminSupportReportsView() {
             if (e.target === e.currentTarget) setActiveReport(null);
           }}
         >
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 font-mono font-bold text-xs">
                   {activeReport.ticketCode}
                 </span>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Chi tiết & Phản hồi Ticket</h3>
-                  <p className="text-xs text-slate-500">Từ học viên: {activeReport.userName} ({activeReport.userEmail})</p>
+                  <h3 className="text-base font-bold text-slate-900">Chi tiết & Phản hồi Học viên</h3>
+                  <p className="text-xs text-slate-500">
+                    Người gửi: <span className="font-semibold text-slate-700">{activeReport.userName}</span> ({activeReport.userEmail}) • {new Date(activeReport.createdAt).toLocaleString("vi-VN")}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveReport(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-4 p-6 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-4 p-6 max-h-[75vh] overflow-y-auto">
+              {/* Report content overview */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-900">{activeReport.title}</span>
-                  <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${categoryLabels[activeReport.category]?.bg}`}>
-                    {categoryLabels[activeReport.category]?.label}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${categoryLabels[activeReport.category]?.bg}`}>
+                      {categoryLabels[activeReport.category]?.label}
+                    </span>
+                    {activeReport.source && (
+                      <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${sourceLabels[activeReport.source]?.bg}`}>
+                        {sourceLabels[activeReport.source]?.label}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{activeReport.description}</p>
-                {activeReport.relatedContent && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-700">Nội dung liên quan:</span>
-                      <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{activeReport.relatedContent}</span>
-                    </div>
+                
+                {/* Related links & questionRef */}
+                <div className="mt-3 pt-2.5 border-t border-slate-200 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {activeReport.relatedContent && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-slate-700">Nội dung:</span>
+                        <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{activeReport.relatedContent}</span>
+                      </div>
+                    )}
+                    {activeReport.questionRef && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-slate-700">Mã câu hỏi:</span>
+                        <button
+                          type="button"
+                          onClick={() => copyQuestionRef(activeReport.questionRef!)}
+                          className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-blue-600 hover:bg-blue-50 flex items-center gap-1 cursor-pointer"
+                          title="Bấm để sao chép"
+                        >
+                          {activeReport.questionRef}
+                          {copiedRef ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Direct Jump Buttons */}
+                  <div className="flex items-center gap-2">
                     {activeReport.source === "MOCK_TEST" && (
-                      <a href="/admin/content/mock-tests" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
-                        Đến trang Quản lý Đề thi ↗
-                      </a>
-                    )}
-                    {(activeReport.source === "QUESTION_BANK" || activeReport.source === "OTHER") && (activeReport.relatedContent.includes("Từ vựng") || activeReport.title.includes("Từ vựng")) && (
-                      <a href="/admin/content/vocabulary" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
-                        Đến trang Quản lý Từ vựng ↗
-                      </a>
-                    )}
-                    {(activeReport.source === "QUESTION_BANK" || activeReport.source === "OTHER") && (activeReport.relatedContent.includes("Ngữ pháp") || activeReport.title.includes("Ngữ pháp")) && (
-                      <a href="/admin/content/grammar" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
-                        Đến trang Quản lý Ngữ pháp ↗
+                      <a href="/admin/content/mock-tests" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến Quản lý Đề thi <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
                     {activeReport.source === "READING" && (
-                      <a href="/admin/content/reading" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
-                        Đến trang Quản lý Reading ↗
+                      <a href="/admin/content/reading" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến Quản lý Reading <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
                     {activeReport.source === "LISTENING" && (
-                      <a href="/admin/content/listening" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
-                        Đến trang Quản lý Listening ↗
+                      <a href="/admin/content/listening" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline">
+                        Đến Quản lý Listening <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    {activeReport.source === "QUESTION_BANK" && (
+                      <a
+                        href={activeReport.questionRef ? `/admin/content/questions?q=${encodeURIComponent(activeReport.questionRef)}` : "/admin/content/questions"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline"
+                      >
+                        Đến Ngân hàng câu hỏi <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
                   </div>
-                )}
+                </div>
               </div>
 
+              {/* Question Snapshot */}
               {activeReport.questionSnapshot ? (
-                <QuestionSnapshotCard title="Câu hỏi và đáp án tại thời điểm học viên báo cáo" snapshot={activeReport.questionSnapshot} />
+                <QuestionSnapshotCard title="Nội dung câu hỏi lúc học viên báo cáo" snapshot={activeReport.questionSnapshot} />
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-slate-600">
-                  Ticket này không có ảnh chụp câu hỏi. Mã tham chiếu: <span className="font-mono font-semibold">{activeReport.questionRef || "Không được cung cấp"}</span>
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-600">
+                  Ticket không đính kèm ảnh chụp câu hỏi. Mã tham chiếu: <span className="font-mono font-semibold">{activeReport.questionRef || "Không có"}</span>
                 </div>
               )}
+
               {activeReport.correction && (
                 <QuestionSnapshotCard title="Nội dung sửa đã lưu trước đó" snapshot={activeReport.correction} />
               )}
 
+              {/* Quick-reply templates chips */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-800 mb-2">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  Mẫu phản hồi nhanh (1-Click điền sẵn):
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {quickReplyTemplates.map((template, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => applyQuickTemplate(template)}
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
+                    >
+                      {template.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reply Textarea */}
               <div className="space-y-3">
                 <label className="block text-xs font-bold text-slate-800">
-                  Nội dung phản hồi cho học viên
+                  Nội dung phản hồi cho học viên <span className="text-red-500">*</span>
+                  <span className="text-[11px] font-normal text-slate-500 ml-2">
+                    (Hệ thống sẽ gửi thông báo tự động đến tài khoản học viên)
+                  </span>
                 </label>
                 <textarea
                   rows={4}
@@ -572,42 +972,101 @@ export function AdminSupportReportsView() {
                   className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
 
+                {/* Direct question correction tool */}
                 {activeReport.category === "QUESTION_ERROR" && activeReport.questionRef && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                      <input type="checkbox" checked={applyCorrection} onChange={(event) => setApplyCorrection(event.target.checked)} />
-                      Lưu nội dung sửa vào bộ câu hỏi dùng chung
+                      <input
+                        type="checkbox"
+                        checked={applyCorrection}
+                        onChange={(event) => setApplyCorrection(event.target.checked)}
+                        className="rounded border-slate-300 text-blue-600"
+                      />
+                      Lưu nội dung sửa vào bộ câu hỏi dùng chung (Question Corrections)
                     </label>
-                    {applyCorrection && <>
-                      <textarea aria-label="Nội dung câu hỏi đã sửa" rows={2} value={correctionQuestionText} onChange={(event) => setCorrectionQuestionText(event.target.value)} placeholder="Nội dung câu hỏi sau khi sửa" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
-                      <textarea aria-label="Các phương án sau khi sửa (JSON)" rows={4} value={correctionOptionsText} onChange={(event) => setCorrectionOptionsText(event.target.value)} placeholder={'{"A":"...","B":"..."}'} className="w-full rounded-lg border border-slate-200 p-2 font-mono text-xs" />
-                      <input aria-label="Đáp án đúng sau khi sửa" value={correctionAnswer} onChange={(event) => setCorrectionAnswer(event.target.value)} placeholder="Đáp án đúng (A/B/C/D)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
-                      <textarea aria-label="Giải thích sau khi sửa" rows={2} value={correctionExplanation} onChange={(event) => setCorrectionExplanation(event.target.value)} placeholder="Giải thích sau khi sửa" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
-                      <textarea aria-label="Đoạn văn sau khi sửa" rows={3} value={correctionPassage} onChange={(event) => setCorrectionPassage(event.target.value)} placeholder="Đoạn văn liên quan (nếu có)" className="w-full rounded-lg border border-slate-200 p-2 text-xs" />
-                    </>}
+                    {applyCorrection && (
+                      <div className="space-y-2 pt-1">
+                        <textarea
+                          aria-label="Nội dung câu hỏi đã sửa"
+                          rows={2}
+                          value={correctionQuestionText}
+                          onChange={(event) => setCorrectionQuestionText(event.target.value)}
+                          placeholder="Nội dung câu hỏi sau khi sửa"
+                          className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                        />
+                        <textarea
+                          aria-label="Các phương án sau khi sửa (JSON)"
+                          rows={4}
+                          value={correctionOptionsText}
+                          onChange={(event) => setCorrectionOptionsText(event.target.value)}
+                          placeholder={'{"A":"...","B":"..."}'}
+                          className="w-full rounded-lg border border-slate-200 bg-white p-2 font-mono text-xs"
+                        />
+                        <input
+                          aria-label="Đáp án đúng sau khi sửa"
+                          value={correctionAnswer}
+                          onChange={(event) => setCorrectionAnswer(event.target.value)}
+                          placeholder="Đáp án đúng (A/B/C/D)"
+                          className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                        />
+                        <textarea
+                          aria-label="Giải thích sau khi sửa"
+                          rows={2}
+                          value={correctionExplanation}
+                          onChange={(event) => setCorrectionExplanation(event.target.value)}
+                          placeholder="Giải thích sau khi sửa"
+                          className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                        />
+                        <textarea
+                          aria-label="Đoạn văn sau khi sửa"
+                          rows={3}
+                          value={correctionPassage}
+                          onChange={(event) => setCorrectionPassage(event.target.value)}
+                          placeholder="Đoạn văn liên quan (nếu có)"
+                          className="w-full rounded-lg border border-slate-200 bg-white p-2 text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">Cập nhật trạng thái</label>
-                    <select
-                      value={replyStatus}
-                      onChange={(e) => setReplyStatus(e.target.value as SupportReportStatus)}
-                      className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
-                    >
-                      <option value="RESOLVED">Đã giải quyết (Resolved)</option>
-                      <option value="IN_PROGRESS">Đang xử lý (In Progress)</option>
-                      <option value="REJECTED">Từ chối / Đã trùng lặp</option>
-                      <option value="PENDING">Chờ xử lý</option>
-                    </select>
+                {/* Footer Controls: Priority, Status, Submit */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Mức ưu tiên</label>
+                      <select
+                        value={replyPriority}
+                        onChange={(e) => setReplyPriority(e.target.value as SupportReportPriority)}
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                      >
+                        <option value="LOW">Thấp (Low)</option>
+                        <option value="MEDIUM">Trung bình (Medium)</option>
+                        <option value="HIGH">Cao (High)</option>
+                        <option value="URGENT">Khẩn cấp (Urgent)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Trạng thái ticket</label>
+                      <select
+                        value={replyStatus}
+                        onChange={(e) => setReplyStatus(e.target.value as SupportReportStatus)}
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                      >
+                        <option value="RESOLVED">Đã giải quyết (Resolved)</option>
+                        <option value="IN_PROGRESS">Đang xử lý (In Progress)</option>
+                        <option value="REJECTED">Từ chối / Đã giải quyết trước</option>
+                        <option value="PENDING">Chờ xử lý</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setActiveReport(null)}
-                      className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                      className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                     >
                       Hủy
                     </button>
@@ -615,9 +1074,9 @@ export function AdminSupportReportsView() {
                       type="button"
                       disabled={saving}
                       onClick={() => void handleSendReply()}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 cursor-pointer"
                     >
-                      <Send className="h-3.5 w-3.5" /> {saving ? "Đang lưu..." : "Gửi phản hồi"}
+                      <Send className="h-3.5 w-3.5" /> {saving ? "Đang gửi..." : "Gửi phản hồi cho Học viên"}
                     </button>
                   </div>
                 </div>
@@ -627,25 +1086,26 @@ export function AdminSupportReportsView() {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
       {deletingReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-base font-bold text-slate-900">Xóa ticket phản hồi?</h3>
-            <p className="mt-2 text-xs text-slate-600">
-              Bạn có chắc chắn muốn xóa Ticket <span className="font-mono font-bold text-blue-600">{deletingReport.ticketCode}</span> từ học viên {deletingReport.userName}?
+            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+              Bạn có chắc chắn muốn xóa Ticket <span className="font-mono font-bold text-blue-600">{deletingReport.ticketCode}</span> từ học viên <span className="font-semibold text-slate-800">{deletingReport.userName}</span>? Thao tác này không thể hoàn tác.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeletingReport(null)}
-                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={() => void handleDeleteConfirm()}
-                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"
+                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 cursor-pointer"
               >
                 Xác nhận xóa
               </button>

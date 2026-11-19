@@ -146,6 +146,723 @@
     padding: 0;
     max-width: 100%;
   }
+
+  .battleship-game {
+    --bs-ink: #10243b;
+    --bs-muted: #52657a;
+    --bs-panel: #ffffff;
+    --bs-edge: #b7c8dc;
+    --bs-cyan: #7de6e7;
+    --bs-deep: #071d35;
+    --bs-ocean: #0c4665;
+    --bs-accent: #ffd166;
+    --bs-good: #147d52;
+    --bs-bad: #a93636;
+    min-height: calc(100svh - 1rem);
+    overflow: hidden;
+    color: var(--bs-ink);
+    border-radius: 1.25rem;
+    background: #eaf3f8;
+    font-family: var(--font-geist-sans), sans-serif;
+  }
+
+  .battleship-game button,
+  .battleship-game select,
+  .battleship-game input {
+    font: inherit;
+  }
+
+  .battleship-game button:focus-visible,
+  .battleship-game a:focus-visible,
+  .battleship-game input:focus-visible,
+  .battleship-game select:focus-visible,
+  .battleship-game summary:focus-visible {
+    outline: 3px solid #f59e0b;
+    outline-offset: 3px;
+  }
+
+  .battleship-topbar {
+    display: flex;
+    min-height: 4.25rem;
+    align-items: center;
+    gap: .75rem;
+    padding: .65rem clamp(.75rem, 3vw, 1.5rem);
+    color: #fff;
+    background: linear-gradient(110deg, #0b2747, #0c556e);
+  }
+
+  .battleship-icon-button,
+  .battleship-quit {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    border: 1px solid #ffffff50;
+    border-radius: .75rem;
+    color: #fff;
+    background: #ffffff12;
+  }
+
+  .battleship-icon-button svg,
+  .battleship-quit svg { width: 1.15rem; height: 1.15rem; }
+  .battleship-icon-button:hover,
+  .battleship-quit:hover { background: #ffffff26; }
+
+  .battleship-alert {
+    margin: .75rem auto;
+    width: min(96%, 68rem);
+    border: 1px solid #e6a3a3;
+    border-radius: .75rem;
+    padding: .7rem 1rem;
+    color: #792929;
+    background: #fff1f1;
+  }
+
+  .battleship-alert-info {
+    border-color: #9dc9d6;
+    color: #124357;
+    background: #e8f8fc;
+  }
+
+  .battleship-setup {
+    display: grid;
+    min-height: calc(100svh - 4.25rem);
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, .9fr);
+    align-items: stretch;
+  }
+
+  .battleship-setup-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.25rem, 5vw, 4rem);
+    color: #f7fbff;
+    background:
+      radial-gradient(ellipse at 70% 22%, #387990 0, transparent 38%),
+      linear-gradient(145deg, #0a2747 5%, #0c4e6a 62%, #087b83);
+  }
+
+  .battleship-kicker {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    color: #b7fbf0;
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+  }
+
+  .battleship-setup-copy h2,
+  .battleship-results h2 {
+    margin-top: .8rem;
+    font-size: clamp(1.8rem, 4vw, 3.2rem);
+    font-weight: 950;
+    line-height: 1.08;
+  }
+
+  .battleship-setup-copy > p {
+    max-width: 36rem;
+    margin-top: .9rem;
+    color: #d3e6ee;
+    font-size: clamp(.9rem, 1.3vw, 1.08rem);
+    line-height: 1.65;
+  }
+
+  .battleship-preview {
+    display: flex;
+    min-height: 7rem;
+    align-items: center;
+    justify-content: space-around;
+    margin: 1.25rem 0;
+    border: 1px solid #a9eff040;
+    border-radius: 1rem;
+    background: linear-gradient(#ffffff08, #001c3670);
+  }
+
+  .battleship-preview-ship {
+    position: relative;
+    height: 1.1rem;
+    border: 3px solid #eefaff;
+    background: #66c2d4;
+    clip-path: polygon(0 0, 100% 0, 86% 100%, 12% 100%);
+  }
+  .battleship-preview-ship::before {
+    position: absolute;
+    top: -1rem;
+    left: 40%;
+    width: 30%;
+    height: .75rem;
+    border: 2px solid #eefaff;
+    background: #d4eef5;
+    content: "";
+  }
+  .battleship-preview-ship.patrol { width: 3.1rem; }
+  .battleship-preview-ship.destroyer { width: 5rem; height: 1.35rem; }
+  .battleship-preview-ship.armor { width: 6rem; height: 1.65rem; background: #c28b56; }
+  .battleship-preview-ship.boss { width: 6.7rem; height: 1.9rem; border-color: #ffe295; background: #b94d60; }
+
+  .battleship-rules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .55rem;
+  }
+  .battleship-rules span {
+    display: inline-flex;
+    min-height: 2.4rem;
+    align-items: center;
+    gap: .35rem;
+    border: 1px solid #d5faff38;
+    border-radius: 999px;
+    padding: .35rem .7rem;
+    color: #efffff;
+    background: #ffffff0d;
+    font-size: .78rem;
+    font-weight: 750;
+  }
+
+  .battleship-setup-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .7rem;
+    padding: clamp(.85rem, 2.7vw, 2rem);
+    background: #f5f8fc;
+  }
+
+  .battleship-field {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    color: #243b55;
+    font-size: .78rem;
+    font-weight: 800;
+  }
+  .battleship-field select {
+    min-height: 44px;
+    width: 100%;
+    border: 1px solid var(--bs-edge);
+    border-radius: .65rem;
+    padding: .45rem .7rem;
+    color: #122a43;
+    background: #fff;
+  }
+
+  .battleship-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .35rem;
+  }
+  .battleship-choice-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .battleship-choice {
+    min-height: 44px;
+    border: 1px solid #b9c9d8;
+    border-radius: .6rem;
+    padding: .35rem .4rem;
+    color: #334c62;
+    background: #fff;
+    font-size: .72rem !important;
+    font-weight: 800 !important;
+  }
+  .battleship-choice.active {
+    border-color: #10677d;
+    color: #fff;
+    background: #105a70;
+  }
+
+  .battleship-levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem .6rem;
+  }
+  .battleship-levels label,
+  .battleship-preferences label {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    gap: .3rem;
+    font-size: .75rem;
+    font-weight: 700;
+  }
+  .battleship-levels input,
+  .battleship-preferences input { width: 1rem; height: 1rem; accent-color: #0e7181; }
+  .battleship-preferences { display: flex; flex-wrap: wrap; gap: .75rem; }
+
+  .battleship-start,
+  .battleship-fire,
+  .battleship-modal-card > button,
+  .battleship-answer-row > button,
+  .battleship-result-actions > button {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    border: 0;
+    border-radius: .75rem;
+    padding: .7rem 1rem;
+    color: #102a3b;
+    background: var(--bs-accent);
+    font-weight: 950;
+    transition: transform .18s ease, background-color .18s ease;
+  }
+  .battleship-start { margin-top: .15rem; font-size: .95rem; }
+  .battleship-start:hover,
+  .battleship-fire:hover,
+  .battleship-answer-row > button:hover,
+  .battleship-result-actions > button:hover { transform: translateY(-1px); background: #ffe294; }
+  .battleship-start:disabled,
+  .battleship-answer-row > button:disabled { cursor: not-allowed; opacity: .5; transform: none; }
+  .battleship-caption { margin-top: .3rem; color: var(--bs-muted); font-size: .73rem; }
+
+  .battleship-restore {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    border: 1px solid #a5ced2;
+    border-radius: .75rem;
+    padding: .6rem;
+    color: #174857;
+    background: #e7f8f5;
+    font-size: .8rem;
+  }
+  .battleship-restore p { width: 100%; font-weight: 800; }
+  .battleship-restore button { min-height: 40px; border-radius: .5rem; padding: .4rem .7rem; color: #12475a; background: #fff; font-weight: 800; }
+
+  .battleship-battle {
+    position: relative;
+    min-height: calc(100svh - 4.25rem);
+    padding: clamp(.5rem, 2vw, 1.15rem);
+    background:
+      radial-gradient(ellipse at 50% 35%, #b6e4e6 0, transparent 46%),
+      linear-gradient(#d5f0f3 0%, #b3e1e4 42%, #75b9c2 43%, #d8eef0 100%);
+  }
+  .battleship-hud {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    border: 1px solid #ffffffa6;
+    border-radius: .85rem;
+    padding: .55rem .8rem;
+    background: #f8fcf0e8;
+    box-shadow: 0 3px 12px #163e5030;
+  }
+  .battleship-stat { display: flex; min-width: 4.5rem; flex-direction: column; gap: .15rem; }
+  .battleship-stat > span { color: #486176; font-size: .62rem; font-weight: 900; letter-spacing: .08em; }
+  .battleship-stat > strong { color: #16344d; font-size: .92rem; font-weight: 950; }
+  .battleship-player-hearts { display: flex; gap: .08rem; }
+  .battleship-player-hearts svg { width: 1rem; height: 1rem; }
+  .battleship-player-hearts .heart-full { color: #c53b50; }
+  .battleship-player-hearts .heart-empty { color: #87949b; }
+  .battleship-quit { min-height: 44px; padding: .3rem .6rem; color: #17364b; border-color: #95a9b5; background: #fff; font-size: .75rem; font-weight: 850; }
+
+  .battleship-ocean {
+    position: relative;
+    height: clamp(15rem, 43vh, 29rem);
+    overflow: hidden;
+    margin-top: .65rem;
+    border: 3px solid #e8ffff;
+    border-radius: 1.15rem;
+    background:
+      linear-gradient(180deg, #b9e8e9 0%, #9dd5dc 40%, #4fabbc 41%, #267f9a 55%, #0d547a 100%);
+    box-shadow: inset 0 0 40px #06395140, 0 8px 20px #153d5030;
+  }
+  .battleship-ocean-grid {
+    position: absolute;
+    inset: 45% 0 0;
+    opacity: .24;
+    background-image: linear-gradient(#e9ffff 1px, transparent 1px), linear-gradient(90deg, #e9ffff 1px, transparent 1px);
+    background-size: 4rem 1.5rem;
+    transform: perspective(16rem) rotateX(38deg) scale(1.2);
+    transform-origin: top;
+  }
+  .battleship-ocean-horizon {
+    position: absolute;
+    top: 37%;
+    left: -5%;
+    width: 110%;
+    height: 2px;
+    background: #f2ffff;
+    box-shadow: 0 8px 20px #fff9;
+  }
+  .battleship-player-ship {
+    position: absolute;
+    z-index: 1;
+    bottom: 20%;
+    left: 8%;
+    display: flex;
+    min-width: 7rem;
+    flex-direction: column;
+    align-items: center;
+    gap: .35rem;
+    color: #fff;
+    font-size: .62rem;
+    font-weight: 950;
+    text-shadow: 0 1px 3px #00344a;
+  }
+  .battleship-own-hp { display: flex; gap: .25rem; }
+  .own-dot { width: .65rem; height: .65rem; border: 2px solid #fff; border-radius: 50%; background: #ff626b; }
+  .own-dot.empty { background: #536e7c; }
+  .battleship-own-silhouette {
+    position: relative;
+    width: clamp(5rem, 12vw, 9rem);
+    height: clamp(2.2rem, 6vh, 3.4rem);
+    border: 4px solid #f3fbff;
+    border-radius: 8% 10% 45% 20%;
+    background: repeating-linear-gradient(90deg, #314d68 0 18%, #dbe5e9 18% 22%);
+    clip-path: polygon(0 0, 100% 0, 83% 100%, 12% 100%);
+    box-shadow: 0 4px 0 #102a3b;
+  }
+  .battleship-own-silhouette::before {
+    position: absolute;
+    top: -1.5rem;
+    left: 40%;
+    width: 26%;
+    height: 1.3rem;
+    border: 3px solid #fff;
+    background: #e5f2f4;
+    content: "";
+  }
+  .battleship-aim-line {
+    position: absolute;
+    top: 55%;
+    left: 21%;
+    width: 52%;
+    border-top: 3px dashed #fff8ac;
+    filter: drop-shadow(0 1px 2px #083143);
+    transform: rotate(-7deg);
+    transform-origin: left;
+  }
+  .battleship-fleet {
+    position: absolute;
+    z-index: 1;
+    right: 5%;
+    bottom: 10%;
+    display: flex;
+    max-width: 62%;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: flex-end;
+    gap: clamp(.3rem, 1.2vw, 1rem);
+  }
+  .battleship-target {
+    position: relative;
+    display: flex;
+    min-width: 4.4rem;
+    flex-direction: column;
+    align-items: center;
+    gap: .22rem;
+    color: #fff;
+    font-size: .62rem;
+    font-weight: 950;
+    text-align: center;
+    text-shadow: 0 1px 3px #003044;
+  }
+  .battleship-target-active { z-index: 2; }
+  .battleship-hp-dots { display: flex; min-height: .65rem; justify-content: center; gap: .18rem; }
+  .battleship-hp-dot { width: .52rem; height: .52rem; border: 2px solid #fff; border-radius: 50%; background: #ff626b; }
+  .battleship-hp-dot-empty { background: #4a6573; }
+  .battleship-ship-shape {
+    position: relative;
+    width: 4rem;
+    height: 2.1rem;
+    border: 3px solid #fff;
+    background: #d7edf0;
+    clip-path: polygon(5% 0, 100% 0, 84% 100%, 20% 100%);
+    box-shadow: 0 4px 0 #073247;
+  }
+  .battleship-ship-deck {
+    position: absolute;
+    top: -1rem;
+    left: 38%;
+    width: 27%;
+    height: 1rem;
+    border: 2px solid #fff;
+    background: #e6f4f4;
+  }
+  .battleship-ship-patrol .battleship-ship-shape { width: 3.1rem; height: 1.5rem; }
+  .battleship-ship-destroyer .battleship-ship-shape { width: 4.8rem; height: 1.8rem; background: #8cd0d3; }
+  .battleship-ship-battleship .battleship-ship-shape { width: 5.6rem; height: 2.4rem; border-width: 4px; background: #c59766; }
+  .battleship-ship-boss .battleship-ship-shape { width: 6rem; height: 2.8rem; border: 4px double #fff4bd; background: #a64055; }
+  .battleship-ship-boss .battleship-ship-deck { height: 1.4rem; background: #ffdb7a; }
+  .battleship-target-active .battleship-ship-shape { outline: 3px solid #fff294; outline-offset: 3px; }
+  .battleship-crosshair { position: absolute; top: .8rem; left: 50%; width: 4.7rem; height: 4.7rem; color: #fff18f; stroke-width: 1.8; transform: translateX(-50%); }
+  .battleship-ship-boss .battleship-crosshair { width: 6rem; height: 6rem; }
+  .battleship-enemy-charge {
+    position: absolute;
+    z-index: 3;
+    top: .75rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    border: 1px solid #fff;
+    border-radius: 999px;
+    padding: .35rem .6rem;
+    color: #fff;
+    background: #14374cce;
+    font-size: .65rem;
+    font-weight: 900;
+  }
+  .battleship-enemy-charge i { width: .9rem; height: .9rem; border: 2px solid #fff; border-radius: 50%; background: transparent; }
+  .battleship-enemy-charge i.charged { background: #ff5c55; box-shadow: 0 0 8px #ff5c55; }
+
+  .battleship-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin-top: .55rem;
+  }
+  .battleship-toolbar > span { margin-right: .25rem; color: #3a586b; font-size: .65rem; font-weight: 950; letter-spacing: .08em; }
+  .battleship-toolbar button,
+  .battleship-question-actions button,
+  .battleship-audio {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    border: 1px solid #afc4d1;
+    border-radius: .65rem;
+    padding: .35rem .65rem;
+    color: #204559;
+    background: #faffff;
+    font-size: .74rem;
+    font-weight: 850;
+  }
+  .battleship-toolbar svg,
+  .battleship-audio svg { width: 1rem; height: 1rem; }
+  .battleship-toolbar button:disabled,
+  .battleship-question-actions button:disabled { opacity: .5; }
+
+  .battleship-question-card {
+    position: relative;
+    z-index: 2;
+    width: min(100%, 56rem);
+    margin: .65rem auto 0;
+    border: 1px solid #c0d0dc;
+    border-radius: 1rem;
+    padding: clamp(.75rem, 2vw, 1.25rem);
+    color: #17344b;
+    background: #fffffffa;
+    box-shadow: 0 8px 20px #18394a24;
+  }
+  .battleship-question-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+  .battleship-question-header h2 { margin-top: .35rem; font-size: clamp(1rem, 2vw, 1.35rem); font-weight: 900; line-height: 1.35; }
+  .battleship-card-caption { margin-top: .4rem; color: #607789; font-size: .8rem; }
+  .battleship-clock { position: relative; flex: 0 0 3.4rem; overflow: hidden; border: 1px solid #c3d6df; border-radius: 999px; padding: .35rem; text-align: center; }
+  .battleship-clock span { position: relative; z-index: 1; font-weight: 900; }
+  .battleship-clock i { position: absolute; inset: auto auto 0 0; height: 3px; background: #ef9b43; }
+  .battleship-word-meta { margin: .35rem 0; color: #627588; font-size: .74rem; font-weight: 750; }
+  .battleship-answer-row { display: flex; gap: .45rem; margin-top: .6rem; }
+  .battleship-answer-row input {
+    min-width: 0;
+    min-height: 48px;
+    flex: 1;
+    border: 2px solid #99b4c5;
+    border-radius: .7rem;
+    padding: .55rem .75rem;
+    color: #17344b;
+    background: #fff;
+  }
+  .battleship-answer-row > button { min-width: 5.5rem; }
+  .battleship-answer-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-top: .65rem; }
+  .battleship-answer-choices button {
+    min-height: 48px;
+    border: 1px solid #8daabd;
+    border-radius: .65rem;
+    padding: .45rem .6rem;
+    color: #173d54;
+    background: #f5fbff;
+    font-weight: 850;
+  }
+  .battleship-answer-choices button:hover { background: #dff3f6; }
+  .battleship-question-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+  .battleship-feedback-card { text-align: center; }
+  .battleship-feedback-card.correct { border-color: #62af88; }
+  .battleship-feedback-card.near { border-color: #d8a645; }
+  .battleship-feedback-card.wrong,
+  .battleship-feedback-card.timeout { border-color: #d78181; }
+  .battleship-feedback-card h2 { font-size: 1.15rem; font-weight: 950; }
+  .battleship-feedback-card > p { margin: .4rem 0; color: #526b7a; font-size: .83rem; }
+  .battleship-feedback-card .battleship-fire { margin-top: .4rem; }
+  .battleship-letter-compare { margin: .7rem auto; }
+  .battleship-letter-compare > div { display: flex; justify-content: center; gap: .18rem; margin: .4rem 0; }
+  .battleship-letter-compare span { min-width: 1.55rem; border-radius: .25rem; padding: .2rem; font-size: 1.2rem; font-weight: 950; }
+  .letter-match { color: #126a43; background: #dcf4e8; }
+  .letter-miss { color: #a53030; background: #ffe0dc; }
+  .letter-empty { color: #647988; background: #e9eff2; }
+  .battleship-letter-compare small { display: block; color: #576c7b; }
+  .battleship-enemy-turn {
+    position: absolute;
+    z-index: 5;
+    top: 42%;
+    left: 50%;
+    border: 2px solid #fff;
+    border-radius: 1rem;
+    padding: 1rem 1.5rem;
+    color: #fff;
+    background: #9e3f40e8;
+    font-size: 1rem;
+    font-weight: 950;
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+  .battleship-offline-state { margin: .4rem auto 0; color: #4e6878; font-size: .7rem; text-align: center; }
+
+  .battleship-paused {
+    position: absolute;
+    z-index: 6;
+    inset: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    border: 1px solid #fff;
+    border-radius: 1rem;
+    color: #17364c;
+    background: #eef8f7ed;
+    text-align: center;
+  }
+  .battleship-paused h2 { font-size: 1.6rem; font-weight: 950; }
+  .battleship-paused button { display: flex; min-height: 48px; align-items: center; gap: .4rem; border: 0; border-radius: .65rem; padding: .6rem 1rem; color: #fff; background: #105a70; font-weight: 850; }
+  .battleship-paused button + button { color: #294858; background: #fff; }
+
+  .battleship-modal {
+    position: fixed;
+    z-index: 30;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: #061b2dd9;
+  }
+  .battleship-modal-card {
+    width: min(100%, 36rem);
+    border: 1px solid #b8d7dc;
+    border-radius: 1.25rem;
+    padding: clamp(1rem, 4vw, 2rem);
+    color: #14354a;
+    background: #fff;
+    box-shadow: 0 20px 60px #03172780;
+  }
+  .battleship-modal-card h2 { margin: .5rem 0; font-size: 1.5rem; font-weight: 950; }
+  .battleship-modal-card > p { margin: .45rem 0; color: #4d6576; }
+  .battleship-modal-card > button { margin-top: .65rem; }
+  .battleship-feedback { border-radius: .65rem; padding: .7rem; }
+  .battleship-feedback.correct { color: #126343; background: #e2f5e9; }
+
+  .battleship-results {
+    min-height: calc(100svh - 4.25rem);
+    padding: clamp(1rem, 4vw, 3rem);
+    color: #fff;
+    background: radial-gradient(ellipse at 50% 5%, #24647b, transparent 42%), linear-gradient(140deg, #092540, #0d495d);
+    text-align: center;
+  }
+  .battleship-results h2 { max-width: 50rem; margin: .55rem auto; }
+  .battleship-stars { margin: .55rem; color: #ffdc72; font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: .18em; }
+  .battleship-result-grid {
+    display: grid;
+    width: min(100%, 54rem);
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: .6rem;
+    margin: 1rem auto;
+  }
+  .battleship-result-grid > span {
+    display: flex;
+    min-height: 5rem;
+    flex-direction: column;
+    justify-content: center;
+    gap: .35rem;
+    border: 1px solid #d2f3f032;
+    border-radius: .8rem;
+    padding: .55rem;
+    color: #d6eaf0;
+    background: #ffffff0c;
+    font-size: .73rem;
+    font-weight: 800;
+  }
+  .battleship-result-grid strong { color: #fff; font-size: 1.15rem; font-weight: 950; }
+  .battleship-result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .55rem; margin: 1rem 0; }
+  .battleship-result-actions > button,
+  .battleship-result-actions > a { display: inline-flex; min-height: 46px; align-items: center; gap: .35rem; border: 0; border-radius: .7rem; padding: .55rem .8rem; color: #153247; background: #ffd166; font-weight: 900; }
+  .battleship-result-actions svg { width: 1rem; height: 1rem; }
+  .battleship-result-actions > .battleship-secondary { border: 1px solid #ffffff6b; color: #fff; background: #ffffff12; }
+  .battleship-review-list { width: min(100%, 54rem); margin: 1rem auto; border: 1px solid #ffffff42; border-radius: .75rem; padding: .75rem; text-align: left; }
+  .battleship-review-list summary { min-height: 44px; cursor: pointer; font-weight: 850; }
+  .battleship-review-list p { border-top: 1px solid #ffffff26; padding: .45rem 0; color: #d8eaf0; font-size: .8rem; }
+  .battleship-high-contrast .battleship-battle { filter: contrast(1.2); }
+  .battleship-high-contrast .battleship-question-card { border: 3px solid #052c48; }
+  .battleship-pseudo-fullscreen { position: fixed; z-index: 80; inset: 0; min-height: 100dvh; overflow-y: auto; border-radius: 0; }
+
+  @media (prefers-color-scheme: dark) {
+    .battleship-setup-panel { color: #e8f2f8; background: #122335; }
+    .battleship-field { color: #e3eff6; }
+    .battleship-field select { border-color: #587186; color: #e6f3fa; background: #1d3448; }
+    .battleship-choice { border-color: #587186; color: #e6f3fa; background: #1d3448; }
+    .battleship-choice.active { color: #fff; background: #0d7182; }
+    .battleship-levels label,
+    .battleship-preferences label { color: #e6f3fa; }
+    .battleship-caption { color: #afc3d0; }
+  }
+
+  @media (max-width: 760px) {
+    .battleship-game { border-radius: 0; }
+    .battleship-setup { min-height: calc(100svh - 4.25rem); grid-template-columns: 1fr; }
+    .battleship-setup-copy { display: none; }
+    .battleship-setup-panel { justify-content: start; gap: .45rem; padding: .65rem .75rem calc(.75rem + env(safe-area-inset-bottom)); }
+    .battleship-field { gap: .2rem; font-size: .7rem; }
+    .battleship-field select { min-height: 42px; }
+    .battleship-choice { min-height: 42px; font-size: .66rem !important; }
+    .battleship-levels label { min-height: 30px; }
+    .battleship-start { min-height: 50px; }
+    .battleship-battle { min-height: calc(100svh - 4.25rem); padding: .45rem .55rem calc(.8rem + env(safe-area-inset-bottom)); }
+    .battleship-hud { gap: .35rem; padding: .4rem .45rem; }
+    .battleship-stat { min-width: 3.4rem; }
+    .battleship-stat > span { font-size: .55rem; }
+    .battleship-stat > strong { font-size: .78rem; }
+    .battleship-ocean { height: clamp(13rem, 38svh, 21rem); }
+    .battleship-player-ship { left: 2%; }
+    .battleship-fleet { right: 1%; max-width: 66%; gap: .3rem; }
+    .battleship-target { min-width: 3.2rem; font-size: .55rem; }
+    .battleship-ship-patrol .battleship-ship-shape { width: 2.6rem; }
+    .battleship-ship-destroyer .battleship-ship-shape { width: 3.4rem; }
+    .battleship-ship-battleship .battleship-ship-shape { width: 4rem; }
+    .battleship-ship-boss .battleship-ship-shape { width: 4.5rem; }
+    .battleship-toolbar { gap: .25rem; }
+    .battleship-toolbar > span { width: 100%; }
+    .battleship-toolbar button { min-height: 42px; padding: .3rem .45rem; font-size: .68rem; }
+    .battleship-question-card { margin-top: .45rem; padding: .7rem; }
+    .battleship-question-header h2 { font-size: .98rem; }
+    .battleship-answer-choices { gap: .35rem; }
+    .battleship-answer-choices button { min-height: 48px; font-size: .78rem; }
+  }
+
+  @media (orientation: landscape) and (max-height: 560px) {
+    .battleship-setup { min-height: calc(100svh - 3.7rem); grid-template-columns: .8fr 1fr; }
+    .battleship-setup-copy { display: flex; padding: .75rem 1rem; }
+    .battleship-setup-copy > p { font-size: .8rem; }
+    .battleship-preview { min-height: 4rem; margin: .4rem 0; }
+    .battleship-setup-panel { gap: .25rem; padding: .35rem .7rem; }
+    .battleship-battle { min-height: calc(100svh - 4rem); padding: .4rem; }
+    .battleship-ocean { float: left; width: 54%; height: 42svh; min-height: 12rem; margin-right: .5rem; }
+    .battleship-question-card { width: 44%; margin: .6rem 0 0 auto; }
+    .battleship-toolbar { position: absolute; right: .5rem; bottom: .4rem; width: 44%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .battleship-game *,
+    .battleship-game *::before,
+    .battleship-game *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
   body {
     overscroll-behavior: none;
     background-color: var(--color-surface);
@@ -521,4 +1238,187 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ========================================================================= */
+/* DARK MODE (Activated via html.dark from Header profile menu toggle)       */
+/* ========================================================================= */
+html.dark {
+  color-scheme: dark;
+  --color-surface: #0b1220;
+  --color-surface-dim: #162238;
+  --color-surface-bright: #0f172a;
+  --color-surface-container-lowest: #111b2e;
+  --color-surface-container-low: #17233a;
+  --color-surface-container: #1d2b45;
+  --color-surface-container-high: #243452;
+  --color-surface-container-highest: #2b3e60;
+  --color-on-surface: #f1f5f9;
+  --color-on-surface-variant: #cbd5e1;
+  --color-outline: #64748b;
+  --color-outline-variant: #334155;
+  --color-primary: #3b82f6;
+  --color-on-primary: #ffffff;
+  --color-background: #0b1220;
+  --color-on-background: #f1f5f9;
+}
+
+html.dark body {
+  background-color: #0b1220;
+  color: #f1f5f9;
+}
+
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90 {
+  background-color: #111b2e !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/80,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/60,
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/40 {
+  background-color: #17233a !important;
+}
+
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-100\/70 {
+  background-color: #1e293b !important;
+}
+
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/80,
+html.dark .bg-slate-200\/70 {
+  background-color: #334155 !important;
+}
+
+html.dark .hover\:bg-white:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-slate-200:hover {
+  background-color: #1e293b !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/70,
+html.dark .border-slate-300 {
+  border-color: #293750 !important;
+}
+
+html.dark .hover\:border-slate-300:hover {
+  border-color: #475569 !important;
+}
+
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+html.dark .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-\[\#1b41ae\] {
+  color: #60a5fa !important;
+}
+
+html.dark .bg-blue-50,
+html.dark .bg-blue-50\/60,
+html.dark .bg-sky-50,
+html.dark .bg-indigo-50 {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+}
+
+html.dark .bg-emerald-50,
+html.dark .bg-teal-50,
+html.dark .bg-teal-50\/60 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/60,
+html.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+}
+
+html.dark .bg-rose-50,
+html.dark .bg-red-50 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+}
+
+html.dark .border-blue-100,
+html.dark .border-blue-200,
+html.dark .border-blue-200\/70,
+html.dark .border-sky-100,
+html.dark .border-indigo-100 {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+html.dark .border-emerald-100,
+html.dark .border-emerald-200,
+html.dark .border-teal-200,
+html.dark .border-teal-200\/80 {
+  border-color: rgba(16, 185, 129, 0.32) !important;
+}
+
+html.dark .border-amber-100,
+html.dark .border-amber-200,
+html.dark .border-amber-200\/80,
+html.dark .border-amber-300,
+html.dark .border-amber-300\/70 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+html.dark .border-rose-100,
+html.dark .border-rose-200 {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+html.dark .text-amber-900,
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+html.dark .text-emerald-800,
+html.dark .text-emerald-700,
+html.dark .text-teal-700 {
+  color: #34d399 !important;
+}
+
+html.dark .text-rose-700,
+html.dark .text-rose-600 {
+  color: #fb7185 !important;
+}
+
+html.dark .text-blue-700,
+html.dark .text-sky-700,
+html.dark .text-indigo-700 {
+  color: #93c5fd !important;
+}
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
 }

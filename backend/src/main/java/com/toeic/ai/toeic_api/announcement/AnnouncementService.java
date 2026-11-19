@@ -83,6 +83,16 @@ public class AnnouncementService {
         jdbc.update("INSERT INTO announcement_reads (announcement_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING", announcementId, userId);
     }
 
+    public void markAllRead(UUID userId) {
+        jdbc.update("""
+                INSERT INTO announcement_reads (announcement_id, user_id)
+                SELECT a.id, ?
+                FROM announcements a
+                WHERE a.status = 'ACTIVE'
+                ON CONFLICT DO NOTHING
+                """, userId);
+    }
+
     private Announcement find(UUID id) {
         List<Announcement> rows = jdbc.query(SELECT.formatted("false") + " WHERE a.id=?", this::map, id);
         if (rows.isEmpty()) throw missing();

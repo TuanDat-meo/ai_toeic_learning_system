@@ -1,6 +1,8 @@
 import { Header } from "@/components/layout/Header";
 import { StudentChatBubble } from "@/components/layout/StudentChatBubble";
 import { StudentStudyTracker } from "@/components/layout/StudentStudyTracker";
+import { DoubleClickDictionary } from "@/components/layout/DoubleClickDictionary";
+import { FeedbackSupportModal } from "@/components/layout/FeedbackSupportModal";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +17,8 @@ export default function DashboardLayout({
       </main>
       <StudentChatBubble />
       <StudentStudyTracker />
+      <DoubleClickDictionary />
+      <FeedbackSupportModal />
     </div>
   );
 }

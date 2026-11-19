@@ -38,6 +38,7 @@ import {
   ReadingVocabExtractorPanel,
   type AppliedVocabEntry,
 } from '@/components/admin/content/reading/ReadingVocabExtractorPanel';
+import { formatExplanation } from "@/lib/utils/formatExplanation";
 import type {
   GradedQuestionOption,
   ReadingNormalizedData,
@@ -925,7 +926,7 @@ export function ReadingPreviewList({
                             <span className="font-bold text-amber-800 flex items-center gap-1 text-[11px]">
                               <Sparkles className="w-3.5 h-3.5" /> Giải thích chi tiết:
                             </span>
-                            <p className="text-[11px] leading-relaxed">{q.explanation}</p>
+                            <p className="text-[11px] leading-relaxed whitespace-pre-line">{formatExplanation(q.explanation)}</p>
                           </div>
                         )}
                         {(() => {

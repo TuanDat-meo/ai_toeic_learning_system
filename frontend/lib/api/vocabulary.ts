@@ -16,11 +16,14 @@ interface RawWordItem {
   level?: string;
   starred?: boolean;
   status?: string;
+  progressStatus?: string;
   setId?: string;
   audio?: string;
   audioUrl?: string;
   audioRegion?: string;
   wordFamily?: string;
+  termType?: WordItem['termType'];
+  dictionarySourceUrl?: string;
   relatedForms?: VocabularyRelatedForm[];
   senses?: VocabularySense[];
 }
@@ -36,8 +39,166 @@ interface RawVocabularyTestSet {
   words?: RawWordItem[];
 }
 
+function isContentStatus(status: string | undefined): status is ContentStatus {
+  return status === 'DRAFT' || status === 'PUBLISHED' || status === 'ARCHIVED' || status === 'PENDING_REVIEW';
+}
+
+export interface StudentVocabularyDashboard {
+  totalWords: number;
+  learnedWords: number;
+  masteredWords: number;
+  learningWords: number;
+  reviewingWords: number;
+  dueForReview: number;
+  totalSets: number;
+  memoryRate: number;
+  studyMinutes: number;
+  streakDays: number;
+  dailyStudyMinutesGoal: number;
+  totalAnswers: number;
+  correctAnswers: number;
+  newWordsGoal: number;
+  reviewGoal: number;
+  completedNewWords: number;
+  completedReview: number;
+  reachedNewGoal: boolean;
+  reachedReviewGoal: boolean;
+}
+
+export interface StudentVocabularyGoal {
+  newWordsGoal: number;
+  reviewGoal: number;
+  completedNewWords: number;
+  completedReview: number;
+  reachedNewGoal: boolean;
+  reachedReviewGoal: boolean;
+}
+
+export interface VocabularyAnswerResult {
+  eventId: string;
+  correct: boolean;
+  correctAnswer: string;
+  result?: 'correct' | 'near' | 'wrong' | 'timeout' | null;
+  status: string;
+  nextReviewAt: string | null;
+  duplicate: boolean;
+  damage?: number;
+  playerHp?: number;
+  enemyHp?: number;
+  score?: number;
+  combo?: number;
+  counterCharge?: number;
+  isCritical?: boolean;
+  battleState?: string;
+}
+
+export type VocabularyGameType = 'FLASHCARD' | 'RUNNER' | 'SENTENCE' | 'MATCHING' | 'BATTLE' | 'TYPING';
+
+export interface VocabularyGameSession {
+  id: string;
+  setId: string;
+  gameType: VocabularyGameType;
+  startedAt: string;
+  completedAt: string | null;
+  score: number;
+  correctCount: number;
+  wrongCount: number;
+  totalQuestions: number;
+  durationSeconds: number;
+  maxCombo: number;
+  mode?: string;
+  timeLimitSeconds?: number | null;
+  difficulty?: 'ALL' | 'EASY' | 'MEDIUM' | 'HARD';
+  questions?: VocabularyGameQuestion[];
+  deckIds?: string[];
+  wordLevel?: string;
+  speedPreset?: string;
+  stars?: number;
+  won?: boolean;
+  playerHpRemaining?: number;
+  fleetHpRemaining?: number;
+}
+
+export interface VocabularyGameQuestion {
+  questionIndex: number;
+  wordId: string;
+  optionWordIds: string[];
+}
+
+export interface BattleSessionEventItem {
+  questionIndex: number;
+  wordId: string;
+  gameResult: string | null;
+  correct: boolean;
+  damage: number;
+  usedHint: boolean;
+}
+
+export interface BattleSessionState {
+  session: VocabularyGameSession;
+  events: BattleSessionEventItem[];
+  playerHp: number;
+  fleetHp: number;
+  combo: number;
+  counterCharge: number;
+  battleState: string;
+}
+
+export interface VocabularyGameScore {
+  gameType: VocabularyGameType;
+  bestScore: number;
+  completedPlays: number;
+  lastPlayedAt: string;
+}
+
+export interface WeakVocabularyWord {
+  wordId: string;
+  word: string;
+  setId: string;
+  setTitle: string;
+  meaning: string;
+  status: string;
+  correctCount: number;
+  incorrectCount: number;
+  nextReviewAt: string | null;
+}
+
+export interface VocabularyDailyStat {
+  date: string;
+  answerCount: number;
+  correctCount: number;
+  responseTimeMs: number;
+}
+
+export interface VocabularyHistoryItem {
+  id: string;
+  wordId: string;
+  word: string;
+  setId: string;
+  setTitle: string;
+  activityType: VocabularyActivityType;
+  questionType: VocabularyQuestionType;
+  studentAnswer: string;
+  correctAnswer: string;
+  correct: boolean;
+  rating: VocabularySrsRating | null;
+  responseTimeMs: number;
+  attemptedAt: string;
+}
+
+export type VocabularyActivityType = 'LEARN' | 'FLASHCARD' | 'PRACTICE' | 'REVIEW' | 'GAME';
+export type VocabularyQuestionType =
+  | 'ENGLISH_TO_VIETNAMESE'
+  | 'VIETNAMESE_TO_ENGLISH'
+  | 'FILL_IN_BLANK'
+  | 'TYPE_WORD'
+  | 'AUDIO'
+  | 'FLASHCARD_RATING';
+export type VocabularySrsRating = 'AGAIN' | 'HARD' | 'GOOD' | 'EASY';
+
 function mapWord(w: RawWordItem): WordItem {
   const audio = w.audioUrl || w.audio || '';
+  const progressStatus = w.progressStatus || w.status;
   return {
     id: w.id,
     word: w.word,
@@ -51,12 +212,17 @@ function mapWord(w: RawWordItem): WordItem {
     level: normalizeVocabularyLevel(w.level || 'B1'),
     starred: w.starred ?? false,
     bookmarked: w.starred ?? false,
-    status: (w.status as ContentStatus) || 'PUBLISHED',
+    status: isContentStatus(w.status) ? w.status : 'PUBLISHED',
+    progressStatus: progressStatus === 'NEW' || progressStatus === 'LEARNING' || progressStatus === 'REVIEWING' || progressStatus === 'MASTERED'
+      ? progressStatus
+      : undefined,
     testId: w.setId,
     audio,
     audioUrl: audio,
     audioRegion: w.audioRegion || 'UNKNOWN',
     wordFamily: w.wordFamily || '',
+    termType: w.termType,
+    dictionarySourceUrl: w.dictionarySourceUrl || '',
     relatedForms: w.relatedForms || [],
     senses: Array.isArray(w.senses) && w.senses.length > 0
       ? w.senses.map((sense) => ({
@@ -68,6 +234,7 @@ function mapWord(w: RawWordItem): WordItem {
           meaning: w.meaning || '',
           example: w.example || '',
           exampleMeaning: w.exampleMeaning || '',
+          definitionEn: '',
         }],
   };
 }
@@ -103,6 +270,12 @@ export async function getVocabularySets(category?: string): Promise<VocabularyTe
   }
 }
 
+export async function getVocabularySetSummaries(category?: string): Promise<VocabularyTestSet[]> {
+  const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
+  const list = await apiRequest<RawVocabularyTestSet[]>(`/api/vocabulary/sets/summary${query}`);
+  return Array.isArray(list) ? list.map(mapSet) : [];
+}
+
 export async function getAdminVocabularySets(category?: string): Promise<VocabularyTestSet[]> {
   const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
   const list = await apiRequest<RawVocabularyTestSet[]>(`/api/admin/vocabulary/sets${query}`);
@@ -110,8 +283,95 @@ export async function getAdminVocabularySets(category?: string): Promise<Vocabul
 }
 
 export async function getVocabularySet(setId: string): Promise<VocabularyTestSet> {
-  const data = await apiRequest<RawVocabularyTestSet>(`/api/vocabulary/sets/${setId}`);
+  const data = await apiRequest<RawVocabularyTestSet>(`/api/vocabulary/sets/${encodeURIComponent(setId)}`);
   return mapSet(data);
+}
+
+export async function getStudentVocabularyDashboard(): Promise<StudentVocabularyDashboard> {
+  return apiRequest<StudentVocabularyDashboard>('/api/vocabulary/dashboard');
+}
+
+export async function getStudentVocabularyGoals(): Promise<StudentVocabularyGoal> {
+  return apiRequest<StudentVocabularyGoal>('/api/vocabulary/goals');
+}
+
+export async function updateStudentVocabularyGoals(data: { newWordsGoal: number; reviewGoal: number }): Promise<StudentVocabularyGoal> {
+  return writeAuthRequest<StudentVocabularyGoal>('PUT', '/api/vocabulary/goals', data);
+}
+
+export async function recordVocabularyAnswer(data: {
+  requestId: string;
+  wordId: string;
+  activityType: VocabularyActivityType;
+  questionType: VocabularyQuestionType;
+  answer?: string;
+  rating?: VocabularySrsRating;
+  responseTimeMs: number;
+  gameSessionId?: string;
+  gameQuestionIndex?: number;
+  encounterType?: 'obstacle' | 'mystery_box';
+  boxEffect?: string;
+  result?: 'correct' | 'near' | 'wrong' | 'timeout';
+  usedHint?: boolean;
+  usedItem?: string;
+  enemyType?: string;
+  damage?: number;
+  gameMode?: string;
+  wordLevel?: string;
+}): Promise<VocabularyAnswerResult> {
+  return writeAuthRequest<VocabularyAnswerResult>('POST', '/api/vocabulary/answers', data);
+}
+
+export async function startVocabularyGameSession(data: {
+  setId: string;
+  gameType: VocabularyGameType;
+  deckIds?: string[];
+  mode?: 'CLASSIC' | 'TIME_ATTACK';
+  timeLimitSeconds?: 30 | 60 | 90 | 120;
+  questionCount?: 10 | 20;
+  difficulty?: 'ALL' | 'EASY' | 'MEDIUM' | 'HARD';
+}): Promise<VocabularyGameSession> {
+  return writeAuthRequest<VocabularyGameSession>('POST', '/api/vocabulary/games/sessions', data);
+}
+
+export async function getVocabularyGameSession(sessionId: string): Promise<VocabularyGameSession> {
+  return apiRequest<VocabularyGameSession>(`/api/vocabulary/games/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function getBattleSessionState(sessionId: string): Promise<BattleSessionState> {
+  return apiRequest<BattleSessionState>(`/api/vocabulary/games/sessions/${encodeURIComponent(sessionId)}/state`);
+}
+
+export async function completeVocabularyGameSession(sessionId: string): Promise<VocabularyGameSession> {
+  return writeAuthRequest<VocabularyGameSession>('POST', `/api/vocabulary/games/sessions/${encodeURIComponent(sessionId)}/complete`, {});
+}
+
+export async function getVocabularyGameScores(setId?: string): Promise<VocabularyGameScore[]> {
+  const query = setId ? `?setId=${encodeURIComponent(setId)}` : '';
+  return apiRequest<VocabularyGameScore[]>(`/api/vocabulary/games/scores${query}`);
+}
+
+export async function getWeakVocabularyWords(limit = 10): Promise<WeakVocabularyWord[]> {
+  const data = await apiRequest<WeakVocabularyWord[]>(`/api/vocabulary/weak-words?limit=${encodeURIComponent(String(limit))}`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getVocabularyDailyStats(): Promise<VocabularyDailyStat[]> {
+  const data = await apiRequest<VocabularyDailyStat[]>('/api/vocabulary/stats/daily');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getDueVocabularyWords(setId?: string, limit = 50): Promise<WordItem[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (setId) params.set('setId', setId);
+  const data = await apiRequest<RawWordItem[]>(`/api/vocabulary/review/due?${params.toString()}`);
+  return Array.isArray(data) ? data.map(mapWord) : [];
+}
+
+export async function getVocabularyHistory(options: { limit?: number; activity?: VocabularyActivityType } = {}): Promise<VocabularyHistoryItem[]> {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  if (options.activity) params.set('activity', options.activity);
+  return apiRequest<VocabularyHistoryItem[]>(`/api/vocabulary/history?${params.toString()}`);
 }
 
 export async function createVocabularySet(data: {
@@ -172,6 +432,8 @@ export async function addVocabularyWord(
     audioRegion?: string;
     subCategory?: string;
     wordFamily?: string;
+    termType?: WordItem['termType'];
+    dictionarySourceUrl?: string;
     relatedForms?: VocabularyRelatedForm[];
     senses?: VocabularySense[];
   }
@@ -189,10 +451,47 @@ export async function addVocabularyWord(
     audioRegion: data.audioRegion || 'UNKNOWN',
     subCategory: data.senses?.[0]?.subCategory || '',
     wordFamily: data.wordFamily || '',
+    termType: data.termType,
+    dictionarySourceUrl: data.dictionarySourceUrl || '',
     relatedForms: (data.relatedForms || []).map(({ id, relationType }) => ({ id, relationType })),
     senses: data.senses || [],
   });
   return mapWord(res);
+}
+
+export async function addVocabularyWordsBulk(
+  setId: string,
+  words: Array<{
+    word: string;
+    meaning: string;
+    partOfSpeech?: string;
+    ipa?: string;
+    example?: string;
+    exampleMeaning?: string;
+    level?: string;
+    audioUrl?: string;
+    wordFamily?: string;
+  }>,
+): Promise<void> {
+  await writeAuthRequest<void>(
+    'POST',
+    `/api/admin/vocabulary/sets/${encodeURIComponent(setId)}/words/bulk`,
+    words.map((word) => ({
+      ...word,
+      partOfSpeech: word.partOfSpeech || 'Noun',
+      level: word.level || 'B1',
+    })),
+  );
+}
+
+export async function fillMissingVocabularyAudio(setId?: string): Promise<number> {
+  const query = setId ? `?setId=${encodeURIComponent(setId)}` : '';
+  const result = await writeAuthRequest<{ updatedCount: number }>(
+    'POST',
+    `/api/admin/vocabulary/audio/fill-missing${query}`,
+    {},
+  );
+  return result.updatedCount;
 }
 
 export async function updateVocabularyWord(
@@ -209,6 +508,8 @@ export async function updateVocabularyWord(
     audioRegion?: string;
     subCategory?: string;
     wordFamily?: string;
+    termType?: WordItem['termType'];
+    dictionarySourceUrl?: string;
     relatedForms?: VocabularyRelatedForm[];
     senses?: VocabularySense[];
   }
@@ -225,6 +526,8 @@ export async function updateVocabularyWord(
     audioRegion: data.audioRegion || 'UNKNOWN',
     subCategory: data.senses?.[0]?.subCategory || '',
     wordFamily: data.wordFamily || '',
+    termType: data.termType,
+    dictionarySourceUrl: data.dictionarySourceUrl || '',
     relatedForms: (data.relatedForms || []).map(({ id, relationType }) => ({ id, relationType })),
     senses: data.senses || [],
   });

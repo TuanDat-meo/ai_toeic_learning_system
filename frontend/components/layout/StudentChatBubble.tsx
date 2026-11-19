@@ -47,7 +47,13 @@ export function StudentChatBubble() {
 
   useEffect(() => {
     getCurrentUser().then(setUser).catch(() => setUser(null));
-    const openChat = () => setOpen(true);
+    const openChat = (event: Event) => {
+      const custom = event as CustomEvent<{ tab?: Tab }>;
+      if (custom.detail?.tab) {
+        setTab(custom.detail.tab);
+      }
+      setOpen(true);
+    };
     const handleMockExamState = (event: Event) => {
       const examEvent = event as CustomEvent<{ isTaking: boolean }>;
       setIsMockExamActive(examEvent.detail?.isTaking === true);

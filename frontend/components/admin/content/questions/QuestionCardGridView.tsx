@@ -50,9 +50,9 @@ export const QuestionCardGridView: React.FC<QuestionCardGridViewProps> = ({
                 </span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                    q.difficulty === "Easy"
+                    q.difficulty === "450-550"
                       ? "bg-emerald-100 text-emerald-800"
-                      : q.difficulty === "Hard"
+                      : q.difficulty === "850-900+"
                       ? "bg-rose-100 text-rose-800"
                       : "bg-amber-100 text-amber-800"
                   }`}

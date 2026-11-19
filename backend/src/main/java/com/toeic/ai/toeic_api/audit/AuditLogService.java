@@ -23,6 +23,21 @@ public class AuditLogService {
                 userId, action, entityType, entityId, summary, ipAddress == null ? "" : ipAddress);
     }
 
+    public void recordWithDetails(UUID userId, String action, String entityType, UUID entityId,
+            String summary, String category, String reason, String ipAddress) {
+        jdbcTemplate.update(
+                "INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_data, ip_address) "
+                        + "VALUES (?, ?, ?, ?, jsonb_build_object('summary', ?, 'category', ?, 'reason', ?), NULLIF(?, '')::inet)",
+                userId,
+                action,
+                entityType,
+                entityId,
+                summary == null ? "" : summary,
+                category == null ? "" : category,
+                reason == null ? "" : reason,
+                ipAddress == null ? "" : ipAddress);
+    }
+
     public List<AuditLogEntry> listForUser(UUID userId, int requestedLimit) {
         int limit = Math.clamp(requestedLimit, 1, 100);
         return jdbcTemplate.query(

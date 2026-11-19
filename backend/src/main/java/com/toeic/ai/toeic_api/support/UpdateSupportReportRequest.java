@@ -9,4 +9,10 @@ import jakarta.validation.constraints.Size;
 public record UpdateSupportReportRequest(
         @NotBlank @Pattern(regexp = "PENDING|IN_PROGRESS|RESOLVED|REJECTED") String status,
         @Size(max = 5000) String adminReply,
-        Map<String, Object> correction) { }
+        Map<String, Object> correction,
+        @Pattern(regexp = "LOW|MEDIUM|HIGH|URGENT") String priority) {
+
+    public UpdateSupportReportRequest(String status, String adminReply, Map<String, Object> correction) {
+        this(status, adminReply, correction, null);
+    }
+}

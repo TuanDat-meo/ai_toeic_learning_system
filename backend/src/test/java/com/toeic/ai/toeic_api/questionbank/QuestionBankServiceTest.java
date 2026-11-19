@@ -30,7 +30,7 @@ class QuestionBankServiceTest {
                         new QuestionBankOption("B", "Second answer", false)),
                 "C",
                 "Grammar (Ngữ pháp)",
-                "Medium",
+                "650-750",
                 "Explanation",
                 "DRAFT");
 

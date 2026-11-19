@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test --experimental-strip-types tests/runner/**/*.test.ts tests/battleship/**/*.test.ts",
+    "test:perf": "node --experimental-strip-types tests/runner/perfBenchmark.ts"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",

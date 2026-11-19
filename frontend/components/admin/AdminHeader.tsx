@@ -1,8 +1,10 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Bell,
   ChevronDown,
   Clock3,
   LogOut,
@@ -23,6 +25,12 @@ import {
   updateCurrentUserProfile,
   type AccountActivity,
 } from "@/lib/api/auth";
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  type AppNotification,
+} from "@/lib/api/support";
 
 type AdminProfile = {
   name: string;
@@ -98,6 +106,10 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  const notifMenuRef = useRef<HTMLDivElement>(null);
   const [profileError, setProfileError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
@@ -133,6 +145,43 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
       active = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    let active = true;
+    const loadNotifs = async () => {
+      try {
+        const [list, count] = await Promise.all([
+          getNotifications(5).catch(() => []),
+          getUnreadNotificationCount().catch(() => 0),
+        ]);
+        if (active) {
+          setNotifications(list);
+          setUnreadNotifCount(count);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadNotifs();
+    const interval = window.setInterval(() => void loadNotifs(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!notifMenuOpen) return;
+
+    function closeOnOutside(event: PointerEvent) {
+      if (notifMenuRef.current && !notifMenuRef.current.contains(event.target as Node)) {
+        setNotifMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutside);
+    return () => document.removeEventListener("pointerdown", closeOnOutside);
+  }, [notifMenuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -346,7 +395,63 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Notification Bell */}
+          <div className="relative" ref={notifMenuRef}>
+            <button
+              type="button"
+              onClick={() => setNotifMenuOpen((prev) => !prev)}
+              aria-label="Thông báo hệ thống"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+            >
+              <Bell className="h-4.5 w-4.5 text-slate-600" />
+              {unreadNotifCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
+                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                </span>
+              )}
+            </button>
+            {notifMenuOpen && (
+              <div className="absolute right-0 top-full z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+                  <span className="text-xs font-bold text-slate-900">Thông báo mới</span>
+                  <Link
+                    href="/admin/support/reports"
+                    onClick={() => setNotifMenuOpen(false)}
+                    className="text-[11px] font-semibold text-blue-600 hover:underline"
+                  >
+                    Xem tất cả tickets ↗
+                  </Link>
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                  {notifications.length > 0 ? (
+                    notifications.map((notif) => (
+                      <Link
+                        key={notif.id}
+                        href={notif.linkUrl || "/admin/support/reports"}
+                        onClick={() => {
+                          setNotifMenuOpen(false);
+                          void markNotificationRead(notif.id).catch(() => {});
+                        }}
+                        className={`block px-4 py-3 text-left transition hover:bg-slate-50 ${
+                          !notif.isRead ? "bg-blue-50/40" : ""
+                        }`}
+                      >
+                        <p className="text-xs font-bold text-slate-800 line-clamp-1">{notif.title}</p>
+                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{notif.message}</p>
+                        <span className="mt-1 block text-[10px] text-slate-400">
+                          {new Date(notif.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="px-4 py-8 text-center text-xs text-slate-400">Không có thông báo mới.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="relative" ref={profileMenuRef}>
             <button
               type="button"

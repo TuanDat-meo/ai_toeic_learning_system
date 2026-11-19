@@ -22,28 +22,28 @@ export function AdminPageFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-7">
-      <div className="overflow-hidden rounded-[28px] border border-[rgba(116,118,132,0.12)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f9ff_100%)] p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-white shadow-[0_14px_28px_rgba(72,103,255,0.22)]">
+    <div className="space-y-5 sm:space-y-6 lg:space-y-7">
+      <div className="overflow-hidden rounded-2xl sm:rounded-[28px] border border-[rgba(116,118,132,0.12)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f9ff_100%)] p-4 sm:p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 sm:gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+            <div className="flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-primary text-lg sm:text-xl font-bold text-white shadow-[0_14px_28px_rgba(72,103,255,0.22)]">
               T
             </div>
-            <div>
-              <div className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+            <div className="min-w-0">
+              <div className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-2.5 py-0.5 sm:py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                 Hệ thống TOEIC AI
               </div>
-              <h1 className="mt-3 text-[30px] font-bold tracking-[-0.05em] text-[#111827]">{title}</h1>
-              {subtitle ? <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{subtitle}</p> : null}
+              <h1 className="mt-2 sm:mt-3 text-xl sm:text-2xl lg:text-[28px] xl:text-[30px] font-bold tracking-tight text-[#111827]">{title}</h1>
+              {subtitle ? <p className="mt-1 sm:mt-2 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-600">{subtitle}</p> : null}
             </div>
           </div>
 
-          {actions ? <div className="flex flex-wrap items-center gap-2 xl:justify-end">{actions}</div> : null}
+          {actions ? <div className="flex flex-wrap items-center gap-2 xl:justify-end shrink-0">{actions}</div> : null}
         </div>
       </div>
 
       {metrics && metrics.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {metrics.map((metric) => {
             const tones: Record<string, string> = {
               primary: "bg-primary-container text-on-primary-container",
@@ -55,18 +55,18 @@ export function AdminPageFrame({
             return (
               <div
                 key={metric.label}
-                className="rounded-[22px] border border-[rgba(116,118,132,0.12)] bg-white p-5 shadow-[0_10px_25px_rgba(15,23,42,0.04)]"
+                className="rounded-2xl sm:rounded-[22px] border border-[rgba(116,118,132,0.12)] bg-white p-4 sm:p-5 shadow-[0_10px_25px_rgba(15,23,42,0.04)] flex flex-col justify-between"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{metric.label}</p>
-                    <p className="mt-4 break-words text-[30px] font-bold tracking-[-0.05em] text-slate-900">{metric.value}</p>
-                    <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${tones[metric.tone ?? "neutral"]}`}>
+                    <p className="mt-2 sm:mt-4 break-words text-2xl sm:text-[30px] font-bold tracking-tight text-slate-900">{metric.value}</p>
+                    <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 sm:py-1 text-[10px] font-bold ${tones[metric.tone ?? "neutral"]}`}>
                       {metric.trend}
                     </span>
                   </div>
                   {metric.icon ? (
-                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[metric.tone ?? "neutral"]}`}>
+                    <span className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl ${tones[metric.tone ?? "neutral"]}`}>
                       {metric.icon}
                     </span>
                   ) : null}

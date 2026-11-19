@@ -11,7 +11,7 @@ import { ListeningQuizModal } from "@/components/admin/content/listening/Listeni
 import { ListeningAttemptHistoryModal } from "@/components/admin/content/listening/ListeningStudyToolsModals";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import { VocabBagModal, TheoryModal } from "@/components/admin/content/listening/ListeningModals";
-import { LearningQuotaBadge } from "@/components/student/billing/LearningQuotaBadge";
+import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
 import { consumeLearningFeature } from "@/lib/api/billing";
 import { getItemProgress, getRedoWrongQuestions, saveItemProgress } from "@/lib/practiceProgress";
 

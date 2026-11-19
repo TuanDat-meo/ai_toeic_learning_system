@@ -68,6 +68,7 @@ public class SecurityConfig {
                         request -> request.getServletPath().startsWith("/api/")))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/media-assets/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
                             "/api/auth/google/**",
@@ -83,8 +84,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/chat/discussion").permitAll()
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/support-reports/**").authenticated()
+                        .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/api/community/**").authenticated()
-                        .requestMatchers("/api/announcements/**").hasRole("STUDENT")
+                        .requestMatchers("/api/announcements/**").authenticated()
                         .requestMatchers("/api/question-corrections/**").authenticated()
                         .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
                             "/api/admin/announcements", "/api/admin/announcements/**",

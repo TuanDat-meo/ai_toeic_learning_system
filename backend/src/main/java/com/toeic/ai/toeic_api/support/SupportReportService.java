@@ -10,6 +10,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.toeic.ai.toeic_api.notification.NotificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,10 +29,12 @@ public class SupportReportService {
             """;
 
     private final JdbcTemplate jdbc;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public SupportReportService(JdbcTemplate jdbc) {
+    public SupportReportService(JdbcTemplate jdbc, NotificationService notificationService) {
         this.jdbc = jdbc;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -45,7 +48,20 @@ public class SupportReportService {
                 """, id, code, reporterId, request.category(), request.title().trim(),
                 request.description().trim(), request.source(), blankToNull(request.questionRef()),
                 json(request.questionSnapshot()), blankToNull(request.relatedContent()));
-        return find(id);
+        SupportReport report = find(id);
+        try {
+            String reporterInfo = report.userName() != null && !report.userName().isBlank() ? report.userName() : "Học viên";
+            notificationService.notifyAdminsAndTeachers(
+                    "SUPPORT_REPORT_NEW",
+                    "Báo cáo lỗi mới: #" + code,
+                    reporterInfo + " vừa gửi: " + report.title(),
+                    "/admin/support/reports",
+                    code
+            );
+        } catch (Exception ignored) {
+            // Log or ignore gracefully so user report is not blocked
+        }
+        return report;
     }
 
     public List<SupportReport> listForAdmin() {
@@ -83,12 +99,39 @@ public class SupportReportService {
         jdbc.update("""
                 UPDATE support_reports
                 SET status = ?, admin_reply = ?,
+                    priority = COALESCE(?, priority),
                     correction = COALESCE(?::jsonb, correction),
                     replied_at = now(), updated_at = now()
                 WHERE id = ?
                 """, request.status(), blankToNull(request.adminReply()),
+                blankToNull(request.priority()),
                 request.correction() == null ? null : writeJson(request.correction()), id);
-        return find(id);
+
+        SupportReport updated = find(id);
+        try {
+            if (updated.reporterId() != null && !updated.reporterId().isBlank()) {
+                String statusLabel = switch (request.status()) {
+                    case "RESOLVED" -> "đã được giải quyết";
+                    case "IN_PROGRESS" -> "đang được tiến hành xử lý";
+                    case "REJECTED" -> "đã được xem xét và ghi nhận";
+                    default -> "đang chờ xử lý";
+                };
+                String replySnippet = (request.adminReply() != null && !request.adminReply().isBlank())
+                        ? " • Phản hồi: " + (request.adminReply().length() > 120 ? request.adminReply().substring(0, 117) + "..." : request.adminReply())
+                        : "";
+                notificationService.createNotification(
+                        UUID.fromString(updated.reporterId()),
+                        "SUPPORT_REPLY",
+                        "Phản hồi ticket #" + updated.ticketCode(),
+                        "Báo cáo của bạn (" + updated.title() + ") " + statusLabel + replySnippet,
+                        "/notifications?tab=reports",
+                        updated.ticketCode()
+                );
+            }
+        } catch (Exception ignored) {
+            // Graceful ignore
+        }
+        return updated;
     }
 
     @Transactional

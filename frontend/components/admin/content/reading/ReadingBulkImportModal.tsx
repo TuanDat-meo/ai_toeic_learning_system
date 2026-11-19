@@ -1535,7 +1535,7 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
         className={`bg-white shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-200 ${
           isMaximized
             ? "fixed inset-0 w-screen h-screen max-w-none max-h-none rounded-none z-50"
-            : "w-full max-w-7xl max-h-[96vh] rounded-3xl"
+            : "w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[96vh] sm:max-h-[92vh] rounded-3xl"
         }`}
       >
         {/* Modal Header */}

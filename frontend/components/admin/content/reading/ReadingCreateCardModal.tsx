@@ -306,6 +306,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     prevPart: string;
     qCount: number;
   } | null>(null);
+  const [multiPartSource, setMultiPartSource] = useState<{
+    fileName: string;
+    parsed: any;
+    availableParts: ("part5" | "part6" | "part7")[];
+  } | null>(null);
 
   // Form State for "Thêm từ vựng mới" (Identical to VocabularyModals layout)
   const [vocabInputWord, setVocabInputWord] = useState("");
@@ -375,7 +380,6 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     if (!dictSuggestion) return;
     const picked =
       dictSuggestion.meanings[meaningIdx] ||
-      dictSuggestion.meanings.find((m) => m.meaningLanguage === "vi") ||
       dictSuggestion.meanings[0];
     if (!picked) return;
     if (dictSuggestion.phonetic && !vocabInputIpa.trim()) {
@@ -384,7 +388,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     if (picked.partOfSpeech) {
       setVocabInputPos(toModalPosSelectValue(picked.partOfSpeech));
     }
-    setVocabInputMeaning(picked.definition);
+    if (picked.meaningVi) setVocabInputMeaning(picked.meaningVi);
     if (picked.example && !vocabInputExample.trim()) {
       setVocabInputExample(picked.example);
     }
@@ -661,6 +665,185 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     }));
   };
 
+  // Nạp cụ thể một Part từ dữ liệu JSON đã bóc tách
+  const loadPartFromParsedJson = (
+    parsed: any,
+    targetPart: "part5" | "part6" | "part7",
+    fileName: string
+  ) => {
+    // 1. Tìm danh sách câu hỏi thô từ mọi cấu trúc JSON khả dĩ
+    let rawCandidates: any[] = [];
+
+    // A. Cấu trúc Full Test ETS: parsed.reading = { part5: [...], part6: [...], part7: [...] }
+    if (parsed.reading && typeof parsed.reading === "object") {
+      const r = parsed.reading;
+      if (targetPart === "part5" && Array.isArray(r.part5)) {
+        rawCandidates = r.part5;
+      } else if (targetPart === "part6" && Array.isArray(r.part6)) {
+        rawCandidates = r.part6;
+      } else if (targetPart === "part7" && Array.isArray(r.part7)) {
+        rawCandidates = r.part7;
+      } else if (Array.isArray(r.questions)) {
+        rawCandidates = r.questions;
+      } else if (Array.isArray(r.sampleQuestions)) {
+        rawCandidates = r.sampleQuestions;
+      }
+    }
+
+    // B. Cấu trúc có keys ở root: parsed.part5 / part6 / part7
+    if (rawCandidates.length === 0) {
+      if (targetPart === "part5" && Array.isArray(parsed.part5)) {
+        rawCandidates = parsed.part5;
+      } else if (targetPart === "part6" && Array.isArray(parsed.part6)) {
+        rawCandidates = parsed.part6;
+      } else if (targetPart === "part7" && Array.isArray(parsed.part7)) {
+        rawCandidates = parsed.part7;
+      }
+    }
+
+    // C. Cấu trúc sampleQuestions, questions, items, data.questions, root array
+    if (rawCandidates.length === 0) {
+      if (Array.isArray(parsed.sampleQuestions)) {
+        rawCandidates = parsed.sampleQuestions;
+      } else if (Array.isArray(parsed.questions)) {
+        rawCandidates = parsed.questions;
+      } else if (Array.isArray(parsed.items)) {
+        rawCandidates = parsed.items;
+      } else if (Array.isArray(parsed.data?.questions)) {
+        rawCandidates = parsed.data.questions;
+      } else if (Array.isArray(parsed.data?.sampleQuestions)) {
+        rawCandidates = parsed.data.sampleQuestions;
+      } else if (Array.isArray(parsed.data)) {
+        rawCandidates = parsed.data;
+      } else if (Array.isArray(parsed)) {
+        rawCandidates = parsed;
+      }
+    }
+
+    // 2. Chuẩn hóa tất cả câu hỏi về dạng SampleQuestion
+    const normalizedList: SampleQuestion[] = rawCandidates.map((q, idx) =>
+      normalizeSampleQuestion(q, idx)
+    );
+
+    // 3. Nếu danh sách chứa nhiều Part -> Trích xuất đúng Part hiện tại
+    let qs: SampleQuestion[] = [];
+    if (normalizedList.length > 0) {
+      const hasMultiParts =
+        normalizedList.length > 30 ||
+        normalizedList.some((q) => {
+          const n = parseInt(q.questionNum || "0", 10);
+          return targetPart === "part5"
+            ? n < 101 || n > 130
+            : targetPart === "part6"
+            ? n < 131 || n > 146
+            : n < 147;
+        });
+
+      if (hasMultiParts) {
+        qs = extractQuestionsForPart(normalizedList, targetPart);
+      } else {
+        qs = normalizedList;
+      }
+    }
+
+    // 4. Trích xuất đoạn văn (Passage) cho Part 6 / 7
+    let extractedPassage = parsed.passageText || "";
+    let extractedPassageVi = parsed.passageTextVi || "";
+
+    if (!extractedPassage) {
+      const firstWithPassage = rawCandidates.find(
+        (q) => q && (q.passageTextEn || q.passageText || q.passages)
+      );
+      if (firstWithPassage) {
+        extractedPassage =
+          firstWithPassage.passageTextEn ||
+          firstWithPassage.passageText ||
+          (Array.isArray(firstWithPassage.passages)
+            ? firstWithPassage.passages.map((p: any) => p.text || "").join("\n\n")
+            : "");
+        extractedPassageVi =
+          firstWithPassage.passageTextVi ||
+          (Array.isArray(firstWithPassage.passages)
+            ? firstWithPassage.passages.map((p: any) => p.textVi || "").join("\n\n")
+            : "");
+      }
+    }
+
+    if (targetPart !== "part5") {
+      if (extractedPassage) setCardFormPassageText(extractedPassage);
+      if (extractedPassageVi) setCardFormPassageTextVi(extractedPassageVi);
+    } else {
+      setCardFormPassageText("");
+      setCardFormPassageTextVi("");
+    }
+
+    // 5. Trích xuất từ vựng (Vocabulary)
+    const extractedVocabs: VocabItem[] = [];
+    const seenWords = new Set<string>();
+    const addVocabs = (list: VocabItem[]) => {
+      list.forEach((v) => {
+        const k = v.word.trim().toLowerCase();
+        if (k && !seenWords.has(k)) {
+          seenWords.add(k);
+          extractedVocabs.push(v);
+        }
+      });
+    };
+
+    if (Array.isArray(parsed.vocabList)) {
+      addVocabs(normalizeVocabArray(parsed.vocabList));
+    }
+    if (Array.isArray(parsed.vocabulary)) {
+      addVocabs(normalizeVocabArray(parsed.vocabulary));
+    }
+    qs.forEach((q) => {
+      if (q.vocabList && q.vocabList.length > 0) addVocabs(q.vocabList);
+    });
+
+    if (extractedVocabs.length > 0 && setCardFormVocabList) {
+      setCardFormVocabList(extractedVocabs);
+    }
+
+    // 6. Cập nhật Category và Preset Metadata (Đảm bảo thẻ Part luôn sáng đúng màu)
+    const preset = PART_PRESETS[targetPart];
+    setCardFormCategory(targetPart);
+    setCardFormSubCategory(preset.subCategory);
+    setCardFormTag(parsed.tag || preset.tag);
+
+    // 7. Tiêu đề (Title)
+    let baseTitle = parsed.title || fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    baseTitle = baseTitle
+      .replace(/\s*\((?:bản chi tiết đầy đủ\s*)?200\s*câu\)/gi, "")
+      .replace(/\s*-\s*full\s*reading\s*(?:\([^\)]*\))?/gi, "")
+      .replace(/\s*full\s*reading\s*(?:\([^\)]*\))?/gi, "")
+      .replace(/\s*\(\s*200\s*câu\s*\)/gi, "")
+      .replace(/\s*-\s*Part\s*[567]\s*(?:\([^\)]*\))?/gi, "")
+      .replace(/[\s\-_]+$/, "")
+      .trim();
+
+    const partLabel =
+      targetPart === "part5"
+        ? "Part 5 (Câu 101 - 130)"
+        : targetPart === "part6"
+        ? "Part 6 (Câu 131 - 146)"
+        : "Part 7 (Câu 147 - 200)";
+    setCardFormTitle(`${baseTitle || "ETS TOEIC Reading"} - ${partLabel}`);
+
+    // 8. Cập nhật câu hỏi và đồng bộ số câu
+    if (qs.length > 0) {
+      setCardFormSampleQuestions(qs);
+      setCardFormTotalQuestions(qs.length);
+      setSelectedQuestionIndex(0);
+      setInternalToast(
+        `Đã nạp thành công ${qs.length} câu hỏi ${targetPart.toUpperCase()} từ file "${fileName}"! 🎉`
+      );
+    } else {
+      setErrorMsg(
+        `Không tìm thấy câu hỏi phù hợp cho ${targetPart.toUpperCase()} trong file "${fileName}". Vui lòng kiểm tra lại cấu trúc file!`
+      );
+    }
+  };
+
   // Import tệp đề thi từ bên ngoài (.json, .xlsx, .xls, .txt, .csv)
   const handleImportFileFromLocal = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -676,171 +859,77 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         const text = await file.text();
         const parsed = JSON.parse(text);
 
-        // 1. Tìm danh sách câu hỏi thô từ mọi cấu trúc JSON khả dĩ
-        let rawCandidates: any[] = [];
-
-        // A. Cấu trúc Full Test ETS: parsed.reading = { part5: [...], part6: [...], part7: [...] }
-        if (parsed.reading && typeof parsed.reading === "object") {
-          const r = parsed.reading;
-          if (targetPart === "part5" && Array.isArray(r.part5)) {
-            rawCandidates = r.part5;
-          } else if (targetPart === "part6" && Array.isArray(r.part6)) {
-            rawCandidates = r.part6;
-          } else if (targetPart === "part7" && Array.isArray(r.part7)) {
-            rawCandidates = r.part7;
-          } else if (Array.isArray(r.questions)) {
-            rawCandidates = r.questions;
-          } else if (Array.isArray(r.sampleQuestions)) {
-            rawCandidates = r.sampleQuestions;
-          }
-        }
-
-        // B. Cấu trúc có keys ở root: parsed.part5 / part6 / part7
-        if (rawCandidates.length === 0) {
-          if (targetPart === "part5" && Array.isArray(parsed.part5)) {
-            rawCandidates = parsed.part5;
-          } else if (targetPart === "part6" && Array.isArray(parsed.part6)) {
-            rawCandidates = parsed.part6;
-          } else if (targetPart === "part7" && Array.isArray(parsed.part7)) {
-            rawCandidates = parsed.part7;
-          }
-        }
-
-        // C. Cấu trúc sampleQuestions, questions, items, data.questions, root array
-        if (rawCandidates.length === 0) {
-          if (Array.isArray(parsed.sampleQuestions)) {
-            rawCandidates = parsed.sampleQuestions;
-          } else if (Array.isArray(parsed.questions)) {
-            rawCandidates = parsed.questions;
-          } else if (Array.isArray(parsed.items)) {
-            rawCandidates = parsed.items;
-          } else if (Array.isArray(parsed.data?.questions)) {
-            rawCandidates = parsed.data.questions;
-          } else if (Array.isArray(parsed.data?.sampleQuestions)) {
-            rawCandidates = parsed.data.sampleQuestions;
-          } else if (Array.isArray(parsed.data)) {
-            rawCandidates = parsed.data;
-          } else if (Array.isArray(parsed)) {
-            rawCandidates = parsed;
-          }
-        }
-
-        // 2. Chuẩn hóa tất cả câu hỏi về dạng SampleQuestion
-        const normalizedList: SampleQuestion[] = rawCandidates.map((q, idx) =>
-          normalizeSampleQuestion(q, idx)
+        // Kiểm tra xem file có chứa nhiều Part hay chỉ 1 Part
+        const hasP5 = Boolean(
+          parsed.reading?.part5?.length ||
+          parsed.part5?.length ||
+          (Array.isArray(parsed.sampleQuestions) && parsed.sampleQuestions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 101 && n <= 130;
+          })) ||
+          (Array.isArray(parsed.questions) && parsed.questions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 101 && n <= 130;
+          }))
         );
 
-        // 3. Nếu danh sách chứa nhiều Part (đề full 200 câu hoặc 100 câu reading) -> Trích xuất đúng Part hiện tại
-        let qs: SampleQuestion[] = [];
-        if (normalizedList.length > 0) {
-          const hasMultiParts =
-            normalizedList.length > 30 ||
-            normalizedList.some((q) => {
-              const n = parseInt(q.questionNum || "0", 10);
-              return targetPart === "part5"
-                ? n < 101 || n > 130
-                : targetPart === "part6"
-                ? n < 131 || n > 146
-                : n < 147;
-            });
+        const hasP6 = Boolean(
+          parsed.reading?.part6?.length ||
+          parsed.part6?.length ||
+          (Array.isArray(parsed.sampleQuestions) && parsed.sampleQuestions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 131 && n <= 146;
+          })) ||
+          (Array.isArray(parsed.questions) && parsed.questions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 131 && n <= 146;
+          }))
+        );
 
-          if (hasMultiParts) {
-            qs = extractQuestionsForPart(normalizedList, targetPart);
-          } else {
-            qs = normalizedList;
-          }
-        }
+        const hasP7 = Boolean(
+          parsed.reading?.part7?.length ||
+          parsed.part7?.length ||
+          (Array.isArray(parsed.sampleQuestions) && parsed.sampleQuestions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 147 && n <= 200;
+          })) ||
+          (Array.isArray(parsed.questions) && parsed.questions.some((q: any) => {
+            const n = parseInt(q.questionNum || q.questionNumber || "0", 10);
+            return n >= 147 && n <= 200;
+          }))
+        );
 
-        // 4. Trích xuất đoạn văn (Passage) cho Part 6 / 7
-        let extractedPassage = parsed.passageText || "";
-        let extractedPassageVi = parsed.passageTextVi || "";
+        const foundParts: ("part5" | "part6" | "part7")[] = [];
+        if (hasP5) foundParts.push("part5");
+        if (hasP6) foundParts.push("part6");
+        if (hasP7) foundParts.push("part7");
 
-        if (!extractedPassage) {
-          const firstWithPassage = rawCandidates.find(
-            (q) => q && (q.passageTextEn || q.passageText || q.passages)
-          );
-          if (firstWithPassage) {
-            extractedPassage =
-              firstWithPassage.passageTextEn ||
-              firstWithPassage.passageText ||
-              (Array.isArray(firstWithPassage.passages)
-                ? firstWithPassage.passages.map((p: any) => p.text || "").join("\n\n")
-                : "");
-            extractedPassageVi =
-              firstWithPassage.passageTextVi ||
-              (Array.isArray(firstWithPassage.passages)
-                ? firstWithPassage.passages.map((p: any) => p.textVi || "").join("\n\n")
-                : "");
-          }
-        }
+        let activeTargetPart = targetPart;
 
-        if (targetPart !== "part5") {
-          if (extractedPassage) setCardFormPassageText(extractedPassage);
-          if (extractedPassageVi) setCardFormPassageTextVi(extractedPassageVi);
-        } else {
-          setCardFormPassageText("");
-          setCardFormPassageTextVi("");
-        }
-
-        // 5. Trích xuất từ vựng (Vocabulary)
-        const extractedVocabs: VocabItem[] = [];
-        const seenWords = new Set<string>();
-        const addVocabs = (list: VocabItem[]) => {
-          list.forEach((v) => {
-            const k = v.word.trim().toLowerCase();
-            if (k && !seenWords.has(k)) {
-              seenWords.add(k);
-              extractedVocabs.push(v);
-            }
+        if (foundParts.length > 1) {
+          // File đa part (như Full test ETS): lưu lại để người dùng có thể chọn hoặc chuyển đổi bất cứ lúc nào
+          setMultiPartSource({
+            fileName: file.name,
+            parsed,
+            availableParts: foundParts,
           });
-        };
-
-        if (Array.isArray(parsed.vocabList)) {
-          addVocabs(normalizeVocabArray(parsed.vocabList));
-        }
-        if (Array.isArray(parsed.vocabulary)) {
-          addVocabs(normalizeVocabArray(parsed.vocabulary));
-        }
-        qs.forEach((q) => {
-          if (q.vocabList && q.vocabList.length > 0) addVocabs(q.vocabList);
-        });
-
-        if (extractedVocabs.length > 0 && setCardFormVocabList) {
-          setCardFormVocabList(extractedVocabs);
-        }
-
-        // 6. Tiêu đề (Title) & Thẻ (Tag)
-        if (parsed.tag) setCardFormTag(parsed.tag);
-        if (parsed.title) {
-          let finalTitle = parsed.title;
-          if (/200\s*câu|full/i.test(finalTitle) && !finalTitle.toLowerCase().includes(targetPart)) {
-            const partLabel =
-              targetPart === "part5"
-                ? "Part 5 (Câu 101 - 130)"
-                : targetPart === "part6"
-                ? "Part 6 (Câu 131 - 146)"
-                : "Part 7 (Câu 147 - 200)";
-            finalTitle = `${finalTitle.replace(/\s*\((?:bản chi tiết đầy đủ\s*)?200\s*câu\)/i, "").trim()} - ${partLabel}`;
+          if (!foundParts.includes(activeTargetPart)) {
+            activeTargetPart = foundParts[0];
           }
-          setCardFormTitle(finalTitle);
+        } else if (foundParts.length === 1) {
+          setMultiPartSource(null);
+          activeTargetPart = foundParts[0];
+        } else {
+          setMultiPartSource(null);
         }
 
-        // 7. Cập nhật câu hỏi và đồng bộ số câu
-        if (qs.length > 0) {
-          setCardFormSampleQuestions(qs);
-          setCardFormTotalQuestions(qs.length);
-          setSelectedQuestionIndex(0);
-          setInternalToast(
-            `Đã import thành công ${qs.length} câu hỏi ${targetPart.toUpperCase()} từ file "${file.name}"! 🎉`
-          );
-        } else {
-          setErrorMsg(
-            `Không tìm thấy câu hỏi phù hợp cho ${targetPart.toUpperCase()} trong file "${file.name}". Vui lòng kiểm tra lại cấu trúc file!`
-          );
-        }
+        loadPartFromParsedJson(parsed, activeTargetPart, file.name);
       } else if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
         try {
           const parsedCard = await parseAdminReadingFile(file);
+          const preset = PART_PRESETS[targetPart];
+          setCardFormCategory(targetPart);
+          setCardFormSubCategory(preset.subCategory);
           if (parsedCard.title) setCardFormTitle(parsedCard.title);
           if (parsedCard.tag) setCardFormTag(parsedCard.tag);
           if (parsedCard.passageText && targetPart !== "part5") setCardFormPassageText(parsedCard.passageText);
@@ -909,6 +998,15 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   // Xác nhận đổi Part & Làm mới sạch dữ liệu theo chuẩn Part mới
   const handleExecutePartSwitchWithReset = (targetPart: "grammar" | "part5" | "part6" | "part7") => {
     const presetKey = (targetPart === "grammar" ? "part5" : targetPart) as "part5" | "part6" | "part7";
+
+    // Nếu đang có nguồn tệp đa part đã nạp và part đích có trong tệp, ưu tiên nạp thẳng dữ liệu từ tệp
+    if (multiPartSource && multiPartSource.availableParts.includes(presetKey)) {
+      loadPartFromParsedJson(multiPartSource.parsed, presetKey, multiPartSource.fileName);
+      setPartSwitchConfirm(null);
+      setPartTransitionNotice(null);
+      return;
+    }
+
     const preset = PART_PRESETS[presetKey];
 
     setCardFormCategory(targetPart);
@@ -1961,41 +2059,41 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 md:p-6 animate-in fade-in duration-150 font-sans">
-      <div className="relative flex max-h-[94vh] w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1400px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 lg:p-6 animate-in fade-in duration-150 font-sans">
+      <div className="relative flex max-h-[96vh] sm:max-h-[92vh] w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100">
         {/* HEADER (Styling matching VocabularyModals) */}
         <div className="flex shrink-0 items-start sm:items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4">
           <div className="min-w-0">
             <span className="text-[11px] font-extrabold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 uppercase tracking-wider">
               READING
             </span>
-            <h3 className="mt-1 text-base sm:text-lg font-bold text-slate-900 leading-snug">
+            <h3 className="mt-1 text-base sm:text-xl font-bold text-slate-900 leading-snug">
               {editingCard ? "Chỉnh sửa bài đọc / chuyên đề TOEIC" : "Thêm bài đọc Reading mới"}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition cursor-pointer shrink-0"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition cursor-pointer shrink-0"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </div>
 
-        {/* TAB NAVIGATION (Full-width segmented bar, cân đối 100% chiều ngang, không bị lệch dồn sang trái) */}
-        <div className="shrink-0 border-b border-slate-200/80 bg-slate-100/70 p-2 sm:px-6 sm:py-2.5">
-          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full">
+        {/* TAB NAVIGATION (Full-width segmented bar, cân đối 100% chiều ngang, cuộn mượt khi màn hình nhỏ) */}
+        <div className="shrink-0 border-b border-slate-200/80 bg-slate-100/70 p-2 sm:px-6 sm:py-2.5 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-2 w-full min-w-[620px] sm:min-w-0">
             {/* 1. THÔNG TIN BÀI ĐỌC */}
             <button
               type="button"
               onClick={() => setActiveTab("info")}
-              className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs font-bold text-center select-none shadow-2xs ${
+              className={`flex-1 min-w-[140px] py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-center select-none shadow-2xs ${
                 activeTab === "info"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "bg-white/80 hover:bg-white text-slate-700 hover:text-blue-700 border border-slate-200/80"
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5 shrink-0" />
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
               <span>1. Thông tin bài đọc</span>
             </button>
 
@@ -2004,17 +2102,17 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab("passage")}
-                className={`flex-1 min-w-[160px] py-2 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs font-bold text-center select-none shadow-2xs ${
+                className={`flex-1 min-w-[160px] py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-center select-none shadow-2xs ${
                   activeTab === "passage"
                     ? "bg-blue-600 text-white shadow-xs"
                     : "bg-white/80 hover:bg-white text-slate-700 hover:text-blue-700 border border-slate-200/80"
                 }`}
               >
-                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                 <span>2. Đoạn văn đọc (Passage)</span>
                 {cardFormPassageText.trim() ? (
                   <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold ${
                       activeTab === "passage" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
                     }`}
                   >
@@ -2022,7 +2120,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   </span>
                 ) : (
                   <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold ${
                       activeTab === "passage" ? "bg-rose-500 text-white" : "bg-rose-100 text-rose-700"
                     }`}
                   >
@@ -2036,16 +2134,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab("questions")}
-              className={`flex-1 min-w-[160px] py-2 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs font-bold text-center select-none shadow-2xs ${
+              className={`flex-1 min-w-[160px] py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-center select-none shadow-2xs ${
                 activeTab === "questions"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "bg-white/80 hover:bg-white text-slate-700 hover:text-blue-700 border border-slate-200/80"
               }`}
             >
-              <ListOrdered className="w-3.5 h-3.5 shrink-0" />
+              <ListOrdered className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
               <span>{hasPassageTab ? "3. Bộ câu hỏi & Đáp án" : "2. Bộ câu hỏi & Đáp án"}</span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold ${
                   activeTab === "questions" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"
                 }`}
               >
@@ -2057,16 +2155,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab("vocab")}
-              className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs font-bold text-center select-none shadow-2xs ${
+              className={`flex-1 min-w-[140px] py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-center select-none shadow-2xs ${
                 activeTab === "vocab"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "bg-white/80 hover:bg-white text-slate-700 hover:text-blue-700 border border-slate-200/80"
               }`}
             >
-              <BookMarked className="w-3.5 h-3.5 shrink-0" />
+              <BookMarked className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
               <span>{hasPassageTab ? "4. Từ vựng cần học" : "3. Từ vựng cần học"}</span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold ${
                   activeTab === "vocab" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-900"
                 }`}
               >
@@ -2078,16 +2176,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab("quick_paste")}
-              className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs font-bold text-center select-none shadow-2xs ${
+              className={`flex-1 min-w-[140px] py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-center select-none shadow-2xs ${
                 activeTab === "quick_paste"
                   ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs font-extrabold"
                   : "bg-amber-50/80 hover:bg-amber-100/80 text-amber-800 border border-amber-200/80"
               }`}
             >
-              <Zap className="w-3.5 h-3.5 shrink-0" />
+              <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
               <span>Dán nhanh tự động</span>
               <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold ${
                   activeTab === "quick_paste" ? "bg-white/20 text-white" : "bg-amber-200/80 text-amber-900"
                 }`}
               >
@@ -2225,16 +2323,68 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>
-                    {cardFormCategory === "grammar" ? (
-                      <>
-                        <strong>Chế độ Ngữ pháp đọc (Grammar / Câu đơn):</strong> Vì dạng câu đơn không có đoạn văn dài nên hệ thống tự động ẩn tab Đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Nếu bạn muốn thêm bài đọc Part 6 hoặc Part 7 có đoạn văn, hãy chọn <strong>Part 6</strong> hoặc <strong>Part 7</strong> ở bên dưới!
-                      </>
-                    ) : (
-                      <>
-                        <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
-                      </>
-                    )}
+                    <strong>Chế độ Part 5 (Incomplete Sentences):</strong> Vì Part 5 chỉ bao gồm các câu đơn riêng biệt nên hệ thống đã tự động ẩn tab nhập đoạn văn đọc (thứ tự tab là 1 → 2 → 3). Bạn chỉ cần nhập các câu hỏi trắc nghiệm ở tab kế tiếp!
                   </span>
+                </div>
+              )}
+
+              {/* BANNER CHỌN PART KHI FILE IMPORT CHỨA NHIỀU PART (VÍ DỤ ĐỀ ETS FULL CHI TIẾT) */}
+              {multiPartSource && (
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 border border-indigo-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-2 rounded-xl bg-indigo-600 text-white shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-indigo-950 leading-tight">
+                        Tệp <span className="font-extrabold text-blue-700 underline">&quot;{multiPartSource.fileName}&quot;</span> chứa đầy đủ các Part của bài thi ({multiPartSource.availableParts.map((p) => p.toUpperCase()).join(", ")})
+                      </p>
+                      <p className="text-[11px] text-indigo-800 mt-0.5">
+                        Đang nạp <strong>{(cardFormCategory === "grammar" ? "part5" : cardFormCategory).toUpperCase()}</strong>. Bấm nút bên cạnh để đổi sang nạp Part khác từ file này ngay:
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    {multiPartSource.availableParts.includes("part5") && (
+                      <button
+                        type="button"
+                        onClick={() => loadPartFromParsedJson(multiPartSource.parsed, "part5", multiPartSource.fileName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          cardFormCategory === "part5" || cardFormCategory === "grammar"
+                            ? "bg-emerald-600 text-white shadow-xs"
+                            : "bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50"
+                        }`}
+                      >
+                        <span>🟢 Part 5 (30 câu)</span>
+                      </button>
+                    )}
+                    {multiPartSource.availableParts.includes("part6") && (
+                      <button
+                        type="button"
+                        onClick={() => loadPartFromParsedJson(multiPartSource.parsed, "part6", multiPartSource.fileName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          cardFormCategory === "part6"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-white text-purple-800 border border-purple-300 hover:bg-purple-50"
+                        }`}
+                      >
+                        <span>🟣 Part 6 (16 câu)</span>
+                      </button>
+                    )}
+                    {multiPartSource.availableParts.includes("part7") && (
+                      <button
+                        type="button"
+                        onClick={() => loadPartFromParsedJson(multiPartSource.parsed, "part7", multiPartSource.fileName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                          cardFormCategory === "part7"
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "bg-white text-blue-800 border border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        <span>🔵 Part 7 (54 câu)</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -2255,59 +2405,59 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-1">
                   <button
                     type="button"
                     onClick={() => handleRequestPartChange("part5")}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                      cardFormCategory === "part5"
+                    className={`p-3 sm:p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                      cardFormCategory === "part5" || cardFormCategory === "grammar"
                         ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                         : "bg-white hover:bg-emerald-50/60 border-slate-200 text-slate-800"
                     }`}
                   >
                     <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider block opacity-80">
+                      <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
                         Part 5
                       </span>
-                      <span className="text-xs font-bold block mt-0.5">Incomplete Sentences</span>
+                      <span className="text-xs sm:text-sm font-bold block mt-0.5">Incomplete Sentences</span>
                     </div>
-                    <span className="text-[10px] mt-1.5 opacity-90 block">30 câu (101-130) • Điền câu đơn</span>
+                    <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">30 câu (101-130) • Điền câu đơn</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleRequestPartChange("part6")}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                    className={`p-3 sm:p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
                       cardFormCategory === "part6"
                         ? "bg-purple-600 text-white border-purple-600 shadow-xs"
                         : "bg-white hover:bg-purple-50/60 border-slate-200 text-slate-800"
                     }`}
                   >
                     <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider block opacity-80">
+                      <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
                         Part 6
                       </span>
-                      <span className="text-xs font-bold block mt-0.5">Text Completion</span>
+                      <span className="text-xs sm:text-sm font-bold block mt-0.5">Text Completion</span>
                     </div>
-                    <span className="text-[10px] mt-1.5 opacity-90 block">16 câu (131-146) • 4 đoạn khuyết</span>
+                    <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">16 câu (131-146) • 4 đoạn khuyết</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleRequestPartChange("part7")}
-                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                    className={`p-3 sm:p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
                       cardFormCategory === "part7"
                         ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                         : "bg-white hover:bg-blue-50/60 border-slate-200 text-slate-800"
                     }`}
                   >
                     <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider block opacity-80">
+                      <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
                         Part 7
                       </span>
-                      <span className="text-xs font-bold block mt-0.5">Reading Comprehension</span>
+                      <span className="text-xs sm:text-sm font-bold block mt-0.5">Reading Comprehension</span>
                     </div>
-                    <span className="text-[10px] mt-1.5 opacity-90 block">54 câu (147-200) • Đoạn đơn &amp; đa</span>
+                    <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">54 câu (147-200) • Đoạn đơn &amp; đa</span>
                   </button>
                 </div>
               </div>
@@ -2316,11 +2466,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               {showAutoDetector && (
                 <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/90 space-y-3 animate-in fade-in duration-150">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-bold text-amber-950 flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-amber-600" />
                       <span>Nhận diện tự động Part dựa trên nội dung nhập</span>
                     </span>
-                    <span className="text-[11px] text-amber-700 font-medium">
+                    <span className="text-xs text-amber-700 font-medium">
                       Dán câu hỏi hoặc bài đọc vào ô bên dưới
                     </span>
                   </div>
@@ -2330,12 +2480,12 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     placeholder="Dán câu hỏi trắc nghiệm hoặc bài đọc vào đây để hệ thống tự nhận diện Part 5, 6 hay 7..."
                     value={detectorInput}
                     onChange={(e) => setDetectorInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-amber-300 bg-white text-xs font-mono font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-200"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-amber-300 bg-white text-xs sm:text-sm font-mono font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-200"
                   />
 
                   {detectorInput.trim() && (
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-200/80">
-                      <span className="text-[11px] text-amber-900 font-semibold">
+                      <span className="text-xs text-amber-900 font-semibold">
                         {detectedInfo ? detectedInfo.title : "Đã nhận văn bản đề thi"}
                       </span>
                       <button
@@ -2344,9 +2494,8 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                           handleParseRawText(detectorInput, (cat) =>
                             setActiveTab(cat === "part5" ? "questions" : "passage")
                           );
-
                         }}
-                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
                       >
                         <Zap className="w-4 h-4" />
                         <span>⚡ Bóc tách toàn bộ bài đọc &amp; câu hỏi vào form ngay</span>
@@ -2357,13 +2506,13 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               )}
 
               {/* THANH CÔNG CỤ NẠP ĐỀ THI CHO PART HIỆN TẠI (IMPORT TỆP HOẶC TỰ ĐIỀN) */}
-              <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-200/90 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-200/90 shadow-2xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-800">
-                    Cách nạp nội dung cho {cardFormCategory.toUpperCase()}:
+                  <span className="text-xs sm:text-sm font-bold text-slate-800">
+                    Cách nạp nội dung cho {(cardFormCategory === "grammar" ? "part5" : cardFormCategory).toUpperCase()}:
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-600 text-white shadow-2xs">
-                    {cardFormCategory === "part5" ? "Điền câu đơn" : cardFormCategory === "part6" ? "Điền đoạn văn" : "Đọc hiểu văn bản"}
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-blue-600 text-white shadow-2xs">
+                    {(cardFormCategory === "part5" || cardFormCategory === "grammar") ? "Điền câu đơn" : cardFormCategory === "part6" ? "Điền đoạn văn" : "Đọc hiểu văn bản"}
                   </span>
                 </div>
 
@@ -2371,19 +2520,19 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   <button
                     type="button"
                     onClick={() => fileImportInputRef.current?.click()}
-                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition cursor-pointer flex items-center gap-1.5"
                     title="Nạp tệp đề thi từ máy tính (.json, .xlsx, .txt)"
                   >
-                    <Upload className="w-3.5 h-3.5" />
+                    <Upload className="w-4 h-4" />
                     <span>📥 Import đề từ file</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab("quick_paste")}
-                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition cursor-pointer flex items-center gap-1.5"
                     title="Chuyển sang tab dán văn bản thô để tự bóc tách"
                   >
-                    <Zap className="w-3.5 h-3.5" />
+                    <Zap className="w-4 h-4" />
                     <span>⚡ Dán nhanh tự động</span>
                   </button>
                   <button
@@ -2392,10 +2541,10 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       setActiveTab(cardFormCategory === "part5" ? "questions" : "passage");
                       setInternalToast(`Chế độ tự điền thủ công: Mời bạn nhập nội dung vào các trường bên dưới hoặc tab kế tiếp! ✍️`);
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs sm:text-sm transition cursor-pointer flex items-center gap-1.5"
                     title="Tự gõ tiêu đề, bài đọc và từng câu hỏi trắc nghiệm"
                   >
-                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                    <FileText className="w-4 h-4 text-slate-500" />
                     <span>✍️ Tự điền thủ công</span>
                   </button>
                 </div>
@@ -2411,7 +2560,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
               {/* 1. TÊN BÀI ĐỌC (FULL WIDTH WITH HELPER TEXT & INLINE VALIDATION) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs sm:text-sm font-bold text-slate-700 mb-1.5">
                   Tên chủ điểm / Bài đọc *
                 </label>
                 <div className="relative">
@@ -2425,7 +2574,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       if (titleError) setTitleError(null);
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    className={`w-full rounded-xl border px-3.5 py-2.5 text-xs font-medium transition-all focus:outline-hidden focus:ring-2 bg-white ${
+                    className={`w-full h-10 sm:h-11 rounded-xl border px-3.5 sm:px-4 text-xs sm:text-sm font-medium transition-all focus:outline-hidden focus:ring-2 bg-white ${
                       titleError
                         ? "border-rose-400 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-rose-200 pr-10"
                         : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
@@ -2438,12 +2587,12 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   )}
                 </div>
                 {titleError ? (
-                  <p className="mt-1.5 text-xs font-semibold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <p className="mt-1.5 text-xs sm:text-sm font-semibold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 shrink-0" />
                     <span>{titleError}</span>
                   </p>
                 ) : (
-                  <p className="mt-1 text-[10px] text-slate-400">
+                  <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
                     Tên bài đọc hiển thị cho học viên trong danh mục chuyên đề luyện thi TOEIC.
                   </p>
                 )}
@@ -2454,14 +2603,14 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     <div className="flex items-start gap-2.5 min-w-0">
                       <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs font-bold text-amber-950 leading-snug">
+                        <p className="text-xs sm:text-sm font-bold text-amber-950 leading-snug">
                           Phát hiện bài đọc tương tự đã có sẵn:{" "}
                           <span className="font-extrabold text-blue-800 underline">
                             &quot;{existingDuplicate.title}&quot;
                           </span>{" "}
                           ({existingDuplicate.category.toUpperCase()} • {existingDuplicate.totalQuestions} câu)
                         </p>
-                        <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                        <p className="text-xs text-amber-800 mt-1 leading-relaxed">
                           {overwriteTargetId === existingDuplicate.id
                             ? "✅ Đang chọn chế độ GHI ĐÈ: Khi bạn bấm 'Lưu', bài đọc cũ trên sẽ được cập nhật thay thế bằng dữ liệu mới này (tránh sinh thêm dòng trùng lặp)."
                             : "Bộ đề này đã có trong danh sách. Bạn có thể chọn ghi đè để cập nhật bài cũ thay vì tạo bài mới!"}
@@ -2473,7 +2622,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setOverwriteTargetId(null)}
-                          className="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold cursor-pointer transition shadow-2xs"
+                          className="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs sm:text-sm font-bold cursor-pointer transition shadow-2xs"
                         >
                           Hủy ghi đè (Tạo bài mới)
                         </button>
@@ -2481,9 +2630,9 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setOverwriteTargetId(existingDuplicate.id)}
-                          className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
+                          className="px-3.5 sm:px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
+                          <Sparkles className="w-4 h-4" />
                           <span>Ghi đè lên bài cũ này</span>
                         </button>
                       )}
@@ -2492,29 +2641,28 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 )}
               </div>
 
-              {/* 3 COLUMNS PERFECT HORIZONTAL ALIGNMENT (h-6 LABEL, h-10 INPUT) */}
+              {/* 3 COLUMNS PERFECT HORIZONTAL ALIGNMENT (h-6 LABEL, h-10/11 INPUT) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 items-start">
                 <div>
-                  <label className="h-6 flex items-center text-xs font-bold text-slate-700 mb-1">
+                  <label className="h-6 flex items-center text-xs sm:text-sm font-bold text-slate-700 mb-1.5">
                     Phần thi (Part)
                   </label>
                   <select
-                    value={cardFormCategory}
+                    value={cardFormCategory === "grammar" ? "part5" : cardFormCategory}
                     onChange={(e) => {
-                      const cat = e.target.value as "grammar" | "part5" | "part6" | "part7";
+                      const cat = e.target.value as "part5" | "part6" | "part7";
                       handleRequestPartChange(cat);
                     }}
-                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
+                    className="w-full h-10 sm:h-11 rounded-xl border border-slate-200 bg-white px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="part5">Part 5 (Điền câu đơn)</option>
                     <option value="part6">Part 6 (Điền đoạn văn)</option>
                     <option value="part7">Part 7 (Đọc hiểu văn bản)</option>
-                    <option value="grammar">Ngữ pháp đọc (Grammar)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="h-6 flex items-center text-xs font-bold text-slate-700 mb-1">
+                  <label className="h-6 flex items-center text-xs sm:text-sm font-bold text-slate-700 mb-1.5">
                     Nhóm con
                   </label>
                   <select
@@ -2524,7 +2672,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                         e.target.value as "word_types" | "verbs" | "other_grammar" | "levels" | "by_topic" | "text_types"
                       )
                     }
-                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
+                    className="w-full h-10 sm:h-11 rounded-xl border border-slate-200 bg-white px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="word_types">Từ loại (Word Types)</option>
                     <option value="verbs">Thì &amp; Động từ (Verbs)</option>
@@ -2536,7 +2684,10 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </div>
 
                 <div>
-                  <div className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3.5 flex items-center text-xs text-slate-600">
+                  <label className="h-6 flex items-center text-xs sm:text-sm font-bold text-slate-700 mb-1.5">
+                    Trạng thái nội dung
+                  </label>
+                  <div className="h-10 sm:h-11 rounded-xl border border-slate-200 bg-slate-50 px-3.5 sm:px-4 flex items-center text-xs sm:text-sm font-semibold text-slate-600">
                     {questions.filter((question) => question.question.trim()).length} câu có nội dung
                   </div>
                 </div>
@@ -2544,18 +2695,18 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
               {/* Tag & Directions */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Thẻ ghi chú (tùy chọn)</label>
+                <label className="block text-xs sm:text-sm font-bold text-slate-700 mb-1.5">Thẻ ghi chú (tùy chọn)</label>
                 <input
                   type="text"
                   placeholder="Ví dụ: Part 7 - Email doanh nghiệp | Bẫy paraphrasing"
                   value={cardFormTag}
                   onChange={(e) => setCardFormTag(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-medium focus:border-blue-500 focus:outline-hidden bg-white"
+                  className="w-full h-10 sm:h-11 rounded-xl border border-slate-200 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-medium focus:border-blue-500 focus:outline-hidden bg-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs sm:text-sm font-bold text-slate-700 mb-1.5">
                   Hướng dẫn làm bài chuẩn ETS (Directions)
                 </label>
                 <textarea
@@ -2563,7 +2714,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   placeholder="Ví dụ: Mỗi câu dưới đây bị khuyết một từ hoặc cụm từ. Bốn phương án trả lời..."
                   value={cardFormTheorySummary}
                   onChange={(e) => setCardFormTheorySummary(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-medium focus:border-blue-500 focus:outline-hidden bg-white resize-none"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium focus:border-blue-500 focus:outline-hidden bg-white resize-none"
                 />
               </div>
             </div>
@@ -2657,15 +2808,15 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="flex flex-col">
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <label className="block text-xs sm:text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                     <span>Nội dung đoạn văn tiếng Anh (Passage - English) *</span>
-                    <span className="text-[10px] text-slate-400 font-normal">
+                    <span className="text-[11px] sm:text-xs text-slate-400 font-normal">
                       {cardFormPassageText.trim() ? `${cardFormPassageText.split(/\s+/).filter(Boolean).length} từ` : "Chưa nhập"}
                     </span>
                   </label>
                   <textarea
                     ref={passageTextareaRef}
-                    rows={9}
+                    rows={8}
                     placeholder={`Dán nội dung bài đọc tiếng Anh vào đây...\nVí dụ:\nSILVERLINE LOGISTICS\nClient Update - Policy Changes\nEffective: October 1...`}
                     value={cardFormPassageText}
                     onChange={(e) => {
@@ -2673,31 +2824,31 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       if (passageError) setPassageError(null);
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    className={`w-full flex-1 min-h-[200px] rounded-xl border px-3.5 py-2.5 text-xs font-mono leading-relaxed focus:outline-hidden focus:ring-2 bg-white resize-y transition-all ${
+                    className={`w-full flex-1 min-h-[180px] sm:min-h-[240px] rounded-xl border px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-mono leading-relaxed focus:outline-hidden focus:ring-2 bg-white resize-y transition-all ${
                       passageError
                         ? "border-rose-400 bg-rose-50/20 text-slate-900 focus:border-rose-500 focus:ring-rose-200"
                         : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
                     }`}
                   />
                   {passageError && (
-                    <p className="mt-1.5 text-xs font-semibold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <p className="mt-1.5 text-xs sm:text-sm font-semibold text-rose-600 flex items-center gap-1.5 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 shrink-0" />
                       <span>{passageError}</span>
                     </p>
                   )}
                 </div>
 
                 <div className="flex flex-col">
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <label className="block text-xs sm:text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                     <span>Bản dịch tiếng Việt (Vietnamese Translation)</span>
-                    <span className="text-[10px] text-emerald-600 font-normal">Hiển thị khi học viên bật Dịch song ngữ</span>
+                    <span className="text-[11px] sm:text-xs text-emerald-600 font-normal">Hiển thị khi học viên bật Dịch song ngữ</span>
                   </label>
                   <textarea
-                    rows={9}
+                    rows={8}
                     placeholder={`Dán bản dịch tiếng Việt của bài đọc vào đây...\nVí dụ:\nHÃNG VẬN TẢI SILVERLINE\nThông báo cập nhật khách hàng - Thay đổi chính sách...`}
                     value={cardFormPassageTextVi}
                     onChange={(e) => setCardFormPassageTextVi(e.target.value)}
-                    className="w-full flex-1 min-h-[200px] rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs leading-relaxed focus:border-emerald-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-100 bg-white resize-y"
+                    className="w-full flex-1 min-h-[180px] sm:min-h-[240px] rounded-xl border border-slate-200 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm leading-relaxed focus:border-emerald-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-100 bg-white resize-y"
                   />
                 </div>
               </div>
@@ -2864,17 +3015,17 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                 </div>
 
                 {/* 4 Options A, B, C, D */}
-                <div className="space-y-2 pt-1">
+                <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">
+                    <span className="text-xs sm:text-sm font-bold text-slate-800">
                       4 Phương án trả lời (A, B, C, D) &amp; Chọn đáp án đúng:
                     </span>
-                    <span className="text-[10px] text-blue-600 font-semibold">
+                    <span className="text-[11px] sm:text-xs text-blue-600 font-semibold">
                       Bấm vào nút tròn để chọn đáp án đúng
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 gap-2.5">
                     {["A", "B", "C", "D"].map((letter, optIdx) => {
                       const isCorrect = (activeQuestion.correctIndex ?? 0) === optIdx;
                       const isOptionEmpty = !activeQuestion.options?.[optIdx]?.trim();
@@ -2884,7 +3035,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                       return (
                         <div
                           key={letter}
-                          className={`p-2 rounded-xl border transition flex items-center gap-2.5 ${
+                          className={`p-2.5 rounded-xl border transition flex items-center gap-2.5 sm:gap-3 ${
                             highlightError
                               ? "bg-rose-50/20 border-rose-300 ring-1 ring-rose-200"
                               : isCorrect
@@ -2897,7 +3048,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                             onClick={() =>
                               handleUpdateCurrentQuestion((q) => ({ ...q, correctIndex: optIdx }))
                             }
-                            className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs transition cursor-pointer shrink-0 ${
+                            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-extrabold text-xs sm:text-sm transition cursor-pointer shrink-0 ${
                               isCorrect
                                 ? "bg-emerald-600 text-white shadow-xs"
                                 : "bg-white border-2 border-slate-300 text-slate-600 hover:border-emerald-500"
@@ -2906,7 +3057,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                             {letter}
                           </button>
 
-                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                             <input
                               ref={optIdx === 0 ? firstOptionInputRef : undefined}
                               type="text"
@@ -2922,7 +3073,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                                 if (optionsError) setOptionsError(null);
                                 if (errorMsg) setErrorMsg(null);
                               }}
-                              className={`w-full px-3 py-1.5 rounded-lg border text-xs font-medium bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                              className={`w-full h-9 sm:h-10 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border text-xs sm:text-sm font-medium bg-white focus:outline-hidden focus:ring-2 transition-all ${
                                 highlightError
                                   ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-rose-200"
                                   : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
@@ -2943,7 +3094,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                                 if (optionsError) setOptionsError(null);
                                 if (errorMsg) setErrorMsg(null);
                               }}
-                              className={`w-full px-3 py-1.5 rounded-lg border text-xs bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                              className={`w-full h-9 sm:h-10 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border text-xs sm:text-sm bg-white focus:outline-hidden focus:ring-2 transition-all ${
                                 highlightMeaningError
                                   ? "border-rose-400 bg-rose-50/30 text-rose-900 focus:border-rose-500 focus:ring-rose-200 ring-1 ring-rose-200"
                                   : "border-slate-200 text-slate-600 focus:border-emerald-500 focus:ring-emerald-100"
@@ -3486,11 +3637,11 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
               )}
 
               <div>
-                <label className="block text-slate-800 font-bold text-xs mb-1.5">
+                <label className="block text-slate-800 font-bold text-xs sm:text-sm mb-1.5">
                   Dán nội dung đề thi chuẩn {cardFormCategory.toUpperCase()} vào đây:
                 </label>
                 <textarea
-                  rows={10}
+                  rows={9}
                   placeholder={
                     cardFormCategory === "part5"
                       ? `101. The committee decided to ______ the proposal after a thorough discussion.\n(A) accept (chấp nhận)\n(B) accepting (việc chấp nhận)\n(C) acceptance (sự chấp nhận)\n(D) accepted (đã chấp nhận)\nĐáp án: A\nDịch: Ủy ban đã quyết định chấp nhận đề xuất sau một cuộc thảo luận kỹ lưỡng.\nGiải thích: Cần động từ nguyên mẫu sau to.\nTừ vựng:\n- committee (/kəˈmɪti/) (n): ủy ban\n- proposal (/prəˈpəʊzl/) (n): đề xuất`
@@ -3500,18 +3651,18 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                   }
                   value={rawPasteText}
                   onChange={(e) => setRawPasteText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-mono leading-relaxed focus:outline-hidden focus:border-amber-500 focus:ring-2 focus:ring-amber-100 bg-white"
+                  className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl border border-slate-200 text-xs sm:text-sm font-mono leading-relaxed focus:outline-hidden focus:border-amber-500 focus:ring-2 focus:ring-amber-100 bg-white"
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span className="text-[11px] text-slate-400">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-[11px] sm:text-xs text-slate-400">
                   Hỗ trợ định dạng chuẩn ETS TOEIC
                 </span>
                 <button
                   type="button"
                   onClick={() => handleParseRawText()}
-                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
+                  className="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer transition flex items-center gap-2 self-end sm:self-auto"
                 >
                   <Zap className="w-4 h-4" />
                   <span>⚡ Phân tích &amp; Điền tự động vào form</span>
@@ -3522,8 +3673,8 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         </div>
 
         {/* FOOTER (Matching VocabularyModals layout: Helper text on left, Hủy & Submit on right) */}
-        <div className="flex shrink-0 flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t border-slate-100 px-4 sm:px-6 py-3.5 bg-slate-50/50">
-          <p className="text-[11px] text-slate-400 truncate max-w-full sm:max-w-xl">
+        <div className="flex shrink-0 flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50/70">
+          <p className="text-xs text-slate-400 truncate max-w-full sm:max-w-xl">
             {totalVocabCount > 0
               ? `Đã liên kết ${totalVocabCount} từ vựng và ${questions.length} câu hỏi vào bài đọc.`
               : "Chưa có từ vựng riêng. Khi các dạng liên quan được thêm vào, hệ thống sẽ tự phát hiện và liên kết."}
@@ -3533,16 +3684,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
+              className="h-10 sm:h-11 rounded-xl px-4 sm:px-5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
             >
               Hủy
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
+              className="h-10 sm:h-11 rounded-xl bg-blue-600 px-5 sm:px-6 text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-blue-700 active:scale-95 transition cursor-pointer flex items-center gap-2"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Sparkles className="w-4 h-4" />
               <span>{editingCard ? "Lưu thay đổi" : "Thêm vào danh sách"}</span>
             </button>
           </div>

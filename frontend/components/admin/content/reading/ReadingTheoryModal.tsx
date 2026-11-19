@@ -25,6 +25,7 @@ import {
   buildVocabItemFromCandidate,
   extractReadingVocabCandidates,
 } from "@/lib/readingVocabExtractor";
+import { formatExplanation } from "@/lib/utils/formatExplanation";
 import {
   fetchAdminReadingCardDetails,
   updateAdminReadingCard,
@@ -205,8 +206,8 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
   }, [passageBlocks]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 md:p-6 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1400px] max-h-[94vh] shadow-2xl border border-slate-100 relative flex flex-col animate-in zoom-in-95 duration-150 font-sans overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 lg:p-6 animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[96vh] sm:max-h-[92vh] shadow-2xl border border-slate-100 relative flex flex-col animate-in zoom-in-95 duration-150 font-sans overflow-hidden">
         {/* HEADER */}
         <div className="p-5 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 via-blue-50/20 to-white shrink-0">
           <div className="space-y-1.5">
@@ -611,8 +612,8 @@ export const ReadingTheoryModal: React.FC<ReadingTheoryModalProps> = ({
                     <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
                       💡 Giải thích chi tiết đáp án:
                     </span>
-                    <p className="text-xs text-amber-950 leading-relaxed font-medium">
-                      {activeQuestion.explanation}
+                    <p className="text-xs text-amber-950 leading-relaxed font-medium whitespace-pre-line">
+                      {formatExplanation(activeQuestion.explanation)}
                     </p>
                   </div>
                 )}

@@ -109,6 +109,7 @@ export function ContentImportManagement() {
   const [vocabularySetsError, setVocabularySetsError] = useState('');
   const [vocabularyTarget, setVocabularyTarget] = useState('__file__');
   const [newVocabularySetName, setNewVocabularySetName] = useState('');
+  const [vocabularyReleaseAt, setVocabularyReleaseAt] = useState('');
   const [batches, setBatches] = useState<ImportBatchSummary[]>([]);
   const [details, setDetails] = useState<ImportBatchDetails | null>(null);
   const [previewSearch, setPreviewSearch] = useState('');
@@ -121,6 +122,7 @@ export function ContentImportManagement() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
+  const [confirmScheduledPublish, setConfirmScheduledPublish] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -295,7 +297,9 @@ export function ContentImportManagement() {
       await publishContentImport(details.batch.id);
       const updated = await getContentImportBatch(details.batch.id);
       setDetails(updated);
-      setNotice(`Đã publish thành công ${updated.batch.publishedCount.toLocaleString('vi-VN')} mục hợp lệ vào hệ thống.`);
+      setNotice(updated.batch.releaseAt && new Date(updated.batch.releaseAt).getTime() > Date.now()
+        ? `Đã publish ${updated.batch.publishedCount.toLocaleString('vi-VN')} mục và đặt lịch mở bộ từ vựng lúc ${formatDate(updated.batch.releaseAt)}. Toàn bộ bộ từ, kể cả từ cũ, sẽ hiển thị với học viên vào thời điểm đó.`
+        : `Đã publish thành công ${updated.batch.publishedCount.toLocaleString('vi-VN')} mục hợp lệ vào hệ thống.`);
       if (details.batch.contentType === 'GRAMMAR') {
         if (typeof window !== 'undefined') {
           localStorage.removeItem('toeic_grammar_topics');
@@ -319,6 +323,7 @@ export function ContentImportManagement() {
 
   function handleTypeChange(nextType: ImportedContentType) {
     setType(nextType);
+    setVocabularyReleaseAt('');
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setDetails(null);
@@ -326,6 +331,12 @@ export function ContentImportManagement() {
     setMediaAsset(null);
     setError('');
     setNotice('');
+  }
+
+  function scheduledReleaseAt() {
+    return type === 'VOCABULARY' && vocabularyReleaseAt
+      ? new Date(vocabularyReleaseAt).toISOString()
+      : undefined;
   }
 
   async function processFile() {
@@ -348,10 +359,10 @@ export function ContentImportManagement() {
       return;
     }
     const vocabularyDestination = type !== 'VOCABULARY' || vocabularyTarget === '__file__'
-      ? undefined
+      ? { releaseAt: scheduledReleaseAt() }
       : vocabularyTarget === '__new__'
-        ? { setName: newVocabularySetName.trim() }
-        : { setId: vocabularyTarget };
+        ? { setName: newVocabularySetName.trim(), releaseAt: scheduledReleaseAt() }
+        : { setId: vocabularyTarget, releaseAt: scheduledReleaseAt() };
 
     setProcessing(true);
     setError('');
@@ -395,10 +406,10 @@ export function ContentImportManagement() {
       return;
     }
     const vocabularyDestination = type !== 'VOCABULARY' || vocabularyTarget === '__file__'
-      ? {}
+      ? { releaseAt: scheduledReleaseAt() }
       : vocabularyTarget === '__new__'
-        ? { vocabularySetName: newVocabularySetName.trim() }
-        : { vocabularySetId: vocabularyTarget };
+        ? { vocabularySetName: newVocabularySetName.trim(), releaseAt: scheduledReleaseAt() }
+        : { vocabularySetId: vocabularyTarget, releaseAt: scheduledReleaseAt() };
     setProcessing(true);
     setError('');
     setNotice('');
@@ -614,6 +625,20 @@ export function ContentImportManagement() {
                       />
                     </label>
                   ) : null}
+                  <label className="mt-3 block text-xs font-semibold text-slate-700" htmlFor="vocabulary-import-release-at">
+                    Thời gian mở bộ từ vựng
+                    <input
+                      id="vocabulary-import-release-at"
+                      type="datetime-local"
+                      value={vocabularyReleaseAt}
+                      onChange={(event) => setVocabularyReleaseAt(event.target.value)}
+                      disabled={processing}
+                      className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                    />
+                    <span className="mt-1 block text-[11px] font-normal leading-4 text-slate-500">
+                      Ngày được lưu vào bộ từ vựng khi bấm Publish. Nếu chọn ngày tương lai, nội dung import được lưu ngay nhưng toàn bộ bộ (kể cả từ cũ) sẽ ẩn với học viên đến ngày đó.
+                    </span>
+                  </label>
                 </div>
               ) : null}
 
@@ -731,12 +756,23 @@ export function ContentImportManagement() {
                   <p className="mt-1 text-xs text-slate-500">
                     {formatDate(details.batch.createdAt)} · {statusLabel(details.batch.status)}
                   </p>
+                  {details.batch.releaseAt ? (
+                    <p className="mt-1 text-xs font-medium text-violet-700">
+                      Ngày mở bộ từ vựng: {formatDate(details.batch.releaseAt)}
+                    </p>
+                  ) : null}
                 </div>
                 {canPublish ? (
                   <button
                     type="button"
                     disabled={processing}
-                    onClick={() => setConfirmPublish(true)}
+                    onClick={() => {
+                      setConfirmScheduledPublish(Boolean(
+                        details.batch.releaseAt
+                        && new Date(details.batch.releaseAt).getTime() > Date.now(),
+                      ));
+                      setConfirmPublish(true);
+                    }}
                     className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {processing ? <LoaderCircle size={16} className="animate-spin" /> : <Database size={16} />}
@@ -750,7 +786,9 @@ export function ContentImportManagement() {
                   { label: 'Tổng dòng', value: details.batch.totalRecords, tone: 'text-slate-900' },
                   {
                     label: 'Hợp lệ',
-                    value: details.batch.status === 'PREVIEW' ? details.batch.validCount : details.batch.publishedCount,
+                    value: ['PREVIEW', 'SCHEDULED'].includes(details.batch.status)
+                      ? details.batch.validCount
+                      : details.batch.publishedCount,
                     tone: 'text-emerald-700',
                   },
                   { label: 'Lỗi', value: details.batch.invalidCount, tone: 'text-red-700' },
@@ -911,6 +949,11 @@ export function ContentImportManagement() {
                         <span>{batch.totalRecords} dòng</span>
                       </div>
                       <p className="mt-1 text-[10px] text-slate-400">{formatDate(batch.createdAt)}</p>
+                      {batch.releaseAt ? (
+                        <p className="mt-1 text-[10px] font-medium text-violet-700">
+                          Mở bộ: {formatDate(batch.releaseAt)}
+                        </p>
+                      ) : null}
                     </button>
 
                     {/* Nút Xóa lượt nhập (Chỉ cho phép xóa khi chưa Publish) */}
@@ -983,11 +1026,15 @@ export function ContentImportManagement() {
       {confirmPublish && details ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h4 className="text-lg font-bold text-slate-900">Xác nhận publish nội dung</h4>
+            <h4 className="text-lg font-bold text-slate-900">
+              {confirmScheduledPublish
+                ? 'Publish và lên lịch mở bộ'
+                : 'Xác nhận publish nội dung'}
+            </h4>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              Bạn đang chuẩn bị publish <strong>{details.batch.validCount}</strong> dòng hợp lệ từ file{' '}
-              <strong>{details.batch.fileName}</strong> vào hệ thống học tập. Dữ liệu sau khi publish sẽ có hiệu lực
-              ngay cho người học.
+              {confirmScheduledPublish
+                ? <>Bạn đang publish <strong>{details.batch.validCount}</strong> dòng từ file <strong>{details.batch.fileName}</strong> ngay bây giờ và đặt bộ từ vựng mở cho học viên lúc <strong>{formatDate(details.batch.releaseAt || '')}</strong>. Toàn bộ bộ từ, kể cả các từ đã có, sẽ ẩn đến thời điểm đó.</>
+                : <>Bạn đang chuẩn bị publish <strong>{details.batch.validCount}</strong> dòng hợp lệ từ file <strong>{details.batch.fileName}</strong> vào hệ thống học tập. Dữ liệu sẽ có hiệu lực ngay cho người học.</>}
             </p>
             <div className="mt-6 flex justify-end gap-2.5">
               <button
@@ -1005,7 +1052,9 @@ export function ContentImportManagement() {
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50"
               >
                 {processing ? <LoaderCircle size={15} className="animate-spin" /> : <Database size={15} />}
-                {processing ? 'Đang lưu…' : 'Xác nhận Publish'}
+                {processing ? 'Đang lưu…' : confirmScheduledPublish
+                  ? 'Publish và đặt lịch mở bộ'
+                  : 'Xác nhận Publish'}
               </button>
             </div>
           </div>

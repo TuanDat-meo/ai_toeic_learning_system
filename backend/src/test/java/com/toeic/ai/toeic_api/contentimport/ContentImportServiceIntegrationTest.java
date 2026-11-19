@@ -11,6 +11,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import com.toeic.ai.toeic_api.grammar.GrammarService;
+import com.toeic.ai.toeic_api.vocabulary.VocabularyService;
 
 import com.toeic.ai.toeic_api.reading.ReadingService;
 
@@ -24,6 +25,9 @@ class ContentImportServiceIntegrationTest {
 
     @Autowired
     private GrammarService grammarService;
+
+    @Autowired
+    private VocabularyService vocabularyService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -84,6 +88,106 @@ class ContentImportServiceIntegrationTest {
         assertThat(firstPreview.batch().validCount()).isEqualTo(1);
         assertThat(secondPreview.batch().validCount()).isEqualTo(1);
         assertThat(secondPreview.batch().duplicateCount()).isZero();
+    }
+
+    @Test
+    void allowsReimportingVocabularyAfterItsLastSetEntryIsPermanentlyDeleted() {
+        String word = "deleted-word-" + java.util.UUID.randomUUID();
+        var file = new MockMultipartFile("file", "word.json", "application/json",
+                """
+                [{"word":"%s", "meaning":"nghĩa cần nhập lại"}]
+                """.formatted(word).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        var initialPreview = previewVocabulary(file);
+        assertThat(initialPreview.batch().validCount()).isEqualTo(1);
+        importService.publish(initialPreview.batch().id(), null);
+
+        String wordId = jdbcTemplate.queryForObject(
+                "SELECT id FROM vocabulary_items WHERE lower(word) = lower(?) ORDER BY created_at DESC LIMIT 1",
+                String.class, word);
+        vocabularyService.deleteWord(wordId);
+
+        var afterDeletionPreview = previewVocabulary(file);
+        assertThat(afterDeletionPreview.batch().validCount()).isEqualTo(1);
+        assertThat(afterDeletionPreview.batch().duplicateCount()).isZero();
+
+        var republished = importService.publish(afterDeletionPreview.batch().id(), null);
+        assertThat(republished.publishedCount()).isEqualTo(1);
+        assertThat(republished.status()).isEqualTo("PUBLISHED");
+
+        var activeDuplicatePreview = previewVocabulary(file);
+        assertThat(activeDuplicatePreview.batch().duplicateCount()).isEqualTo(1);
+    }
+
+    @Test
+    void futureVocabularyReleaseDateIsAppliedToTheSetOnPublish() {
+        String word = "scheduled-word-" + java.util.UUID.randomUUID();
+        var file = new MockMultipartFile("file", "scheduled.json", "application/json",
+                """
+                [{"word":"%s", "meaning":"nghĩa sẽ phát hành theo lịch"}]
+                """.formatted(word).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String releaseAt = java.time.OffsetDateTime.now().plusMinutes(5).toString();
+
+        var preview = importService.preview(
+                ContentType.VOCABULARY, file, null, null, "Scheduled Vocabulary", releaseAt);
+        var published = importService.publish(preview.batch().id(), null);
+
+        assertThat(published.status()).isEqualTo("PUBLISHED");
+        assertThat(published.releaseAt()).isNotNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM vocabulary_items WHERE lower(word) = lower(?)", Integer.class, word))
+                .isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT s.release_at FROM vocabulary_test_sets s
+                JOIN vocabulary_items w ON w.set_id = s.id
+                WHERE lower(w.word) = lower(?)
+                """, java.sql.Timestamp.class, word))
+                .isAfter(java.sql.Timestamp.from(java.time.Instant.now()));
+        String setId = jdbcTemplate.queryForObject(
+                "SELECT set_id FROM vocabulary_items WHERE lower(word) = lower(?)", String.class, word);
+        assertThat(vocabularyService.listSets(null, null, true))
+                .filteredOn(set -> set.id().equals(setId))
+                .singleElement()
+                .satisfies(set -> {
+                    var actual = java.time.LocalDateTime.parse(set.releaseAt());
+                    var expected = java.time.OffsetDateTime.parse(releaseAt)
+                            .atZoneSameInstant(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                            .toLocalDateTime();
+                    assertThat(java.time.Duration.between(expected, actual).abs())
+                            .isLessThanOrEqualTo(java.time.Duration.ofNanos(1_000));
+                });
+        assertThatThrownBy(() -> vocabularyService.getSetDetails(setId, null))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void immediateVocabularyPublishStoresTheSetReleaseTime() {
+        String word = "immediate-release-" + java.util.UUID.randomUUID();
+        String setName = "Immediate Release " + java.util.UUID.randomUUID();
+        var file = new MockMultipartFile("file", "immediate.json", "application/json",
+                """
+                [{"word":"%s", "meaning":"nghĩa phát hành ngay"}]
+                """.formatted(word).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        var preview = importService.preview(
+                ContentType.VOCABULARY, file, null, null, setName, null);
+        assertThat(preview.batch().releaseAt()).isNull();
+        var beforePublish = java.time.Instant.now().minusSeconds(1);
+        var published = importService.publish(preview.batch().id(), null);
+        var afterPublish = java.time.Instant.now().plusSeconds(1);
+
+        assertThat(published.status()).isEqualTo("PUBLISHED");
+        String setId = jdbcTemplate.queryForObject(
+                "SELECT set_id FROM vocabulary_items WHERE lower(word) = lower(?)", String.class, word);
+        var releaseAt = jdbcTemplate.queryForObject(
+                "SELECT release_at FROM vocabulary_test_sets WHERE id = ?",
+                java.sql.Timestamp.class, setId).toInstant();
+        assertThat(releaseAt).isBetween(beforePublish, afterPublish);
+        assertThat(vocabularyService.listSets(null, null, true))
+                .filteredOn(set -> set.id().equals(setId))
+                .singleElement()
+                .satisfies(set -> assertThat(set.releaseAt()).isNotBlank());
     }
 
     @Test
