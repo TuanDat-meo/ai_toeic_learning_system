@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getCurrentUser, type AuthUser } from "@/lib/api/auth";
+import { getReports } from "@/lib/api/support";
 import { 
   LayoutDashboard, 
   BookA,
@@ -72,6 +73,7 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const pathname = usePathname();
   const [role, setRole] = useState<AuthUser["role"] | null>(null);
   const [roleLoadFailed, setRoleLoadFailed] = useState(false);
+  const [pendingReportCount, setPendingReportCount] = useState<number>(0);
 
   useEffect(() => {
     let active = true;
@@ -82,10 +84,20 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       .catch(() => {
         if (active) setRoleLoadFailed(true);
       });
+
+    getReports()
+      .then((reports) => {
+        if (active) {
+          const pending = reports.filter((r) => r.status === "PENDING").length;
+          setPendingReportCount(pending);
+        }
+      })
+      .catch(() => {});
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [pathname]);
 
   const visibleGroups = role === "TEACHER"
     ? navGroups
@@ -105,7 +117,7 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
         />
       ) : null}
-      <aside className={`fixed left-0 top-16 z-50 flex h-[calc(100dvh-4rem)] w-72 xl:w-80 md:top-[76px] md:h-[calc(100dvh-76px)] flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-16 z-50 flex h-[calc(100dvh-4rem)] w-72 2xl:w-80 md:top-[76px] md:h-[calc(100dvh-76px)] flex-col border-r border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
       <div className="flex h-12 shrink-0 items-center justify-end border-b border-slate-100 px-4 md:hidden">
         <button type="button" aria-label="Đóng điều hướng" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
           <X aria-hidden="true" className="h-4 w-4" />
@@ -148,7 +160,12 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                         ].join(" ")}
                       />
                       <span>{item.label}</span>
-                      {active && (
+                      {item.href === "/admin/support/reports" && pendingReportCount > 0 && (
+                        <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums shadow-xs">
+                          {pendingReportCount}
+                        </span>
+                      )}
+                      {active && (item.href !== "/admin/support/reports" || pendingReportCount === 0) && (
                         <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600" />
                       )}
                     </Link>

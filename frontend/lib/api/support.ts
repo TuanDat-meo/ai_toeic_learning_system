@@ -37,6 +37,7 @@ export type SupportReportUpdate = {
   status: SupportReportStatus;
   adminReply?: string;
   correction?: Record<string, unknown>;
+  priority?: SupportReportPriority;
 };
 
 export type AnnouncementType = "SYSTEM" | "FEATURE_UPDATE" | "PROMOTION" | "EVENT";
@@ -86,6 +87,52 @@ export async function deleteSupportReport(id: string): Promise<void> {
   await writeAuthRequest<void>("DELETE", `/api/admin/support/reports/${id}`);
 }
 
+export async function batchUpdateSupportReports(ids: string[], status: SupportReportStatus): Promise<void> {
+  await Promise.all(ids.map((id) => updateSupportReport(id, { status })));
+}
+
+export async function batchDeleteSupportReports(ids: string[]): Promise<void> {
+  await Promise.all(ids.map((id) => deleteSupportReport(id)));
+}
+
+export type AppNotification = {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  linkUrl?: string;
+  referenceId?: string;
+  createdAt: string;
+};
+
+export async function getNotifications(limit = 30): Promise<AppNotification[]> {
+  const list = await apiRequest<AppNotification[]>(`/api/notifications?limit=${limit}`);
+  return Array.isArray(list) ? list : [];
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  try {
+    const res = await apiRequest<{ unreadCount: number }>('/api/notifications/unread-count');
+    return res?.unreadCount ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  await writeAuthRequest<void>("PATCH", `/api/notifications/${id}/read`);
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await writeAuthRequest<void>("PATCH", "/api/notifications/read-all");
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  await writeAuthRequest<void>("DELETE", `/api/notifications/${id}`);
+}
+
 export type QuestionCorrection = {
   questionText?: string;
   options?: string[] | Record<string, string>;
@@ -120,4 +167,15 @@ export function getStudentAnnouncements(): Promise<Announcement[]> {
 
 export async function markAnnouncementRead(id: string): Promise<void> {
   await writeAuthRequest<void>("PATCH", `/api/announcements/${id}/read`);
+}
+
+export async function markAllAnnouncementsRead(): Promise<void> {
+  try {
+    await writeAuthRequest<void>("PATCH", "/api/announcements/read-all");
+  } catch {
+    // Graceful fallback for backward compatibility
+    const all = await getStudentAnnouncements();
+    const unread = all.filter((a) => !a.isRead);
+    await Promise.all(unread.map((a) => markAnnouncementRead(a.id)));
+  }
 }

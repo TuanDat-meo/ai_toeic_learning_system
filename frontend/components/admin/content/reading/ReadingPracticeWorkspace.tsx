@@ -634,6 +634,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   // Standard TOEIC Part Detection & Directions
   const [showDirectionsModal, setShowDirectionsModal] = useState(false);
+  const [showCompletionSummaryModal, setShowCompletionSummaryModal] = useState(false);
 
   const workspacePart: "PART 5" | "PART 6" | "PART 7" = useMemo(() => {
     if (card.category === "part5") return "PART 5";
@@ -2002,8 +2003,19 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                         Câu {q.questionNum || gIdx + 1}
                       </span>
                       {readingConfig?.showTargetPaceBadge && !isCardChecked && (
-                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                          Mục tiêu: ~{currentPaceMetrics.targetSecPerQ}s
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-lg border transition-colors shadow-2xs ${
+                            timeSpentOnCurrentGroup <= currentPaceMetrics.targetSecPerQ
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                              : timeSpentOnCurrentGroup < currentPaceMetrics.timeoutThreshold
+                              ? "bg-amber-50 text-amber-800 border-amber-300"
+                              : "bg-rose-50 text-rose-800 border-rose-400 animate-pulse"
+                          }`}
+                          title={`Thời gian làm câu này: ${timeSpentOnCurrentGroup}s (Mục tiêu: ~${currentPaceMetrics.targetSecPerQ}s, Cảnh báo quá giờ: ${currentPaceMetrics.timeoutThreshold}s)`}
+                        >
+                          <Clock className="w-3 h-3 shrink-0" />
+                          <span>{timeSpentOnCurrentGroup}s</span>
+                          <span className="text-slate-400 font-normal">/ ~{currentPaceMetrics.targetSecPerQ}s</span>
                         </span>
                       )}
                       {isCardChecked && (
@@ -2567,10 +2579,11 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                   ) : (
                     <button
                       type="button"
-                      onClick={onClose}
+                      onClick={() => setShowCompletionSummaryModal(true)}
                       className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <span>Hoàn thành toàn bộ bài luyện tập! 🎉</span>
+                      <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                      <span>Hoàn thành &amp; Xem báo cáo phân tích tốc độ làm bài! 🎉</span>
                     </button>
                   )}
                 </div>
@@ -2617,6 +2630,18 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
+
+          {questionGridStats.unanswered === 0 && (
+            <button
+              type="button"
+              onClick={() => setShowCompletionSummaryModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs cursor-pointer animate-pulse"
+              title="Xem phân tích tốc độ và nhịp độ làm bài hoàn chỉnh"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Báo cáo tốc độ</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -3949,6 +3974,174 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           </div>
         </div>
       )}
+
+      {/* COMPLETION & PACING PERFORMANCE SUMMARY MODAL */}
+      {showCompletionSummaryModal && (() => {
+        const totalTargetSeconds = totalQuestionsCount * currentPaceMetrics.targetSecPerQ;
+        const actualSeconds = timerSeconds;
+        const diffSeconds = totalTargetSeconds - actualSeconds;
+        const isAhead = diffSeconds > 30;
+        const isBehind = diffSeconds < -30;
+        const avgSecPerQ = Math.round(actualSeconds / Math.max(1, totalQuestionsCount));
+        const accuracyPercent = Math.round((currentSessionCorrect / Math.max(1, totalQuestionsCount)) * 100);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 max-h-[92vh] overflow-y-auto custom-scrollbar">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+                    <Sparkles className="w-5 h-5 fill-amber-400" />
+                  </span>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                      Báo Cáo Tốc Độ &amp; Nhịp Độ Làm Bài Reading
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {card.title} • {totalQuestionsCount} câu hỏi • {workspacePart}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCompletionSummaryModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 4 KPI Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* 1. Độ chính xác */}
+                <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-1">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wide block">
+                    Độ chính xác
+                  </span>
+                  <span className="text-xl font-black text-emerald-950 font-mono block">
+                    {currentSessionCorrect} / {totalQuestionsCount}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded inline-block">
+                    {accuracyPercent}% chuẩn xác
+                  </span>
+                </div>
+
+                {/* 2. Thời gian thực tế */}
+                <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-1">
+                  <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wide block">
+                    Thời gian thực tế
+                  </span>
+                  <span className="text-xl font-black text-blue-950 font-mono block">
+                    {formatTimer(actualSeconds)}
+                  </span>
+                  <span className="text-[10px] text-blue-700 font-medium block">
+                    tổng thời gian làm bài
+                  </span>
+                </div>
+
+                {/* 3. Thời gian mục tiêu */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+                    Thời gian mục tiêu
+                  </span>
+                  <span className="text-xl font-black text-slate-900 font-mono block">
+                    {formatTimer(totalTargetSeconds)}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium block">
+                    {totalQuestionsCount} câu × {currentPaceMetrics.targetSecPerQ}s
+                  </span>
+                </div>
+
+                {/* 4. Tốc độ trung bình */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-1">
+                  <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wide block">
+                    Tốc độ câu
+                  </span>
+                  <span className="text-xl font-black text-purple-950 font-mono block">
+                    ~{avgSecPerQ}s / câu
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-medium block">
+                    mục tiêu: ~{currentPaceMetrics.targetSecPerQ}s
+                  </span>
+                </div>
+              </div>
+
+              {/* Assessment Message Box */}
+              <div
+                className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-2 ${
+                  isAhead
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                    : isBehind
+                    ? "bg-amber-50 border-amber-300 text-amber-950"
+                    : "bg-blue-50 border-blue-300 text-blue-950"
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  {isAhead ? (
+                    <>
+                      <Zap className="w-4 h-4 text-emerald-600 fill-emerald-500" />
+                      <span>
+                        ⚡ Hoàn thành sớm hơn mục tiêu {formatTimer(diffSeconds)} (-{Math.round((diffSeconds / Math.max(1, totalTargetSeconds)) * 100)}%)!
+                      </span>
+                    </>
+                  ) : isBehind ? (
+                    <>
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        ⚠️ Bị trễ hơn mục tiêu {formatTimer(Math.abs(diffSeconds))} (+{Math.round((Math.abs(diffSeconds) / Math.max(1, totalTargetSeconds)) * 100)}%)
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                      <span>✓ Rất chuẩn xác! Hoàn thành sát với thời gian dự kiến</span>
+                    </>
+                  )}
+                </div>
+
+                <p className="font-normal">
+                  {isAhead
+                    ? `Tốc độ phản xạ của bạn đạt ~${avgSecPerQ}s/câu (nhanh hơn chuẩn mục tiêu ${currentPaceMetrics.targetSecPerQ}s/câu). Trong bài thi thật 75 phút, việc tiết kiệm được ${formatTimer(diffSeconds)} ở phần này sẽ giúp bạn có quỹ thời gian quý giá để dồn vào giải quyết các bài đọc khó ở Part 7.`
+                    : isBehind
+                    ? `Bạn đang mất trung bình ~${avgSecPerQ}s cho mỗi câu (chuẩn mục tiêu là ${currentPaceMetrics.targetSecPerQ}s/câu). Nếu duy trì tốc độ này khi làm trọn đề thi 75 phút, bạn có thể bị thiếu từ 5 đến 12 phút ở Part 7. Hãy tập nhận diện nhanh ngữ pháp và chọn đáp án dứt khoát hơn!`
+                    : `Bạn duy trì nhịp độ làm bài rất đều đặn và ổn định (~${avgSecPerQ}s/câu so với chuẩn ${currentPaceMetrics.targetSecPerQ}s/câu). Hãy tiếp tục duy trì cảm giác thời gian này khi bước vào kỳ thi thật!`}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleRestartAll}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Làm lại bài từ đầu</span>
+                </button>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompletionSummaryModal(false)}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition cursor-pointer"
+                  >
+                    Xem lại chi tiết bài làm
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    Hoàn tất &amp; Thoát
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

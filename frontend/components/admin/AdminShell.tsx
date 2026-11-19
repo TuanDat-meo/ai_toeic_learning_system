@@ -14,7 +14,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
       <div className="flex min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-76px)]">
         <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <main className="min-w-0 flex-1 p-3.5 sm:p-5 lg:p-6 xl:p-8 md:ml-72 xl:ml-80">
+        <main className="min-w-0 flex-1 p-3.5 sm:p-5 lg:p-6 2xl:p-8 md:ml-72 2xl:ml-80">
           <div className="w-full max-w-[1700px] mx-auto">
             {children}
           </div>
