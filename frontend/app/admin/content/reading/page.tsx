@@ -52,6 +52,7 @@ export default function ReadingLearningPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const cardsRef = React.useRef<ExerciseCardData[]>(cards);
+  const loadCardsRef = React.useRef<(isRetry?: boolean) => Promise<void>>(null);
   useEffect(() => {
     cardsRef.current = cards;
   }, [cards]);
@@ -85,13 +86,16 @@ export default function ReadingLearningPage() {
       // Auto-retry once after 3 seconds if initial load failed (e.g. backend container is still starting up)
       if (!isRetry && !errMsg.includes("quyền") && !errMsg.includes("hết hạn")) {
         window.setTimeout(() => {
-          void loadCards(true);
+          void loadCardsRef.current?.(true);
         }, 3000);
       }
     } finally {
       setLoading(false);
     }
   }, []);
+  useEffect(() => {
+    loadCardsRef.current = loadCards;
+  }, [loadCards]);
 
   useEffect(() => {
     void loadCards();

@@ -45,6 +45,9 @@ export function QuestionErrorReportButton({ source, questionRef, relatedContent,
       });
       setDetails("");
       setOpen(false);
+      window.dispatchEvent(new Event("support-reports-updated"));
+      window.dispatchEvent(new Event("notification-updated"));
+      window.dispatchEvent(new Event("support-report-created"));
       onSubmitted?.(report.ticketCode);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không gửi được báo cáo. Vui lòng thử lại.");

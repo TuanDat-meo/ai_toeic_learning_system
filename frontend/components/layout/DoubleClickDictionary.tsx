@@ -250,54 +250,54 @@ export function DoubleClickDictionary() {
       ref={popupRef}
       data-toeic-dictionary-popup="true"
       style={{ top: position.top, left: position.left }}
-      className="fixed z-[60] w-[320px] max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15"
+      className="fixed z-[60] w-[320px] max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-900/15 dark:shadow-slate-950/60"
     >
-      <div className="flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+      <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <BookMarked className="h-4 w-4 shrink-0 text-teal-600" />
-            <span className="truncate text-base font-bold text-slate-900">{result.word}</span>
+            <BookMarked className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+            <span className="truncate text-base font-bold text-slate-900 dark:text-white">{result.word}</span>
             <button
               type="button"
               onClick={() => playPronunciation(result.word, result.audioUrl)}
-              className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-200/70 hover:text-[#1b41ae] cursor-pointer"
+              className="rounded-lg p-1 text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-700 hover:text-[#1b41ae] dark:hover:text-blue-400 transition cursor-pointer"
               title="Nghe phát âm"
             >
               <Volume2 className="h-4 w-4" />
             </button>
           </div>
           {result.phonetic && (
-            <p className="mt-0.5 text-xs font-medium text-slate-500">{result.phonetic}</p>
+            <p className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">{result.phonetic}</p>
           )}
         </div>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 cursor-pointer"
+          className="rounded-lg p-1 text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
           aria-label="Đóng cửa sổ tra từ"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="max-h-[260px] space-y-3 overflow-y-auto px-4 py-3 text-xs">
+      <div className="max-h-[260px] space-y-3 overflow-y-auto px-4 py-3 text-xs bg-white dark:bg-slate-900">
         {loading ? (
-          <div className="flex items-center gap-2 py-4 text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin text-[#1b41ae]" />
+          <div className="flex items-center gap-2 py-4 text-slate-500 dark:text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin text-[#1b41ae] dark:text-blue-400" />
             <span>Đang tra nghĩa từ &ldquo;{result.word}&rdquo;...</span>
           </div>
         ) : result.notFound ? (
-          <p className="py-2 text-slate-500">
+          <p className="py-2 text-slate-500 dark:text-slate-400">
             Không tìm thấy định nghĩa cho từ <strong>{result.word}</strong>. Bạn có thể mở từ điển Cambridge bên dưới.
           </p>
         ) : (
           <>
             {result.viTranslation && (
-              <div className="rounded-xl border border-teal-200/80 bg-teal-50/60 px-3 py-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-teal-700">
+              <div className="rounded-xl border border-teal-200/80 dark:border-teal-700/60 bg-teal-50/60 dark:bg-teal-950/60 px-3 py-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">
                   Nghĩa tiếng Việt
                 </span>
-                <p className="mt-0.5 text-sm font-semibold text-slate-900">{result.viTranslation}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{result.viTranslation}</p>
               </div>
             )}
 
@@ -306,13 +306,13 @@ export function DoubleClickDictionary() {
                 {result.meanings.map((meaning, index) => (
                   <div key={`${meaning.partOfSpeech}-${index}`} className="space-y-1">
                     {meaning.partOfSpeech && (
-                      <span className="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold italic text-slate-600">
+                      <span className="inline-block rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold italic text-slate-600 dark:text-slate-300">
                         {meaning.partOfSpeech}
                       </span>
                     )}
-                    <p className="leading-relaxed text-slate-700">{meaning.definition}</p>
+                    <p className="leading-relaxed text-slate-700 dark:text-slate-200">{meaning.definition}</p>
                     {meaning.example && (
-                      <p className="border-l-2 border-slate-200 pl-2 text-[11px] italic text-slate-500">
+                      <p className="border-l-2 border-slate-200 dark:border-slate-700 pl-2 text-[11px] italic text-slate-500 dark:text-slate-400">
                         &ldquo;{meaning.example}&rdquo;
                       </p>
                     )}

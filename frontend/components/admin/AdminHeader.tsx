@@ -97,6 +97,7 @@ function activityActionLabel(action: string) {
 export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [systemName, setSystemName] = useState("TOEIC MASTER");
   const [profile, setProfile] = useState(emptyProfile);
   const [draft, setDraft] = useState(emptyProfile);
   const [activities, setActivities] = useState<AccountActivity[]>([]);
@@ -127,6 +128,25 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     : [];
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("toeic_system_branding");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.systemName) setSystemName(parsed.systemName);
+      }
+    } catch {}
+
+    const handleBrandingChange = (event: Event) => {
+      const custom = event as CustomEvent<{ systemName?: string }>;
+      if (custom.detail?.systemName) {
+        setSystemName(custom.detail.systemName);
+      }
+    };
+    window.addEventListener("toeic:system-settings-changed", handleBrandingChange);
+    return () => window.removeEventListener("toeic:system-settings-changed", handleBrandingChange);
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     getCurrentUser()
@@ -142,8 +162,20 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
         if (active) router.replace("/login");
       });
 
+    const handleProfileUpdate = (event: Event) => {
+      const custom = event as CustomEvent<{ name?: string; email?: string }>;
+      if (custom.detail) {
+        setProfile((prev) => ({
+          name: custom.detail.name ?? prev.name,
+          email: custom.detail.email ?? prev.email,
+        }));
+      }
+    };
+    window.addEventListener("toeic:user-profile-updated", handleProfileUpdate);
+
     return () => {
       active = false;
+      window.removeEventListener("toeic:user-profile-updated", handleProfileUpdate);
     };
   }, [router]);
 
@@ -189,15 +221,18 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   }, [notifMenuOpen]);
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !dialog) return;
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setDialog(null);
+      }
     }
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [menuOpen]);
+  }, [menuOpen, dialog]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -244,6 +279,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
       setProfile(updated);
       setDraft(updated);
       setDialog(null);
+      window.dispatchEvent(new CustomEvent("toeic:user-profile-updated", { detail: updated }));
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Không thể cập nhật hồ sơ. Vui lòng thử lại.");
     } finally {
@@ -299,9 +335,28 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     setLogoutAllSaving(true);
     try {
       await logoutAllSessions();
+      ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch {}
+      });
       router.replace("/login");
       router.refresh();
     } catch (error) {
+      // Nếu phiên đã hết hạn trên server hoặc trả về lỗi, tiến hành dọn sạch phiên client và điều hướng
+      const isExpired = error instanceof Error && (error.message.includes("hết hạn") || error.message.includes("401"));
+      if (isExpired) {
+        ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
+          try {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          } catch {}
+        });
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
       setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất các thiết bị.");
     } finally {
       setLogoutAllSaving(false);
@@ -312,14 +367,17 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     setLogoutError("");
     try {
       await logoutSession();
+    } catch (error) {
+      console.warn("Lỗi khi gọi API đăng xuất, tiếp tục đăng xuất client:", error);
+    } finally {
       ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch {}
       });
       router.replace("/login");
       router.refresh();
-    } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
     }
   }
 
@@ -345,7 +403,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20">AI</span>
           <span className="min-w-0">
             <span className="flex items-center gap-2">
-              <span className="truncate text-sm font-bold tracking-tight text-slate-900">TOEIC MASTER</span>
+              <span className="truncate text-sm font-bold tracking-tight text-slate-900">{systemName}</span>
               <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">PRO</span>
             </span>
             <span className="block text-xs font-medium text-slate-400">Admin Workspace</span>

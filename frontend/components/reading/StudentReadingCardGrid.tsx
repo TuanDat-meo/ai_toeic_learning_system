@@ -46,24 +46,24 @@ function StudentReadingCardItem({
   }, [card]);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 p-5 shadow-xs dark:shadow-md hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500/60 transition-all flex flex-col justify-between">
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 uppercase">
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800 uppercase">
             {card.category}
           </span>
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
             Sẵn sàng luyện
           </span>
         </div>
 
         <div>
-          <h4 className="text-base font-bold text-slate-900 leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors">
+          <h4 className="text-base font-bold text-slate-900 dark:text-white leading-snug line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
             {card.title}
           </h4>
           {card.tag && (
-            <p className="text-xs text-slate-400 mt-0.5">{card.tag}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">{card.tag}</p>
           )}
         </div>
 
@@ -160,7 +160,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
   return (
     <div className="space-y-6">
       {/* Thanh tìm kiếm & lọc thể loại */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs dark:shadow-md overflow-hidden">
         {/* Tìm kiếm */}
         <div className="relative w-full lg:w-72 shrink-0">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -169,56 +169,56 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
             placeholder="Tìm theo chủ đề, dạng bài, thẻ tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-slate-50/50"
+            className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-slate-50/50 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
           />
         </div>
 
         {/* Lọc thể loại */}
         <div className="flex-1 min-w-0 max-w-full flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar">
-        {/* Lọc Năm / Bộ đề ETS */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto no-scrollbar">
-          {[
-            { id: "all", label: "Tất cả năm" },
-            { id: "2024", label: "ETS 2024" },
-            { id: "2023", label: "ETS 2023" },
-            { id: "2022", label: "ETS 2022" },
-          ].map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSelectedSeries(s.id as "all" | "2024" | "2023" | "2022")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
-                selectedSeries === s.id
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
+          {/* Lọc Năm / Bộ đề ETS */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl overflow-x-auto no-scrollbar border border-transparent dark:border-slate-700/60">
+            {[
+              { id: "all", label: "Tất cả năm" },
+              { id: "2024", label: "ETS 2024" },
+              { id: "2023", label: "ETS 2023" },
+              { id: "2022", label: "ETS 2022" },
+            ].map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedSeries(s.id as "all" | "2024" | "2023" | "2022")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                  selectedSeries === s.id
+                    ? "bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
 
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl shrink-0">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl shrink-0 border border-transparent dark:border-slate-700/60">
             {[
-            { id: "all", label: "Tất cả dạng bài" },
-            { id: "part5", label: "Part 5 (Điền từ)" },
-            { id: "part6", label: "Part 6 (Điền đoạn)" },
-            { id: "part7", label: "Part 7 (Đọc hiểu)" },
-            { id: "grammar", label: "Chuyên đề ngữ pháp" },
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setSelectedCategory(cat.id as "all" | "grammar" | "part5" | "part6" | "part7")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                selectedCategory === cat.id
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+              { id: "all", label: "Tất cả dạng bài" },
+              { id: "part5", label: "Part 5 (Điền từ)" },
+              { id: "part6", label: "Part 6 (Điền đoạn)" },
+              { id: "part7", label: "Part 7 (Đọc hiểu)" },
+              { id: "grammar", label: "Chuyên đề ngữ pháp" },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.id as "all" | "grammar" | "part5" | "part6" | "part7")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                  selectedCategory === cat.id
+                    ? "bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -236,13 +236,13 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
         {levelCards.length > 0 && (
           <section className="space-y-3.5">
             <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <span>🎯 Luyện Đọc Theo 4 Cấp Độ Điểm Target</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold font-mono">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-extrabold font-mono border border-emerald-200 dark:border-emerald-800">
                   {levelCards.length} Bài
                 </span>
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Phân cấp độ bài đọc từ cơ bản (Lv.1 dưới 200 điểm) đến nâng cao (Lv.4 trên 750 điểm).
               </p>
             </div>
@@ -254,13 +254,13 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
         {topicAndGrammarCards.length > 0 && (
           <section className="space-y-3.5">
             <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <span>⚡ Chuyên Đề &amp; Dạng Bài Tập Trọng Tâm</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-extrabold font-mono">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 font-extrabold font-mono border border-purple-200 dark:border-purple-800">
                   {topicAndGrammarCards.length} Chuyên đề
                 </span>
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Các dạng bài tập ngữ pháp, mệnh đề danh từ, thì động từ hay gặp nhất trong TOEIC Reading.
               </p>
             </div>
@@ -269,10 +269,10 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
         )}
 
         {testCards.length === 0 && levelCards.length === 0 && topicAndGrammarCards.length === 0 && (
-          <div className="p-12 text-center text-slate-500 bg-white rounded-3xl border border-slate-200/80 shadow-xs">
-            <BookOpen className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-            <h4 className="text-sm font-bold text-slate-800">Chưa có bài đọc nào trong cơ sở dữ liệu</h4>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+          <div className="p-12 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs dark:shadow-md">
+            <BookOpen className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+            <h4 className="text-sm font-bold text-slate-800 dark:text-white">Chưa có bài đọc nào trong cơ sở dữ liệu</h4>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-md mx-auto">
               Dữ liệu bài tập được tải trực tiếp từ PostgreSQL. Vui lòng nạp (import) bộ đề hoặc chạy lệnh seed dữ liệu.
             </p>
           </div>

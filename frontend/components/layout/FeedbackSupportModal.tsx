@@ -72,6 +72,7 @@ export function FeedbackSupportModal() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<FeedbackMode>('feedback');
   const [activeTab, setActiveTab] = useState<ModalTab>('compose');
+  const [supportEmail, setSupportEmail] = useState('support@example.com');
 
   const [category, setCategory] = useState<SupportReportCategory>('UI_FEEDBACK');
   const [title, setTitle] = useState('');
@@ -83,6 +84,27 @@ export function FeedbackSupportModal() {
   const [history, setHistory] = useState<SupportReport[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedBranding = localStorage.getItem('toeic_system_branding');
+      if (savedBranding) {
+        const parsed = JSON.parse(savedBranding);
+        if (parsed?.supportEmail) setSupportEmail(parsed.supportEmail);
+      }
+    } catch {
+      // Ignore storage read error
+    }
+
+    const handleBrandingChange = (event: Event) => {
+      const custom = event as CustomEvent<{ supportEmail?: string }>;
+      if (custom.detail?.supportEmail) {
+        setSupportEmail(custom.detail.supportEmail);
+      }
+    };
+    window.addEventListener('toeic:system-settings-changed', handleBrandingChange);
+    return () => window.removeEventListener('toeic:system-settings-changed', handleBrandingChange);
+  }, []);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -112,7 +134,12 @@ export function FeedbackSupportModal() {
     };
 
     window.addEventListener(OPEN_FEEDBACK_MODAL_EVENT, handleOpen);
-    return () => window.removeEventListener(OPEN_FEEDBACK_MODAL_EVENT, handleOpen);
+    const handleReportsUpdated = () => void loadHistory();
+    window.addEventListener('support-reports-updated', handleReportsUpdated);
+    return () => {
+      window.removeEventListener(OPEN_FEEDBACK_MODAL_EVENT, handleOpen);
+      window.removeEventListener('support-reports-updated', handleReportsUpdated);
+    };
   }, [loadHistory]);
 
   useEffect(() => {
@@ -158,6 +185,9 @@ export function FeedbackSupportModal() {
       setTitle('');
       setDescription('');
       setHistory((prev) => [created, ...prev]);
+      window.dispatchEvent(new Event('support-reports-updated'));
+      window.dispatchEvent(new Event('notification-updated'));
+      window.dispatchEvent(new Event('support-report-created'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể gửi phản hồi lúc này. Vui lòng thử lại.');
     } finally {
@@ -170,6 +200,8 @@ export function FeedbackSupportModal() {
     try {
       await deleteSupportReport(id);
       setHistory((prev) => prev.filter((item) => item.id !== id));
+      window.dispatchEvent(new Event('support-reports-updated'));
+      window.dispatchEvent(new Event('notification-updated'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể xóa phiếu phản hồi này.');
     } finally {
@@ -186,14 +218,14 @@ export function FeedbackSupportModal() {
       <div
         role="dialog"
         aria-modal="true"
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4">
           <div className="flex items-center gap-3">
             <span
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                isFeature ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-[#1b41ae]'
+                isFeature ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400' : 'bg-blue-50 dark:bg-blue-950/80 text-[#1b41ae] dark:text-blue-400'
               }`}
             >
               {isFeature ? (
@@ -203,18 +235,21 @@ export function FeedbackSupportModal() {
               )}
             </span>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                {isFeature ? 'Đề xuất tính năng mới' : 'Gửi phản hồi (Feedback)'}
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                {isFeature ? 'Đề xuất tính năng mới' : 'Gửi phản hồi & Báo lỗi'}
               </h2>
-              <p className="text-[11px] text-slate-500">
-                Gửi trực tiếp đến quản trị viên hệ thống &amp; theo dõi trạng thái xử lý
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Gửi trực tiếp đến Admin hoặc email:{' '}
+                <a href={`mailto:${supportEmail}`} className="font-semibold text-[#1b41ae] dark:text-blue-400 hover:underline">
+                  {supportEmail}
+                </a>
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
             aria-label="Đóng"
           >
             <X className="h-5 w-5" />
@@ -222,14 +257,14 @@ export function FeedbackSupportModal() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-100 px-6 pt-2">
+        <div className="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-2">
           <button
             type="button"
             onClick={() => setActiveTab('compose')}
             className={`border-b-2 px-3 pb-2.5 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'compose'
-                ? 'border-[#1b41ae] text-[#1b41ae]'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-[#1b41ae] dark:border-blue-400 text-[#1b41ae] dark:text-blue-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             {isFeature ? 'Viết đề xuất' : 'Gửi phản hồi mới'}
@@ -242,13 +277,13 @@ export function FeedbackSupportModal() {
             }}
             className={`inline-flex items-center gap-1.5 border-b-2 px-3 pb-2.5 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'history'
-                ? 'border-[#1b41ae] text-[#1b41ae]'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-[#1b41ae] dark:border-blue-400 text-[#1b41ae] dark:text-blue-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             <span>Lịch sử đã gửi</span>
             {history.length > 0 && (
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 tabular-nums">
+              <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-300 tabular-nums">
                 {history.length}
               </span>
             )}

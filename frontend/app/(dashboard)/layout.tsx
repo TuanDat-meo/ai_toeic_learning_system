@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { Header } from "@/components/layout/Header";
 import { StudentChatBubble } from "@/components/layout/StudentChatBubble";
 import { StudentStudyTracker } from "@/components/layout/StudentStudyTracker";
 import { DoubleClickDictionary } from "@/components/layout/DoubleClickDictionary";
 import { FeedbackSupportModal } from "@/components/layout/FeedbackSupportModal";
+
+export const metadata: Metadata = {
+  title: "TOEIC AI - Học & Luyện Thi TOEIC Cá Nhân Hóa",
+  description: "Nền tảng tự học và luyện thi TOEIC chuẩn format mới nhất cùng trợ lý AI",
+};
 
 export default function DashboardLayout({
   children,

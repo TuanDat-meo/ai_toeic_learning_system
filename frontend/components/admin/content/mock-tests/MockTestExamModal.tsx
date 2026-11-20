@@ -99,6 +99,21 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
   const [currentExamParts, setCurrentExamParts] = React.useState<string[]>(activeExamParts);
   const [selectedParts, setSelectedParts] = React.useState<string[]>([]);
   const [selectedModeTab, setSelectedModeTab] = React.useState<"exam" | "practice">("exam");
+  const [preventCopyingExam, setPreventCopyingExam] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("toeic_system_extended_settings") : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.preventCopyingExam === "boolean") {
+          setPreventCopyingExam(parsed.preventCopyingExam);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Review mode states
   const [reviewFilter, setReviewFilter] = React.useState<"ALL" | "CORRECT" | "WRONG" | "UNANSWERED">("ALL");
@@ -556,7 +571,23 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
 
             return (
               <div className="flex-1 flex flex-col justify-between overflow-hidden">
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+                <div
+                  className={`flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100 ${
+                    preventCopyingExam ? "select-none" : ""
+                  }`}
+                  onCopy={(e) => {
+                    if (preventCopyingExam) {
+                      e.preventDefault();
+                      triggerToast("⚠️ Hệ thống đã bật khóa chống sao chép đề thi.");
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (preventCopyingExam) {
+                      e.preventDefault();
+                      triggerToast("⚠️ Thao tác chuột phải đã bị khóa trong phòng thi.");
+                    }
+                  }}
+                >
                   {/* LEFT PANE: Instruction & Content */}
                   <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
                     <div className="space-y-4">

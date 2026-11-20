@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -223,6 +223,8 @@ export function AdminSupportReportsView() {
     setTimeout(() => setFeedbackMsg(""), 4000);
   }, []);
 
+  const loadDataRef = useRef<(isRetry?: boolean) => Promise<void>>(null);
+
   const loadData = useCallback(async (isRetry = false) => {
     setLoading(true);
     try {
@@ -232,19 +234,30 @@ export function AdminSupportReportsView() {
       showFeedback("Không thể tải danh sách phản hồi. Đang thử kết nối lại...", true);
       if (!isRetry) {
         window.setTimeout(() => {
-          void loadData(true);
+          void loadDataRef.current?.(true);
         }, 3000);
       }
     } finally {
       setLoading(false);
     }
   }, [showFeedback]);
+  useEffect(() => {
+    loadDataRef.current = loadData;
+  }, [loadData]);
 
   useEffect(() => {
     void loadData();
     void markAllNotificationsRead().then(() => {
       window.dispatchEvent(new Event("notification-updated"));
     }).catch(() => {});
+
+    const handleUpdated = () => void loadData();
+    window.addEventListener("support-reports-updated", handleUpdated);
+    window.addEventListener("support-report-created", handleUpdated);
+    return () => {
+      window.removeEventListener("support-reports-updated", handleUpdated);
+      window.removeEventListener("support-report-created", handleUpdated);
+    };
   }, [loadData]);
 
   // Date threshold helper
@@ -539,9 +552,9 @@ export function AdminSupportReportsView() {
     >
       <div className="space-y-4">
         {/* Header & Main Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
               Danh sách Ticket Hỗ trợ
               {filtered.length > 0 && (
                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
@@ -558,40 +571,41 @@ export function AdminSupportReportsView() {
               type="button"
               onClick={handleExportExcel}
               disabled={filtered.length === 0}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/90 disabled:opacity-50 shadow-xs cursor-pointer transition active:scale-95"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 sm:px-3.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/90 disabled:opacity-50 shadow-xs cursor-pointer transition active:scale-95"
               title="Xuất danh sách ticket ra file Excel có hàng cột rõ ràng"
             >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
               <span>Xuất file Excel</span>
             </button>
             <button
               type="button"
               onClick={() => void loadData()}
               disabled={loading}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs cursor-pointer"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs cursor-pointer transition active:scale-95"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-blue-600" : ""}`} /> Làm mới
+              <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? "animate-spin text-blue-600" : ""}`} />
+              <span>Làm mới</span>
             </button>
           </div>
         </div>
 
         {/* Filters Bar */}
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
-          <div className="relative sm:col-span-2 md:col-span-1 lg:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-12 gap-2 sm:gap-2.5">
+          <div className="relative sm:col-span-2 md:col-span-3 xl:col-span-4">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm mã ticket, tên, email, câu hỏi..."
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
             />
           </div>
 
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as typeof categoryFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 xl:col-span-3 transition cursor-pointer"
           >
             <option value="ALL">Tất cả phân loại</option>
             <option value="QUESTION_ERROR">Lỗi câu hỏi/đáp án</option>
@@ -604,7 +618,7 @@ export function AdminSupportReportsView() {
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value as typeof sourceFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 xl:col-span-3 transition cursor-pointer"
           >
             <option value="ALL">Tất cả nguồn bài học</option>
             <option value="READING">Reading (Part 5-7)</option>
@@ -617,7 +631,7 @@ export function AdminSupportReportsView() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:col-span-2 md:col-span-1 xl:col-span-2 transition cursor-pointer"
           >
             <option value="ALL">Tất cả trạng thái</option>
             <option value="PENDING">Chờ xử lý</option>
@@ -711,11 +725,11 @@ export function AdminSupportReportsView() {
 
       {/* Main Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left">
-            <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200/80">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <table className="w-full min-w-[760px] lg:min-w-full text-left border-collapse">
+            <thead className="bg-slate-50/90 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200/80">
               <tr>
-                <th className="w-12 px-4 py-3.5 text-center">
+                <th className="w-10 sm:w-12 px-2.5 sm:px-3 py-3 sm:py-3.5 text-center shrink-0">
                   <input
                     type="checkbox"
                     checked={filtered.length > 0 && selectedIds.size === filtered.length}
@@ -724,12 +738,12 @@ export function AdminSupportReportsView() {
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
                 </th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Mã Ticket & Người gửi</th>
-                <th className="px-4 py-3.5 text-center whitespace-nowrap">Phân loại & Nguồn</th>
-                <th className="px-4 py-3.5 text-center">Tiêu đề & Nội dung</th>
-                <th className="px-4 py-3.5 text-center whitespace-nowrap">Trạng thái</th>
-                <th className="px-4 py-3.5 text-center whitespace-nowrap">Ngày tạo</th>
-                <th className="px-4 py-3.5 text-center whitespace-nowrap">
+                <th className="w-[18%] min-w-[130px] px-3 sm:px-4 py-3 sm:py-3.5 whitespace-nowrap">Mã Ticket & Người gửi</th>
+                <th className="w-[16%] min-w-[125px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">Phân loại & Nguồn</th>
+                <th className="w-[30%] min-w-[180px] px-3 sm:px-4 py-3 sm:py-3.5 text-center">Tiêu đề & Nội dung</th>
+                <th className="w-[13%] min-w-[110px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">Trạng thái</th>
+                <th className="w-[11%] min-w-[85px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">Ngày tạo</th>
+                <th className="w-[11%] min-w-[80px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">
                   Thao tác
                 </th>
               </tr>
@@ -739,7 +753,6 @@ export function AdminSupportReportsView() {
                 const cat = categoryLabels[r.category] || categoryLabels.OTHER;
                 const src = r.source ? sourceLabels[r.source] : null;
                 const st = statusBadges[r.status] || statusBadges.PENDING;
-                const pr = priorityBadges[r.priority] || priorityBadges.MEDIUM;
                 const isSelected = selectedIds.has(r.id);
 
                 return (
@@ -747,7 +760,7 @@ export function AdminSupportReportsView() {
                     key={r.id}
                     className={`transition-colors ${isSelected ? "bg-blue-50/40" : "hover:bg-slate-50/80"}`}
                   >
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-2.5 sm:px-3 py-3 sm:py-3.5 text-center">
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -757,47 +770,47 @@ export function AdminSupportReportsView() {
                       />
                     </td>
 
-                    <td className="px-4 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-4 py-3 sm:py-3.5">
                       <span className="font-mono font-bold text-xs text-blue-700 tracking-wide block">{r.ticketCode}</span>
-                      <p className="font-bold text-slate-900 text-sm mt-0.5">{r.userName}</p>
-                      <p className="text-xs text-slate-500 font-normal">{r.userEmail}</p>
+                      <p className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5 truncate max-w-[150px] lg:max-w-none">{r.userName}</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500 font-normal truncate max-w-[150px] lg:max-w-none">{r.userEmail}</p>
                     </td>
 
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        <span className={`inline-block rounded-md border px-2.5 py-1 text-xs font-semibold ${cat.bg}`}>
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center">
+                      <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5">
+                        <span className={`inline-block rounded-md border px-2 py-0.5 text-[11px] sm:text-xs font-semibold ${cat.bg}`}>
                           {cat.label}
                         </span>
                         {src && (
-                          <span className={`inline-block rounded-md border px-2.5 py-1 text-xs font-semibold ${src.bg}`}>
+                          <span className={`inline-block rounded-md border px-2 py-0.5 text-[11px] sm:text-xs font-semibold ${src.bg}`}>
                             {src.label}
                           </span>
                         )}
                       </div>
                       {r.relatedContent && (
-                        <span className="block mt-1.5 text-xs text-slate-600 font-medium truncate max-w-[200px] mx-auto text-center" title={r.relatedContent}>
+                        <span className="block mt-1 text-[11px] text-slate-600 font-medium truncate max-w-[150px] mx-auto text-center" title={r.relatedContent}>
                           {r.relatedContent}
                         </span>
                       )}
                     </td>
 
-                    <td className="px-4 py-4 max-w-sm">
-                      <p className="font-bold text-slate-900 text-sm line-clamp-1">{r.title}</p>
-                      <p className="text-slate-600 line-clamp-1 mt-1 text-xs leading-relaxed">{r.description}</p>
+                    <td className="px-3 sm:px-4 py-3 sm:py-3.5">
+                      <p className="font-bold text-slate-900 text-xs sm:text-sm line-clamp-1">{r.title}</p>
+                      <p className="text-slate-600 line-clamp-1 mt-0.5 text-[11px] sm:text-xs leading-relaxed">{r.description}</p>
                       {r.adminReply && (
-                        <div className="text-emerald-800 mt-2 text-xs font-medium flex items-center gap-1.5 bg-emerald-50/90 px-2.5 py-1 rounded-lg border border-emerald-200/70 w-fit">
-                          <MessageSquare className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                          <span className="truncate max-w-[240px]" title={r.adminReply}>Đã trả lời: {r.adminReply}</span>
+                        <div className="text-emerald-800 mt-1.5 text-[11px] font-medium inline-flex items-center gap-1 bg-emerald-50/90 px-2 py-0.5 rounded-lg border border-emerald-200/70 max-w-full">
+                          <MessageSquare className="h-3 w-3 shrink-0 text-emerald-600" />
+                          <span className="truncate max-w-[180px] sm:max-w-xs" title={r.adminReply}>Đã trả lời: {r.adminReply}</span>
                         </div>
                       )}
                     </td>
 
-                    <td className="px-4 py-4 text-center whitespace-nowrap">
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">
                       <select
                         aria-label="Thay đổi trạng thái nhanh"
                         value={r.status}
                         onChange={(e) => void handleQuickStatusChange(r, e.target.value as SupportReportStatus)}
-                        className={`rounded-lg border px-3 py-1.5 text-xs font-semibold outline-none cursor-pointer shadow-2xs transition-colors ${st.className}`}
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold outline-none cursor-pointer shadow-2xs transition-colors ${st.className}`}
                       >
                         <option value="PENDING">Chờ xử lý</option>
                         <option value="IN_PROGRESS">Đang xử lý</option>
@@ -806,7 +819,7 @@ export function AdminSupportReportsView() {
                       </select>
                     </td>
 
-                    <td className="px-4 py-4 text-center text-xs font-medium text-slate-600 whitespace-nowrap">
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center text-[11px] sm:text-xs font-medium text-slate-600 whitespace-nowrap">
                       {new Date(r.createdAt).toLocaleDateString("vi-VN", {
                         day: "2-digit",
                         month: "2-digit",
@@ -816,15 +829,15 @@ export function AdminSupportReportsView() {
                       })}
                     </td>
 
-                    <td className="px-4 py-4 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1 sm:gap-1.5">
                         <button
                           type="button"
                           onClick={() => openReplyModal(r)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200/80 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:text-blue-800 transition whitespace-nowrap cursor-pointer shadow-2xs"
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200/80 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:text-blue-800 transition whitespace-nowrap cursor-pointer shadow-2xs"
                           title="Xem chi tiết & phản hồi"
                         >
-                          <Eye className="h-3.5 w-3.5 shrink-0" />
+                          <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
                           <span>Xem</span>
                         </button>
                         <button
@@ -833,7 +846,7 @@ export function AdminSupportReportsView() {
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition cursor-pointer"
                           title="Xóa ticket"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </button>
                       </div>
                     </td>
@@ -857,25 +870,25 @@ export function AdminSupportReportsView() {
       {/* Reply & Details Modal */}
       {activeReport && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-2 sm:p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setActiveReport(null);
           }}
         >
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-                  <Ticket className="h-5 w-5" />
+          <div className="w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4 bg-slate-50/70 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                  <Ticket className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-slate-900">Chi tiết & Phản hồi Học viên</h3>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-blue-100/80 text-blue-800 font-mono font-bold text-xs border border-blue-200/60 whitespace-nowrap">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">Chi tiết & Phản hồi Học viên</h3>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-100/80 text-blue-800 font-mono font-bold text-[11px] sm:text-xs border border-blue-200/60 whitespace-nowrap">
                       {activeReport.ticketCode}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
                     Người gửi: <span className="font-semibold text-slate-700">{activeReport.userName}</span> ({activeReport.userEmail}) • {new Date(activeReport.createdAt).toLocaleString("vi-VN")}
                   </p>
                 </div>
@@ -883,13 +896,13 @@ export function AdminSupportReportsView() {
               <button
                 type="button"
                 onClick={() => setActiveReport(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer ml-2"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-4 p-6 max-h-[75vh] overflow-y-auto">
+            <div className="space-y-4 p-4 sm:p-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200">
               {/* Report content overview */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1071,14 +1084,14 @@ export function AdminSupportReportsView() {
                 )}
 
                 {/* Footer Controls: Status, Submit */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-full sm:w-auto">
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Trạng thái ticket</label>
                       <select
                         value={replyStatus}
                         onChange={(e) => setReplyStatus(e.target.value as SupportReportStatus)}
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                        className="h-9 w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
                       >
                         <option value="RESOLVED">Đã giải quyết (Resolved)</option>
                         <option value="IN_PROGRESS">Đang xử lý (In Progress)</option>
@@ -1088,11 +1101,11 @@ export function AdminSupportReportsView() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0">
                     <button
                       type="button"
                       onClick={() => setActiveReport(null)}
-                      className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                      className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer transition"
                     >
                       Hủy
                     </button>
@@ -1100,7 +1113,7 @@ export function AdminSupportReportsView() {
                       type="button"
                       disabled={saving}
                       onClick={() => void handleSendReply()}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 sm:px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 cursor-pointer transition active:scale-95"
                     >
                       <Send className="h-3.5 w-3.5" /> {saving ? "Đang gửi..." : "Gửi phản hồi cho Học viên"}
                     </button>

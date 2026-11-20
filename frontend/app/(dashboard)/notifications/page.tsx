@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
   X,
   Filter,
 } from 'lucide-react';
@@ -22,6 +23,10 @@ import {
   markAnnouncementRead,
   markAllAnnouncementsRead,
   markAllNotificationsRead,
+  deleteSupportReport,
+  resolveStudentActionUrl,
+  getActionUrlLabel,
+  normalizeLineBreaks,
   type Announcement,
   type SupportReport,
   type AnnouncementType,
@@ -53,6 +58,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState('');
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
   const [activeDetailItem, setActiveDetailItem] = useState<Announcement | null>(null);
 
   async function load() {
@@ -77,6 +83,7 @@ export default function NotificationsPage() {
   }
 
   useEffect(() => {
+    document.title = 'Thông Báo & Phản Hồi - TOEIC AI';
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('tab') === 'reports') {
@@ -98,10 +105,14 @@ export default function NotificationsPage() {
     const handleUpdated = () => void load();
     window.addEventListener('announcement-updated', handleUpdated);
     window.addEventListener('announcement-read-updated', handleUpdated);
+    window.addEventListener('support-reports-updated', handleUpdated);
+    window.addEventListener('support-report-created', handleUpdated);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('announcement-updated', handleUpdated);
       window.removeEventListener('announcement-read-updated', handleUpdated);
+      window.removeEventListener('support-reports-updated', handleUpdated);
+      window.removeEventListener('support-report-created', handleUpdated);
     };
   }, []);
 
@@ -131,8 +142,23 @@ export default function NotificationsPage() {
     }
   }
 
+  async function handleDeleteReport(id: string) {
+    if (!window.confirm('Bạn có chắc chắn muốn hủy phiếu báo cáo này không?')) return;
+    setDeletingReportId(id);
+    try {
+      await deleteSupportReport(id);
+      setReports((current) => current.filter((r) => r.id !== id));
+      window.dispatchEvent(new Event('support-reports-updated'));
+      window.dispatchEvent(new Event('notification-updated'));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể hủy báo cáo này.');
+    } finally {
+      setDeletingReportId(null);
+    }
+  }
+
   function handleOpenDetail(item: Announcement) {
-    setActiveDetailItem(item);
+    setActiveDetailItem({ ...item, isRead: true });
     if (!item.isRead) {
       void markRead(item.id);
     }
@@ -334,41 +360,37 @@ export default function NotificationsPage() {
                   </div>
 
                   <h2 className="mt-3 text-base font-bold text-slate-900 group-hover:text-blue-700 transition">
-                    {item.title}
+                    {normalizeLineBreaks(item.title)}
                   </h2>
                   {item.summary && (
                     <p className="mt-1 text-sm font-medium text-slate-600 line-clamp-2 leading-relaxed">
-                      {item.summary}
+                      {normalizeLineBreaks(item.summary)}
                     </p>
                   )}
                   <p className="mt-2 text-xs text-slate-500 line-clamp-3 leading-relaxed whitespace-pre-wrap">
-                    {item.content}
+                    {normalizeLineBreaks(item.content)}
                   </p>
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                     <span className="text-xs text-slate-400">Gửi bởi {item.createdBy || 'Ban Quản Trị'}</span>
-                    <div className="flex items-center gap-2">
-                      {item.actionUrl && (
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 group-hover:text-blue-600 transition">
+                        <span>Xem chi tiết</span> &rarr;
+                      </span>
+                      {item.actionUrl && item.actionUrl.trim() !== '' && item.actionUrl.trim() !== '/' && (
                         <Link
-                          href={item.actionUrl}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-2xs"
-                        >
-                          Khám phá ngay <ExternalLink className="size-3" />
-                        </Link>
-                      )}
-                      {!item.isRead && (
-                        <button
-                          type="button"
-                          disabled={markingId === item.id}
+                          href={resolveStudentActionUrl(item.actionUrl)}
                           onClick={(e) => {
                             e.stopPropagation();
-                            void markRead(item.id);
+                            if (!item.isRead) {
+                              void markRead(item.id);
+                            }
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-2xs"
                         >
-                          <Check className="size-3" /> Đánh dấu đã đọc
-                        </button>
+                          <span>{getActionUrlLabel(item.actionUrl)}</span>
+                          <ExternalLink className="size-3" />
+                        </Link>
                       )}
                     </div>
                   </div>
@@ -412,9 +434,23 @@ export default function NotificationsPage() {
                           ✓ Đã phản hồi
                         </span>
                       )}
-                      <time className="ml-auto text-xs text-slate-400">
-                        Gửi lúc: {new Date(report.createdAt).toLocaleString('vi-VN')}
-                      </time>
+                      <div className="ml-auto flex items-center gap-3">
+                        <time className="text-xs text-slate-400">
+                          Gửi lúc: {new Date(report.createdAt).toLocaleString('vi-VN')}
+                        </time>
+                        {report.status === 'PENDING' && (
+                          <button
+                            type="button"
+                            disabled={deletingReportId === report.id}
+                            onClick={() => void handleDeleteReport(report.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 transition disabled:opacity-50 cursor-pointer"
+                            title="Hủy phản hồi này"
+                          >
+                            <Trash2 className="size-3" />
+                            <span>Hủy</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -462,15 +498,15 @@ export default function NotificationsPage() {
 
       {/* Modal xem chi tiết thông báo */}
       {activeDetailItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white dark:bg-slate-900 border border-transparent dark:border-slate-700/80 shadow-2xl animate-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/70 dark:bg-slate-800/60">
               <div className="flex items-center gap-2">
                 <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${typeLabels[activeDetailItem.type]?.badgeClass}`}>
                   {typeLabels[activeDetailItem.type]?.label}
                 </span>
                 {activeDetailItem.isPinned && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-700/60 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
                     <Pin className="size-3 fill-amber-500" /> Nổi bật
                   </span>
                 )}
@@ -478,7 +514,7 @@ export default function NotificationsPage() {
               <button
                 type="button"
                 onClick={() => setActiveDetailItem(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 cursor-pointer"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
               >
                 <X className="size-4" />
               </button>
@@ -486,39 +522,39 @@ export default function NotificationsPage() {
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
-                <h3 className="text-lg font-bold text-slate-900 leading-snug">{activeDetailItem.title}</h3>
-                <time className="mt-1 block text-xs text-slate-400">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-snug">{normalizeLineBreaks(activeDetailItem.title)}</h3>
+                <time className="mt-1 block text-xs text-slate-400 dark:text-slate-400">
                   Đăng lúc {new Date(activeDetailItem.createdAt).toLocaleString('vi-VN')} • Gửi bởi {activeDetailItem.createdBy || 'Ban Quản Trị'}
                 </time>
               </div>
 
               {activeDetailItem.summary && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3.5 text-xs font-medium text-slate-700 leading-relaxed">
-                  {activeDetailItem.summary}
+                <div className="rounded-xl border border-blue-100 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/40 p-3.5 text-xs font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                  {normalizeLineBreaks(activeDetailItem.summary)}
                 </div>
               )}
 
-              <div className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
-                {activeDetailItem.content}
+              <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                {normalizeLineBreaks(activeDetailItem.content)}
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 bg-slate-50/50">
-              <span className="text-xs text-slate-400">Đã cập nhật trạng thái đã đọc</span>
+            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
+              <span className="text-xs text-slate-400 dark:text-slate-400">Đã cập nhật trạng thái đã đọc</span>
               <div className="flex items-center gap-2">
-                {activeDetailItem.actionUrl && (
+                {activeDetailItem.actionUrl && activeDetailItem.actionUrl.trim() !== '' && activeDetailItem.actionUrl.trim() !== '/' && (
                   <Link
-                    href={activeDetailItem.actionUrl}
+                    href={resolveStudentActionUrl(activeDetailItem.actionUrl)}
                     onClick={() => setActiveDetailItem(null)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
                   >
-                    <span>Khám phá ngay</span> <ExternalLink className="size-3.5" />
+                    <span>{getActionUrlLabel(activeDetailItem.actionUrl)}</span> <ExternalLink className="size-3.5" />
                   </Link>
                 )}
                 <button
                   type="button"
                   onClick={() => setActiveDetailItem(null)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
                 >
                   Đóng
                 </button>

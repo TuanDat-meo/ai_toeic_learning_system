@@ -32,7 +32,7 @@ const steps = [
   { label: 'Xác nhận', icon: Check },
 ];
 
-const scoreGoals = [450, 600, 750, 900];
+const scoreGoals = [450, 600, 750, 850, 900];
 const reasons: { value: LearningOnboardingPayload['learningReason']; label: string }[] = [
   { value: 'CAREER', label: 'Phát triển sự nghiệp' },
   { value: 'STUDY', label: 'Học tập' },
@@ -107,6 +107,7 @@ export default function StudentOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [loadingDraft, setLoadingDraft] = useState(true);
   const [error, setError] = useState('');
+  const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -114,17 +115,41 @@ export default function StudentOnboardingPage() {
     getLearningOnboardingStatus()
       .then(({ state }) => {
         if (!active) return;
-        if (state.completed) {
+        const isEdit = typeof window !== 'undefined' && window.location.search.includes('mode=edit');
+        setIsEditMode(isEdit);
+        if (state.completed && !isEdit) {
           router.replace('/dashboard');
           return;
         }
+        let initialTargetScore = state.targetScore ?? 0;
+        let initialDailyMinutes = state.dailyStudyMinutes ?? null;
+
+        try {
+          const rawExt = typeof window !== 'undefined' ? localStorage.getItem('toeic_system_extended_settings') : null;
+          if (rawExt) {
+            const parsed = JSON.parse(rawExt);
+            if (!initialTargetScore && parsed.defaultTargetScore) {
+              initialTargetScore = Number(parsed.defaultTargetScore);
+            }
+          }
+          const rawBrand = typeof window !== 'undefined' ? localStorage.getItem('toeic_system_branding') : null;
+          if (rawBrand) {
+            const parsed = JSON.parse(rawBrand);
+            if (!initialDailyMinutes && parsed.dailyStudyMinutes) {
+              initialDailyMinutes = Number(parsed.dailyStudyMinutes);
+            }
+          }
+        } catch {
+          // ignore parsing error
+        }
+
         setForm({
-          targetScore: state.targetScore ?? 0,
+          targetScore: initialTargetScore,
           examDate: state.examDate,
           learningReason: state.learningReason as OnboardingForm['learningReason'],
           currentLevel: state.currentLevel as OnboardingForm['currentLevel'],
           recentScore: state.recentScore,
-          dailyStudyMinutes: state.dailyStudyMinutes,
+          dailyStudyMinutes: initialDailyMinutes,
           studyDays: state.studyDays,
           interests: state.interests as OnboardingForm['interests'],
         });
@@ -217,10 +242,16 @@ export default function StudentOnboardingPage() {
 
       <section className="mx-auto max-w-3xl px-4 pb-12 pt-8 sm:px-8 sm:pt-12">
         <div className="mb-8 text-center">
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-cyan-300">Bắt đầu hành trình TOEIC</p>
-          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Thiết lập mục tiêu học tập</h1>
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-cyan-300">
+            {isEditMode ? 'Cập nhật lộ trình TOEIC' : 'Bắt đầu hành trình TOEIC'}
+          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            {isEditMode ? 'Cập nhật mục tiêu học tập' : 'Thiết lập mục tiêu học tập'}
+          </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400 sm:text-base">
-            Cho chúng tôi biết mục tiêu của bạn để xây dựng lộ trình phù hợp nhất.
+            {isEditMode
+              ? 'Tùy chỉnh lại điểm số mục tiêu, thời lượng học và sở thích để hệ thống gợi ý bài tập chuẩn xác nhất.'
+              : 'Cho chúng tôi biết mục tiêu của bạn để xây dựng lộ trình phù hợp nhất.'}
           </p>
         </div>
 
@@ -427,7 +458,7 @@ export default function StudentOnboardingPage() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-wait disabled:opacity-70"
                 >
                   {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
-                  {saving ? 'Đang lưu...' : 'Lưu mục tiêu & bắt đầu'}
+                  {saving ? 'Đang lưu...' : isEditMode ? 'Lưu cập nhật & trở về' : 'Lưu mục tiêu & bắt đầu'}
                 </button>
               )}
             </div>
