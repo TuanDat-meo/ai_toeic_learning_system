@@ -247,9 +247,6 @@ export function AdminSupportReportsView() {
 
   useEffect(() => {
     void loadData();
-    void markAllNotificationsRead().then(() => {
-      window.dispatchEvent(new Event("notification-updated"));
-    }).catch(() => {});
 
     const handleUpdated = () => void loadData();
     window.addEventListener("support-reports-updated", handleUpdated);
@@ -404,7 +401,7 @@ export function AdminSupportReportsView() {
     }
   };
 
-  function openReplyModal(report: SupportReport) {
+  async function openReplyModal(report: SupportReport) {
     setActiveReport(report);
     setReplyText(report.adminReply || "");
     setReplyStatus(report.status === "PENDING" ? "RESOLVED" : report.status);
@@ -416,7 +413,41 @@ export function AdminSupportReportsView() {
     setCorrectionAnswer(String(snapshot.correctAnswer || ""));
     setCorrectionExplanation(String(snapshot.explanation || ""));
     setCorrectionPassage(String(snapshot.passage || ""));
+
+    // Tự động chuyển PENDING -> IN_PROGRESS khi Admin vào xem để số thông báo tự động giảm dần
+    if (report.status === "PENDING") {
+      try {
+        const updated = await updateSupportReport(report.id, {
+          status: "IN_PROGRESS",
+          priority: report.priority,
+        });
+        setReports((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+        setActiveReport((prev) => (prev && prev.id === updated.id ? { ...prev, status: "IN_PROGRESS" } : prev));
+        window.dispatchEvent(new Event("support-reports-updated"));
+        window.dispatchEvent(new Event("notification-updated"));
+      } catch (err) {
+        console.warn("Không thể tự động cập nhật trạng thái sang IN_PROGRESS:", err);
+      }
+    }
   }
+
+  const lastOpenedTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || reports.length === 0) return;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const ticketParam = params.get("ticket") || params.get("id");
+      if (ticketParam && ticketParam !== lastOpenedTicketRef.current) {
+        const target = reports.find(
+          (r) => r.ticketCode.toLowerCase() === ticketParam.toLowerCase() || r.id === ticketParam
+        );
+        if (target) {
+          lastOpenedTicketRef.current = ticketParam;
+          void openReplyModal(target);
+        }
+      }
+    }
+  }, [loading, reports]);
 
   function applyQuickTemplate(template: (typeof quickReplyTemplates)[0]) {
     setReplyText(template.text);

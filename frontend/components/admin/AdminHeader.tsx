@@ -30,7 +30,10 @@ import {
   getUnreadNotificationCount,
   markNotificationRead,
   markAllNotificationsRead,
+  getReports,
+  updateSupportReport,
   type AppNotification,
+  type SupportReport,
 } from "@/lib/api/support";
 
 type AdminProfile = {
@@ -110,6 +113,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const [logoutError, setLogoutError] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [pendingReports, setPendingReports] = useState<SupportReport[]>([]);
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
   const notifMenuRef = useRef<HTMLDivElement>(null);
   const [profileError, setProfileError] = useState("");
@@ -183,13 +187,15 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     let active = true;
     const loadNotifs = async () => {
       try {
-        const [list, count] = await Promise.all([
+        const [list, count, reports] = await Promise.all([
           getNotifications(5).catch(() => []),
           getUnreadNotificationCount().catch(() => 0),
+          getReports().catch(() => []),
         ]);
         if (active) {
           setNotifications(list);
           setUnreadNotifCount(count);
+          setPendingReports(reports.filter((r) => r.status === "PENDING"));
         }
       } catch {
         // ignore
@@ -461,88 +467,143 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {/* Notification Bell */}
           <div className="relative" ref={notifMenuRef}>
-            <button
-              type="button"
-              onClick={() => setNotifMenuOpen((prev) => !prev)}
-              aria-label="Thông báo hệ thống"
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-            >
-              <Bell className="h-4.5 w-4.5 text-slate-600" />
-              {unreadNotifCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
-                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
-                </span>
-              )}
-            </button>
-            {notifMenuOpen && (
-              <div className="absolute right-0 top-full z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 animate-in fade-in zoom-in duration-150">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-slate-50/70">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900">Thông báo mới</span>
-                    {unreadNotifCount > 0 && (
-                      <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 border border-rose-200">
-                        {unreadNotifCount}
+            {(() => {
+              const totalAlertCount = unreadNotifCount + pendingReports.length;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setNotifMenuOpen((prev) => !prev)}
+                    aria-label="Thông báo và yêu cầu hỗ trợ"
+                    className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    <Bell className="h-4.5 w-4.5 text-slate-600" />
+                    {totalAlertCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
+                        {totalAlertCount > 9 ? "9+" : totalAlertCount}
                       </span>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {unreadNotifCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await markAllNotificationsRead().catch(() => {});
-                          setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-                          setUnreadNotifCount(0);
-                          window.dispatchEvent(new Event("notification-updated"));
-                        }}
-                        className="text-[11px] font-semibold text-slate-500 hover:text-blue-600 transition cursor-pointer"
-                      >
-                        Đã đọc tất cả
-                      </button>
-                    )}
-                    <Link
-                      href="/admin/support/reports"
-                      onClick={() => setNotifMenuOpen(false)}
-                      className="text-[11px] font-semibold text-blue-600 hover:underline"
-                    >
-                      Xem tất cả ↗
-                    </Link>
-                  </div>
-                </div>
-                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                  {notifications.length > 0 ? (
-                    notifications.map((notif) => (
-                      <Link
-                        key={notif.id}
-                        href={notif.linkUrl || "/admin/support/reports"}
-                        onClick={async () => {
-                          setNotifMenuOpen(false);
-                          if (!notif.isRead) {
-                            await markNotificationRead(notif.id).catch(() => {});
-                            setNotifications((prev) =>
-                              prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
-                            );
-                            setUnreadNotifCount((prev) => Math.max(0, prev - 1));
-                            window.dispatchEvent(new Event("notification-updated"));
-                          }
-                        }}
-                        className={`block px-4 py-3 text-left transition hover:bg-slate-50 ${
-                          !notif.isRead ? "bg-blue-50/40" : ""
-                        }`}
-                      >
-                        <p className="text-xs font-bold text-slate-800 line-clamp-1">{notif.title}</p>
-                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{notif.message}</p>
-                        <span className="mt-1 block text-[10px] text-slate-400">
-                          {new Date(notif.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </Link>
-                    ))
-                  ) : (
-                    <p className="px-4 py-8 text-center text-xs text-slate-400">Không có thông báo mới.</p>
+                  </button>
+                  {notifMenuOpen && (
+                    <div className="absolute right-0 top-full z-40 mt-2 w-84 sm:w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 animate-in fade-in zoom-in duration-150">
+                      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-900">Thông báo & Yêu cầu</span>
+                          {totalAlertCount > 0 && (
+                            <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 border border-rose-200">
+                              {totalAlertCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {unreadNotifCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await markAllNotificationsRead().catch(() => {});
+                                setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+                                setUnreadNotifCount(0);
+                                window.dispatchEvent(new Event("notification-updated"));
+                              }}
+                              className="text-[11px] font-semibold text-slate-500 hover:text-blue-600 transition cursor-pointer"
+                            >
+                              Đã đọc tất cả
+                            </button>
+                          )}
+                          <Link
+                            href="/admin/support/reports"
+                            onClick={() => setNotifMenuOpen(false)}
+                            className="text-[11px] font-semibold text-blue-600 hover:underline"
+                          >
+                            Xem tất cả ↗
+                          </Link>
+                        </div>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                        {/* Danh sách ticket học viên chờ xử lý */}
+                        {pendingReports.length > 0 && (
+                          <div className="bg-amber-50/50 px-3.5 py-1.5 border-b border-amber-100 flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                              Học viên gửi yêu cầu ({pendingReports.length})
+                            </span>
+                            <span className="text-[10px] font-medium text-amber-600">Chờ xử lý</span>
+                          </div>
+                        )}
+                        {pendingReports.map((report) => (
+                          <Link
+                            key={report.id}
+                            href={`/admin/support/reports?ticket=${encodeURIComponent(report.ticketCode)}`}
+                            onClick={async () => {
+                              setNotifMenuOpen(false);
+                              try {
+                                await updateSupportReport(report.id, {
+                                  status: "IN_PROGRESS",
+                                  priority: report.priority,
+                                });
+                                setPendingReports((prev) => prev.filter((r) => r.id !== report.id));
+                                window.dispatchEvent(new Event("support-reports-updated"));
+                                window.dispatchEvent(new Event("notification-updated"));
+                              } catch (e) {
+                                console.warn(e);
+                              }
+                            }}
+                            className="block px-4 py-3 text-left transition hover:bg-amber-50/50 bg-amber-50/15"
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                #{report.ticketCode}
+                              </span>
+                              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 border border-rose-200">
+                                Chờ xử lý
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{report.title}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                              Từ: <span className="font-medium text-slate-700">{report.userName || "Học viên"}</span> ({report.userEmail})
+                            </p>
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              {new Date(report.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} • {new Date(report.createdAt).toLocaleDateString("vi-VN")}
+                            </span>
+                          </Link>
+                        ))}
+
+                        {/* Thông báo hệ thống */}
+                        {notifications.length > 0 && notifications.map((notif) => (
+                          <Link
+                            key={notif.id}
+                            href={notif.linkUrl || "/admin/support/reports"}
+                            onClick={async () => {
+                              setNotifMenuOpen(false);
+                              if (!notif.isRead) {
+                                await markNotificationRead(notif.id).catch(() => {});
+                                setNotifications((prev) =>
+                                  prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+                                );
+                                setUnreadNotifCount((prev) => Math.max(0, prev - 1));
+                                window.dispatchEvent(new Event("notification-updated"));
+                              }
+                            }}
+                            className={`block px-4 py-3 text-left transition hover:bg-slate-50 ${
+                              !notif.isRead ? "bg-blue-50/40" : ""
+                            }`}
+                          >
+                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{notif.title}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{notif.message}</p>
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              {new Date(notif.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </Link>
+                        ))}
+
+                        {totalAlertCount === 0 && (
+                          <p className="px-4 py-8 text-center text-xs text-slate-400">Không có thông báo hoặc yêu cầu mới cần xử lý.</p>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </div>
-            )}
+                </>
+              );
+            })()}
           </div>
 
           <div className="relative" ref={profileMenuRef}>
