@@ -341,6 +341,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     setLogoutAllSaving(true);
     try {
       await logoutAllSessions();
+      document.documentElement.classList.remove("dark");
       ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
         try {
           localStorage.removeItem(key);
@@ -353,6 +354,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
       // Nếu phiên đã hết hạn trên server hoặc trả về lỗi, tiến hành dọn sạch phiên client và điều hướng
       const isExpired = error instanceof Error && (error.message.includes("hết hạn") || error.message.includes("401"));
       if (isExpired) {
+        document.documentElement.classList.remove("dark");
         ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
           try {
             localStorage.removeItem(key);
@@ -376,6 +378,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     } catch (error) {
       console.warn("Lỗi khi gọi API đăng xuất, tiếp tục đăng xuất client:", error);
     } finally {
+      document.documentElement.classList.remove("dark");
       ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
         try {
           localStorage.removeItem(key);
@@ -725,41 +728,49 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                   <input required minLength={8} maxLength={72} type="password" autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                 </label>
                 {securityError ? <p role="alert" className="text-sm text-rose-700">{securityError}</p> : null}
-                <div className="flex justify-end border-t border-slate-100 pt-4">
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button type="button" onClick={() => setDialog(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Hủy</button>
                   <button type="submit" disabled={passwordSaving} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">
                     <KeyRound aria-hidden="true" className="h-4 w-4" /> {passwordSaving ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-5">
-                {activityLoading ? (
-                  <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải lịch sử thao tác...</p>
-                ) : activityError ? (
-                  <p role="alert" className="py-8 text-center text-sm text-rose-700">{activityError}</p>
-                ) : activities.length > 0 ? (
-                  <ol className="space-y-0">
-                    {activities.map((entry, index) => (
-                      <li key={entry.id} className="relative flex gap-3 pb-5 last:pb-0">
-                        {index < activities.length - 1 ? <span aria-hidden="true" className="absolute left-[7px] top-4 h-full w-px bg-slate-200" /> : null}
-                        <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-blue-500 bg-white" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800">{activityActionLabel(entry.action)}</p>
-                          <p className="mt-0.5 truncate text-xs text-slate-500">{entry.summary || entry.entityType}</p>
-                          <time dateTime={entry.createdAt} className="mt-1 block text-[11px] text-slate-400">
-                            {new Date(entry.createdAt).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}
-                          </time>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <div className="py-8 text-center">
-                    <Clock3 aria-hidden="true" className="mx-auto h-8 w-8 text-slate-300" />
-                    <p className="mt-3 text-sm font-medium text-slate-700">Chưa có thao tác nào</p>
-                    <p className="mt-1 text-xs text-slate-500">Các thao tác CRUD thực hiện bằng tài khoản này sẽ xuất hiện tại đây.</p>
-                  </div>
-                )}
+              <div className="flex flex-col">
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-5">
+                  {activityLoading ? (
+                    <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải lịch sử thao tác...</p>
+                  ) : activityError ? (
+                    <p role="alert" className="py-8 text-center text-sm text-rose-700">{activityError}</p>
+                  ) : activities.length > 0 ? (
+                    <ol className="space-y-0">
+                      {activities.map((entry, index) => (
+                        <li key={entry.id} className="relative flex gap-3 pb-5 last:pb-0">
+                          {index < activities.length - 1 ? <span aria-hidden="true" className="absolute left-[7px] top-4 h-full w-px bg-slate-200" /> : null}
+                          <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-blue-500 bg-white" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-slate-800">{activityActionLabel(entry.action)}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{entry.summary || entry.entityType}</p>
+                            <time dateTime={entry.createdAt} className="mt-1 block text-[11px] text-slate-400">
+                              {new Date(entry.createdAt).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}
+                            </time>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <div className="py-8 text-center">
+                      <Clock3 aria-hidden="true" className="mx-auto h-8 w-8 text-slate-300" />
+                      <p className="mt-3 text-sm font-medium text-slate-700">Chưa có thao tác nào</p>
+                      <p className="mt-1 text-xs text-slate-500">Các thao tác CRUD thực hiện bằng tài khoản này sẽ xuất hiện tại đây.</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end border-t border-slate-100 p-4">
+                  <button type="button" onClick={() => setDialog(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    Đóng
+                  </button>
+                </div>
               </div>
             )}
           </section>

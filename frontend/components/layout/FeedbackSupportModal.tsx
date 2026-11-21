@@ -332,13 +332,13 @@ export function FeedbackSupportModal() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {!isFeature && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Danh mục phản hồi
                     </label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as SupportReportCategory)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-800 focus:border-[#1b41ae] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-100 focus:border-[#1b41ae] focus:outline-none"
                     >
                       {CATEGORY_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -350,7 +350,7 @@ export function FeedbackSupportModal() {
                 )}
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     {isFeature ? 'Tên tính năng bạn muốn đề xuất' : 'Tiêu đề ngắn gọn'}
                   </label>
                   <input
@@ -363,13 +363,13 @@ export function FeedbackSupportModal() {
                         : 'Ví dụ: Góp ý về cách hiển thị giải thích câu hỏi Part 6'
                     }
                     maxLength={140}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-[#1b41ae] focus:outline-none"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-[#1b41ae] focus:outline-none"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     {isFeature ? 'Mô tả chi tiết lợi ích & cách hoạt động mong muốn' : 'Nội dung chi tiết'}
                   </label>
                   <textarea
@@ -382,7 +382,7 @@ export function FeedbackSupportModal() {
                         : 'Mô tả vấn đề hoặc góp ý cụ thể để chúng tôi cải thiện nhanh nhất...'
                     }
                     maxLength={1200}
-                    className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs leading-relaxed text-slate-900 placeholder-slate-400 focus:border-[#1b41ae] focus:outline-none"
+                    className="w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs leading-relaxed text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-[#1b41ae] focus:outline-none"
                     required
                   />
                   <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
@@ -394,20 +394,20 @@ export function FeedbackSupportModal() {
                 {error && (
                   <p
                     role="alert"
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-medium text-rose-700"
+                    className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/60 px-3.5 py-2 text-xs font-medium text-rose-700 dark:text-rose-300"
                   >
                     {error}
                   </p>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
                   <button
                     type="button"
                     onClick={() => {
                       setOpen(false);
                       window.dispatchEvent(new CustomEvent('toeic:open-chat', { detail: { tab: 'support' } }));
                     }}
-                    className="text-[11px] font-semibold text-[#1b41ae] hover:underline cursor-pointer"
+                    className="text-[11px] font-semibold text-[#1b41ae] dark:text-blue-400 hover:underline cursor-pointer"
                   >
                     Cần hỗ trợ nhanh? Nhắn tin 1-1 với Admin
                   </button>
@@ -415,7 +415,7 @@ export function FeedbackSupportModal() {
                     <button
                       type="button"
                       onClick={() => setOpen(false)}
-                      className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                     >
                       Hủy
                     </button>
@@ -448,12 +448,12 @@ export function FeedbackSupportModal() {
                   <span>Đang tải lịch sử phản hồi...</span>
                 </div>
               ) : history.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-8 text-center">
-                  <Clock className="mx-auto h-6 w-6 text-slate-300" />
-                  <p className="mt-2 text-xs font-semibold text-slate-700">
+                <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 py-8 text-center">
+                  <Clock className="mx-auto h-6 w-6 text-slate-300 dark:text-slate-600" />
+                  <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
                     Bạn chưa gửi phản hồi hoặc đề xuất nào
                   </p>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                     Các phiếu bạn gửi sẽ hiển thị tại đây cùng phản hồi từ quản trị viên.
                   </p>
                 </div>
@@ -463,12 +463,12 @@ export function FeedbackSupportModal() {
                   return (
                     <div
                       key={item.id}
-                      className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3.5 space-y-2"
+                      className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/60 p-3.5 space-y-2"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-slate-400 tabular-nums">
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tabular-nums">
                               #{item.ticketCode || item.id.slice(0, 8)}
                             </span>
                             <span
@@ -477,14 +477,14 @@ export function FeedbackSupportModal() {
                               {statusInfo.label}
                             </span>
                           </div>
-                          <p className="mt-1 text-xs font-bold text-slate-900">{item.title}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-900 dark:text-white">{item.title}</p>
                         </div>
                         {item.status === 'PENDING' && (
                           <button
                             type="button"
                             onClick={() => void handleDelete(item.id)}
                             disabled={deletingId === item.id}
-                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 dark:hover:bg-rose-950/60 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
                             title="Thu hồi phiếu này"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -492,20 +492,20 @@ export function FeedbackSupportModal() {
                         )}
                       </div>
 
-                      <p className="whitespace-pre-line text-xs leading-relaxed text-slate-600">
+                      <p className="whitespace-pre-line text-xs leading-relaxed text-slate-600 dark:text-slate-300">
                         {item.description}
                       </p>
 
                       {item.adminReply && (
-                        <div className="rounded-lg border border-blue-200/70 bg-blue-50/60 px-3 py-2 text-xs">
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-[#1b41ae]">
+                        <div className="rounded-lg border border-blue-200/70 dark:border-blue-800/70 bg-blue-50/60 dark:bg-blue-950/40 px-3 py-2 text-xs">
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-[#1b41ae] dark:text-blue-400">
                             Phản hồi từ Quản trị viên
                           </span>
-                          <p className="mt-0.5 whitespace-pre-line text-slate-800">{item.adminReply}</p>
+                          <p className="mt-0.5 whitespace-pre-line text-slate-800 dark:text-slate-100">{item.adminReply}</p>
                         </div>
                       )}
 
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500">
                         Gửi lúc {formatDateTime(item.createdAt)}
                       </p>
                     </div>
