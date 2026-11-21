@@ -32,7 +32,51 @@ const steps = [
   { label: 'Xác nhận', icon: Check },
 ];
 
-const scoreGoals = [450, 600, 750, 850, 900];
+const scoreGoals = [450, 550, 650, 750, 850, 900];
+
+function getScoreBandInfo(score: number) {
+  if (score <= 0) return null;
+  if (score < 450) {
+    return {
+      band: 'Sơ cấp (CEFR A1 - A2)',
+      color: 'text-amber-300 border-amber-500/30 bg-amber-500/10',
+      desc: 'Tập trung củng cố phát âm chuẩn, từ vựng nền tảng và ngữ pháp câu đơn.',
+    };
+  }
+  if (score < 550) {
+    return {
+      band: 'Sơ trung cấp (CEFR B1)',
+      color: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10',
+      desc: 'Đạt chuẩn tốt nghiệp Đại học / Cao đẳng, giao tiếp và đọc hiểu văn bản cơ bản.',
+    };
+  }
+  if (score < 650) {
+    return {
+      band: 'Trung cấp (CEFR B1+)',
+      color: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10',
+      desc: 'Tự tin giao tiếp công sở, xử lý email, công việc văn phòng và phỏng vấn doanh nghiệp.',
+    };
+  }
+  if (score < 750) {
+    return {
+      band: 'Trung cao cấp (CEFR B2)',
+      color: 'text-blue-300 border-blue-500/30 bg-blue-500/10',
+      desc: 'Làm việc chuyên nghiệp tại doanh nghiệp quốc tế, đàm phán và soạn thảo hợp đồng.',
+    };
+  }
+  if (score < 850) {
+    return {
+      band: 'Nâng cao (CEFR B2+)',
+      color: 'text-purple-300 border-purple-500/30 bg-purple-500/10',
+      desc: 'Năng lực ngôn ngữ lưu loát, thuyết trình tự tin, đáp ứng vị trí quản lý đa quốc gia.',
+    };
+  }
+  return {
+    band: 'Xuất sắc (CEFR C1)',
+    color: 'text-rose-300 border-rose-500/30 bg-rose-500/10',
+    desc: 'Thành thạo như người bản ngữ, sử dụng tiếng Anh linh hoạt cho nghiên cứu và giảng dạy.',
+  };
+}
 const reasons: { value: LearningOnboardingPayload['learningReason']; label: string }[] = [
   { value: 'CAREER', label: 'Phát triển sự nghiệp' },
   { value: 'STUDY', label: 'Học tập' },
@@ -181,13 +225,15 @@ export default function StudentOnboardingPage() {
   }
 
   async function submit() {
-    if (form.targetScore === 0 || form.learningReason === null) return;
+    if (form.targetScore <= 0 || form.learningReason === null) return;
 
     setSaving(true);
     setError('');
     try {
+      const normalizedTargetScore = Math.max(10, Math.min(990, Math.round(form.targetScore / 5) * 5));
       await completeLearningOnboarding({
         ...form,
+        targetScore: normalizedTargetScore,
         learningReason: form.learningReason,
         examDate: form.examDate || null,
       });
@@ -202,9 +248,11 @@ export default function StudentOnboardingPage() {
     setSaving(true);
     setError('');
     try {
+      const normalizedTargetScore =
+        form.targetScore > 0 ? Math.max(10, Math.min(990, Math.round(form.targetScore / 5) * 5)) : null;
       await saveLearningOnboardingDraft({
         ...form,
-        targetScore: form.targetScore || null,
+        targetScore: normalizedTargetScore,
         currentStep: step,
       });
       router.replace('/dashboard');
@@ -307,13 +355,121 @@ export default function StudentOnboardingPage() {
           {step === 0 && (
             <div className="space-y-7">
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-slate-200">Bạn muốn đạt bao nhiêu điểm TOEIC?</h3>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-200">Bạn muốn đạt bao nhiêu điểm TOEIC?</h3>
+                  {form.targetScore > 0 && (
+                    <span className="text-xs font-semibold text-cyan-300">
+                      Mục tiêu: {form.targetScore} điểm
+                    </span>
+                  )}
+                </div>
+
+                {/* Popular score milestones */}
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
                   {scoreGoals.map((score) => (
-                    <ChoiceButton key={score} selected={form.targetScore === score} onClick={() => setForm({ ...form, targetScore: score })} className="py-4 text-base">
-                      {score}<span className="ml-1 text-xs font-normal text-slate-400">điểm</span>
+                    <ChoiceButton
+                      key={score}
+                      selected={form.targetScore === score}
+                      onClick={() => setForm({ ...form, targetScore: score })}
+                      className="py-3 text-sm"
+                    >
+                      {score}
+                      <span className="ml-0.5 text-xs font-normal text-slate-400">đ</span>
                     </ChoiceButton>
                   ))}
+                </div>
+
+                {/* Custom score input card */}
+                <div className="mt-4 rounded-xl border border-white/[0.08] bg-[#090e19] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <label htmlFor="custom-target-score" className="block text-xs font-medium text-slate-200">
+                        Hoặc tự nhập điểm mục tiêu tùy chỉnh:
+                      </label>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Thang điểm từ 10 đến 990 (bội số của 5, ví dụ: 550, 700, 825)
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = form.targetScore || 450;
+                          const next = Math.max(10, current - 5);
+                          setForm({ ...form, targetScore: next });
+                        }}
+                        className="flex size-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm font-bold text-slate-300 hover:bg-white/10 hover:text-white transition cursor-pointer"
+                        title="Giảm 5 điểm"
+                      >
+                        -5
+                      </button>
+
+                      <div className="relative">
+                        <input
+                          id="custom-target-score"
+                          type="number"
+                          min={10}
+                          max={990}
+                          step={5}
+                          value={form.targetScore > 0 ? form.targetScore : ''}
+                          onChange={(event) => {
+                            const val = parseInt(event.target.value, 10);
+                            if (isNaN(val)) {
+                              setForm({ ...form, targetScore: 0 });
+                            } else {
+                              const clamped = Math.max(0, Math.min(990, val));
+                              setForm({ ...form, targetScore: clamped });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (form.targetScore > 0) {
+                              const rounded = Math.max(10, Math.min(990, Math.round(form.targetScore / 5) * 5));
+                              if (rounded !== form.targetScore) {
+                                setForm({ ...form, targetScore: rounded });
+                              }
+                            }
+                          }}
+                          placeholder="VD: 550"
+                          className="w-28 rounded-lg border border-cyan-500/30 bg-[#0d1422] px-3 py-2 text-center text-base font-bold text-cyan-200 outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = form.targetScore || 450;
+                          const next = Math.min(990, current + 5);
+                          setForm({ ...form, targetScore: next });
+                        }}
+                        className="flex size-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm font-bold text-slate-300 hover:bg-white/10 hover:text-white transition cursor-pointer"
+                        title="Tăng 5 điểm"
+                      >
+                        +5
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dynamic target description */}
+                  {(() => {
+                    const info = getScoreBandInfo(form.targetScore);
+                    if (!info) return null;
+                    return (
+                      <div className={`mt-3 flex items-start gap-2.5 rounded-lg border p-2.5 text-xs ${info.color}`}>
+                        <Sparkles className="size-4 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold">{info.band}: </span>
+                          <span>{info.desc}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {form.targetScore > 0 && form.targetScore % 5 !== 0 && (
+                    <p className="mt-2 text-xs text-amber-300">
+                      ⚠️ Điểm TOEIC chuẩn là bội số của 5. Hệ thống sẽ tự động làm tròn thành {Math.round(form.targetScore / 5) * 5} điểm khi lưu.
+                    </p>
+                  )}
                 </div>
               </div>
               <div>
@@ -455,7 +611,10 @@ export default function StudentOnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setStep((current) => current + 1)}
-                  disabled={step === 0 && (form.targetScore === 0 || form.learningReason === null)}
+                  disabled={
+                    step === 0 &&
+                    (form.targetScore < 10 || form.targetScore > 990 || form.learningReason === null)
+                  }
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
                 >
                   Tiếp tục <ArrowRight className="size-4" />
