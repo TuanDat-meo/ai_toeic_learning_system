@@ -1268,30 +1268,45 @@ html.dark body {
   color: #f1f5f9;
 }
 
-html.dark .bg-white,
-html.dark .bg-white\/95,
-html.dark .bg-white\/90 {
+/* Tự động chuyển các dải gradient trắng/xanh nhạt sang nền tối đậm đà, sắc nét */
+html.dark .bg-gradient-to-r,
+html.dark .bg-gradient-to-br,
+html.dark .bg-gradient-to-b {
+  background-image: none !important;
   background-color: #111b2e !important;
 }
 
-html.dark .bg-slate-50,
-html.dark .bg-slate-50\/80,
-html.dark .bg-slate-50\/70,
-html.dark .bg-slate-50\/60,
-html.dark .bg-slate-50\/50,
-html.dark .bg-slate-50\/40 {
+html.dark [class*="from-blue-50"],
+html.dark [class*="from-indigo-50"],
+html.dark [class*="from-amber-50"] {
+  background-image: linear-gradient(105deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+  border-color: #334155 !important;
+}
+
+html.dark :not([class*="dark:bg-"]).bg-white,
+html.dark :not([class*="dark:bg-"]).bg-white\/95,
+html.dark :not([class*="dark:bg-"]).bg-white\/90 {
+  background-color: #111b2e !important;
+}
+
+html.dark :not([class*="dark:bg-"]).bg-slate-50,
+html.dark :not([class*="dark:bg-"]).bg-slate-50\/80,
+html.dark :not([class*="dark:bg-"]).bg-slate-50\/70,
+html.dark :not([class*="dark:bg-"]).bg-slate-50\/60,
+html.dark :not([class*="dark:bg-"]).bg-slate-50\/50,
+html.dark :not([class*="dark:bg-"]).bg-slate-50\/40 {
   background-color: #17233a !important;
 }
 
-html.dark .bg-slate-100,
-html.dark .bg-slate-100\/80,
-html.dark .bg-slate-100\/70 {
+html.dark :not([class*="dark:bg-"]).bg-slate-100,
+html.dark :not([class*="dark:bg-"]).bg-slate-100\/80,
+html.dark :not([class*="dark:bg-"]).bg-slate-100\/70 {
   background-color: #1e293b !important;
 }
 
-html.dark .bg-slate-200,
-html.dark .bg-slate-200\/80,
-html.dark .bg-slate-200\/70 {
+html.dark :not([class*="dark:bg-"]).bg-slate-200,
+html.dark :not([class*="dark:bg-"]).bg-slate-200\/80,
+html.dark :not([class*="dark:bg-"]).bg-slate-200\/70 {
   background-color: #334155 !important;
 }
 
@@ -1314,9 +1329,50 @@ html.dark .hover\:border-slate-300:hover {
   border-color: #475569 !important;
 }
 
+html.dark .text-slate-950,
 html.dark .text-slate-900,
 html.dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+html.dark .dark\:text-white {
+  color: #ffffff !important;
+}
+
+html.dark .dark\:text-slate-100 {
   color: #f1f5f9 !important;
+}
+
+html.dark .dark\:text-slate-200 {
+  color: #e2e8f0 !important;
+}
+
+html.dark .dark\:text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .dark\:text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark .dark\:bg-blue-600 {
+  background-color: #2563eb !important;
+}
+
+html.dark .dark\:bg-blue-500 {
+  background-color: #3b82f6 !important;
+}
+
+html.dark .dark\:bg-emerald-600 {
+  background-color: #059669 !important;
+}
+
+html.dark .dark\:bg-slate-900 {
+  background-color: #0f172a !important;
+}
+
+html.dark .dark\:bg-slate-800 {
+  background-color: #1e293b !important;
 }
 
 html.dark .text-slate-700 {

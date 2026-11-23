@@ -73,16 +73,16 @@ export default function StudentGrammarPage() {
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
       {quotaMessage ? <div role="alert" className="fixed right-5 top-5 z-[70] max-w-sm rounded-xl bg-red-700 px-4 py-3 text-xs font-semibold text-white shadow-xl">{quotaMessage}</div> : null}
       {/* Header chuẩn tối giản, thanh lịch như Admin */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
         <div>
-          <p className="text-xs font-medium text-slate-400">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400">
             Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
-            <span className="font-semibold text-blue-700">Ngữ pháp trọng tâm</span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Ngữ pháp trọng tâm</span>
           </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-[28px]">
             Chuyên Đề Ngữ Pháp TOEIC Trọng Tâm
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
             Các chủ điểm ngữ pháp TOEIC đã được phát hành.
           </p>
         </div>

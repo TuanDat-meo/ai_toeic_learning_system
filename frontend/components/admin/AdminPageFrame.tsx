@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
 
 export type AdminMetric = {
   label: string;
@@ -21,6 +23,25 @@ export function AdminPageFrame({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const [systemName, setSystemName] = useState("Hệ thống TOEIC AI");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("toeic_system_branding");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.systemName) setSystemName(parsed.systemName);
+      }
+    } catch {}
+
+    const handleUpdate = (e: Event) => {
+      const custom = e as CustomEvent<{ systemName?: string }>;
+      if (custom.detail?.systemName) setSystemName(custom.detail.systemName);
+    };
+    window.addEventListener("toeic:system-settings-changed", handleUpdate);
+    return () => window.removeEventListener("toeic:system-settings-changed", handleUpdate);
+  }, []);
+
   return (
     <div className="space-y-5 sm:space-y-6 lg:space-y-7">
       <div className="overflow-hidden rounded-2xl sm:rounded-[28px] border border-[rgba(116,118,132,0.12)] bg-[linear-gradient(135deg,#ffffff_0%,#f7f9ff_100%)] p-4 sm:p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
@@ -31,7 +52,7 @@ export function AdminPageFrame({
             </div>
             <div className="min-w-0">
               <div className="inline-flex items-center rounded-full border border-primary/15 bg-primary/5 px-2.5 py-0.5 sm:py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                Hệ thống TOEIC AI
+                {systemName}
               </div>
               <h1 className="mt-2 sm:mt-3 text-xl sm:text-2xl lg:text-[28px] xl:text-[30px] font-bold tracking-tight text-[#111827]">{title}</h1>
               {subtitle ? <p className="mt-1 sm:mt-2 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-600">{subtitle}</p> : null}
@@ -43,7 +64,7 @@ export function AdminPageFrame({
       </div>
 
       {metrics && metrics.length > 0 ? (
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => {
             const tones: Record<string, string> = {
               primary: "bg-primary-container text-on-primary-container",
@@ -55,13 +76,17 @@ export function AdminPageFrame({
             return (
               <div
                 key={metric.label}
-                className="rounded-2xl sm:rounded-[22px] border border-[rgba(116,118,132,0.12)] bg-white p-4 sm:p-5 shadow-[0_10px_25px_rgba(15,23,42,0.04)] flex flex-col justify-between"
+                className="rounded-2xl sm:rounded-[22px] border border-[rgba(116,118,132,0.12)] bg-white p-3.5 sm:p-5 shadow-[0_10px_25px_rgba(15,23,42,0.04)] flex flex-col justify-between transition hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{metric.label}</p>
-                    <p className="mt-2 sm:mt-4 break-words text-2xl sm:text-[30px] font-bold tracking-tight text-slate-900">{metric.value}</p>
-                    <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 sm:py-1 text-[10px] font-bold ${tones[metric.tone ?? "neutral"]}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 truncate" title={metric.label}>
+                      {metric.label}
+                    </p>
+                    <p className="mt-1.5 sm:mt-3 truncate text-xl sm:text-2xl xl:text-[28px] 2xl:text-3xl font-bold tracking-tight text-slate-900">
+                      {metric.value}
+                    </p>
+                    <span className={`mt-2 inline-flex max-w-full truncate rounded-full px-2 py-0.5 sm:py-1 text-[10px] font-bold ${tones[metric.tone ?? "neutral"]}`}>
                       {metric.trend}
                     </span>
                   </div>

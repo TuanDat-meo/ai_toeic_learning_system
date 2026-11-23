@@ -42,9 +42,6 @@ public class ChatController {
     @PostMapping("/api/chat/ai")
     public AiChatResponse askAi(@Valid @RequestBody AiChatRequest request, Authentication auth) {
         var user = users.findManagedUser(auth.getName());
-        if (!"STUDENT".equals(user.role())) {
-            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ học viên mới có thể sử dụng gia sư AI.");
-        }
         String lastPrompt = request.messages().stream()
                 .filter(turn -> "user".equals(turn.role()))
                 .reduce((first, second) -> second)

@@ -18,6 +18,7 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 
 export default function StudentMockTestsPage() {
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2" | "vol3">("vol1");
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [testsVol1, setTestsVol1] = useState<TestItem[]>([]);
   const [testsVol2, setTestsVol2] = useState<TestItem[]>([]);
   const [testsVol3, setTestsVol3] = useState<TestItem[]>([]);
@@ -49,8 +50,30 @@ export default function StudentMockTestsPage() {
   }, []);
 
   useEffect(() => {
+    document.title = "Phòng Thi Thử TOEIC Trực Tuyến - TOEIC AI";
     loadTests();
   }, [loadTests]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("toeic_system_extended_settings");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed?.maintenanceMode === "boolean") {
+          setMaintenanceMode(parsed.maintenanceMode);
+        }
+      }
+    } catch {}
+
+    const handleSettingsChange = (event: Event) => {
+      const custom = event as CustomEvent<{ maintenanceMode?: boolean }>;
+      if (custom.detail && typeof custom.detail.maintenanceMode === "boolean") {
+        setMaintenanceMode(custom.detail.maintenanceMode);
+      }
+    };
+    window.addEventListener("toeic:system-settings-changed", handleSettingsChange);
+    return () => window.removeEventListener("toeic:system-settings-changed", handleSettingsChange);
+  }, []);
 
 
   // State Toast Notification
@@ -282,16 +305,16 @@ export default function StudentMockTestsPage() {
       )}
 
       {/* Header chuẩn phong cách tối giản, sạch sẽ như Admin */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
         <div>
-          <p className="text-xs font-medium text-slate-400">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400">
             Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
-            <span className="font-semibold text-blue-700">Thi thử trực tuyến</span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Thi thử trực tuyến</span>
           </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-[28px]">
             Phòng Thi Thử TOEIC Trực Tuyến
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
             Làm các đề thi đã được phát hành, với đồng hồ đếm ngược hoặc luyện tập linh hoạt theo tiến độ của bạn.
           </p>
         </div>
@@ -300,6 +323,19 @@ export default function StudentMockTestsPage() {
           <LearningQuotaBadge featureKey="MOCK_TEST" />
         </div>
       </header>
+
+      {/* Banner thông báo bảo trì hệ thống */}
+      {maintenanceMode && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm animate-in fade-in">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <p className="font-bold text-sm">Hệ thống đang trong chế độ bảo trì &amp; cập nhật dữ liệu</p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              Quản trị viên đang cập nhật và tối ưu hóa ngân hàng đề thi. Các kết quả làm bài vẫn được ghi nhận, vui lòng lưu ý thời gian hoàn thành bài thi.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Grid danh sách các đề thi thử */}
       {catalogError && (

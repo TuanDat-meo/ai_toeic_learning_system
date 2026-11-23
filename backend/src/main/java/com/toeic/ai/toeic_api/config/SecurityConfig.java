@@ -71,6 +71,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/media-assets/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
+                            "/api/auth/logout",
                             "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
                             "/api/listening/**",
@@ -92,6 +93,7 @@ public class SecurityConfig {
                             "/api/admin/announcements", "/api/admin/announcements/**",
                             "/api/admin/settings", "/api/admin/settings/**",
                             "/api/admin/mock-tests/**", "/api/admin/reading/**",
+                            "/api/admin/ai-review/**",
                             "/api/admin/question-bank/**")
                             .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers(HttpMethod.POST, "/api/admin/data/import/preview")

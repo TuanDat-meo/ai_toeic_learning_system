@@ -176,25 +176,25 @@ export default function StudentVocabularyPage() {
         </div>
       ) : null}
       {/* Header phong cách tinh tế, đơn giản, sạch sẽ giống Admin */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
         <div>
-          <p className="text-xs font-medium text-slate-400">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400">
             Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
-            <span className="font-semibold text-blue-700">Luyện từ vựng</span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Luyện từ vựng</span>
           </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-[28px]">
             Kho Từ Vựng TOEIC Trọng Tâm
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
             Các bộ từ vựng đã được phát hành.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <Link href="/vocabulary/games" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100">
+          <Link href="/vocabulary/games" className="rounded-xl border border-amber-200 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/60 px-3 py-2 text-sm font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition">
             Game Center
           </Link>
-          <Link href="/vocabulary/history" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <Link href="/vocabulary/history" className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
             Lịch sử học
           </Link>
           <LearningQuotaBadge featureKey="VOCABULARY" />

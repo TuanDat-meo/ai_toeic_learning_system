@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -9,6 +9,8 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Eye,
+  FileSpreadsheet,
   Filter,
   MessageSquare,
   MessageSquareWarning,
@@ -16,16 +18,19 @@ import {
   Search,
   Send,
   Sparkles,
+  Ticket,
   Trash2,
   X,
 } from "lucide-react";
 import { AdminPageFrame, type AdminMetric } from "@/components/admin/AdminPageFrame";
+import { exportToExcel } from "@/lib/exportExcel";
 import {
   getReports,
   updateSupportReport,
   deleteSupportReport,
   batchUpdateSupportReports,
   batchDeleteSupportReports,
+  markAllNotificationsRead,
   type SupportReport,
   type SupportReportCategory,
   type SupportReportPriority,
@@ -219,20 +224,38 @@ export function AdminSupportReportsView() {
     setTimeout(() => setFeedbackMsg(""), 4000);
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadDataRef = useRef<(isRetry?: boolean) => Promise<void>>(null);
+
+  const loadData = useCallback(async (isRetry = false) => {
     setLoading(true);
     try {
       const data = await getReports();
       setReports(data);
     } catch {
-      showFeedback("Không thể tải danh sách phản hồi", true);
+      showFeedback("Không thể tải danh sách phản hồi. Đang thử kết nối lại...", true);
+      if (!isRetry) {
+        window.setTimeout(() => {
+          void loadDataRef.current?.(true);
+        }, 3000);
+      }
     } finally {
       setLoading(false);
     }
   }, [showFeedback]);
+  useEffect(() => {
+    loadDataRef.current = loadData;
+  }, [loadData]);
 
   useEffect(() => {
-    void Promise.resolve().then(loadData);
+    void loadData();
+
+    const handleUpdated = () => void loadData();
+    window.addEventListener("support-reports-updated", handleUpdated);
+    window.addEventListener("support-report-created", handleUpdated);
+    return () => {
+      window.removeEventListener("support-reports-updated", handleUpdated);
+      window.removeEventListener("support-report-created", handleUpdated);
+    };
   }, [loadData]);
 
   // Date threshold helper
@@ -335,6 +358,8 @@ export function AdminSupportReportsView() {
       );
       showFeedback(`Đã chuyển ${ids.length} ticket sang trạng thái ${statusBadges[status].label}.`);
       setSelectedIds(new Set());
+      window.dispatchEvent(new Event("support-reports-updated"));
+      window.dispatchEvent(new Event("notification-updated"));
     } catch {
       showFeedback("Không thể cập nhật hàng loạt.", true);
     } finally {
@@ -352,6 +377,8 @@ export function AdminSupportReportsView() {
       setReports((current) => current.filter((r) => !selectedIds.has(r.id)));
       showFeedback(`Đã xóa thành công ${ids.length} ticket.`);
       setSelectedIds(new Set());
+      window.dispatchEvent(new Event("support-reports-updated"));
+      window.dispatchEvent(new Event("notification-updated"));
     } catch {
       showFeedback("Không thể xóa hàng loạt.", true);
     } finally {
@@ -368,12 +395,14 @@ export function AdminSupportReportsView() {
       });
       setReports((current) => current.map((r) => (r.id === updated.id ? updated : r)));
       showFeedback(`Đã đổi trạng thái ticket ${report.ticketCode} sang ${statusBadges[newStatus].label}.`);
+      window.dispatchEvent(new Event("support-reports-updated"));
+      window.dispatchEvent(new Event("notification-updated"));
     } catch (err) {
       showFeedback(err instanceof Error ? err.message : "Không thể cập nhật trạng thái.", true);
     }
   };
 
-  function openReplyModal(report: SupportReport) {
+  async function openReplyModal(report: SupportReport) {
     setActiveReport(report);
     setReplyText(report.adminReply || "");
     setReplyStatus(report.status === "PENDING" ? "RESOLVED" : report.status);
@@ -386,6 +415,51 @@ export function AdminSupportReportsView() {
     setCorrectionAnswer(String(snapshot.correctAnswer || ""));
     setCorrectionExplanation(String(snapshot.explanation || ""));
     setCorrectionPassage(String(snapshot.passage || ""));
+
+    // Tự động chuyển PENDING -> IN_PROGRESS khi Admin vào xem để số thông báo tự động giảm dần
+    if (report.status === "PENDING") {
+      try {
+        const updated = await updateSupportReport(report.id, {
+          status: "IN_PROGRESS",
+          priority: report.priority,
+        });
+        setReports((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+        setActiveReport((prev) => (prev && prev.id === updated.id ? { ...prev, status: "IN_PROGRESS" } : prev));
+        window.dispatchEvent(new Event("support-reports-updated"));
+        window.dispatchEvent(new Event("notification-updated"));
+      } catch (err) {
+        console.warn("Không thể tự động cập nhật trạng thái sang IN_PROGRESS:", err);
+      }
+    }
+  }
+
+  const lastOpenedTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || reports.length === 0) return;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const ticketParam = params.get("ticket") || params.get("id");
+      if (ticketParam && ticketParam !== lastOpenedTicketRef.current) {
+        const target = reports.find(
+          (r) => r.ticketCode.toLowerCase() === ticketParam.toLowerCase() || r.id === ticketParam
+        );
+        if (target) {
+          lastOpenedTicketRef.current = ticketParam;
+          void openReplyModal(target);
+        }
+      }
+    }
+  }, [loading, reports]);
+
+  function applyQuickTemplate(template: (typeof quickReplyTemplates)[0]) {
+    setReplyText(template.text);
+    setReplyStatus(template.status);
+  }
+
+  function copyQuestionRef(ref: string) {
+    navigator.clipboard.writeText(ref);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2000);
   }
 
   function applyQuickTemplate(template: (typeof quickReplyTemplates)[0]) {
@@ -427,13 +501,15 @@ export function AdminSupportReportsView() {
       }
       const updatedReport = await updateSupportReport(activeReport.id, {
         status: replyStatus,
-        priority: replyPriority,
+        priority: activeReport.priority,
         adminReply: replyText.trim(),
         ...(correction ? { correction } : {}),
       });
       setReports((current) => current.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
       setActiveReport(null);
       showFeedback(`Đã cập nhật & gửi thông báo cho Ticket ${updatedReport.ticketCode}.`);
+      window.dispatchEvent(new Event("support-reports-updated"));
+      window.dispatchEvent(new Event("notification-updated"));
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Không thể cập nhật ticket.", true);
     } finally {
@@ -448,39 +524,68 @@ export function AdminSupportReportsView() {
       setReports((current) => current.filter((report) => report.id !== deletingReport.id));
       setDeletingReport(null);
       showFeedback(`Đã xóa Ticket ${deletingReport.ticketCode}`);
+      window.dispatchEvent(new Event("support-reports-updated"));
+      window.dispatchEvent(new Event("notification-updated"));
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Không thể xóa ticket.", true);
     }
   }
 
-  function exportCsv() {
-    const escapeCsv = (val: string) => `"${val.replaceAll('"', '""')}"`;
-    const rows = [
-      ["Mã Ticket", "Người gửi", "Email", "Phân loại", "Nguồn", "Tiêu đề", "Độ ưu tiên", "Trạng thái", "Ngày gửi", "Phản hồi Admin"],
-      ...filtered.map((r) => [
-        r.ticketCode,
-        r.userName,
-        r.userEmail,
-        categoryLabels[r.category]?.label || r.category,
-        r.source ? sourceLabels[r.source]?.label || r.source : "Khác",
-        r.title,
-        priorityBadges[r.priority]?.label || r.priority,
-        statusBadges[r.status]?.label || r.status,
-        new Date(r.createdAt).toLocaleString("vi-VN"),
-        r.adminReply || "",
-      ]),
-    ];
+  function handleExportExcel() {
+    if (filtered.length === 0) return;
 
-    const csvContent = `\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}`;
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `bao-loi-phan-hoi-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    exportToExcel({
+      filename: `danh_sach_ticket_ho_tro_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Ticket Hỗ trợ",
+      title: "HỆ THỐNG QUẢN LÝ TICKET PHẢN HỒI & BÁO LỖI HỌC VIÊN TOEIC",
+      metadata: [
+        { label: "Ngày xuất báo cáo", value: new Date().toLocaleString("vi-VN") },
+        { label: "Tổng số phản hồi", value: `${filtered.length} ticket` },
+        {
+          label: "Bộ lọc trạng thái",
+          value: statusFilter === "ALL" ? "Tất cả trạng thái" : statusBadges[statusFilter]?.label || statusFilter,
+        },
+        {
+          label: "Bộ lọc phân loại",
+          value: categoryFilter === "ALL" ? "Tất cả phân loại" : categoryLabels[categoryFilter]?.label || categoryFilter,
+        },
+        {
+          label: "Bộ lọc nguồn",
+          value: sourceFilter === "ALL" ? "Tất cả nguồn" : sourceLabels[sourceFilter]?.label || sourceFilter,
+        },
+      ],
+      columns: [
+        { header: "STT", key: "stt", width: 50, align: "center" },
+        { header: "Mã Ticket", key: "ticketCode", width: 110, align: "center" },
+        { header: "Người gửi", key: "userName", width: 140, align: "left" },
+        { header: "Email học viên", key: "userEmail", width: 220, align: "left" },
+        { header: "Phân loại lỗi", key: "category", width: 160, align: "center" },
+        { header: "Nguồn bài học", key: "source", width: 150, align: "center" },
+        { header: "Tiêu đề phản hồi", key: "title", width: 260, align: "left" },
+        { header: "Nội dung phản hồi chi tiết", key: "content", width: 340, align: "left" },
+        { header: "Mã câu hỏi liên quan", key: "questionRef", width: 150, align: "center" },
+        { header: "Mức độ ưu tiên", key: "priority", width: 110, align: "center" },
+        { header: "Trạng thái", key: "status", width: 130, align: "center" },
+        { header: "Ngày gửi", key: "createdAt", width: 150, align: "center" },
+        { header: "Phản hồi từ Admin", key: "adminReply", width: 300, align: "left" },
+      ],
+      data: filtered.map((r, index) => ({
+        stt: index + 1,
+        ticketCode: r.ticketCode,
+        userName: r.userName || "Học viên",
+        userEmail: r.userEmail,
+        category: categoryLabels[r.category]?.label || r.category,
+        source: r.source ? sourceLabels[r.source]?.label || r.source : "Hệ thống chung",
+        title: r.title,
+        content: r.description || r.title,
+        questionRef: r.questionRef || r.relatedContent || "—",
+        priority: priorityBadges[r.priority]?.label || r.priority,
+        status: statusBadges[r.status]?.label || r.status,
+        createdAt: new Date(r.createdAt).toLocaleString("vi-VN"),
+        adminReply: r.adminReply || "Chưa phản hồi",
+      })),
+    });
+    showFeedback(`Đã xuất file Excel thành công (${filtered.length} ticket)! 📊`);
   }
 
   return (
@@ -491,9 +596,9 @@ export function AdminSupportReportsView() {
     >
       <div className="space-y-4">
         {/* Header & Main Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
               Danh sách Ticket Hỗ trợ
               {filtered.length > 0 && (
                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
@@ -508,40 +613,43 @@ export function AdminSupportReportsView() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={exportCsv}
+              onClick={handleExportExcel}
               disabled={filtered.length === 0}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-xs cursor-pointer"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 sm:px-3.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/90 disabled:opacity-50 shadow-xs cursor-pointer transition active:scale-95"
+              title="Xuất danh sách ticket ra file Excel có hàng cột rõ ràng"
             >
-              <Download className="h-4 w-4" /> Xuất CSV
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Xuất file Excel</span>
             </button>
             <button
               type="button"
               onClick={() => void loadData()}
               disabled={loading}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs cursor-pointer"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-xs cursor-pointer transition active:scale-95"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-blue-600" : ""}`} /> Làm mới
+              <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? "animate-spin text-blue-600" : ""}`} />
+              <span>Làm mới</span>
             </button>
           </div>
         </div>
 
         {/* Filters Bar */}
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-          <div className="relative sm:col-span-2 md:col-span-1 lg:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-12 gap-2 sm:gap-2.5">
+          <div className="relative sm:col-span-2 md:col-span-3 xl:col-span-4">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm mã ticket, tên, email, câu hỏi..."
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
             />
           </div>
 
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as typeof categoryFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 xl:col-span-3 transition cursor-pointer"
           >
             <option value="ALL">Tất cả phân loại</option>
             <option value="QUESTION_ERROR">Lỗi câu hỏi/đáp án</option>
@@ -554,7 +662,7 @@ export function AdminSupportReportsView() {
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value as typeof sourceFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 xl:col-span-3 transition cursor-pointer"
           >
             <option value="ALL">Tất cả nguồn bài học</option>
             <option value="READING">Reading (Part 5-7)</option>
@@ -567,7 +675,7 @@ export function AdminSupportReportsView() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:col-span-2 md:col-span-1 xl:col-span-2 transition cursor-pointer"
           >
             <option value="ALL">Tất cả trạng thái</option>
             <option value="PENDING">Chờ xử lý</option>
@@ -575,18 +683,73 @@ export function AdminSupportReportsView() {
             <option value="RESOLVED">Đã giải quyết</option>
             <option value="REJECTED">Từ chối</option>
           </select>
+        </div>
 
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value as typeof priorityFilter)}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          >
-            <option value="ALL">Tất cả mức ưu tiên</option>
-            <option value="URGENT">Khẩn cấp</option>
-            <option value="HIGH">Cao</option>
-            <option value="MEDIUM">Trung bình</option>
-            <option value="LOW">Thấp</option>
-          </select>
+        {/* Date Filter Chips & Bulk Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+            <span className="text-slate-400 flex items-center gap-1 mr-1">
+              <Filter className="h-3 w-3" /> Thời gian:
+            </span>
+            {(
+              [
+                { id: "ALL", label: "Tất cả" },
+                { id: "TODAY", label: "Hôm nay" },
+                { id: "7_DAYS", label: "7 ngày qua" },
+                { id: "30_DAYS", label: "30 ngày qua" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setDateFilter(item.id)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                  dateFilter === item.id
+                    ? "bg-blue-600 text-white"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3 py-1.5 text-xs text-blue-900 animate-in fade-in">
+              <span className="font-bold">Đã chọn {selectedIds.size} ticket</span>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkStatus("RESOLVED")}
+                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+              >
+                ✓ Đã giải quyết
+              </button>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkStatus("IN_PROGRESS")}
+                className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+              >
+                Đang xử lý
+              </button>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkDelete()}
+                className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                Xóa
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Date Filter Chips & Bulk Action Bar */}
@@ -673,26 +836,25 @@ export function AdminSupportReportsView() {
 
       {/* Main Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-xs">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <table className="w-full min-w-[760px] lg:min-w-full text-left border-collapse">
+            <thead className="bg-slate-50/90 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200/80">
               <tr>
-                <th className="w-10 px-4 py-3.5 text-center">
+                <th className="w-10 sm:w-12 px-2.5 sm:px-3 py-3 sm:py-3.5 text-center shrink-0">
                   <input
                     type="checkbox"
                     checked={filtered.length > 0 && selectedIds.size === filtered.length}
                     onChange={handleToggleSelectAll}
                     aria-label="Chọn tất cả"
-                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
                 </th>
-                <th className="px-4 py-3.5">Mã Ticket & Người gửi</th>
-                <th className="px-4 py-3.5">Phân loại & Nguồn</th>
-                <th className="px-4 py-3.5">Tiêu đề & Nội dung</th>
-                <th className="px-4 py-3.5">Độ ưu tiên</th>
-                <th className="px-4 py-3.5">Trạng thái</th>
-                <th className="px-4 py-3.5">Ngày tạo</th>
-                <th className="sticky right-0 bg-slate-50 px-4 py-3.5 text-right z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]">
+                <th className="w-[18%] min-w-[130px] px-3 sm:px-4 py-3 sm:py-3.5 whitespace-nowrap">Mã Ticket & Người gửi</th>
+                <th className="w-[16%] min-w-[125px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">Phân loại & Nguồn</th>
+                <th className="w-[30%] min-w-[180px] px-3 sm:px-4 py-3 sm:py-3.5 text-center">Tiêu đề & Nội dung</th>
+                <th className="w-[13%] min-w-[110px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">Trạng thái</th>
+                <th className="w-[11%] min-w-[85px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">Ngày tạo</th>
+                <th className="w-[11%] min-w-[80px] px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">
                   Thao tác
                 </th>
               </tr>
@@ -702,7 +864,6 @@ export function AdminSupportReportsView() {
                 const cat = categoryLabels[r.category] || categoryLabels.OTHER;
                 const src = r.source ? sourceLabels[r.source] : null;
                 const st = statusBadges[r.status] || statusBadges.PENDING;
-                const pr = priorityBadges[r.priority] || priorityBadges.MEDIUM;
                 const isSelected = selectedIds.has(r.id);
 
                 return (
@@ -710,61 +871,57 @@ export function AdminSupportReportsView() {
                     key={r.id}
                     className={`transition-colors ${isSelected ? "bg-blue-50/40" : "hover:bg-slate-50/80"}`}
                   >
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-2.5 sm:px-3 py-3 sm:py-3.5 text-center">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleToggleSelect(r.id)}
                         aria-label={`Chọn ticket ${r.ticketCode}`}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className="font-mono font-bold text-blue-700 block">{r.ticketCode}</span>
-                      <p className="font-semibold text-slate-900 mt-0.5">{r.userName}</p>
-                      <p className="text-[11px] text-slate-400">{r.userEmail}</p>
+                    <td className="px-3 sm:px-4 py-3 sm:py-3.5">
+                      <span className="font-mono font-bold text-xs text-blue-700 tracking-wide block">{r.ticketCode}</span>
+                      <p className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5 truncate max-w-[150px] lg:max-w-none">{r.userName}</p>
+                      <p className="text-[11px] sm:text-xs text-slate-500 font-normal truncate max-w-[150px] lg:max-w-none">{r.userEmail}</p>
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${cat.bg}`}>
-                        {cat.label}
-                      </span>
-                      {src && (
-                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-semibold ml-1.5 ${src.bg}`}>
-                          {src.label}
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center">
+                      <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5">
+                        <span className={`inline-block rounded-md border px-2 py-0.5 text-[11px] sm:text-xs font-semibold ${cat.bg}`}>
+                          {cat.label}
                         </span>
-                      )}
+                        {src && (
+                          <span className={`inline-block rounded-md border px-2 py-0.5 text-[11px] sm:text-xs font-semibold ${src.bg}`}>
+                            {src.label}
+                          </span>
+                        )}
+                      </div>
                       {r.relatedContent && (
-                        <span className="block mt-1 text-[10px] text-slate-500 font-mono truncate max-w-[150px]" title={r.relatedContent}>
+                        <span className="block mt-1 text-[11px] text-slate-600 font-medium truncate max-w-[150px] mx-auto text-center" title={r.relatedContent}>
                           {r.relatedContent}
                         </span>
                       )}
                     </td>
 
-                    <td className="px-4 py-3.5 max-w-xs">
-                      <p className="font-bold text-slate-800 line-clamp-1">{r.title}</p>
-                      <p className="text-slate-500 line-clamp-1 mt-0.5 text-[11px]">{r.description}</p>
+                    <td className="px-3 sm:px-4 py-3 sm:py-3.5">
+                      <p className="font-bold text-slate-900 text-xs sm:text-sm line-clamp-1">{r.title}</p>
+                      <p className="text-slate-600 line-clamp-1 mt-0.5 text-[11px] sm:text-xs leading-relaxed">{r.description}</p>
                       {r.adminReply && (
-                        <p className="text-emerald-700 mt-1 text-[10px] font-medium flex items-center gap-1">
-                          <MessageSquare className="h-3 w-3 shrink-0" />
-                          <span className="truncate max-w-[200px]" title={r.adminReply}>Đã trả lời: {r.adminReply}</span>
-                        </p>
+                        <div className="text-emerald-800 mt-1.5 text-[11px] font-medium inline-flex items-center gap-1 bg-emerald-50/90 px-2 py-0.5 rounded-lg border border-emerald-200/70 max-w-full">
+                          <MessageSquare className="h-3 w-3 shrink-0 text-emerald-600" />
+                          <span className="truncate max-w-[180px] sm:max-w-xs" title={r.adminReply}>Đã trả lời: {r.adminReply}</span>
+                        </div>
                       )}
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] border ${pr.className}`}>
-                        {pr.label}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3.5">
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">
                       <select
                         aria-label="Thay đổi trạng thái nhanh"
                         value={r.status}
                         onChange={(e) => void handleQuickStatusChange(r, e.target.value as SupportReportStatus)}
-                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold outline-none cursor-pointer ${st.className}`}
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold outline-none cursor-pointer shadow-2xs transition-colors ${st.className}`}
                       >
                         <option value="PENDING">Chờ xử lý</option>
                         <option value="IN_PROGRESS">Đang xử lý</option>
@@ -773,7 +930,7 @@ export function AdminSupportReportsView() {
                       </select>
                     </td>
 
-                    <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center text-[11px] sm:text-xs font-medium text-slate-600 whitespace-nowrap">
                       {new Date(r.createdAt).toLocaleDateString("vi-VN", {
                         day: "2-digit",
                         month: "2-digit",
@@ -783,14 +940,16 @@ export function AdminSupportReportsView() {
                       })}
                     </td>
 
-                    <td className="sticky right-0 bg-white/95 backdrop-blur-sm px-4 py-3.5 text-right z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="px-2 sm:px-3 py-3 sm:py-3.5 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1 sm:gap-1.5">
                         <button
                           type="button"
                           onClick={() => openReplyModal(r)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200/80 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:text-blue-800 transition whitespace-nowrap cursor-pointer shadow-2xs"
+                          title="Xem chi tiết & phản hồi"
                         >
-                          <MessageSquare className="h-3.5 w-3.5" /> Chi tiết & Trả lời
+                          <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                          <span>Xem</span>
                         </button>
                         <button
                           type="button"
@@ -798,7 +957,7 @@ export function AdminSupportReportsView() {
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition cursor-pointer"
                           title="Xóa ticket"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </button>
                       </div>
                     </td>
@@ -808,7 +967,7 @@ export function AdminSupportReportsView() {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500 text-xs">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500 text-sm">
                     <AlertCircle className="h-8 w-8 text-slate-300 mx-auto mb-2" />
                     Không tìm thấy ticket phản hồi phù hợp với bộ lọc hiện tại.
                   </td>
@@ -822,20 +981,25 @@ export function AdminSupportReportsView() {
       {/* Reply & Details Modal */}
       {activeReport && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-2 sm:p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setActiveReport(null);
           }}
         >
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 font-mono font-bold text-xs">
-                  {activeReport.ticketCode}
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Chi tiết & Phản hồi Học viên</h3>
-                  <p className="text-xs text-slate-500">
+          <div className="w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4 bg-slate-50/70 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                  <Ticket className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">Chi tiết & Phản hồi Học viên</h3>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-100/80 text-blue-800 font-mono font-bold text-[11px] sm:text-xs border border-blue-200/60 whitespace-nowrap">
+                      {activeReport.ticketCode}
+                    </span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
                     Người gửi: <span className="font-semibold text-slate-700">{activeReport.userName}</span> ({activeReport.userEmail}) • {new Date(activeReport.createdAt).toLocaleString("vi-VN")}
                   </p>
                 </div>
@@ -843,13 +1007,13 @@ export function AdminSupportReportsView() {
               <button
                 type="button"
                 onClick={() => setActiveReport(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer ml-2"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-4 p-6 max-h-[75vh] overflow-y-auto">
+            <div className="space-y-4 p-4 sm:p-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200">
               {/* Report content overview */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1030,29 +1194,15 @@ export function AdminSupportReportsView() {
                   </div>
                 )}
 
-                {/* Footer Controls: Priority, Status, Submit */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Mức ưu tiên</label>
-                      <select
-                        value={replyPriority}
-                        onChange={(e) => setReplyPriority(e.target.value as SupportReportPriority)}
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
-                      >
-                        <option value="LOW">Thấp (Low)</option>
-                        <option value="MEDIUM">Trung bình (Medium)</option>
-                        <option value="HIGH">Cao (High)</option>
-                        <option value="URGENT">Khẩn cấp (Urgent)</option>
-                      </select>
-                    </div>
-
-                    <div>
+                {/* Footer Controls: Status, Submit */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-full sm:w-auto">
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Trạng thái ticket</label>
                       <select
                         value={replyStatus}
                         onChange={(e) => setReplyStatus(e.target.value as SupportReportStatus)}
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                        className="h-9 w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500 cursor-pointer"
                       >
                         <option value="RESOLVED">Đã giải quyết (Resolved)</option>
                         <option value="IN_PROGRESS">Đang xử lý (In Progress)</option>
@@ -1062,11 +1212,11 @@ export function AdminSupportReportsView() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0">
                     <button
                       type="button"
                       onClick={() => setActiveReport(null)}
-                      className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                      className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer transition"
                     >
                       Hủy
                     </button>
@@ -1074,7 +1224,7 @@ export function AdminSupportReportsView() {
                       type="button"
                       disabled={saving}
                       onClick={() => void handleSendReply()}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 sm:px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 cursor-pointer transition active:scale-95"
                     >
                       <Send className="h-3.5 w-3.5" /> {saving ? "Đang gửi..." : "Gửi phản hồi cho Học viên"}
                     </button>

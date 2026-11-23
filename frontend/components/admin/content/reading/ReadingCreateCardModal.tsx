@@ -43,6 +43,7 @@ import {
 
 export interface ReadingCreateCardModalProps {
   editingCard: ExerciseCardData | null;
+  isPassageOnlyMode?: boolean;
   cardFormTitle: string;
   setCardFormTitle: (val: string) => void;
   cardFormCategory: "grammar" | "part5" | "part6" | "part7";
@@ -220,6 +221,7 @@ export function extractReadingTestSignature(title: string, category: string): st
 
 export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   editingCard,
+  isPassageOnlyMode = false,
   cardFormTitle,
   setCardFormTitle,
   cardFormCategory,
@@ -266,6 +268,7 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
     );
   }, [cardFormTitle, cardFormCategory, existingCards, editingCard]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [passageModeError, setPassageModeError] = useState<string | null>(null);
   const [internalToast, setInternalToast] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [passageError, setPassageError] = useState<string | null>(null);
@@ -978,6 +981,13 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
   // Yêu cầu chuyển đổi Part: nếu đang có dữ liệu thì cảnh báo xác nhận làm mới
   const handleRequestPartChange = (targetPart: "grammar" | "part5" | "part6" | "part7") => {
+    if (isPassageOnlyMode && (targetPart === "part5" || targetPart === "grammar")) {
+      setPassageModeError(
+        "Kho đoạn văn (Passage Bank) chỉ dành riêng cho Part 6 (Điền đoạn văn) hoặc Part 7 (Đọc hiểu văn bản). Không thể chọn Part 5 tại đây vì Part 5 chỉ là câu trắc nghiệm đơn, không có đoạn văn dài."
+      );
+      return;
+    }
+    setPassageModeError(null);
     if (targetPart === cardFormCategory) return;
 
     const hasExistingData =
@@ -1881,6 +1891,44 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
       return;
     }
 
+    // 0. NẾU MỞ TỪ KHO ĐOẠN VĂN (isPassageOnlyMode): Bắt buộc chỉ Part 6 hoặc Part 7 và phải có bài đọc hợp lệ
+    if (isPassageOnlyMode) {
+      if (cardFormCategory === "part5" || cardFormCategory === "grammar") {
+        const msg = "❌ Kho đoạn văn chỉ hỗ trợ Part 6 hoặc Part 7. Bạn không thể lưu bài dạng Part 5 (câu đơn) vào Kho đoạn văn! Vui lòng chọn Part 6 hoặc Part 7.";
+        setErrorMsg(msg);
+        setPassageModeError("Không thể lưu bài dạng Part 5 vào Kho đoạn văn. Vui lòng chọn Part 6 hoặc Part 7.");
+        setActiveTab("info");
+        return;
+      }
+
+      const hasPassage = Boolean(cardFormPassageText.trim()) || questions.some((q) => Boolean(q.passageText?.trim()));
+      if (!hasPassage) {
+        const msg = "❌ Kho đoạn văn bắt buộc phải có nội dung văn bản bài đọc (Passage). Không thể tạo bài trống đoạn văn hoặc chỉ chứa câu hỏi đơn lẻ!";
+        setErrorMsg(msg);
+        setPassageError(msg);
+        setActiveTab("passage");
+        setTimeout(() => {
+          passageTextareaRef.current?.focus();
+        }, 50);
+        return;
+      }
+
+      // Kiểm tra nếu người dùng cố tình viết nội dung đoạn văn chỉ là 1 câu ngắn kiểu Part 5
+      const passageWords = cardFormPassageText.trim().split(/\s+/).filter(Boolean);
+      const subPassageWords = questions.flatMap((q) => (q.passageText || "").trim().split(/\s+/).filter(Boolean));
+      const totalWords = passageWords.length + subPassageWords.length;
+      if (totalWords < 15) {
+        const msg = "❌ Nội dung bài đọc quá ngắn (dưới 15 từ). Kho đoạn văn yêu cầu đoạn văn hoàn chỉnh (như bài đọc, thông báo, thư tín, email...) thay vì chỉ một câu đơn lẻ theo cấu trúc Part 5!";
+        setErrorMsg(msg);
+        setPassageError(msg);
+        setActiveTab("passage");
+        setTimeout(() => {
+          passageTextareaRef.current?.focus();
+        }, 50);
+        return;
+      }
+    }
+
     // 2. KIỂM TRA ĐOẠN VĂN ĐỌC (NẾU PART 6 HOẶC PART 7)
     const hasAnyPassage = !!cardFormPassageText.trim() || questions.some((q) => !!q.passageText?.trim());
 
@@ -2065,10 +2113,14 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
         <div className="flex shrink-0 items-start sm:items-center justify-between gap-3 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4">
           <div className="min-w-0">
             <span className="text-[11px] font-extrabold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 uppercase tracking-wider">
-              READING
+              {isPassageOnlyMode ? "KHO ĐOẠN VĂN (PASSAGE BANK)" : "READING"}
             </span>
             <h3 className="mt-1 text-base sm:text-xl font-bold text-slate-900 leading-snug">
-              {editingCard ? "Chỉnh sửa bài đọc / chuyên đề TOEIC" : "Thêm bài đọc Reading mới"}
+              {editingCard
+                ? "Chỉnh sửa bài đọc / chuyên đề TOEIC"
+                : isPassageOnlyMode
+                ? "Thêm đoạn văn mới vào Kho đoạn văn (Part 6 & Part 7)"
+                : "Thêm bài đọc Reading mới"}
             </h3>
           </div>
           <button
@@ -2410,18 +2462,31 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     type="button"
                     onClick={() => handleRequestPartChange("part5")}
                     className={`p-3 sm:p-3.5 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                      cardFormCategory === "part5" || cardFormCategory === "grammar"
+                      isPassageOnlyMode
+                        ? "border-rose-200/90 bg-rose-50/40 text-slate-500 hover:border-rose-400 hover:bg-rose-50/70"
+                        : cardFormCategory === "part5" || cardFormCategory === "grammar"
                         ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                         : "bg-white hover:bg-emerald-50/60 border-slate-200 text-slate-800"
                     }`}
                   >
                     <div>
-                      <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
-                        Part 5
-                      </span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
+                          Part 5
+                        </span>
+                        {isPassageOnlyMode && (
+                          <span className="text-[9px] font-extrabold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-md border border-rose-300">
+                            🔒 Chặn chọn
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs sm:text-sm font-bold block mt-0.5">Incomplete Sentences</span>
                     </div>
-                    <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">30 câu (101-130) • Điền câu đơn</span>
+                    <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">
+                      {isPassageOnlyMode
+                        ? "⚠️ Kho đoạn văn không hỗ trợ Part 5 (câu đơn)"
+                        : "30 câu (101-130) • Điền câu đơn"}
+                    </span>
                   </button>
 
                   <button
@@ -2434,9 +2499,16 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     }`}
                   >
                     <div>
-                      <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
-                        Part 6
-                      </span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
+                          Part 6
+                        </span>
+                        {isPassageOnlyMode && (
+                          <span className="text-[9px] font-extrabold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-md border border-purple-200">
+                            ✓ Khuyên dùng
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs sm:text-sm font-bold block mt-0.5">Text Completion</span>
                     </div>
                     <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">16 câu (131-146) • 4 đoạn khuyết</span>
@@ -2452,14 +2524,47 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
                     }`}
                   >
                     <div>
-                      <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
-                        Part 7
-                      </span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider block opacity-85">
+                          Part 7
+                        </span>
+                        {isPassageOnlyMode && (
+                          <span className="text-[9px] font-extrabold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-md border border-blue-200">
+                            ✓ Khuyên dùng
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs sm:text-sm font-bold block mt-0.5">Reading Comprehension</span>
                     </div>
                     <span className="text-[11px] sm:text-xs mt-1.5 opacity-90 block">54 câu (147-200) • Đoạn đơn &amp; đa</span>
                   </button>
                 </div>
+
+                {/* THÔNG BÁO BÁO LỖI NGAY TRONG KHUNG CHỌN KHI BẤM PART 5 TRONG KHO ĐOẠN VĂN */}
+                {passageModeError && (
+                  <div className="mt-2.5 p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-950 text-xs font-semibold flex items-start gap-2.5 animate-in fade-in duration-150 shadow-2xs">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <p className="font-bold text-rose-950">
+                        Chỉ được phép chọn Part 6 hoặc Part 7 trong Kho đoạn văn!
+                      </p>
+                      <p className="text-[11px] text-rose-900 font-medium leading-relaxed">
+                        {passageModeError}
+                      </p>
+                      <p className="text-[11px] text-rose-800 pt-0.5">
+                        💡 <strong>Lưu ý:</strong> Nếu bạn muốn soạn đề Part 5 (câu trắc nghiệm đơn 101 - 130), hãy bấm <strong>&quot;Đóng&quot;</strong> hộp thoại này và dùng nút <strong>&quot;+ Thêm bài đọc mới&quot;</strong> ở thanh tiêu đề ngoài trang.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPassageModeError(null)}
+                      className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                      title="Đóng thông báo lỗi"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* AUTO-DETECTION ACCORDION */}

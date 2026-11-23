@@ -56,7 +56,7 @@ public class AnnouncementService {
         jdbc.update("""
                 INSERT INTO announcements (id,title,summary,content,type,target,status,is_pinned,action_url,created_by)
                 VALUES (?,?,?,?,?,?,?,?,?,?)
-                """, id, request.title().trim(), clean(request.summary()), request.content().trim(), request.type(),
+                """, id, request.title().trim(), clean(request.summary()), clean(request.content()), request.type(),
                 request.target(), request.status(), request.isPinned(), clean(request.actionUrl()), adminId);
         return find(id);
     }
@@ -66,7 +66,7 @@ public class AnnouncementService {
         int changed = jdbc.update("""
                 UPDATE announcements SET title=?,summary=?,content=?,type=?,target=?,status=?,is_pinned=?,action_url=?,updated_at=now()
                 WHERE id=?
-                """, request.title().trim(), clean(request.summary()), request.content().trim(), request.type(),
+                """, request.title().trim(), clean(request.summary()), clean(request.content()), request.type(),
                 request.target(), request.status(), request.isPinned(), clean(request.actionUrl()), id);
         if (changed == 0) throw missing();
         return find(id);
@@ -102,13 +102,16 @@ public class AnnouncementService {
     private Announcement map(ResultSet rs, int row) throws SQLException {
         Timestamp created = rs.getTimestamp("created_at");
         Timestamp updated = rs.getTimestamp("updated_at");
-        return new Announcement(rs.getObject("id", UUID.class), rs.getString("title"), rs.getString("summary"),
-                rs.getString("content"), rs.getString("type"), rs.getString("target"), rs.getString("status"),
+        return new Announcement(rs.getObject("id", UUID.class), rs.getString("title"), clean(rs.getString("summary")),
+                clean(rs.getString("content")), rs.getString("type"), rs.getString("target"), rs.getString("status"),
                 rs.getBoolean("is_pinned"), rs.getString("action_url"), rs.getLong("read_count"),
                 rs.getBoolean("is_read"), created == null ? null : created.toInstant(),
                 updated == null ? null : updated.toInstant(), rs.getString("created_by"));
     }
 
-    private static String clean(String value) { return value == null ? "" : value.trim(); }
+    private static String clean(String value) {
+        if (value == null) return "";
+        return value.trim().replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n");
+    }
     private static ResponseStatusException missing() { return new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy thông báo."); }
 }

@@ -85,6 +85,7 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [systemName, setSystemName] = useState('TOEIC AI');
   const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
   const [logoutError, setLogoutError] = useState('');
   const [prefNotice, setPrefNotice] = useState('');
@@ -125,9 +126,24 @@ export function Header() {
 
       const savedLookup = localStorage.getItem(DOUBLE_CLICK_LOOKUP_STORAGE_KEY) !== 'false';
       setIsDoubleTapLookup(savedLookup);
+
+      const savedBranding = localStorage.getItem('toeic_system_branding');
+      if (savedBranding) {
+        const parsed = JSON.parse(savedBranding);
+        if (parsed?.systemName) setSystemName(parsed.systemName);
+      }
     } catch {
       // Ignore storage access errors
     }
+
+    const handleBrandingChange = (event: Event) => {
+      const custom = event as CustomEvent<{ systemName?: string }>;
+      if (custom.detail?.systemName) {
+        setSystemName(custom.detail.systemName);
+      }
+    };
+    window.addEventListener('toeic:system-settings-changed', handleBrandingChange);
+    return () => window.removeEventListener('toeic:system-settings-changed', handleBrandingChange);
   }, []);
 
   const closeMenu = () => {
@@ -172,19 +188,22 @@ export function Header() {
   };
 
   useEffect(() => {
-
     getCurrentUser()
       .then(setUser)
       .catch((error: unknown) => {
         console.error("Could not load the current user:", error);
       });
+
+    const handleProfileUpdate = () => {
+      getCurrentUser().then(setUser).catch(() => {});
+    };
+    window.addEventListener('toeic:user-profile-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('toeic:user-profile-updated', handleProfileUpdate);
+    };
   }, [router]);
 
   useEffect(() => {
-    if (!user || user.role !== 'STUDENT') {
-      return;
-    }
-
     let active = true;
     const refreshUnreadCount = async () => {
       try {
@@ -233,10 +252,18 @@ export function Header() {
     setLogoutError('');
     try {
       await logout();
+    } catch (error) {
+      console.warn('Lỗi khi gọi API đăng xuất, tiếp tục dọn phiên client:', error);
+    } finally {
+      document.documentElement.classList.remove('dark');
+      ['accessToken', 'refreshToken', 'token', 'authToken', 'currentUser', 'auth'].forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch {}
+      });
       router.replace('/login');
       router.refresh();
-    } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : 'Không thể đăng xuất.');
     }
   }
 
@@ -251,7 +278,7 @@ export function Header() {
           <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm shadow-primary/20">
             <BookOpen className="size-[18px]" aria-hidden="true" />
           </span>
-          <span className="hidden text-[15px] font-bold tracking-tight text-on-surface lg:inline">TOEIC AI</span>
+          <span className="hidden text-[15px] font-bold tracking-tight text-on-surface lg:inline">{systemName}</span>
         </Link>
 
         <nav aria-label="Điều hướng học tập" className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -311,14 +338,23 @@ export function Header() {
             <Link
               href="/notifications"
               onClick={closeMenu}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface"
+              className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface"
             >
-              <Bell className="size-4 text-primary" aria-hidden="true" />
-              <span className="flex-1">Thông báo</span>
-              {unreadAnnouncementCount > 0 && <span aria-label={`${unreadAnnouncementCount} chưa đọc`} className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</span>}
+              <span className="flex items-center gap-3">
+                <Bell className="size-4 text-primary" aria-hidden="true" />
+                <span>Thông báo</span>
+              </span>
+              {unreadAnnouncementCount > 0 && (
+                <span
+                  aria-label={`${unreadAnnouncementCount} chưa đọc`}
+                  className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white shadow-xs tabular-nums"
+                >
+                  {unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}
+                </span>
+              )}
             </Link>
             <Link
-              href="/onboarding"
+              href="/onboarding?mode=edit"
               onClick={closeMenu}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface"
             >

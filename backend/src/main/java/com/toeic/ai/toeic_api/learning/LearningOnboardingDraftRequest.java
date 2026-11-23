@@ -21,9 +21,9 @@ public record LearningOnboardingDraftRequest(
         @NotNull List<@Pattern(regexp = "LISTENING|READING|VOCABULARY|GRAMMAR|MOCK_TESTS") String> interests,
         @NotNull @Min(0) @Max(4) Integer currentStep) {
 
-    @AssertTrue(message = "Điểm mục tiêu không hợp lệ.")
+    @AssertTrue(message = "Điểm mục tiêu TOEIC không hợp lệ (phải từ 10 đến 990 điểm và là bội số của 5).")
     public boolean isTargetScoreSupported() {
-        return targetScore == null || List.of(450, 600, 750, 900).contains(targetScore);
+        return targetScore == null || (targetScore >= 10 && targetScore <= 990 && targetScore % 5 == 0);
     }
 
     @AssertTrue(message = "Thời lượng học mỗi ngày không hợp lệ.")

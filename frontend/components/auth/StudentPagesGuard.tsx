@@ -19,6 +19,7 @@ const studentRoutes = [
   '/profile',
   '/recommendation',
   '/result',
+  '/notifications',
 ];
 
 export function StudentPagesGuard({ children }: { children: ReactNode }) {
@@ -31,6 +32,22 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
   const [authorizationError, setAuthorizationError] = useState<{ path: string; message: string } | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
+  // Quản lý Chế độ tối (Dark Mode):
+  // Chỉ kích hoạt chế độ tối bên trong không gian học viên (User).
+  // Các trang Quản trị (Admin), Đăng nhập, Đăng ký, Trang chủ (Landing page) luôn ở chế độ sáng chuẩn.
+  useEffect(() => {
+    if (requiresStudent) {
+      try {
+        const isDark = localStorage.getItem('toeic_pref_dark_mode') === 'true';
+        document.documentElement.classList.toggle('dark', isDark);
+      } catch {
+        // ignore
+      }
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [pathname, requiresStudent]);
+
   useEffect(() => {
     if (!requiresStudent) return;
 
@@ -39,19 +56,19 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
       try {
         const user = await getCurrentUser();
         if (!active) return;
-        if (user.role !== 'STUDENT') {
-          router.replace(getHomePathForRole(user.role));
-          return;
-        }
-        try {
-          const onboarding = await getLearningOnboardingStatus();
-          if (!active) return;
-          if (onboarding?.state?.completed && pathname === '/onboarding') {
-            router.replace('/dashboard');
-            return;
+        // Cho phép ADMIN và TEACHER truy cập và trải nghiệm tất cả các trang học tập của học viên
+        if (user.role === 'STUDENT') {
+          try {
+            const onboarding = await getLearningOnboardingStatus();
+            if (!active) return;
+            const isEditingOnboarding = typeof window !== 'undefined' && window.location.search.includes('mode=edit');
+            if (onboarding?.state?.completed && pathname === '/onboarding' && !isEditingOnboarding) {
+              router.replace('/dashboard');
+              return;
+            }
+          } catch {
+            // Ignore onboarding status fetch error so learning routes remain accessible
           }
-        } catch {
-          // Ignore onboarding status fetch error so learning routes remain accessible
         }
         setAuthorizationError(null);
         setAuthorizedPath(pathname);

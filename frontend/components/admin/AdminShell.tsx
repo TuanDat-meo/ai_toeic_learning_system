@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
@@ -8,6 +8,11 @@ import { StudentChatBubble } from "@/components/layout/StudentChatBubble";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    // Không gian quản trị (Admin) luôn giữ giao diện sáng chuẩn, không bị ảnh hưởng bởi chế độ tối
+    document.documentElement.classList.remove("dark");
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">

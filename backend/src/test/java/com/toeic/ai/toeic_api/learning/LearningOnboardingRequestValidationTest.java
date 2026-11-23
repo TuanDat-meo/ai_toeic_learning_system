@@ -24,12 +24,12 @@ class LearningOnboardingRequestValidationTest {
     @Test
     void rejectsUnsupportedChoicesAndOutOfRangeValues() {
         LearningOnboardingRequest request = new LearningOnboardingRequest(
-                500, null, "OTHER", "NEW", 1000, 20, List.of(8),
+                1005, null, "OTHER", "NEW", 1000, 20, List.of(8),
                 List.of("SPEAKING"));
 
         assertThat(validator.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("targetScoreSupported", "learningReason", "currentLevel", "recentScore",
+                .contains("targetScore", "targetScoreSupported", "learningReason", "currentLevel", "recentScore",
                         "dailyStudyMinutesSupported", "studyDays[0].<list element>",
                         "interests[0].<list element>");
     }
@@ -37,7 +37,7 @@ class LearningOnboardingRequestValidationTest {
     @Test
     void acceptsIncompleteDraftAndRejectsInvalidStep() {
         LearningOnboardingDraftRequest draft = new LearningOnboardingDraftRequest(
-                750, null, null, null, null, null, List.of(), List.of(), 1);
+                550, null, null, null, null, null, List.of(), List.of(), 1);
         LearningOnboardingDraftRequest emptyDraft = new LearningOnboardingDraftRequest(
                 null, null, null, null, null, null, List.of(), List.of(), 0);
         LearningOnboardingDraftRequest invalidStep = new LearningOnboardingDraftRequest(
@@ -53,7 +53,7 @@ class LearningOnboardingRequestValidationTest {
     @Test
     void rejectsUnsupportedTargetScoreOnDraft() {
         LearningOnboardingDraftRequest draft = new LearningOnboardingDraftRequest(
-                500, null, null, null, null, null, List.of(), List.of(), 0);
+                503, null, null, null, null, null, List.of(), List.of(), 0);
 
         assertThat(validator.validate(draft))
                 .extracting(violation -> violation.getPropertyPath().toString())

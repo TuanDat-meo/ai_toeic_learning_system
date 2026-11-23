@@ -328,9 +328,14 @@ export function AiReviewManagement() {
       })
       .catch((error: unknown) => {
         if (active) {
-          setLoadError(
-            error instanceof Error ? error.message : "Không thể tải danh sách kiểm duyệt AI.",
-          );
+          const errMsg = error instanceof Error ? error.message : "Không thể tải danh sách kiểm duyệt AI.";
+          setLoadError(errMsg);
+          // Auto-retry once after 3 seconds if initial load failed (e.g. backend container is still starting up)
+          if (!errMsg.includes("quyền") && !errMsg.includes("hết hạn")) {
+            window.setTimeout(() => {
+              if (active) setReloadKey((k) => k + 1);
+            }, 3000);
+          }
         }
       })
       .finally(() => {
@@ -982,13 +987,23 @@ export function AiReviewManagement() {
             <div>
               <h2 className="text-sm font-bold">Không thể tải danh sách kiểm duyệt</h2>
               <p className="mt-1 text-xs">{loadError}</p>
-              <button
-                type="button"
-                onClick={refreshQueue}
-                className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer"
-              >
-                Thử lại
-              </button>
+              <div className="mt-3 flex items-center gap-2">
+                {loadError.includes("quyền") || loadError.includes("hết hạn") ? (
+                  <Link
+                    href="/login"
+                    className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition"
+                  >
+                    Đăng nhập lại với quyền Admin
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={refreshQueue}
+                  className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer"
+                >
+                  Thử lại
+                </button>
+              </div>
             </div>
           </div>
         </section>

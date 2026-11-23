@@ -85,17 +85,23 @@ export function AdminSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         if (active) setRoleLoadFailed(true);
       });
 
-    getReports()
-      .then((reports) => {
-        if (active) {
-          const pending = reports.filter((r) => r.status === "PENDING").length;
-          setPendingReportCount(pending);
-        }
-      })
-      .catch(() => {});
+    const refreshPending = () => {
+      getReports()
+        .then((reports) => {
+          if (active) {
+            const pending = reports.filter((r) => r.status === "PENDING").length;
+            setPendingReportCount(pending);
+          }
+        })
+        .catch(() => {});
+    };
+
+    refreshPending();
+    window.addEventListener("support-reports-updated", refreshPending);
 
     return () => {
       active = false;
+      window.removeEventListener("support-reports-updated", refreshPending);
     };
   }, [pathname]);
 

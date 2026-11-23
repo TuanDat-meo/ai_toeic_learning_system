@@ -158,10 +158,19 @@ public class AuthController {
 
     @PostMapping("/logout")
     void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
-        ManagedUser current = userAccountService.findManagedUser(authentication.getName());
-        auditLogService.record(current.id(), "LOGOUT", "SESSION", null,
-            "Đăng xuất khỏi thiết bị này.", request.getRemoteAddr());
-        new SecurityContextLogoutHandler().logout(request, response, authentication);
+        if (authentication != null && authentication.isAuthenticated()) {
+            try {
+                ManagedUser current = userAccountService.findManagedUser(authentication.getName());
+                if (current != null) {
+                    auditLogService.record(current.id(), "LOGOUT", "SESSION", null,
+                        "Đăng xuất khỏi thiết bị này.", request.getRemoteAddr());
+                }
+            } catch (Exception ignored) {
+            }
+            new SecurityContextLogoutHandler().logout(request, response, authentication);
+        } else {
+            new SecurityContextLogoutHandler().logout(request, response, null);
+        }
     }
 
     private AuthUser toAuthUser(ManagedUser user) {
