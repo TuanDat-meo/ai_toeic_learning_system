@@ -848,8 +848,7 @@ public class ContentImportService {
                                 return found;
                             });
                 }
-                Map<String, UUID> found = new java.util.HashMap<>(findContentIds(type, dedupeKeys));
-                if (type != ContentType.VOCABULARY) return found;
+                if (type != ContentType.VOCABULARY) return findContentIds(type, dedupeKeys);
 
                 Set<String> words = validations.stream()
                         .filter(validation -> validation.valid())

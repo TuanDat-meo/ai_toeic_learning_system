@@ -29,6 +29,7 @@ import {
   AlertCircle,
   Megaphone,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import {
   getStudentAnnouncements,

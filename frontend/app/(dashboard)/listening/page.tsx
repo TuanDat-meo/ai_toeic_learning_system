@@ -4,8 +4,8 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Sparkles, Volume2, History, BarChart3, Clock, Target, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData } from "@/app/admin/content/listening/types";
 import { fetchListeningCards, fetchListeningUnits, fetchListeningAnalytics, type ListeningAnalyticsSummary, type ListeningRecommendationItem } from "@/lib/api/listening";
-import { StudentListeningDictationTab } from "@/components/student/listening/StudentListeningDictationTab";
-import { StudentListeningPartTab } from "@/components/student/listening/StudentListeningPartTab";
+import { StudentListeningDictationTab } from "@/components/listening/StudentListeningDictationTab";
+import { StudentListeningPartTab } from "@/components/listening/StudentListeningPartTab";
 import { ListeningDictationModal } from "@/components/admin/content/listening/ListeningDictationModal";
 import { ListeningQuizModal } from "@/components/admin/content/listening/ListeningQuizModal";
 import { ListeningAttemptHistoryModal } from "@/components/admin/content/listening/ListeningStudyToolsModals";
@@ -95,6 +95,53 @@ export default function StudentListeningPage() {
   const [part3Categories, setPart3Categories] = useState<LevelCategoryCardData[]>([]);
   const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>([]);
   const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>([]);
+
+  // Modal 1: Dictation Studio
+  const [dictationModalCard, setDictationModalCard] = useState<DictationCardData | null>(null);
+  const [activeDictationQIndex, setActiveDictationQIndex] = useState(0);
+  const [dictationUserInputs, setDictationUserInputs] = useState<{ [qId: number]: string }>({});
+  const [dictationChecked, setDictationChecked] = useState<{ [qId: number]: boolean }>({});
+  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("chep");
+  const [fillPercentage, setFillPercentage] = useState<30 | 50 | 100>(50);
+  const [revealedWordCount, setRevealedWordCount] = useState<number>(0);
+  const [replayCount, setReplayCount] = useState<number>(1);
+  const [audioSpeed, setAudioSpeed] = useState<"0.8" | "1.0" | "1.2">("1.0");
+
+  // Modal 2: Quiz Practice
+  const [quizModalCard, setQuizModalCard] = useState<LevelCategoryCardData | null>(null);
+  const [activeQuizQIndex, setActiveQuizQIndex] = useState(0);
+  const [quizSelectedOption, setQuizSelectedOption] = useState<{ [qId: number]: string }>({});
+  const [quizAnswerChecked, setQuizAnswerChecked] = useState<{ [qId: number]: boolean }>({});
+  const [showBilingualQuiz, setShowBilingualQuiz] = useState(false);
+
+  // Modal phụ
+  const [vocabBagModalData, setVocabBagModalData] = useState<{
+    title: string;
+    items: { word: string; ipa: string; meaning: string; example?: string }[];
+  } | null>(null);
+  const [theoryModalData, setTheoryModalData] = useState<{
+    title: string;
+    summary: string;
+    rules: string[];
+  } | null>(null);
+  const [savedVocabBag, setSavedVocabBag] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("toeic_listening_saved_vocab");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("toeic_listening_flagged_questions");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     let active = true;
@@ -205,53 +252,6 @@ export default function StudentListeningPage() {
       });
     return () => { active = false; };
   }, [refreshAnalytics]);
-
-  // Modal 1: Dictation Studio
-  const [dictationModalCard, setDictationModalCard] = useState<DictationCardData | null>(null);
-  const [activeDictationQIndex, setActiveDictationQIndex] = useState(0);
-  const [dictationUserInputs, setDictationUserInputs] = useState<{ [qId: number]: string }>({});
-  const [dictationChecked, setDictationChecked] = useState<{ [qId: number]: boolean }>({});
-  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("chep");
-  const [fillPercentage, setFillPercentage] = useState<30 | 50 | 100>(50);
-  const [revealedWordCount, setRevealedWordCount] = useState<number>(0);
-  const [replayCount, setReplayCount] = useState<number>(1);
-  const [audioSpeed, setAudioSpeed] = useState<"0.8" | "1.0" | "1.2">("1.0");
-
-  // Modal 2: Quiz Practice
-  const [quizModalCard, setQuizModalCard] = useState<LevelCategoryCardData | null>(null);
-  const [activeQuizQIndex, setActiveQuizQIndex] = useState(0);
-  const [quizSelectedOption, setQuizSelectedOption] = useState<{ [qId: number]: string }>({});
-  const [quizAnswerChecked, setQuizAnswerChecked] = useState<{ [qId: number]: boolean }>({});
-  const [showBilingualQuiz, setShowBilingualQuiz] = useState(false);
-
-  // Modal phụ
-  const [vocabBagModalData, setVocabBagModalData] = useState<{
-    title: string;
-    items: { word: string; ipa: string; meaning: string; example?: string }[];
-  } | null>(null);
-  const [theoryModalData, setTheoryModalData] = useState<{
-    title: string;
-    summary: string;
-    rules: string[];
-  } | null>(null);
-  const [savedVocabBag, setSavedVocabBag] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("toeic_listening_saved_vocab");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [flaggedReviewIds, setFlaggedReviewIds] = useState<number[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("toeic_listening_flagged_questions");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;

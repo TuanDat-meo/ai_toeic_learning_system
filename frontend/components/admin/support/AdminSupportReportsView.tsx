@@ -462,17 +462,6 @@ export function AdminSupportReportsView() {
     setTimeout(() => setCopiedRef(false), 2000);
   }
 
-  function applyQuickTemplate(template: (typeof quickReplyTemplates)[0]) {
-    setReplyText(template.text);
-    setReplyStatus(template.status);
-  }
-
-  function copyQuestionRef(ref: string) {
-    navigator.clipboard.writeText(ref);
-    setCopiedRef(true);
-    setTimeout(() => setCopiedRef(false), 2000);
-  }
-
   async function handleSendReply() {
     if (!activeReport) return;
     setSaving(true);
