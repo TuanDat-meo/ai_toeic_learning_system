@@ -5,6 +5,7 @@ import {
   Headphones,
   Plus,
   Download,
+  Upload,
   BookOpen,
   FileAudio,
   Globe,
@@ -19,6 +20,7 @@ interface ListeningHeaderProps {
   activePartTab: "dictation" | "part1" | "part2" | "part3" | "part4";
   setActivePartTab: (tab: "dictation" | "part1" | "part2" | "part3" | "part4") => void;
   onOpenCreate?: () => void;
+  onOpenBulkImport?: () => void;
   onExportCsv: () => void;
 }
 
@@ -28,6 +30,7 @@ export const ListeningHeader: React.FC<ListeningHeaderProps> = ({
   activePartTab,
   setActivePartTab,
   onOpenCreate,
+  onOpenBulkImport,
   onExportCsv,
 }) => {
   return (
@@ -48,6 +51,16 @@ export const ListeningHeader: React.FC<ListeningHeaderProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {onOpenBulkImport && (
+            <button
+              type="button"
+              onClick={onOpenBulkImport}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-100/80 cursor-pointer shadow-xs transition"
+            >
+              <Upload size={16} className="text-blue-600" aria-hidden="true" />
+              <span>Import hàng loạt</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onExportCsv}

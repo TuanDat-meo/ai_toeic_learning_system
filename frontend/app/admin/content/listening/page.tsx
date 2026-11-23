@@ -11,7 +11,9 @@ import {
   fetchAdminListeningCards,
   fetchAdminListeningUnits,
   updateListeningCard,
+  updateListeningCardStatus,
   updateListeningUnit,
+  updateListeningUnitStatus,
 } from "@/lib/api/listening";
 import { ListeningHeader, ListeningAdminTab } from "@/components/admin/content/listening/ListeningHeader";
 import {
@@ -34,6 +36,7 @@ import {
   LevelFormModal,
   DeleteLevelModal,
 } from "@/components/admin/content/listening/ListeningModals";
+import { ListeningBulkImportModal } from "@/components/admin/content/listening/ListeningBulkImportModal";
 
 const EMPTY_LISTENING_QUESTION: DictationQuestion = {
   id: 0,
@@ -63,6 +66,28 @@ export default function ListeningPage() {
   const [part4Levels, setPart4Levels] = useState<LevelCategoryCardData[]>([]);
   const [part4Categories, setPart4Categories] = useState<LevelCategoryCardData[]>([]);
   const [dataLoadError, setDataLoadError] = useState<string | null>(null);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+
+  const reloadListeningData = React.useCallback(() => {
+    Promise.all([fetchAdminListeningCards(), fetchAdminListeningUnits()])
+      .then(([cards, units]) => {
+        setDictationCards(cards);
+        const byPart = (part: LevelCategoryCardData["part"], type: "level" | "category") =>
+          units.filter((unit) => unit.part === part && unit.type === type);
+        setPart1Levels(byPart("Part 1", "level"));
+        setPart1Categories(byPart("Part 1", "category"));
+        setPart2Levels(byPart("Part 2", "level"));
+        setPart2Categories(byPart("Part 2", "category"));
+        setPart3Levels(byPart("Part 3", "level"));
+        setPart3Categories(byPart("Part 3", "category"));
+        setPart4Levels(byPart("Part 4", "level"));
+        setPart4Categories(byPart("Part 4", "category"));
+        setDataLoadError(null);
+      })
+      .catch((error: unknown) => {
+        setDataLoadError(error instanceof Error ? error.message : "Không thể tải dữ liệu nghe.");
+      });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -102,7 +127,7 @@ export default function ListeningPage() {
   const [activeDictationQIndex, setActiveDictationQIndex] = useState(0);
   const [dictationUserInputs, setDictationUserInputs] = useState<{ [qId: number]: string }>({});
   const [dictationChecked, setDictationChecked] = useState<{ [qId: number]: boolean }>({});
-  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("check");
+  const [dictationSubTab, setDictationSubTab] = useState<"chep" | "check" | "full">("chep");
   const [fillPercentage, setFillPercentage] = useState<30 | 50 | 100>(50);
   const [revealedWordCount, setRevealedWordCount] = useState<number>(0);
   const [replayCount, setReplayCount] = useState<number>(1);
@@ -163,6 +188,7 @@ export default function ListeningPage() {
   const [showReviewQuestionsModal, setShowReviewQuestionsModal] = useState(false);
 
   // CRUD Dictation
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PUBLISHED" | "DRAFT">("ALL");
   const [showDictationModal, setShowDictationModal] = useState(false);
   const [editingDictationCard, setEditingDictationCard] = useState<DictationCardData | null>(null);
   const [dictationFormTitle, setDictationFormTitle] = useState("");
@@ -172,7 +198,11 @@ export default function ListeningPage() {
   const [dictationFormTestNum, setDictationFormTestNum] = useState(1);
   const [dictationFormPart, setDictationFormPart] = useState<"Part 1" | "Part 2" | "Part 3" | "Part 4">("Part 1");
   const [dictationFormYear, setDictationFormYear] = useState<"2026" | "2024" | "2023" | "2022">("2024");
-  const [dictationFormQuestions, setDictationFormQuestions] = useState(10);
+  const [dictationFormQuestions, setDictationFormQuestions] = useState(1);
+  const [dictationFormContentStatus, setDictationFormContentStatus] = useState<"DRAFT" | "PUBLISHED">("PUBLISHED");
+  const [dictationQuestionsList, setDictationQuestionsList] = useState<DictationQuestion[]>([
+    { ...EMPTY_LISTENING_QUESTION, id: 1 },
+  ]);
   const [deleteDictationConfirm, setDeleteDictationConfirm] = useState<DictationCardData | null>(null);
 
   // CRUD Level / Category
@@ -181,10 +211,13 @@ export default function ListeningPage() {
   const [levelFormPart, setLevelFormPart] = useState<"Part 1" | "Part 2" | "Part 3" | "Part 4">("Part 1");
   const [levelFormType, setLevelFormType] = useState<"level" | "category">("level");
   const [levelFormTitle, setLevelFormTitle] = useState("");
-  const [levelFormQuestions, setLevelFormQuestions] = useState(30);
+  const [levelFormQuestions, setLevelFormQuestions] = useState(1);
   const [levelFormTheory, setLevelFormTheory] = useState("");
   const [levelFormRules, setLevelFormRules] = useState("");
-  const [levelFormQuestion, setLevelFormQuestion] = useState<DictationQuestion>(EMPTY_LISTENING_QUESTION);
+  const [levelFormContentStatus, setLevelFormContentStatus] = useState<"DRAFT" | "PUBLISHED">("PUBLISHED");
+  const [levelFormQuestionsList, setLevelFormQuestionsList] = useState<DictationQuestion[]>([
+    { ...EMPTY_LISTENING_QUESTION, id: 1 },
+  ]);
   const [deleteLevelConfirm, setDeleteLevelConfirm] = useState<LevelCategoryCardData | null>(null);
 
   // Handlers
@@ -197,7 +230,9 @@ export default function ListeningPage() {
     setDictationFormTestNum(1);
     setDictationFormPart("Part 1");
     setDictationFormYear(selectedYear);
-    setDictationFormQuestions(10);
+    setDictationFormQuestions(1);
+    setDictationFormContentStatus("PUBLISHED");
+    setDictationQuestionsList([{ ...EMPTY_LISTENING_QUESTION, id: 1, part: "Part 1" }]);
     setShowDictationModal(true);
   };
 
@@ -205,6 +240,9 @@ export default function ListeningPage() {
     if (e) e.stopPropagation();
     setEditingDictationCard(card);
     const q1 = card.questions?.[0];
+    const list = card.questions && card.questions.length > 0
+      ? card.questions.map((q, idx) => ({ ...q, id: q.id || idx + 1, part: card.part }))
+      : [{ ...EMPTY_LISTENING_QUESTION, id: 1, part: card.part }];
     setDictationFormTitle(card.title || `Test ${card.testNumber} - ${card.part}`);
     setDictationFormAudioUrl(q1?.audioUrl || "");
     setDictationFormTranscript(q1?.fullTranscript || "");
@@ -212,34 +250,44 @@ export default function ListeningPage() {
     setDictationFormTestNum(card.testNumber);
     setDictationFormPart(card.part);
     setDictationFormYear(card.year);
-    setDictationFormQuestions(card.totalQuestions);
+    setDictationFormQuestions(list.length);
+    setDictationFormContentStatus(card.contentStatus === "DRAFT" ? "DRAFT" : "PUBLISHED");
+    setDictationQuestionsList(list);
     setShowDictationModal(true);
   };
 
-  const handleSaveDictation = async (e: React.FormEvent) => {
+  const handleSaveDictation = async (e: React.FormEvent, statusOverride?: "DRAFT" | "PUBLISHED") => {
     e.preventDefault();
+    const targetStatus = statusOverride || dictationFormContentStatus;
     if (!dictationFormTitle.trim()) {
       triggerToast("Vui lòng nhập tiêu đề bài nghe chép! ⚠️");
       return;
     }
-    if (!dictationFormTranscript.trim()) {
-      triggerToast("Vui lòng nhập transcript đoạn nghe! ⚠️");
-      return;
-    }
-    if (!dictationFormAudioUrl.trim()) {
-      triggerToast("Vui lòng nhập đường dẫn Audio MP3! ⚠️");
+    const normalizedQuestions = dictationQuestionsList.map((q, idx) => ({
+      ...q,
+      id: idx + 1,
+      part: dictationFormPart,
+      audioUrl: (q.audioUrl || "").trim(),
+      fullTranscript: (q.fullTranscript || "").trim(),
+      vietnameseTranslation: (q.vietnameseTranslation || "").trim(),
+    }));
+    const firstQ = normalizedQuestions[0];
+    if (targetStatus === "PUBLISHED" && (!firstQ || !firstQ.fullTranscript || !firstQ.audioUrl)) {
+      triggerToast("Để xuất bản, vui lòng nhập đầy đủ Audio MP3 và Transcript cho các câu! ⚠️");
       return;
     }
 
     const request = {
-        title: dictationFormTitle.trim(),
-        testNumber: dictationFormTestNum,
-        part: dictationFormPart,
-        year: dictationFormYear,
-        totalQuestions: dictationFormQuestions,
-        audioUrl: dictationFormAudioUrl.trim(),
-        fullTranscript: dictationFormTranscript.trim(),
-        vietnameseTranslation: dictationFormTranslation.trim(),
+      title: dictationFormTitle.trim(),
+      testNumber: dictationFormTestNum,
+      part: dictationFormPart,
+      year: dictationFormYear,
+      totalQuestions: normalizedQuestions.length,
+      audioUrl: firstQ?.audioUrl || "",
+      fullTranscript: firstQ?.fullTranscript || "",
+      vietnameseTranslation: firstQ?.vietnameseTranslation || "",
+      questions: normalizedQuestions,
+      contentStatus: targetStatus,
     };
     try {
       const savedCard = editingDictationCard
@@ -248,12 +296,29 @@ export default function ListeningPage() {
       setDictationCards((prev) => editingDictationCard
         ? prev.map((card) => card.id === savedCard.id ? savedCard : card)
         : [savedCard, ...prev]);
+      const statusLabel = targetStatus === "DRAFT" ? "Bản nháp" : "Đã xuất bản";
       triggerToast(editingDictationCard
-        ? `Đã cập nhật bài nghe "${dictationFormTitle}"! 💾`
-        : `Đã thêm bài nghe "${dictationFormTitle}" thành công! 🎉`);
+        ? `Đã cập nhật bài nghe "${dictationFormTitle}" (${normalizedQuestions.length} câu · ${statusLabel})! 💾`
+        : `Đã tạo bài nghe "${dictationFormTitle}" (${normalizedQuestions.length} câu · ${statusLabel})! 🎉`);
       setShowDictationModal(false);
     } catch (error) {
       triggerToast(error instanceof Error ? error.message : "Không thể lưu bài nghe.");
+    }
+  };
+
+  const handleToggleDictationStatus = async (card: DictationCardData, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const nextStatus: "DRAFT" | "PUBLISHED" = card.contentStatus === "DRAFT" ? "PUBLISHED" : "DRAFT";
+    try {
+      const updated = await updateListeningCardStatus(card.id, nextStatus);
+      setDictationCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      triggerToast(
+        nextStatus === "PUBLISHED"
+          ? `🚀 Đã xuất bản bài nghe "${card.title || card.part}" cho học viên!`
+          : `📝 Đã chuyển bài nghe "${card.title || card.part}" về Bản nháp!`
+      );
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể đổi trạng thái bài nghe.");
     }
   };
 
@@ -274,10 +339,11 @@ export default function ListeningPage() {
     setLevelFormPart(part);
     setLevelFormType(type);
     setLevelFormTitle("");
-    setLevelFormQuestions(30);
+    setLevelFormQuestions(1);
     setLevelFormTheory("");
     setLevelFormRules("");
-    setLevelFormQuestion({ ...EMPTY_LISTENING_QUESTION, part });
+    setLevelFormContentStatus("PUBLISHED");
+    setLevelFormQuestionsList([{ ...EMPTY_LISTENING_QUESTION, id: 1, part }]);
     setShowLevelModal(true);
   };
 
@@ -287,51 +353,70 @@ export default function ListeningPage() {
     setLevelFormPart(card.part);
     setLevelFormType(card.type);
     setLevelFormTitle(card.title);
-    setLevelFormQuestions(card.totalQuestions);
+    const list = card.questions && card.questions.length > 0
+      ? card.questions.map((q, idx) => ({ ...q, id: q.id || idx + 1, part: card.part }))
+      : [{ ...EMPTY_LISTENING_QUESTION, id: 1, part: card.part }];
+    setLevelFormQuestions(list.length);
     setLevelFormTheory(card.theorySummary);
     setLevelFormRules(card.rules.join("\n"));
-    setLevelFormQuestion(card.questions[0] || { ...EMPTY_LISTENING_QUESTION, part: card.part });
+    setLevelFormContentStatus(card.contentStatus === "DRAFT" ? "DRAFT" : "PUBLISHED");
+    setLevelFormQuestionsList(list);
     setShowLevelModal(true);
   };
 
-  const handleSaveLevel = async (e: React.FormEvent) => {
+  const handleSaveLevel = async (e: React.FormEvent, statusOverride?: "DRAFT" | "PUBLISHED") => {
     e.preventDefault();
+    const targetStatus = statusOverride || levelFormContentStatus;
     if (!levelFormTitle.trim()) {
       triggerToast("Vui lòng nhập tên chủ điểm!");
       return;
     }
-    const options = levelFormQuestion.options || {};
-    if (!levelFormQuestion.audioUrl.trim() || !levelFormQuestion.fullTranscript.trim()
-      || !["A", "B", "C", "D"].every((key) => options[key]?.trim())
-      || !levelFormQuestion.correctAnswer) {
-      triggerToast("Vui lòng nhập audio, transcript, đủ 4 lựa chọn và đáp án đúng.");
-      return;
+    const part = editingLevelCard?.part || levelFormPart;
+    const requiredKeys = part === "Part 2" ? ["A", "B", "C"] : ["A", "B", "C", "D"];
+    if (targetStatus === "PUBLISHED") {
+      for (let i = 0; i < levelFormQuestionsList.length; i++) {
+        const q = levelFormQuestionsList[i];
+        const options = q.options || {};
+        if (
+          !q.audioUrl?.trim() ||
+          !q.fullTranscript?.trim() ||
+          !requiredKeys.every((key) => options[key]?.trim()) ||
+          !q.correctAnswer
+        ) {
+          triggerToast(`Câu ${i + 1}: Vui lòng nhập audio, transcript, đủ các lựa chọn (${requiredKeys.join(", ")}) và đáp án đúng.`);
+          return;
+        }
+      }
     }
     const rulesArray = levelFormRules.split("\n").map((r) => r.trim()).filter(Boolean);
-    const part = editingLevelCard?.part || levelFormPart;
-    const savedQuestion: DictationQuestion = {
-      ...levelFormQuestion,
-      id: editingLevelCard?.questions[0]?.id || Date.now(),
-      part,
-      options: {
+    const savedQuestions: DictationQuestion[] = levelFormQuestionsList.map((q, idx) => {
+      const options = q.options || {};
+      const savedOptions: { [key: string]: string } = {
         A: options.A || "",
         B: options.B || "",
         C: options.C || "",
-        D: options.D || "",
-      },
-    };
+      };
+      if (part !== "Part 2" || options.D?.trim()) {
+        savedOptions.D = options.D || "";
+      }
+      return {
+        ...q,
+        id: q.id || idx + 1,
+        part,
+        options: savedOptions,
+      };
+    });
     const request = {
       part,
       type: editingLevelCard?.type || levelFormType,
       title: levelFormTitle.trim(),
       targetLevel: editingLevelCard?.targetLevel,
-      totalQuestions: levelFormQuestions,
+      totalQuestions: savedQuestions.length,
       theorySummary: levelFormTheory.trim(),
       rules: rulesArray.length > 0 ? rulesArray : editingLevelCard?.rules || [],
       vocabBag: editingLevelCard?.vocabBag || [],
-      questions: editingLevelCard
-        ? [savedQuestion, ...editingLevelCard.questions.slice(1)]
-        : [savedQuestion],
+      questions: savedQuestions,
+      contentStatus: targetStatus,
     };
     try {
       const savedUnit = editingLevelCard
@@ -355,12 +440,38 @@ export default function ListeningPage() {
       setUnitList("Part 3", "category", setPart3Categories);
       setUnitList("Part 4", "level", setPart4Levels);
       setUnitList("Part 4", "category", setPart4Categories);
+      const statusLabel = targetStatus === "DRAFT" ? "Bản nháp" : "Đã xuất bản";
       triggerToast(editingLevelCard
-        ? `Đã cập nhật chủ điểm "${levelFormTitle}"! 💾`
-        : `Đã thêm chủ điểm "${savedUnit.title}"! 🎉`);
+        ? `Đã cập nhật chủ điểm "${levelFormTitle}" (${savedQuestions.length} câu · ${statusLabel})! 💾`
+        : `Đã thêm chủ điểm "${savedUnit.title}" (${savedQuestions.length} câu · ${statusLabel})! 🎉`);
       setShowLevelModal(false);
     } catch (error) {
       triggerToast(error instanceof Error ? error.message : "Không thể lưu chủ điểm nghe.");
+    }
+  };
+
+  const handleToggleLevelStatus = async (card: LevelCategoryCardData, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const nextStatus: "DRAFT" | "PUBLISHED" = card.contentStatus === "DRAFT" ? "PUBLISHED" : "DRAFT";
+    try {
+      const updated = await updateListeningUnitStatus(card.id, nextStatus);
+      const replaceInList = (prev: LevelCategoryCardData[]) =>
+        prev.map((u) => (u.id === updated.id ? updated : u));
+      setPart1Levels(replaceInList);
+      setPart1Categories(replaceInList);
+      setPart2Levels(replaceInList);
+      setPart2Categories(replaceInList);
+      setPart3Levels(replaceInList);
+      setPart3Categories(replaceInList);
+      setPart4Levels(replaceInList);
+      setPart4Categories(replaceInList);
+      triggerToast(
+        nextStatus === "PUBLISHED"
+          ? `🚀 Đã xuất bản chủ điểm "${card.title}" cho học viên!`
+          : `📝 Đã chuyển chủ điểm "${card.title}" về Bản nháp!`
+      );
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : "Không thể đổi trạng thái chủ điểm.");
     }
   };
 
@@ -449,9 +560,17 @@ export default function ListeningPage() {
     setDeleteConfirmTarget(null);
   };
 
+  const filterByPublicationStatus = <T extends { contentStatus?: string }>(items: T[]): T[] => {
+    if (statusFilter === "ALL") return items;
+    return items.filter((item) => {
+      const norm = item.contentStatus === "DRAFT" ? "DRAFT" : "PUBLISHED";
+      return norm === statusFilter;
+    });
+  };
+
   const filteredDictationCards = useMemo(() => {
-    return dictationCards.filter((c) => c.year === selectedYear);
-  }, [dictationCards, selectedYear]);
+    return filterByPublicationStatus(dictationCards.filter((c) => c.year === selectedYear));
+  }, [dictationCards, selectedYear, statusFilter]);
 
   const testsGrouped = useMemo(() => {
     const groups: { [testNum: number]: DictationCardData[] } = {};
@@ -569,6 +688,7 @@ export default function ListeningPage() {
             handleOpenAddLevel("Part 4");
           }
         }}
+        onOpenBulkImport={() => setShowBulkImportModal(true)}
         onExportCsv={handleExportCsv}
       />
 
@@ -580,10 +700,13 @@ export default function ListeningPage() {
             <ListeningDictationTab
               selectedYear={selectedYear}
               setSelectedYear={setSelectedYear}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
               flaggedReviewIds={flaggedReviewIds}
               testsGrouped={testsGrouped}
               handleOpenAddDictation={handleOpenAddDictation}
               handleOpenEditDictation={handleOpenEditDictation}
+              handleToggleDictationStatus={handleToggleDictationStatus}
               setDeleteDictationConfirm={setDeleteDictationConfirm}
               setVocabBagModalData={setVocabBagModalData}
               setTheoryModalData={setTheoryModalData}
@@ -596,12 +719,15 @@ export default function ListeningPage() {
           {activeTab === "part1" && (
             <ListeningPartTab
               part="Part 1"
-              levels={part1Levels}
-              categories={part1Categories}
+              levels={filterByPublicationStatus(part1Levels)}
+              categories={filterByPublicationStatus(part1Categories)}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
               categorySectionTitle="Theo dạng tranh"
               categorySectionSubtitle="Cùng bộ câu ở trên, chia theo bức tranh mô tả gì."
               handleOpenAddLevel={handleOpenAddLevel}
               handleOpenEditLevel={handleOpenEditLevel}
+              handleToggleLevelStatus={handleToggleLevelStatus}
               setDeleteLevelConfirm={setDeleteLevelConfirm}
               setVocabBagModalData={setVocabBagModalData}
               setTheoryModalData={setTheoryModalData}
@@ -613,12 +739,15 @@ export default function ListeningPage() {
           {activeTab === "part2" && (
             <ListeningPartTab
               part="Part 2"
-              levels={part2Levels}
-              categories={part2Categories}
+              levels={filterByPublicationStatus(part2Levels)}
+              categories={filterByPublicationStatus(part2Categories)}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
               categorySectionTitle="Theo dạng câu hỏi"
               categorySectionSubtitle="Phân loại câu hỏi Wh-, Yes/No, Lựa chọn và bẫy gián tiếp."
               handleOpenAddLevel={handleOpenAddLevel}
               handleOpenEditLevel={handleOpenEditLevel}
+              handleToggleLevelStatus={handleToggleLevelStatus}
               setDeleteLevelConfirm={setDeleteLevelConfirm}
               setVocabBagModalData={setVocabBagModalData}
               setTheoryModalData={setTheoryModalData}
@@ -630,12 +759,15 @@ export default function ListeningPage() {
           {activeTab === "part3" && (
             <ListeningPartTab
               part="Part 3"
-              levels={part3Levels}
-              categories={part3Categories}
+              levels={filterByPublicationStatus(part3Levels)}
+              categories={filterByPublicationStatus(part3Categories)}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
               categorySectionTitle="Theo chủ đề hội thoại"
               categorySectionSubtitle="Công sở, dịch vụ, hội thoại 3 người và bài đọc kèm sơ đồ."
               handleOpenAddLevel={handleOpenAddLevel}
               handleOpenEditLevel={handleOpenEditLevel}
+              handleToggleLevelStatus={handleToggleLevelStatus}
               setDeleteLevelConfirm={setDeleteLevelConfirm}
               setVocabBagModalData={setVocabBagModalData}
               setTheoryModalData={setTheoryModalData}
@@ -647,12 +779,15 @@ export default function ListeningPage() {
           {activeTab === "part4" && (
             <ListeningPartTab
               part="Part 4"
-              levels={part4Levels}
-              categories={part4Categories}
+              levels={filterByPublicationStatus(part4Levels)}
+              categories={filterByPublicationStatus(part4Categories)}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
               categorySectionTitle="Theo dạng bài nói"
               categorySectionSubtitle="Thông báo ga tàu, hộp thư thoại, bản tin thời tiết & bài phát biểu."
               handleOpenAddLevel={handleOpenAddLevel}
               handleOpenEditLevel={handleOpenEditLevel}
+              handleToggleLevelStatus={handleToggleLevelStatus}
               setDeleteLevelConfirm={setDeleteLevelConfirm}
               setVocabBagModalData={setVocabBagModalData}
               setTheoryModalData={setTheoryModalData}
@@ -780,6 +915,10 @@ export default function ListeningPage() {
         setDictationFormYear={setDictationFormYear}
         dictationFormQuestions={dictationFormQuestions}
         setDictationFormQuestions={setDictationFormQuestions}
+        dictationFormContentStatus={dictationFormContentStatus}
+        setDictationFormContentStatus={setDictationFormContentStatus}
+        dictationQuestionsList={dictationQuestionsList}
+        setDictationQuestionsList={setDictationQuestionsList}
         handleSaveDictation={handleSaveDictation}
       />
 
@@ -803,8 +942,10 @@ export default function ListeningPage() {
         setLevelFormTheory={setLevelFormTheory}
         levelFormRules={levelFormRules}
         setLevelFormRules={setLevelFormRules}
-        levelFormQuestion={levelFormQuestion}
-        setLevelFormQuestion={setLevelFormQuestion}
+        levelFormContentStatus={levelFormContentStatus}
+        setLevelFormContentStatus={setLevelFormContentStatus}
+        levelFormQuestionsList={levelFormQuestionsList}
+        setLevelFormQuestionsList={setLevelFormQuestionsList}
         handleSaveLevel={handleSaveLevel}
       />
 
@@ -812,6 +953,13 @@ export default function ListeningPage() {
         deleteLevelConfirm={deleteLevelConfirm}
         setDeleteLevelConfirm={setDeleteLevelConfirm}
         handleConfirmDeleteLevelCard={handleConfirmDeleteLevelCard}
+      />
+
+      <ListeningBulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onImported={reloadListeningData}
+        triggerToast={triggerToast}
       />
     </div>
   );
