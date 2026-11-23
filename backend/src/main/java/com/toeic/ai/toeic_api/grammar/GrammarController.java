@@ -23,14 +23,17 @@ public class GrammarController {
     private final GrammarService grammarService;
     private final GrammarSuggestionService grammarSuggestionService;
     private final UserAccountService userAccountService;
+    private final GrammarOperationsService operationsService;
 
     public GrammarController(
             GrammarService grammarService,
             GrammarSuggestionService grammarSuggestionService,
-            UserAccountService userAccountService) {
+            UserAccountService userAccountService,
+            GrammarOperationsService operationsService) {
         this.grammarService = grammarService;
         this.grammarSuggestionService = grammarSuggestionService;
         this.userAccountService = userAccountService;
+        this.operationsService = operationsService;
     }
 
     @GetMapping("/api/grammar/topics")
@@ -43,6 +46,36 @@ public class GrammarController {
     public GrammarService.GrammarTopic getTopic(@PathVariable String topicId, Authentication authentication) {
         UUID userId = extractUserId(authentication);
         return grammarService.getTopic(topicId, userId);
+    }
+
+    @GetMapping("/api/grammar/topics/{topicId}/resume")
+    public Map<String, Object> getResumeIndex(
+            @PathVariable String topicId,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return grammarService.getResumeIndex(userId, topicId);
+    }
+
+    @GetMapping("/api/grammar/config")
+    public GrammarService.GrammarLearningConfig getLearningConfig(
+            @org.springframework.web.bind.annotation.RequestParam(required=false) String topicId) {
+        return grammarService.getLearningConfig(topicId);
+    }
+
+    @GetMapping("/api/admin/grammar/config")
+    public GrammarService.GrammarLearningConfig getAdminLearningConfig(
+            @org.springframework.web.bind.annotation.RequestParam(required=false) String topicId) {
+        return grammarService.getLearningConfig(topicId);
+    }
+
+    @PutMapping("/api/admin/grammar/config")
+    public GrammarService.GrammarLearningConfig putLearningConfig(
+            @org.springframework.web.bind.annotation.RequestParam(required=false) String topicId,
+            @RequestBody GrammarService.GrammarLearningConfig config,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return grammarService.putLearningConfig(topicId, config, actorId);
     }
 
     @GetMapping("/api/admin/grammar/categories")
@@ -72,11 +105,11 @@ public class GrammarController {
 
     @PostMapping("/api/grammar/progress")
     @ResponseStatus(HttpStatus.OK)
-    public void saveProgress(@RequestBody GrammarService.SaveGrammarProgressRequest request, Authentication authentication) {
+    public GrammarService.GrammarAttemptResult saveProgress(@RequestBody GrammarService.SaveGrammarAttemptRequest request, Authentication authentication) {
         UUID userId = extractUserId(authentication);
-        if (userId != null && request != null) {
-            grammarService.saveProgress(userId, request.topicId(), request.completedQuestions(), request.totalQuestions(), request.status());
-        }
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        if (request == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu dữ liệu làm bài.");
+        return grammarService.saveAttempt(userId, request);
     }
 
     // Admin endpoints (guarded by hasRole('ADMIN') for /api/admin/**)
@@ -88,7 +121,13 @@ public class GrammarController {
 
     @PostMapping("/api/admin/grammar/topics")
     @ResponseStatus(HttpStatus.CREATED)
-    public GrammarService.GrammarTopic createTopic(@RequestBody GrammarService.CreateGrammarTopicRequest request) {
+    public GrammarService.GrammarTopic createTopic(
+            @RequestBody GrammarService.CreateGrammarTopicRequest request,
+            Authentication authentication) {
+        if ("PUBLISHED".equalsIgnoreCase(request.status()) && !canPublish(authentication)) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Chỉ REVIEWER hoặc ADMIN được phát hành.");
+        }
         return grammarService.createTopic(request);
     }
 
@@ -106,7 +145,14 @@ public class GrammarController {
     }
 
     @PutMapping("/api/admin/grammar/topics/{id}")
-    public GrammarService.GrammarTopic updateTopic(@PathVariable String id, @RequestBody GrammarService.UpdateGrammarTopicRequest request) {
+    public GrammarService.GrammarTopic updateTopic(
+            @PathVariable String id,
+            @RequestBody GrammarService.UpdateGrammarTopicRequest request,
+            Authentication authentication) {
+        if ("PUBLISHED".equalsIgnoreCase(request.status()) && !canPublish(authentication)) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Chỉ REVIEWER hoặc ADMIN được phát hành.");
+        }
         return grammarService.updateTopic(id, request);
     }
 
@@ -162,8 +208,14 @@ public class GrammarController {
 
     @PostMapping("/api/admin/grammar/topics/bulk-status")
     @ResponseStatus(HttpStatus.OK)
-    public void bulkUpdateStatus(@RequestBody GrammarService.BulkStatusRequest request) {
+    public void bulkUpdateStatus(
+            @RequestBody GrammarService.BulkStatusRequest request,
+            Authentication authentication) {
         if (request != null && request.ids() != null) {
+            if ("PUBLISHED".equalsIgnoreCase(request.status()) && !canPublish(authentication)) {
+                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Chỉ REVIEWER hoặc ADMIN được phát hành.");
+            }
             grammarService.bulkUpdateStatus(request.ids(), request.status());
         }
     }
@@ -176,6 +228,300 @@ public class GrammarController {
         }
     }
 
+    @PostMapping("/api/grammar/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarOperationsService.QuestionReport createQuestionReport(
+            @RequestBody GrammarOperationsService.QuestionReportRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.createReport(userId, request);
+    }
+
+    @GetMapping("/api/grammar/reports/mine")
+    public List<GrammarOperationsService.QuestionReport> mineQuestionReports(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.mineReports(userId);
+    }
+
+    @GetMapping("/api/admin/grammar/reports")
+    public List<GrammarOperationsService.QuestionReport> adminQuestionReports() {
+        return operationsService.adminReports();
+    }
+
+    @PutMapping("/api/admin/grammar/reports/{id}")
+    public GrammarOperationsService.QuestionReport handleQuestionReport(
+            @PathVariable Long id,
+            @RequestBody GrammarOperationsService.UpdateReportRequest request,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        if (actorId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.handleReport(id, actorId, request);
+    }
+
+    @PostMapping("/api/grammar/bookmarks")
+    @ResponseStatus(HttpStatus.OK)
+    public void setBookmark(
+            @RequestBody GrammarOperationsService.BookmarkRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        operationsService.setBookmark(userId, request);
+    }
+
+    @DeleteMapping("/api/grammar/bookmarks/{targetType}/{targetId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeBookmark(
+            @PathVariable String targetType,
+            @PathVariable String targetId,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        operationsService.removeBookmark(userId, targetType.toUpperCase(), targetId);
+    }
+
+    @GetMapping("/api/grammar/bookmarks")
+    public List<GrammarOperationsService.BookmarkView> bookmarks(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.bookmarks(userId);
+    }
+
+    @GetMapping("/api/grammar/review/due")
+    public List<GrammarOperationsService.ReviewItem> dueReviews(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.dueReviews(userId);
+    }
+
+    @GetMapping("/api/grammar/analytics")
+    public GrammarOperationsService.GrammarAnalytics analytics(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.analytics(userId);
+    }
+
+    @GetMapping("/api/admin/grammar/analytics")
+    public Map<String, Object> adminCoverage() {
+        return operationsService.adminCoverage();
+    }
+
+    @GetMapping("/api/grammar/traps")
+    public Map<String, Object> trapAnalysis(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return operationsService.trapAnalysis(userId);
+    }
+
+    @GetMapping("/api/grammar/today")
+    public Map<String, Object> today(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.today(userId);
+    }
+
+    @GetMapping("/api/grammar/search")
+    public Map<String, Object> search(
+            @org.springframework.web.bind.annotation.RequestParam String keyword,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return operationsService.search(userId, keyword);
+    }
+
+    @GetMapping("/api/grammar/path/summary")
+    public Map<String, Object> pathSummary(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.pathSummary(userId);
+    }
+
+    @GetMapping("/api/grammar/settings")
+    public Map<String, Object> getGrammarSettings(Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.getUserSettings(userId);
+    }
+
+    @PutMapping("/api/grammar/settings")
+    public Map<String, Object> putGrammarSettings(
+            @RequestBody GrammarOperationsService.UserSettingsRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.putUserSettings(userId, request);
+    }
+
+    @GetMapping("/api/admin/grammar/topics/page")
+    public Map<String, Object> pagedAdminTopics(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue="0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue="20") int size,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue="ALL") String status,
+            @org.springframework.web.bind.annotation.RequestParam(required=false) String search,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue="order") String sort) {
+        return operationsService.pagedAdminTopics(page, size, status, search, sort);
+    }
+
+    @PostMapping("/api/admin/grammar/passages")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarOperationsService.PassageView createPassage(
+            @RequestBody GrammarOperationsService.PassageRequest request,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.createPassage(actorId, request);
+    }
+
+    @GetMapping("/api/admin/grammar/passages")
+    public List<GrammarOperationsService.PassageView> passages() {
+        return operationsService.passages();
+    }
+
+    @GetMapping("/api/admin/grammar/rules")
+    public List<GrammarOperationsService.RuleView> rules(
+            @org.springframework.web.bind.annotation.RequestParam(required=false) String topicId) {
+        return operationsService.rules(topicId);
+    }
+
+    @PutMapping("/api/admin/grammar/passages/{passageId}/questions")
+    public void linkPassage(
+            @PathVariable String passageId,
+            @RequestBody Map<String, Object> body) {
+        Object raw = body.get("questionIds");
+        if (!(raw instanceof List<?> values)) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Thiếu danh sách questionIds.");
+        }
+        operationsService.linkPassage(passageId,
+                values.stream().map(String::valueOf).toList());
+    }
+
+    @PostMapping("/api/admin/grammar/rules")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarOperationsService.RuleView createRule(
+            @RequestBody GrammarOperationsService.RuleRequest request,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.createRule(actorId, request);
+    }
+
+    @PutMapping("/api/admin/grammar/rules/{ruleId}/questions")
+    public void linkRule(
+            @PathVariable String ruleId,
+            @RequestBody Map<String, Object> body) {
+        Object raw = body.get("questionIds");
+        if (!(raw instanceof List<?> values)) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Thiếu danh sách questionIds.");
+        }
+        operationsService.linkRule(ruleId,
+                values.stream().map(String::valueOf).toList());
+    }
+
+    @PostMapping("/api/admin/grammar/ai-explanations")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarOperationsService.AiExplanationView cacheAiExplanation(
+            @RequestBody GrammarOperationsService.AiExplanationRequest request,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.cacheAiExplanation(actorId, request);
+    }
+
+    @GetMapping("/api/grammar/ai-explanations")
+    public GrammarOperationsService.AiExplanationView getAiExplanation(
+            @org.springframework.web.bind.annotation.RequestParam String questionId,
+            @org.springframework.web.bind.annotation.RequestParam String selectedOption) {
+        return operationsService.getAiExplanation(questionId, selectedOption);
+    }
+
+    @PostMapping("/api/grammar/ai-explanations/{id}/feedback")
+    @ResponseStatus(HttpStatus.OK)
+    public void feedbackAiExplanation(
+            @PathVariable Long id,
+            @RequestBody GrammarOperationsService.AiFeedbackRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        operationsService.feedbackAiExplanation(id, userId, request);
+    }
+
+    @PostMapping("/api/grammar/exams")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarOperationsService.ExamSessionView startExam(
+            @RequestBody GrammarOperationsService.ExamStartRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.startExam(userId, request);
+    }
+
+    @GetMapping("/api/grammar/exams/{id}")
+    public GrammarOperationsService.ExamSessionView getExam(
+            @PathVariable String id,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.getExamSession(id, userId);
+    }
+
+    @PostMapping("/api/grammar/exams/{id}/submit")
+    public GrammarOperationsService.ExamSessionView submitExam(
+            @PathVariable String id,
+            @RequestBody GrammarOperationsService.ExamSubmitRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        if (userId == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        return operationsService.submitExam(id, userId, request);
+    }
+
+    @PostMapping("/api/admin/grammar/revisions")
+    public GrammarOperationsService.RevisionView createRevision(
+            @RequestBody GrammarOperationsService.RevisionRequest request,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.createRevision(actorId, request);
+    }
+
+    @GetMapping("/api/admin/grammar/revisions")
+    public List<GrammarOperationsService.RevisionView> revisions(
+            @org.springframework.web.bind.annotation.RequestParam String entityType,
+            @org.springframework.web.bind.annotation.RequestParam String entityId) {
+        return operationsService.revisions(entityType, entityId);
+    }
+
+    @PostMapping("/api/admin/grammar/revisions/{entityType}/{entityId}/{version}/restore")
+    public GrammarOperationsService.RevisionView restoreRevision(
+            @PathVariable String entityType,
+            @PathVariable String entityId,
+            @PathVariable int version,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.restoreRevision(actorId, entityType, entityId, version);
+    }
+
+    @PostMapping("/api/admin/grammar/import-batches")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GrammarOperationsService.ImportBatchView createImportBatch(
+            @RequestBody GrammarOperationsService.ImportBatchRequest request,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.createImportBatch(actorId, request);
+    }
+
+    @PostMapping("/api/admin/grammar/import-batches/{id}/commit")
+    public GrammarOperationsService.ImportBatchView commitImportBatch(
+            @PathVariable String id,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.commitImportBatch(actorId, id);
+    }
+
+    @PostMapping("/api/admin/grammar/import-batches/{id}/undo")
+    public GrammarOperationsService.ImportBatchView undoImportBatch(
+            @PathVariable String id,
+            Authentication authentication) {
+        UUID actorId = extractUserId(authentication);
+        return operationsService.undoImportBatch(actorId, id);
+    }
+
     private UUID extractUserId(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             return null;
@@ -185,5 +531,12 @@ public class GrammarController {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private boolean canPublish(Authentication authentication) {
+        if (authentication == null) return false;
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .anyMatch(role -> "ROLE_ADMIN".equals(role) || "ROLE_REVIEWER".equals(role));
     }
 }

@@ -1,4 +1,4 @@
-import { apiRequest, writeAuthRequest } from './client';
+import { apiRequest, uploadAuthRequest, writeAuthRequest } from './client';
 import type { GrammarTopicItem, GrammarQuestionItem, GrammarCategory } from '@/app/admin/content/grammar/types';
 
 interface RawGrammarTopic {
@@ -32,6 +32,15 @@ interface RawGrammarTopic {
   linkedToeicQuestionCount?: number;
   completedQuestions?: number;
   userStatus?: string;
+  learningStatus?: GrammarTopicItem['learningStatus'];
+  dueCount?: number;
+  wrongCount?: number;
+  savedCount?: number;
+  resumeQuestionId?: string;
+  lockedSoft?: boolean;
+  prerequisiteNames?: string[];
+  weakRuleCount?: number;
+  masteryPercent?: number;
 }
 
 function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
@@ -97,6 +106,15 @@ function mapGrammarTopic(t: RawGrammarTopic): GrammarTopicItem {
     linkedToeicQuestionCount: t.linkedToeicQuestionCount ?? 0,
     completedQuestions: t.completedQuestions ?? 0,
     userStatus: t.userStatus ?? 'Chưa học',
+    learningStatus: t.learningStatus,
+    dueCount: t.dueCount ?? 0,
+    wrongCount: t.wrongCount ?? 0,
+    savedCount: t.savedCount ?? 0,
+    resumeQuestionId: t.resumeQuestionId,
+    lockedSoft: t.lockedSoft ?? false,
+    prerequisiteNames: Array.isArray(t.prerequisiteNames) ? t.prerequisiteNames : [],
+    weakRuleCount: t.weakRuleCount ?? 0,
+    masteryPercent: t.masteryPercent ?? 0,
   };
 }
 
@@ -109,6 +127,22 @@ export async function getAdminGrammarTopics(): Promise<GrammarTopicItem[]> {
   const list = await apiRequest<RawGrammarTopic[]>('/api/admin/grammar/topics');
   if (!Array.isArray(list)) throw new Error('Dữ liệu chủ điểm ngữ pháp từ máy chủ không hợp lệ.');
   return list.map(mapGrammarTopic);
+}
+
+export async function getPagedAdminGrammarTopics(params: {
+  page?: number;
+  size?: number;
+  status?: string;
+  search?: string;
+  sort?: string;
+} = {}): Promise<{items: Array<Record<string, unknown>>; page: number; size: number; total: number}> {
+  const query = new URLSearchParams();
+  query.set('page', String(params.page ?? 0));
+  query.set('size', String(params.size ?? 20));
+  query.set('status', params.status ?? 'ALL');
+  if (params.search) query.set('search', params.search);
+  query.set('sort', params.sort ?? 'order');
+  return apiRequest(`/api/admin/grammar/topics/page?${query.toString()}`);
 }
 
 export async function getGrammarTopic(id: string): Promise<GrammarTopicItem> {
@@ -357,27 +391,266 @@ export async function bulkDeleteGrammarTopics(ids: string[]): Promise<void> {
   await writeAuthRequest<void>('POST', '/api/admin/grammar/topics/bulk-delete', { ids });
 }
 
+export async function getGrammarResumeIndex(topicId: string): Promise<{ startIndex: number; answeredQuestions: number }> {
+  return apiRequest<{ startIndex: number; answeredQuestions: number }>(
+    `/api/grammar/topics/${encodeURIComponent(topicId)}/resume`,
+  );
+}
+
+export interface GrammarTodayData {
+  due: { count: number };
+  resume: { topicId?: string; title?: string; completedQuestions?: number };
+  suggestion: { topicId?: string; reason: string };
+  newLearner: boolean;
+}
+
+export async function getGrammarToday(): Promise<GrammarTodayData> {
+  return apiRequest('/api/grammar/today');
+}
+
+export async function searchGrammar(keyword: string): Promise<{
+  topics: Array<Record<string, unknown>>;
+  rules: Array<Record<string, unknown>>;
+  questions: Array<Record<string, unknown>>;
+}> {
+  return apiRequest(`/api/grammar/search?keyword=${encodeURIComponent(keyword.trim())}`);
+}
+
+export async function getGrammarPathSummary(): Promise<{
+  publishedCount: number;
+  masteredCount: number;
+  inProgressCount: number;
+}> {
+  return apiRequest('/api/grammar/path/summary');
+}
+
+export interface GrammarUserSettings {
+  dailyTargetMinutes: number;
+  reminderEnabled: boolean;
+  reminderTime: string;
+  timezone: string;
+  soundEnabled: boolean;
+  fontScale: number;
+}
+
+export async function getGrammarUserSettings(): Promise<GrammarUserSettings> {
+  return apiRequest('/api/grammar/settings');
+}
+
+export async function putGrammarUserSettings(settings: GrammarUserSettings): Promise<GrammarUserSettings> {
+  return writeAuthRequest('PUT', '/api/grammar/settings', settings);
+}
+
+export async function reportGrammarQuestion(questionId: string, reason: string, message: string): Promise<void> {
+  await writeAuthRequest<void>('POST', '/api/grammar/reports', { questionId, reason, message });
+}
+
+export async function setGrammarBookmark(targetType: 'QUESTION' | 'TOPIC', targetId: string, note = ''): Promise<void> {
+  await writeAuthRequest<void>('POST', '/api/grammar/bookmarks', { targetType, targetId, note });
+}
+
+export async function removeGrammarBookmark(targetType: 'QUESTION' | 'TOPIC', targetId: string): Promise<void> {
+  await writeAuthRequest<void>('DELETE', `/api/grammar/bookmarks/${targetType}/${encodeURIComponent(targetId)}`);
+}
+
+export async function getGrammarBookmarks(): Promise<Array<{targetType: string; targetId: string; note: string; createdAt: string}>> {
+  return apiRequest('/api/grammar/bookmarks');
+}
+
+export async function getDueGrammarReviews(): Promise<Array<{questionId: string; topicId: string; dueAt: string; intervalDays: number; ease: number; streak: number}>> {
+  return apiRequest('/api/grammar/review/due');
+}
+
+export async function getGrammarAnalytics(): Promise<{
+  attempts: number;
+  firstAttempts: number;
+  firstAttemptAccuracy: number;
+  retentionRate: number;
+  repeatedErrorCount: number;
+  interleavedAccuracy: number;
+  averageResponseTimeMs: number;
+}> {
+  return apiRequest('/api/grammar/analytics');
+}
+
+export interface GrammarTrapQuestion extends Record<string, unknown> {
+  question_id: string;
+  attempts: number;
+  wrong_attempts: number;
+  wrong_rate: number;
+}
+
+export async function getGrammarTrapAnalysis(): Promise<{
+  questions: GrammarTrapQuestion[];
+  hasData: boolean;
+}> {
+  return apiRequest('/api/grammar/traps');
+}
+
+export async function createGrammarRule(request: {
+  topicId: string;
+  code: string;
+  name: string;
+  description?: string;
+  learningObjective?: string;
+}): Promise<unknown> {
+  return writeAuthRequest('POST', '/api/admin/grammar/rules', request);
+}
+
+export async function linkGrammarRule(ruleId: string, questionIds: string[]): Promise<void> {
+  await writeAuthRequest<void>('PUT', `/api/admin/grammar/rules/${encodeURIComponent(ruleId)}/questions`, { questionIds });
+}
+
+export async function createGrammarPassage(request: {type: 'PART6' | 'PART7'; content: string; translation?: string}): Promise<unknown> {
+  return writeAuthRequest('POST', '/api/admin/grammar/passages', request);
+}
+
+export async function linkGrammarPassage(passageId: string, questionIds: string[]): Promise<void> {
+  await writeAuthRequest<void>('PUT', `/api/admin/grammar/passages/${encodeURIComponent(passageId)}/questions`, { questionIds });
+}
+
+export async function startGrammarExam(topicId: string, durationSeconds: number): Promise<{
+  id: string;
+  topicId: string;
+  startedAt: string;
+  deadlineAt: string;
+  submittedAt?: string;
+  suspicious: boolean;
+  score?: number;
+  status: string;
+}> {
+  return writeAuthRequest('POST', '/api/grammar/exams', { topicId, durationSeconds });
+}
+
+export interface GrammarExamSession {
+  id: string;
+  topicId: string;
+  startedAt: string;
+  deadlineAt: string;
+  submittedAt?: string | null;
+  suspicious: boolean;
+  score?: number | null;
+  status: string;
+}
+
+export async function getGrammarExam(id: string): Promise<GrammarExamSession> {
+  return apiRequest(`/api/grammar/exams/${encodeURIComponent(id)}`);
+}
+
+export async function submitGrammarExam(id: string, score: number, suspicious: boolean): Promise<unknown> {
+  return writeAuthRequest('POST', `/api/grammar/exams/${encodeURIComponent(id)}/submit`, { score, suspicious });
+}
+
+export async function previewGrammarImport(file: File): Promise<unknown> {
+  const form = new FormData();
+  form.set('type', 'GRAMMAR');
+  form.set('file', file);
+  return uploadAuthRequest('/api/admin/data/import/preview', form);
+}
+
+export async function getGrammarPassages(): Promise<Array<{
+  id: string;
+  type: 'PART6' | 'PART7';
+  content: string;
+  translation?: string;
+}>> {
+  return apiRequest('/api/admin/grammar/passages');
+}
+
+export async function getGrammarRules(topicId?: string): Promise<Array<{
+  id: string;
+  topicId: string;
+  code: string;
+  name: string;
+  description?: string;
+  learningObjective?: string;
+}>> {
+  const query = topicId ? `?topicId=${encodeURIComponent(topicId)}` : '';
+  return apiRequest(`/api/admin/grammar/rules${query}`);
+}
+
+export async function createGrammarRevision(
+  entityType: 'TOPIC' | 'QUESTION',
+  entityId: string,
+  content: Record<string, unknown>,
+): Promise<unknown> {
+  return writeAuthRequest('POST', '/api/admin/grammar/revisions', {
+    entityType,
+    entityId,
+    content,
+  });
+}
+
+export async function getGrammarRevisions(entityType: 'TOPIC' | 'QUESTION', entityId: string): Promise<Array<{
+  entityType: string;
+  entityId: string;
+  version: number;
+  content: Record<string, unknown>;
+  actorId?: string;
+  createdAt: string;
+}>> {
+  const query = new URLSearchParams({ entityType, entityId });
+  return apiRequest(`/api/admin/grammar/revisions?${query.toString()}`);
+}
+
+export async function restoreGrammarRevision(
+  entityType: 'TOPIC' | 'QUESTION',
+  entityId: string,
+  version: number,
+): Promise<unknown> {
+  return writeAuthRequest(
+    'POST',
+    `/api/admin/grammar/revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/${version}/restore`,
+  );
+}
+
+export interface GrammarLearningConfig {
+  passThreshold: number;
+  srsInitialDays: number;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  showExplanationImmediately: boolean;
+  examMode: boolean;
+  minQuestionsToPublish: number;
+  masteryStreak: number;
+  masteryMinGapDays: number;
+  difficultyLowThreshold: number;
+  reportAutoHideThreshold: number;
+  behaviorRetentionDays: number;
+}
+
+export async function getGrammarLearningConfig(topicId?: string): Promise<GrammarLearningConfig> {
+  const query = topicId ? `?topicId=${encodeURIComponent(topicId)}` : '';
+  return apiRequest<GrammarLearningConfig>(`/api/grammar/config${query}`);
+}
+
+export async function getAdminGrammarLearningConfig(topicId?: string): Promise<GrammarLearningConfig> {
+  const query = topicId ? `?topicId=${encodeURIComponent(topicId)}` : '';
+  return apiRequest<GrammarLearningConfig>(`/api/admin/grammar/config${query}`);
+}
+
+export async function putAdminGrammarLearningConfig(
+  config: GrammarLearningConfig,
+  topicId?: string,
+): Promise<GrammarLearningConfig> {
+  const query = topicId ? `?topicId=${encodeURIComponent(topicId)}` : '';
+  return writeAuthRequest<GrammarLearningConfig>('PUT', `/api/admin/grammar/config${query}`, config);
+}
+
 export async function saveGrammarProgress(
   topicId: string,
-  completedQuestions: number,
-  totalQuestions: number,
-  status: string
-): Promise<void> {
-  const normalizedStatus =
-    status === 'COMPLETED' || status === 'Đã hoàn thành'
-      ? 'COMPLETED'
-      : status === 'NOT_STARTED' || status === 'Chưa học'
-      ? 'NOT_STARTED'
-      : 'IN_PROGRESS';
-
-  try {
-    await writeAuthRequest<void>('POST', '/api/grammar/progress', {
-      topicId,
-      completedQuestions,
-      totalQuestions,
-      status: normalizedStatus,
-    });
-  } catch (error) {
-    console.warn('Could not persist grammar progress to backend:', error);
-  }
+  questionId: string,
+  selectedOption: string,
+  mode: 'PRACTICE' | 'RETRY_WRONG' | 'EXAM' | 'REVIEW' | 'MIXED',
+  timeSpentMs: number,
+  clientEventId: string
+): Promise<{ isCorrect: boolean; answeredQuestions: number; totalQuestions: number; firstAttemptAccuracy: number }> {
+  return writeAuthRequest('POST', '/api/grammar/progress', {
+    topicId,
+    questionId,
+    selectedOption,
+    mode,
+    timeSpentMs,
+    clientEventId,
+  });
 }

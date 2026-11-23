@@ -30,6 +30,7 @@ import {
   GrammarCurriculumConfigView,
 } from "@/components/admin/content/grammar/GrammarViews";
 import { GrammarContentReviewView } from "@/components/admin/content/grammar/GrammarContentReviewView";
+import { GrammarOperationsView } from "@/components/admin/content/grammar/GrammarOperationsView";
 import {
   GrammarTopicDetailModal,
   GrammarTopicEditModal,
@@ -304,7 +305,7 @@ export default function AdminGrammarPage() {
     }
   };
 
-  const handleReviewStatusChange = async (topic: GrammarTopicItem, status: "DRAFT" | "PUBLISHED") => {
+  const handleReviewStatusChange = async (topic: GrammarTopicItem, status: "DRAFT" | "IN_REVIEW" | "PUBLISHED") => {
     setActionError(null);
     if (status === "PUBLISHED") {
       const errors = analyzeGrammarTopic(topic, topics, status)
@@ -659,6 +660,10 @@ export default function AdminGrammarPage() {
 
       {activeMainTab === "curriculum" && (
         <GrammarCurriculumConfigView topicsCount={totalTopicsCount} topics={topics} />
+      )}
+
+      {activeMainTab === "operations" && (
+        <GrammarOperationsView topics={topics} />
       )}
 
       {/* Modals */}

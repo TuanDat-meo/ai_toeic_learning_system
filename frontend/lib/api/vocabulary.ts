@@ -205,11 +205,13 @@ function mapWord(w: RawWordItem): WordItem {
     ipa: w.ipa || '',
     partOfSpeech: normalizeVocabularyPartOfSpeech(w.partOfSpeech || w.pos || 'Noun'),
     pos: normalizeVocabularyPartOfSpeech(w.partOfSpeech || w.pos || 'Noun'),
+    sourcePartOfSpeech: w.partOfSpeech ?? w.pos ?? '',
     meaning: w.meaning || '',
     example: w.example || '',
     exampleMeaning: w.exampleMeaning || '',
     exampleVi: w.exampleMeaning || '',
     level: normalizeVocabularyLevel(w.level || 'B1'),
+    sourceLevel: w.level ?? '',
     starred: w.starred ?? false,
     bookmarked: w.starred ?? false,
     status: isContentStatus(w.status) ? w.status : 'PUBLISHED',
@@ -241,7 +243,7 @@ function mapWord(w: RawWordItem): WordItem {
 
 function mapSet(s: RawVocabularyTestSet): VocabularyTestSet {
   const words = Array.isArray(s.words) ? s.words.map(mapWord) : [];
-  const count = typeof s.wordCount === 'number' ? s.wordCount : words.length;
+  const count = words.length > 0 ? words.length : (typeof s.wordCount === 'number' ? s.wordCount : 0);
 
   return {
     id: s.id,
@@ -318,8 +320,34 @@ export async function recordVocabularyAnswer(data: {
   damage?: number;
   gameMode?: string;
   wordLevel?: string;
+  firstWordId?: string;
+  secondWordId?: string;
 }): Promise<VocabularyAnswerResult> {
   return writeAuthRequest<VocabularyAnswerResult>('POST', '/api/vocabulary/answers', data);
+}
+
+export interface RecordMatchingAttemptData {
+  sessionId: string;
+  attemptIndex: number;
+  requestId: string;
+  firstWordId: string;
+  secondWordId: string;
+  responseTimeMs: number;
+}
+
+export async function recordMatchingAttempt(data: RecordMatchingAttemptData): Promise<VocabularyAnswerResult> {
+  return writeAuthRequest<VocabularyAnswerResult>('POST', '/api/vocabulary/answers', {
+    requestId: data.requestId,
+    wordId: data.firstWordId,
+    firstWordId: data.firstWordId,
+    secondWordId: data.secondWordId,
+    answer: data.secondWordId,
+    activityType: 'GAME',
+    questionType: 'ENGLISH_TO_VIETNAMESE',
+    gameSessionId: data.sessionId,
+    gameQuestionIndex: data.attemptIndex,
+    responseTimeMs: data.responseTimeMs,
+  });
 }
 
 export async function startVocabularyGameSession(data: {

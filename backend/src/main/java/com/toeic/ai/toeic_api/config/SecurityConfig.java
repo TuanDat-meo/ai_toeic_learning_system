@@ -70,6 +70,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/media-assets/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.POST, "/api/grammar/progress").authenticated()
+                        .requestMatchers("/api/admin/grammar/**").hasAnyRole("ADMIN", "TEACHER", "AUTHOR", "REVIEWER")
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
                             "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
@@ -80,7 +82,7 @@ public class SecurityConfig {
                             "/api/mock-tests/**",
                             "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/billing/**").hasRole("STUDENT")
-                        .requestMatchers("/api/learning-profile/**").hasRole("STUDENT")
+                        .requestMatchers("/api/learning-profile/**", "/api/study-plan/**").hasRole("STUDENT")
                         .requestMatchers(HttpMethod.GET, "/api/chat/discussion").permitAll()
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/support-reports/**").authenticated()

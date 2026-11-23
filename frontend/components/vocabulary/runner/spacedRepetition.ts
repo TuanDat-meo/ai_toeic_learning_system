@@ -9,10 +9,11 @@ export interface RunnerQuestionItem {
   vietnameseMeaning: string;
   exampleSentence: string;
   exampleMeaning: string;
-  type: "VIETNAMESE_TO_ENGLISH" | "FILL_IN_BLANK" | "AUDIO";
+  type: "ENGLISH_TO_VIETNAMESE" | "VIETNAMESE_TO_ENGLISH" | "FILL_IN_BLANK" | "AUDIO" | "PHONETIC_TO_AUDIO";
   prompt: string;
   choices: string[];   // 4 phương án cho chế độ chọn nhanh (nút to >= 44px trên mobile)
   isReviewInstance?: boolean; // Đánh dấu là câu hỏi lặp lại ngắt quãng do từng làm sai
+  answerFormat?: "audio_choices";
 }
 
 /**
@@ -32,8 +33,25 @@ export function shuffleArray<T>(array: T[]): T[] {
  */
 export function generateQuestionChoices(
   correctWord: WordItem,
-  allWords: WordItem[]
+  allWords: WordItem[],
+  answerLanguage: "english" | "vietnamese" = "english"
 ): string[] {
+  if (answerLanguage === "vietnamese") {
+    const getMeaning = (word: WordItem): string =>
+      word.meaning?.trim()
+      || word.senses?.find((sense) => sense.meaning?.trim())?.meaning?.trim()
+      || word.meanings?.find((meaning) => meaning.meaning?.trim())?.meaning?.trim()
+      || word.translation?.trim()
+      || "";
+    const correctMeaning = getMeaning(correctWord);
+    const distractors = allWords
+      .filter((word) => word.id !== correctWord.id)
+      .map(getMeaning)
+      .filter((meaning, index, meanings) => meaning && meanings.indexOf(meaning) === index)
+      .slice(0, 3);
+    return shuffleArray([correctMeaning, ...distractors]);
+  }
+
   const distractors = allWords
     .filter((w) => w.id !== correctWord.id && w.word.toLowerCase() !== correctWord.word.toLowerCase())
     .map((w) => w.word);

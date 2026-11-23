@@ -19,7 +19,7 @@ export type SupportReport = {
   repliedAt?: string;
   createdAt: string;
   updatedAt: string;
-  source?: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK" | "OTHER";
+  source?: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK" | "GRAMMAR" | "OTHER";
   questionRef?: string;
   questionSnapshot?: Record<string, unknown> | null;
   correction?: Record<string, unknown> | null;

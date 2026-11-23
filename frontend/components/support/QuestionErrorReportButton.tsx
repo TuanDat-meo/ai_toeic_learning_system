@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Flag, LoaderCircle, Send, X } from "lucide-react";
 import { createSupportReport, type SupportReportCategory } from "@/lib/api/support";
 import { createCommunityPost } from '@/lib/api/community';
+import { reportGrammarQuestion } from '@/lib/api/grammar';
 
 type Props = {
-  source: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK" | "OTHER";
+  source: "READING" | "LISTENING" | "MOCK_TEST" | "QUESTION_BANK" | "GRAMMAR" | "OTHER";
   questionRef: string;
   relatedContent: string;
   questionSnapshot: Record<string, unknown>;
@@ -43,6 +44,9 @@ export function QuestionErrorReportButton({ source, questionRef, relatedContent,
         questionSnapshot,
         relatedContent,
       });
+      if (source === "GRAMMAR" && questionRef) {
+        await reportGrammarQuestion(questionRef, category, details.trim());
+      }
       setDetails("");
       setOpen(false);
       onSubmitted?.(report.ticketCode);

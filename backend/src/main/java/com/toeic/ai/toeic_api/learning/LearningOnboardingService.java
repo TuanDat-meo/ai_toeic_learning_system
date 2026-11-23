@@ -15,10 +15,15 @@ import com.toeic.ai.toeic_api.settings.SystemSettingsService;
 public class LearningOnboardingService {
     private final JdbcTemplate jdbcTemplate;
     private final SystemSettingsService systemSettingsService;
+    private final StudyPlanService studyPlanService;
 
-    public LearningOnboardingService(JdbcTemplate jdbcTemplate, SystemSettingsService systemSettingsService) {
+    public LearningOnboardingService(
+            JdbcTemplate jdbcTemplate,
+            SystemSettingsService systemSettingsService,
+            StudyPlanService studyPlanService) {
         this.jdbcTemplate = jdbcTemplate;
         this.systemSettingsService = systemSettingsService;
+        this.studyPlanService = studyPlanService;
     }
 
     public boolean isOnboardingCompleted(UUID userId) {
@@ -100,6 +105,9 @@ public class LearningOnboardingService {
                 request.interests(),
                 4,
                 true);
+
+        // Tự động khởi tạo Kế hoạch học tập cá nhân hóa & đồng bộ mục tiêu hằng ngày
+        studyPlanService.generateOrRefreshStudyPlan(userId);
     }
 
     private void saveProfile(

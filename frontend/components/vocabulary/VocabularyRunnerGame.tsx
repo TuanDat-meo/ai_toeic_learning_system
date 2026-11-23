@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ArrowLeft,
   Heart,
@@ -72,7 +72,7 @@ import {
 } from "./runner/speedCalculator";
 import {
   selectWordsForSession,
-  type StudyMode,
+  type DeckScope,
   type WordLevelTag,
   type QuestionCountSelection,
 } from "./runner/wordSelector";
@@ -103,15 +103,13 @@ function getVietnameseMeaning(word: WordItem): string {
       if (sense.meaning?.trim()) return sense.meaning;
     }
   }
+  const meaning = word.meanings?.find((item) => item.meaning?.trim())?.meaning?.trim();
+  if (meaning) return meaning;
+  if (word.translation?.trim()) return word.translation.trim();
   return "Nghĩa của từ";
 }
 
 function getEnglishOrVietnameseMeaning(word: WordItem): string {
-  if (word.senses && word.senses.length > 0) {
-    for (const s of word.senses) {
-      if (s.definitionEn?.trim()) return s.definitionEn;
-    }
-  }
   return getVietnameseMeaning(word);
 }
 
@@ -137,11 +135,10 @@ function buildQuestionItem(
     example &&
     new RegExp(`\\b${word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(example);
 
-  const choices = generateQuestionChoices(word, allWords);
-
   // Phân bố Điểm Chạm: Cứ mỗi 4 câu sẽ có 1 Hộp Mù (Mystery Box) thưởng may rủi
   const isMysteryBox = index > 0 && index % 4 === 3;
   if (isMysteryBox) {
+    const choices = generateQuestionChoices(word, allWords, "vietnamese");
     return {
       instanceId: crypto.randomUUID(),
       word,
@@ -149,7 +146,7 @@ function buildQuestionItem(
       vietnameseMeaning: viMeaning,
       exampleSentence: example || `She can ${word.word.toLowerCase()} her feelings.`,
       exampleMeaning: exampleVi || "",
-      type: "VIETNAMESE_TO_ENGLISH",
+      type: "ENGLISH_TO_VIETNAMESE",
       prompt: `🎁 Hộp Mù May Rủi: Đoán nghĩa từ "${word.word}"`,
       choices,
       obstacleKind: "mystery_box",
@@ -159,6 +156,7 @@ function buildQuestionItem(
 
   // Boss đặc biệt ở các mốc câu 10, 20
   if (index === 9 || index === 19) {
+    const choices = generateQuestionChoices(word, allWords, "vietnamese");
     return {
       instanceId: crypto.randomUUID(),
       word,
@@ -166,7 +164,7 @@ function buildQuestionItem(
       vietnameseMeaning: viMeaning,
       exampleSentence: example,
       exampleMeaning: exampleVi,
-      type: "VIETNAMESE_TO_ENGLISH",
+      type: "ENGLISH_TO_VIETNAMESE",
       prompt: `👹 TRÙM CUỐI: Giải nghĩa từ "${word.word}"`,
       choices,
       obstacleKind: "boss",
@@ -174,8 +172,28 @@ function buildQuestionItem(
     };
   }
 
+  const phonetic = word.ipa?.trim() || word.phonetic?.trim();
+  if (index % 5 === 4 && phonetic) {
+    const choices = generateQuestionChoices(word, allWords, "english");
+    return {
+      instanceId: crypto.randomUUID(),
+      word,
+      displayMeaning,
+      vietnameseMeaning: viMeaning,
+      exampleSentence: example,
+      exampleMeaning: exampleVi,
+      type: "PHONETIC_TO_AUDIO",
+      answerFormat: "audio_choices",
+      prompt: `Phiên âm /${phonetic}/ · Nghe các đáp án và chọn từ được phát âm như vậy.`,
+      choices,
+      obstacleKind: "rock",
+      encounterType: "obstacle",
+    };
+  }
+
   // Chướng ngại 1: Hố sâu -> Nghe phát âm và chọn từ
   if (index % 4 === 2 && (word.audioUrl || word.audio)) {
+    const choices = generateQuestionChoices(word, allWords, "english");
     return {
       instanceId: crypto.randomUUID(),
       word,
@@ -193,6 +211,7 @@ function buildQuestionItem(
 
   // Chướng ngại 2: Cành cây thấp -> Trượt người và điền vào chỗ trống
   if (hasExampleWithWord && index % 3 === 1) {
+    const choices = generateQuestionChoices(word, allWords, "english");
     const prompt = example.replace(
       new RegExp(`\\b${word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"),
       "______"
@@ -213,6 +232,7 @@ function buildQuestionItem(
   }
 
   // Chướng ngại 3: Tảng đá -> Bật nhảy qua tảng đá
+  const choices = generateQuestionChoices(word, allWords, "english");
   return {
     instanceId: crypto.randomUUID(),
     word,
@@ -286,7 +306,8 @@ export default function VocabularyRunnerGame({
     return RUNNER_CONFIG.DEFAULT_SPEED_PRESET;
   });
 
-  const [studyMode, setStudyMode] = useState<StudyMode>("single_deck");
+  const [deckScope, setDeckScope] = useState<DeckScope>("single_deck");
+  const [filterByLevel, setFilterByLevel] = useState(false);
   const [selectedLevels, setSelectedLevels] = useState<WordLevelTag[]>([
     "A1",
     "A2",
@@ -303,7 +324,8 @@ export default function VocabularyRunnerGame({
   // ── 2. Danh sách câu hỏi ──
   const [questions, setQuestions] = useState<RunnerQuestionWithMeta[]>(() => {
     const sel = selectWordsForSession(words, allSetsWords, {
-      mode: "single_deck",
+      deckScope: "single_deck",
+      filterByLevel: false,
       targetCount: 20,
     });
     return sel.selectedWords.map((w, idx) => buildQuestionItem(w, idx, sel.distractorPool));
@@ -381,15 +403,62 @@ export default function VocabularyRunnerGame({
   const handleTimeoutRef = useRef<() => void>(() => {});
 
   const currentQuestion = questions[questionIndex];
+  const availableWordCount = useMemo(() => {
+    const wordSets = availableSets.length > 0
+      ? availableSets.map((set) => ({ setId: set.id, words: set.words || [] }))
+      : allSetsWords;
+    const hasSourceWords = deckScope === "all_decks"
+      ? activeWords.length > 0 || wordSets.some((set) => set.words.length > 0)
+      : activeWords.length > 0;
+    if (!hasSourceWords) return 0;
+    return selectWordsForSession(activeWords, wordSets, {
+      deckScope,
+      filterByLevel,
+      targetCount: "full",
+      selectedLevels,
+    }).selectedWords.length;
+  }, [activeWords, availableSets, allSetsWords, deckScope, filterByLevel, selectedLevels]);
+  const singleDeckWordCount = useMemo(() => activeWords.length === 0
+    ? 0
+    : selectWordsForSession(activeWords, [], {
+        deckScope: "single_deck",
+        filterByLevel: false,
+        targetCount: "full",
+      }).selectedWords.length, [activeWords]);
+  const allDeckWordCount = useMemo(() => {
+    const wordSets = availableSets.length > 0
+      ? availableSets.map((set) => ({ setId: set.id, words: set.words || [] }))
+      : allSetsWords;
+    if (activeWords.length === 0 && !wordSets.some((set) => set.words.length > 0)) return 0;
+    return selectWordsForSession(activeWords, wordSets, {
+      deckScope: "all_decks",
+      filterByLevel: false,
+      targetCount: "full",
+    }).selectedWords.length;
+  }, [activeWords, availableSets, allSetsWords]);
+  const answerWordByText = useMemo(() => {
+    const map = new Map<string, WordItem>();
+    [...activeWords, ...availableSets.flatMap((set) => set.words || []), ...allSetsWords.flatMap((set) => set.words)]
+      .forEach((word) => map.set(word.word.trim().toLowerCase(), word));
+    return map;
+  }, [activeWords, availableSets, allSetsWords]);
 
   // Tải danh sách bộ đề đầy đủ từ backend
   useEffect(() => {
     let mounted = true;
     getVocabularySets()
-      .then((sets) => {
-        if (mounted && Array.isArray(sets) && sets.length > 0) {
-          setAvailableSets(sets);
-        }
+      .then(async (sets) => {
+        if (!mounted || !Array.isArray(sets) || sets.length === 0) return;
+        setAvailableSets(sets);
+        const detailedSets = await Promise.all(sets.map(async (set) => {
+          if (set.words?.length) return set;
+          try {
+            return await getVocabularySet(set.id);
+          } catch {
+            return set;
+          }
+        }));
+        if (mounted) setAvailableSets(detailedSets);
       })
       .catch((err) => {
         console.warn("Could not load all vocabulary sets", err);
@@ -418,7 +487,8 @@ export default function VocabularyRunnerGame({
         : allSetsWords;
 
       const selection = selectWordsForSession(newWords, allPool, {
-        mode: studyMode,
+        deckScope,
+        filterByLevel,
         targetCount: targetQuestionCount,
         selectedLevels,
         wrongWordsHistory: wrongWords,
@@ -459,6 +529,14 @@ export default function VocabularyRunnerGame({
   const toggleMaximizeTab = useCallback(() => {
     setIsMaximizedTab((prev) => !prev);
   }, []);
+
+  const handleUseHint = () => {
+    if (hintVisible) return;
+    if (bonusHints > 0) {
+      setBonusHints((count) => count - 1);
+    }
+    setHintVisible(true);
+  };
 
   // Phím tắt: F để phóng to vừa 1 tab, Esc để thoát chế độ phóng to
   useEffect(() => {
@@ -551,6 +629,14 @@ export default function VocabularyRunnerGame({
 
       questionTimerIntervalRef.current = setInterval(() => {
         setQuestionTimer((time) => {
+          if (time <= 6 && time > 1) {
+            setDistanceToChaser((distance) =>
+              Math.max(
+                RUNNER_CONFIG.MIN_DISTANCE_TO_CHASER,
+                distance - RUNNER_CONFIG.DISTANCE_LOSS_TIMEOUT_WARNING
+              )
+            );
+          }
           if (time <= 1) {
             handleTimeoutRef.current();
             return 0;
@@ -659,14 +745,15 @@ export default function VocabularyRunnerGame({
   };
 
   // Khởi tạo câu hỏi dựa trên các chế độ học (Mục 6A.C)
-  const initializeQuestions = () => {
+  const initializeQuestions = (sourceWords = activeWords, count = targetQuestionCount) => {
     const allPool = availableSets.length > 0
       ? availableSets.map((s) => ({ setId: s.id, words: s.words || [] }))
       : allSetsWords;
 
-    const selection = selectWordsForSession(activeWords, allPool, {
-      mode: studyMode,
-      targetCount: targetQuestionCount,
+    const selection = selectWordsForSession(sourceWords, allPool, {
+      deckScope,
+      filterByLevel,
+      targetCount: count,
       selectedLevels,
       wrongWordsHistory: wrongWords,
     });
@@ -679,19 +766,30 @@ export default function VocabularyRunnerGame({
   };
 
   // Chọn chế độ học và cập nhật câu hỏi xem trước
-  const handleSelectStudyMode = (mode: StudyMode) => {
-    setStudyMode(mode);
+  const refreshQuestions = (nextScope = deckScope, nextFilter = filterByLevel, levels = selectedLevels, count = targetQuestionCount) => {
     const allPool = availableSets.length > 0
       ? availableSets.map((s) => ({ setId: s.id, words: s.words || [] }))
       : allSetsWords;
     const sel = selectWordsForSession(activeWords, allPool, {
-      mode,
-      targetCount: targetQuestionCount,
-      selectedLevels,
+      deckScope: nextScope,
+      filterByLevel: nextFilter,
+      targetCount: count,
+      selectedLevels: levels,
       wrongWordsHistory: wrongWords,
     });
     setSelectorWarning(sel.warningMessage || null);
     setQuestions(sel.selectedWords.map((w, idx) => buildQuestionItem(w, idx, sel.distractorPool)));
+  };
+
+  const handleSelectDeckScope = (scope: DeckScope) => {
+    setDeckScope(scope);
+    refreshQuestions(scope);
+  };
+
+  const handleToggleLevelFilter = () => {
+    const next = !filterByLevel;
+    setFilterByLevel(next);
+    refreshQuestions(deckScope, next);
   };
 
   // Bật/tắt từng cấp độ CEFR khi chọn "Theo cấp độ"
@@ -705,7 +803,8 @@ export default function VocabularyRunnerGame({
         ? availableSets.map((s) => ({ setId: s.id, words: s.words || [] }))
         : allSetsWords;
       const sel = selectWordsForSession(activeWords, allPool, {
-        mode: "by_level",
+        deckScope,
+        filterByLevel: true,
         targetCount: targetQuestionCount,
         selectedLevels: validNext,
         wrongWordsHistory: wrongWords,
@@ -717,15 +816,20 @@ export default function VocabularyRunnerGame({
   };
 
   // Bắt đầu game
-  const handleStart = async () => {
+  const handleStart = async (sourceWords = activeWords, count = targetQuestionCount) => {
     setIsChecking(true);
-    if (studyMode !== "single_deck" && availableSets.length === 0) {
+    if (deckScope === "all_decks" && availableSets.length === 0 && allSetsWords.length === 0) {
       setSelectorWarning("Không tải được danh sách bộ đề. Vui lòng thử lại trước khi chơi trộn.");
       setIsChecking(false);
       return;
     }
     try {
-      const activeQuestions = initializeQuestions();
+      const activeQuestions = initializeQuestions(sourceWords, count);
+      if (activeQuestions.length === 0) {
+        setSelectorWarning("Không có từ phù hợp để bắt đầu. Hãy chọn cấp độ hoặc phạm vi khác.");
+        setIsChecking(false);
+        return;
+      }
 
       let activeSession = session;
       if (!activeSession) {
@@ -734,7 +838,7 @@ export default function VocabularyRunnerGame({
           gameType: "RUNNER",
           deckIds: [...new Set([
             activeSetId,
-            ...(studyMode === "single_deck"
+            ...(deckScope === "single_deck"
               ? []
               : availableSets.map((set) => set.id)),
             ...activeQuestions.map((question) => question.word.setId)
@@ -812,7 +916,7 @@ export default function VocabularyRunnerGame({
             totalQuestions: questions.length,
             durationSeconds: elapsed,
             maxCombo: finalMaxCombo,
-            mode: studyMode,
+            mode: filterByLevel ? "by_level" : deckScope,
             speedPreset,
           };
           setFinalSession(fallback);
@@ -821,7 +925,7 @@ export default function VocabularyRunnerGame({
       }
       setGameState(isVictory ? "VICTORY" : "GAME_OVER");
     },
-    [session, activeSetId, questions.length, elapsed, studyMode, speedPreset, onComplete]
+    [session, activeSetId, questions.length, elapsed, deckScope, filterByLevel, speedPreset, onComplete]
   );
 
   // ── Xử lý nộp câu trả lời ──
@@ -830,14 +934,19 @@ export default function VocabularyRunnerGame({
     const answerToEval = (submittedText ?? userInput).trim();
     if (!answerToEval) return;
 
+    // Phát âm từ mục tiêu sau mọi lựa chọn để củng cố liên kết từ-nghĩa.
+    playWord(currentQuestion.word, soundMuted);
     setIsChecking(true);
 
     const isBox = currentQuestion.encounterType === "mystery_box";
 
     // 1. Chấm điểm thông minh với Dung sai chính tả & Biến thể từ
+    const expectedAnswer = currentQuestion.type === "ENGLISH_TO_VIETNAMESE"
+      ? currentQuestion.vietnameseMeaning
+      : currentQuestion.word.word;
     const evalResult = evaluateAnswer({
       userInput: answerToEval,
-      correctWord: currentQuestion.word.word,
+      correctWord: expectedAnswer,
       usedHint: hintVisible,
       currentCombo: combo,
     });
@@ -851,7 +960,7 @@ export default function VocabularyRunnerGame({
           requestId: currentQuestion.instanceId || createRuntimeId(),
           wordId: currentQuestion.word.id,
           activityType: "GAME",
-          questionType: currentQuestion.type,
+          questionType: currentQuestion.type === "PHONETIC_TO_AUDIO" ? "AUDIO" : currentQuestion.type,
           answer: answerToEval,
           responseTimeMs: Math.min(elapsed * 1000, 600_000),
           gameSessionId: activeSessionId,
@@ -933,10 +1042,10 @@ export default function VocabularyRunnerGame({
         setToast(null);
 
         const nextIndex = questionIndex + 1;
-        if (nextIndex >= questions.length && targetQuestionCount !== 0) {
+        if (targetQuestionCount !== 0 && nextIndex >= questions.length) {
           void handleFinish(true, nextScore, newMaxCombo, nextCorrect, wrongCount, lives);
         } else {
-          setQuestionIndex(nextIndex);
+          setQuestionIndex(nextIndex >= questions.length ? 0 : nextIndex);
 
           // Tính toán khoảng cách chướng ngại tiếp theo theo THỜI GIAN NGHỈ 1.6s
           const nextSpeed = calculateDynamicSpeed({
@@ -955,12 +1064,12 @@ export default function VocabularyRunnerGame({
       // TRẢ LỜI SAI:
       setWrongStreak((w) => w + 1);
       setCorrectStreak(0);
-      void handleFailure(currentQuestion.word.word, isBox);
+      void handleFailure(expectedAnswer, isBox);
     }
   };
 
   // ── Xử lý khi sai hoặc hết giờ ──
-  const handleFailure = (correctWord: string, isMysteryBox = false) => {
+  const handleFailure = (correctWord: string, isMysteryBox = false, timedOut = false) => {
     // Quy tắc hộp mù: Sai ở hộp mù thì hộp biến mất, KHÔNG mất tim
     if (isMysteryBox) {
       setToast({
@@ -980,10 +1089,10 @@ export default function VocabularyRunnerGame({
         setHintVisible(false);
 
         const nextIndex = questionIndex + 1;
-        if (nextIndex >= questions.length && targetQuestionCount !== 0) {
+        if (targetQuestionCount !== 0 && nextIndex >= questions.length) {
           void handleFinish(true, score, maxCombo, correctCount, wrongCount, lives);
         } else {
-          setQuestionIndex(nextIndex);
+          setQuestionIndex(nextIndex >= questions.length ? 0 : nextIndex);
           const nextSpeed = calculateDynamicSpeed({
             preset: speedPreset,
             questionIndex: nextIndex,
@@ -1018,10 +1127,10 @@ export default function VocabularyRunnerGame({
         setHintVisible(false);
 
         const nextIndex = questionIndex + 1;
-        if (nextIndex >= questions.length && targetQuestionCount !== 0) {
+        if (targetQuestionCount !== 0 && nextIndex >= questions.length) {
           void handleFinish(true, score, maxCombo, correctCount, wrongCount, lives);
         } else {
-          setQuestionIndex(nextIndex);
+          setQuestionIndex(nextIndex >= questions.length ? 0 : nextIndex);
           const nextSpeed = calculateDynamicSpeed({
             preset: speedPreset,
             questionIndex: nextIndex,
@@ -1048,6 +1157,10 @@ export default function VocabularyRunnerGame({
       : nextLives;
 
     setLives(finalCalculatedLives);
+    if (timedOut && !reducedMotion) {
+      setIsShaking(true);
+      window.setTimeout(() => setIsShaking(false), RUNNER_CONFIG.STUNNED_DURATION_MS);
+    }
     setDistanceToChaser(chaserResult.newDistance);
     setCombo(0);
     setWrongCount(nextWrong);
@@ -1068,8 +1181,10 @@ export default function VocabularyRunnerGame({
     setToast({
       id: createRuntimeId(),
       type: "wrong",
-      message: `Chưa chính xác! (-1 ❤️)`,
-      subMessage: `Đáp án: ${correctWord} · Nghĩa: ${currentQuestion?.vietnameseMeaning}`,
+      message: timedOut ? "Quái vật đã cắn! (-1 ❤️)" : `Chưa chính xác! (-1 ❤️)`,
+      subMessage: timedOut
+        ? `Bạn hết thời gian. Đáp án: ${correctWord}`
+        : `Đáp án: ${correctWord} · Nghĩa: ${currentQuestion?.vietnameseMeaning}`,
       timestamp: getCurrentTimestamp(),
     });
 
@@ -1085,10 +1200,10 @@ export default function VocabularyRunnerGame({
         void handleFinish(false, score, maxCombo, correctCount, nextWrong, finalCalculatedLives);
       } else {
         const nextIndex = questionIndex + 1;
-        if (nextIndex >= questions.length && targetQuestionCount !== 0) {
+        if (targetQuestionCount !== 0 && nextIndex >= questions.length) {
           void handleFinish(true, score, maxCombo, correctCount, nextWrong, finalCalculatedLives);
         } else {
-          setQuestionIndex(nextIndex);
+          setQuestionIndex(nextIndex >= questions.length ? 0 : nextIndex);
           const nextSpeed = calculateDynamicSpeed({
             preset: speedPreset,
             questionIndex: nextIndex,
@@ -1107,7 +1222,13 @@ export default function VocabularyRunnerGame({
   const handleTimeout = () => {
     if (gameState !== "ENCOUNTER" || !currentQuestion) return;
     const isBox = currentQuestion.encounterType === "mystery_box";
-    handleFailure(currentQuestion.word.word, isBox);
+    handleFailure(
+      currentQuestion.type === "ENGLISH_TO_VIETNAMESE"
+        ? currentQuestion.vietnameseMeaning
+        : currentQuestion.word.word,
+      isBox,
+      true
+    );
   };
 
   useEffect(() => {
@@ -1133,8 +1254,9 @@ export default function VocabularyRunnerGame({
   // Luyện tập từ sai
   const handlePracticeWrong = () => {
     if (wrongWords.length === 0) return;
-    setQuestions(wrongWords.map((w, idx) => buildQuestionItem(w, idx, activeWords)));
-    void handleStart();
+    setTargetQuestionCount("full");
+    refreshQuestions(deckScope, filterByLevel, selectedLevels, "full");
+    void handleStart(wrongWords, "full");
   };
 
   // Accuracy
@@ -1185,31 +1307,58 @@ export default function VocabularyRunnerGame({
 
         {/* ── Header Bar ── */}
         <div className="relative z-10 flex items-center justify-between p-3 sm:p-4 border-b border-white/10">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <h1 className="text-base sm:text-xl lg:text-2xl font-black tracking-tight truncate">
-              <span className={highContrast ? "text-amber-400" : "text-amber-600"}>Đường Đua</span>
-              <span className={`ml-1 ${highContrast ? "text-white" : "text-slate-900"}`}>Từ Vựng 🏃‍♂️</span>
-            </h1>
-            <span className={`text-xs font-bold hidden md:inline ${highContrast ? "text-amber-200/80" : "text-slate-500"}`}>(Vocabulary Runner)</span>
-          </div>
+          <button
+            type="button"
+            onClick={onBackToCenter}
+            className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs sm:text-sm font-extrabold shadow-sm transition active:scale-95 shrink-0 ${
+              highContrast
+                ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+            title="Về Trung tâm trò chơi"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Trung tâm trò chơi</span>
+            <span className="sm:hidden">Quay lại</span>
+          </button>
 
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            <button type="button" onClick={() => setHighContrast((h) => !h)}
-              className={`p-1.5 sm:p-2 rounded-lg transition-all ${highContrast ? "bg-white/10 hover:bg-white/20 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`}
-              title={highContrast ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}>
-              {highContrast ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button type="button" onClick={toggleMaximizeTab}
-              className={`p-1.5 sm:p-2 rounded-lg transition-all ${highContrast ? "bg-white/10 hover:bg-white/20 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`}
-              title={isMaximizedTab ? "Thu nhỏ (F)" : "Phóng to tab (F)"}>
-              {isMaximizedTab ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-            <button type="button" onClick={onBackToCenter}
-              className={`inline-flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-2 rounded-xl font-bold text-xs sm:text-sm transition-all ${highContrast ? "bg-white/10 hover:bg-white/20 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`} title="Về Trung tâm trò chơi">
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Trung tâm trò chơi</span>
-              <span className="sm:hidden">Thoát</span>
-            </button>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="text-right min-w-0">
+              <h1 className="text-base sm:text-xl font-black tracking-tight truncate">
+                <span className={highContrast ? "text-amber-400" : "text-amber-600"}>Đường Đua</span>
+                <span className={`ml-1 ${highContrast ? "text-white" : "text-slate-900"}`}>Từ Vựng 🏃‍♂️</span>
+              </h1>
+              <p className={`hidden text-xs font-semibold sm:block ${highContrast ? "text-amber-200/80" : "text-slate-500"}`}>
+                Vocabulary Runner · Chạy đua và nhảy chướng ngại vật
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={toggleMaximizeTab}
+                className={`p-2 rounded-xl border shadow-sm transition active:scale-95 ${
+                  highContrast
+                    ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+                title={isMaximizedTab ? "Thu nhỏ (F)" : "Phóng to tab (F)"}
+              >
+                {isMaximizedTab ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setHighContrast((h) => !h)}
+                className={`p-2 rounded-xl border shadow-sm transition active:scale-95 ${
+                  highContrast
+                    ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+                title={highContrast ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
+              >
+                {highContrast ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1239,14 +1388,19 @@ export default function VocabularyRunnerGame({
 
             {/* 0. Bộ đề đang chọn */}
             <div className="flex items-center justify-between bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200/80 rounded-xl p-2.5 sm:p-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <FolderKanban className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 shrink-0" />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <FolderKanban className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
                 <div className="min-w-0">
-                  <span className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider block leading-none">
-                    Bộ đề:
+                  <span className="text-[10px] sm:text-xs text-indigo-600 font-bold uppercase tracking-wider block leading-none">
+                    Bộ đề đang chọn
                   </span>
                   <p className="font-black text-sm sm:text-base text-indigo-950 truncate mt-0.5">
                     {activeTestSet.title}
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate">
+                    {activeTestSet.category || "Từ vựng TOEIC"} · {activeTestSet.words?.length || activeTestSet.wordCount || activeWords.length} từ khả dụng
                   </p>
                 </div>
               </div>
@@ -1260,41 +1414,54 @@ export default function VocabularyRunnerGame({
             {/* 1. Chế độ học */}
             <div>
               <label className="font-extrabold text-sm text-indigo-950 flex items-center gap-1.5 mb-1.5">
-                <BookOpen className="w-4 h-4 text-blue-600" /> Chế độ học:
+                <BookOpen className="w-4 h-4 text-blue-600" /> Phạm vi từ vựng:
               </label>
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                 {[
-                  { key: "single_deck" as const, label: "Bộ đề hiện tại", sub: activeTestSet.title },
-                  { key: "all_decks" as const, label: "Toàn bộ từ", sub: "Cân bằng các bộ" },
-                  { key: "by_level" as const, label: "Theo cấp độ", sub: "Chọn cấp CEFR" },
+                  { key: "single_deck" as const, label: "📚 Bộ đề hiện tại", sub: `${singleDeckWordCount} từ trong bộ đã chọn` },
+                  { key: "all_decks" as const, label: "🗂 Trộn tất cả bộ đề", sub: `${allDeckWordCount} từ từ mọi bộ đề` },
                 ].map((item) => (
-                  <button key={item.key} type="button" onClick={() => handleSelectStudyMode(item.key)}
-                    className={`p-2 sm:p-2.5 rounded-xl border-2 text-left transition-all ${
-                      studyMode === item.key
-                        ? "bg-indigo-50 border-indigo-600 text-indigo-950 shadow-sm"
-                        : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300"
+                  <button key={item.key} type="button" onClick={() => handleSelectDeckScope(item.key)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      deckScope === item.key
+                        ? "bg-indigo-50 border-indigo-600 text-indigo-950 shadow-sm ring-1 ring-indigo-500"
+                        : "bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50"
                     }`}>
                     <p className="font-bold text-xs sm:text-sm leading-tight">{item.label}</p>
-                    <p className="text-[10px] sm:text-xs text-slate-500 truncate mt-0.5">{item.sub}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{item.sub}</p>
                   </button>
                 ))}
               </div>
 
+              <button type="button" onClick={handleToggleLevelFilter}
+                className={`mt-2 w-full rounded-xl border p-3 text-left transition flex items-center justify-between ${filterByLevel ? "bg-violet-50 border-violet-600 text-violet-950 shadow-sm ring-1 ring-violet-500" : "bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50"}`}>
+                <span>
+                  <span className="block font-bold text-xs sm:text-sm">🎯 Lọc theo cấp độ CEFR</span>
+                  <span className="block text-[11px] text-slate-500 mt-0.5">{filterByLevel ? `Áp dụng trên ${deckScope === "all_decks" ? "toàn bộ kho từ" : "bộ đề đã chọn"}` : "Bấm để bật lọc theo cấp CEFR"}</span>
+                </span>
+                <span className={`ml-3 shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold ${filterByLevel ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 text-slate-500"}`}>
+                  {filterByLevel ? "Đang bật" : "Tắt"}
+                </span>
+              </button>
+
               {/* CEFR Level Selector */}
-              {studyMode === "by_level" && (
+              {filterByLevel && (
                 <div className="mt-2 bg-indigo-50/80 border border-indigo-200 rounded-xl p-2.5 sm:p-3 space-y-2 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
                     <span className="font-extrabold text-xs sm:text-sm text-indigo-950">Chọn cấp độ:</span>
                     <button type="button"
                       onClick={() => {
-                        if (selectedLevels.length === 7) { setSelectedLevels(["B1"]); }
-                        else { setSelectedLevels(["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"]); }
+                        const levels: WordLevelTag[] = selectedLevels.length === 7
+                          ? ["B1"]
+                          : ["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"];
+                        setSelectedLevels(levels);
+                        refreshQuestions(deckScope, filterByLevel, levels);
                       }}
                       className="text-xs font-bold text-indigo-600 hover:text-indigo-800">
                       {selectedLevels.length === 7 ? "Bỏ chọn tất cả" : "Chọn tất cả"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
                     {[
                       { level: "A1" as const, desc: "Cơ bản" },
                       { level: "A2" as const, desc: "Sơ cấp" },
@@ -1312,8 +1479,8 @@ export default function VocabularyRunnerGame({
                               ? "bg-indigo-600 text-white border-indigo-700 shadow-sm"
                               : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
                           }`}>
-                          <span className="font-black">{level.toUpperCase()}</span>
-                          <span className={`text-[10px] ${isSelected ? "text-indigo-200" : "text-slate-400"}`}>{desc}</span>
+                          <span className="font-black">{level === "unclassified" ? "Khác" : level}</span>
+                          <span className={`text-[10px] ${isSelected ? "text-indigo-200" : "text-slate-400"}`}>{level === "unclassified" ? "Mở rộng" : desc}</span>
                         </button>
                       );
                     })}
@@ -1353,16 +1520,20 @@ export default function VocabularyRunnerGame({
               <label className="font-extrabold text-sm text-indigo-950 flex items-center gap-1.5 mb-1.5">
                 🎯 Số câu hỏi:
               </label>
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                {[10, 20, 30, 0].map((num) => (
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2">
+                {[10, 20, 30, "full", 0].map((num) => (
                   <button key={num} type="button"
-                    onClick={() => setTargetQuestionCount(num as QuestionCountSelection)}
+                    onClick={() => {
+                      const count = num as QuestionCountSelection;
+                      setTargetQuestionCount(count);
+                      refreshQuestions(deckScope, filterByLevel, selectedLevels, count);
+                    }}
                     className={`py-2 sm:py-2.5 px-2 rounded-xl border-2 font-black text-xs sm:text-sm text-center transition-all ${
                       targetQuestionCount === num
                         ? "bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm"
                         : "bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300"
                     }`}>
-                    {num === 0 ? "Vô tận" : `${num} câu`}
+                    {num === 0 ? "♾ Vô tận" : num === "full" ? <><span className="block">Full bộ đề</span><span className="block text-[10px] font-normal text-slate-500">({availableWordCount} từ)</span></> : `${num} câu`}
                   </button>
                 ))}
               </div>
@@ -1391,7 +1562,7 @@ export default function VocabularyRunnerGame({
             <span className="sm:hidden">Thoát</span>
           </button>
 
-          <button type="button" disabled={isChecking} onClick={handleStart}
+          <button type="button" disabled={isChecking} onClick={() => handleStart()}
             className="bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-500 hover:to-orange-600 active:scale-95 text-slate-950 font-black text-sm sm:text-base lg:text-lg px-6 sm:px-8 py-2.5 sm:py-3 rounded-2xl shadow-xl shadow-amber-500/30 transition-all flex items-center gap-2 border-2 border-amber-300">
             <Play className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Bắt đầu chạy</span>
@@ -1422,6 +1593,14 @@ export default function VocabularyRunnerGame({
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-[50dvh]">
+                <button type="button" onClick={() => {
+                  setDeckScope("all_decks");
+                  refreshQuestions("all_decks");
+                  setIsSetPickerOpen(false);
+                }} className="w-full p-3 rounded-xl sm:rounded-2xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-left text-indigo-950 transition-colors">
+                  <p className="font-bold text-sm">🗂 Toàn bộ bộ đề</p>
+                  <p className="text-xs text-indigo-700 mt-0.5">Trộn từ các bộ đề hiện có</p>
+                </button>
                 {isLoadingSet ? (
                   <div className="py-8 flex flex-col items-center justify-center text-slate-500 gap-2">
                     <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
@@ -1443,7 +1622,7 @@ export default function VocabularyRunnerGame({
                         <div className="min-w-0 pr-2">
                           <p className="font-bold text-sm truncate">{s.title}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            {s.category || "Từ vựng TOEIC"} · {s.wordCount ?? s.words?.length ?? 0} từ
+                            {s.category || "Từ vựng TOEIC"} · {s.words?.length || s.wordCount || 0} từ
                           </p>
                         </div>
                         {isCurrent ? (
@@ -1508,7 +1687,7 @@ export default function VocabularyRunnerGame({
           <p className={`text-xs sm:text-sm font-semibold mt-2 px-4 ${
             highContrast ? "text-white/70" : "text-slate-600"
           }`}>
-            {activeTestSet.title} · {studyMode === "single_deck" ? "Bộ đề" : studyMode === "all_decks" ? "Toàn bộ" : "Cấp độ"} · {RUNNER_SPEED_PRESETS[speedPreset].label}
+            {activeTestSet.title} · {deckScope === "single_deck" ? "Bộ đề" : "Toàn bộ"}{filterByLevel ? " · CEFR" : ""} · {RUNNER_SPEED_PRESETS[speedPreset].label}
           </p>
         </div>
 
@@ -1630,7 +1809,7 @@ export default function VocabularyRunnerGame({
             <span className="font-bold text-amber-300">Kẻ đuổi:</span>
             <div className="w-24 bg-white/20 rounded-full h-2 overflow-hidden relative">
               <div
-                className={`h-full transition-all duration-300 ${
+                className={`h-full transition-[width] duration-1000 ease-out ${
                   distanceToChaser < 30 ? "bg-red-500 animate-pulse" : "bg-emerald-400"
                 }`}
                 style={{ width: `${distanceToChaser}%` }}
@@ -1745,11 +1924,40 @@ export default function VocabularyRunnerGame({
 
           {/* Khiên Năng Lượng */}
           {hasShield && (
-            <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-900 to-blue-900 text-cyan-300 px-3 py-2 rounded-2xl shadow-lg border border-cyan-400 animate-pulse">
+            <button
+              type="button"
+              onClick={() => setToast({
+                id: createRuntimeId(),
+                type: "box_positive",
+                message: "🛡️ Khiên đang bảo vệ bạn",
+                subMessage: "Khi bị cắn hoặc trả lời sai, khiên sẽ tự động chặn một lần mất tim.",
+                timestamp: getCurrentTimestamp(),
+              })}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-900 to-blue-900 text-cyan-300 px-3 py-2 rounded-2xl shadow-lg border border-cyan-400 animate-pulse hover:bg-cyan-800"
+              title="Xem cách dùng khiên"
+            >
               <Shield className="w-4 h-4 fill-cyan-400 text-cyan-400" />
               <span className="text-xs font-black">Khiên</span>
-            </div>
+            </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleUseHint}
+            disabled={hintVisible}
+            className="flex items-center gap-1.5 rounded-2xl border border-amber-300 bg-amber-500 px-3 py-2 text-xs font-black text-slate-950 shadow-lg transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Hiện chữ cái đầu của đáp án"
+          >
+            <Lightbulb className="h-4 w-4" />
+            <span>Gợi ý {bonusHints > 0 ? `(${bonusHints})` : ""}</span>
+          </button>
+
+          <div
+            className="hidden xl:flex items-center gap-1.5 rounded-2xl border border-white/20 bg-slate-950/60 px-3 py-2 text-[10px] font-bold text-slate-200"
+            title="Hộp mù tự động kích hoạt vật phẩm khi trả lời đúng"
+          >
+            🎁 Hộp mù: khiên chặn 1 lần cắn · tim hồi phục · gợi ý cộng thêm · điểm/khoảng cách
+          </div>
 
           {/* Combo Multiplier */}
           <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-900 to-orange-900 text-white px-3.5 py-2 rounded-2xl shadow-lg border border-white/20">
@@ -1829,7 +2037,7 @@ export default function VocabularyRunnerGame({
               </div>
 
               {/* Toggle Chế độ Trắc nghiệm / Gõ từ */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {currentQuestion.answerFormat !== "audio_choices" && <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setInputMode("choice")}
@@ -1852,28 +2060,34 @@ export default function VocabularyRunnerGame({
                 >
                   <Keyboard className="w-3.5 h-3.5" /> Bàn phím
                 </button>
-              </div>
+              </div>}
             </div>
 
             {/* Prompt row */}
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => playWord(currentQuestion.word, soundMuted)}
-                className="w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-700 flex items-center justify-center shrink-0 transition-transform active:scale-95"
-                aria-label="Phát âm"
-              >
-                <Volume2 className="w-5 h-5" />
-              </button>
+              {currentQuestion.answerFormat !== "audio_choices" && (
+                <button
+                  type="button"
+                  onClick={() => playWord(currentQuestion.word, soundMuted)}
+                  className="w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-700 flex items-center justify-center shrink-0 transition-transform active:scale-95"
+                  aria-label="Phát âm từ mục tiêu"
+                >
+                  <Volume2 className="w-5 h-5" />
+                </button>
+              )}
               <div className="flex-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full mr-2">
                   {currentQuestion.encounterType === "mystery_box"
                     ? "Hộp mù"
                     : currentQuestion.type === "FILL_IN_BLANK"
                     ? "Điền từ"
+                    : currentQuestion.type === "PHONETIC_TO_AUDIO"
+                    ? "Nghe và chọn phát âm"
                     : currentQuestion.type === "AUDIO"
-                    ? "Nghe"
-                    : "Đoán nghĩa"}
+                    ? "Nghe và chọn từ"
+                    : currentQuestion.type === "ENGLISH_TO_VIETNAMESE"
+                    ? "Chọn nghĩa tiếng Việt"
+                    : "Chọn từ tiếng Anh"}
                 </span>
                 <span className="text-sm sm:text-base font-bold text-slate-800">
                   {currentQuestion.prompt}
@@ -1882,7 +2096,34 @@ export default function VocabularyRunnerGame({
             </div>
 
             {/* Chế độ 1: 4 Nút Trắc Nghiệm Lớn (>= 44px theo tiêu chuẩn WCAG) */}
-            {inputMode === "choice" ? (
+            {currentQuestion.answerFormat === "audio_choices" ? (
+              <div className="grid grid-cols-2 gap-2 pt-1" aria-label="Các đáp án phát âm">
+                {currentQuestion.choices.map((choice, idx) => {
+                  const optionWord = answerWordByText.get(choice.trim().toLowerCase()) ?? currentQuestion.word;
+                  return (
+                    <div key={`${currentQuestion.instanceId}-audio-choice-${idx}`} className="min-h-24 rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 flex flex-col items-center justify-center gap-2">
+                      <span className="text-xs font-extrabold uppercase tracking-wide text-slate-500">Đáp án {idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => playWord(optionWord, soundMuted)}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3 text-sm font-bold text-sky-800 hover:bg-sky-50"
+                        aria-label={`Nghe đáp án ${idx + 1}`}
+                      >
+                        <Volume2 className="h-4 w-4" /> Nghe
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isChecking}
+                        onClick={() => void handleSubmitAnswer(choice)}
+                        className="min-h-10 w-full rounded-xl bg-indigo-600 px-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        Chọn đáp án {idx + 1}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : inputMode === "choice" ? (
               <div className="grid grid-cols-2 gap-2 pt-1">
                 {currentQuestion.choices.map((choice, idx) => (
                   <button
@@ -1911,7 +2152,9 @@ export default function VocabularyRunnerGame({
                   type="text"
                   value={userInput}
                   onChange={(e) => setUserInput(e.target.value)}
-                  placeholder="Nhập từ tiếng Anh (sai 1 ký tự vẫn tính đúng)..."
+                  placeholder={currentQuestion.type === "ENGLISH_TO_VIETNAMESE"
+                    ? "Nhập nghĩa tiếng Việt..."
+                    : "Nhập từ tiếng Anh..."}
                   disabled={isChecking}
                   autoComplete="off"
                   autoCorrect="off"
@@ -1930,10 +2173,10 @@ export default function VocabularyRunnerGame({
             )}
 
             {/* Sub Actions: Gợi ý + Phát âm */}
-            <div className="flex items-center gap-2 pt-1 flex-wrap">
+            {currentQuestion.answerFormat !== "audio_choices" && <div className="flex items-center gap-2 pt-1 flex-wrap">
               <button
                 type="button"
-                onClick={() => setHintVisible(true)}
+                onClick={handleUseHint}
                 className="bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 border border-amber-200"
               >
                 <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
@@ -1958,7 +2201,7 @@ export default function VocabularyRunnerGame({
                   {"*".repeat(Math.max(1, currentQuestion.word.word.length - 1))}
                 </span>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       )}

@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { LearningOnboardingPrompt } from "@/components/learning/LearningOnboardingPrompt";
+import { getGrammarToday } from "@/lib/api/grammar";
+import { getStudyPlanSummary, generateStudyPlan, type StudyPlanSummary } from "@/lib/api/study-plan";
 import {
   BookOpen,
   Brain,
@@ -22,6 +24,7 @@ import {
   Clock,
   Zap,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import {
   getStudyTrackerData,
@@ -44,26 +47,9 @@ interface TargetGoalData {
 }
 
 export default function Home() {
-  // Study Tracker & Streak Data
-  const [trackerData, setTrackerData] = useState<StudyTrackerData>(getStudyTrackerData);
-  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
-  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
-
-  // Lắng nghe cập nhật thời gian học thực tế theo thời gian thực
-  useEffect(() => {
-    const handleTrackerUpdate = () => {
-      setTrackerData(getStudyTrackerData());
-    };
-    window.addEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
-    window.addEventListener("storage", handleTrackerUpdate);
-    window.addEventListener("focus", handleTrackerUpdate);
-    return () => {
-      window.removeEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
-      window.removeEventListener("storage", handleTrackerUpdate);
-      window.removeEventListener("focus", handleTrackerUpdate);
-    };
-  }, []);
+  const [grammarTodayCount, setGrammarTodayCount] = useState<number | null>(null);
+  const [studyPlan, setStudyPlan] = useState<StudyPlanSummary | null>(null);
+  const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
 
   // Latest Score & Target Goal State
   const [latestScore, setLatestScore] = useState<LatestScoreData | null>(() => {
@@ -95,6 +81,89 @@ export default function Home() {
     }
     return null;
   });
+
+  useEffect(() => {
+    void getGrammarToday()
+      .then((data) => setGrammarTodayCount(data.due?.count ?? null))
+      .catch(() => setGrammarTodayCount(null));
+
+    void getStudyPlanSummary()
+      .then((data) => {
+        if (data && data.targetScore > 0) {
+          setStudyPlan(data);
+          setTargetGoal((prev) => ({
+            targetBand: data.targetScore,
+            focusNote: prev?.focusNote || (data.daysRemaining ? `Còn ${data.daysRemaining} ngày thi` : 'Kế hoạch theo lộ trình'),
+          }));
+          if (data.baselineScore) {
+            setLatestScore((prev) => {
+              if (prev && prev.total > 0) return prev;
+              const half = Math.round(data.baselineScore! / 2);
+              return {
+                lc: half,
+                rc: data.baselineScore! - half,
+                total: data.baselineScore!,
+                testName: 'Đánh giá đầu vào',
+              };
+            });
+          }
+        }
+      })
+      .catch(() => {
+        // Học viên chưa hoàn thành onboarding hoặc dùng profile mặc định
+      });
+  }, []);
+
+  const handleRefreshStudyPlan = async () => {
+    setIsRefreshingPlan(true);
+    try {
+      const refreshed = await generateStudyPlan();
+      const updatedSummary: StudyPlanSummary = {
+        targetScore: refreshed.targetScore,
+        baselineScore: refreshed.baselineScore,
+        daysRemaining: refreshed.daysRemaining,
+        recommendedNewWords: refreshed.recommendedNewWords,
+        recommendedReview: refreshed.recommendedReview,
+        recommendedGrammar: refreshed.recommendedGrammar,
+        recommendedMockTestsPerWeek: refreshed.recommendedMockTestsPerWeek,
+        planExplanation: refreshed.planExplanation,
+        focusAreas: refreshed.focusAreas,
+        progressPercent: studyPlan?.progressPercent ?? 0,
+        baselineSource: refreshed.baselineSource,
+      };
+      setStudyPlan(updatedSummary);
+      setTargetGoal((prev) => ({
+        targetBand: refreshed.targetScore,
+        focusNote: prev?.focusNote || (refreshed.daysRemaining ? `Còn ${refreshed.daysRemaining} ngày thi` : 'Kế hoạch theo lộ trình'),
+      }));
+      showToast("Đã tính toán và đồng bộ lại lộ trình học tập cá nhân hóa! 🎯");
+    } catch {
+      showToast("Không thể tính lại lộ trình lúc này. Vui lòng thử lại sau.");
+    } finally {
+      setIsRefreshingPlan(false);
+    }
+  };
+
+  // Study Tracker & Streak Data
+  const [trackerData, setTrackerData] = useState<StudyTrackerData>(getStudyTrackerData);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+  const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
+
+  // Lắng nghe cập nhật thời gian học thực tế theo thời gian thực
+  useEffect(() => {
+    const handleTrackerUpdate = () => {
+      setTrackerData(getStudyTrackerData());
+    };
+    window.addEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+    window.addEventListener("storage", handleTrackerUpdate);
+    window.addEventListener("focus", handleTrackerUpdate);
+    return () => {
+      window.removeEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+      window.removeEventListener("storage", handleTrackerUpdate);
+      window.removeEventListener("focus", handleTrackerUpdate);
+    };
+  }, []);
 
   // Modal open states for Score & Target
   const [isScoreModalOpen, setIsScoreModalOpen] = useState(false);
@@ -217,7 +286,9 @@ export default function Home() {
       detail: "Ôn tập các chủ điểm và bài tập ngữ pháp được cung cấp.",
       icon: Brain,
       href: "/grammar",
-      stats: "Mở để xem dữ liệu hiện có",
+      stats: grammarTodayCount && grammarTodayCount > 0
+        ? `Ngữ pháp hôm nay: ${grammarTodayCount} câu đến hạn`
+        : "Ngữ pháp hôm nay: xem lộ trình",
       badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
       accentColor: "from-emerald-500 to-teal-600",
       iconBg: "bg-emerald-50 text-emerald-600",
@@ -468,6 +539,106 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* LỘ TRÌNH CÁ NHÂN HÓA DỰA TRÊN DỮ LIỆU THỰC TẾ & MỤC TIÊU */}
+      {studyPlan && studyPlan.targetScore > 0 && (
+        <section aria-labelledby="study-plan-title" className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/50 p-5 sm:p-6 shadow-xs hover:border-indigo-200 transition-all">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-indigo-100/70 pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="p-1.5 rounded-lg bg-indigo-600 text-white shadow-2xs">
+                  <Sparkles className="w-4 h-4" />
+                </span>
+                <h2 id="study-plan-title" className="text-base font-bold text-slate-900">
+                  Lộ Trình Học Tập Cá Nhân Hóa Thông Minh
+                </h2>
+                <span className="rounded-full bg-indigo-100/80 px-2.5 py-0.5 text-[10px] font-bold text-indigo-700">
+                  Đã đồng bộ mục tiêu
+                </span>
+                {/* Badge nguồn điểm xuất phát */}
+                {studyPlan.baselineScore != null && (
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                      studyPlan.baselineSource === 'MOCK_TEST'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : studyPlan.baselineSource === 'SELF_REPORTED'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-500'
+                    }`}
+                    title="Nguồn điểm xuất phát được dùng để tính lộ trình"
+                  >
+                    {studyPlan.baselineSource === 'MOCK_TEST'
+                      ? `📊 Từ bài thi thử: ${studyPlan.baselineScore} điểm`
+                      : studyPlan.baselineSource === 'SELF_REPORTED'
+                      ? `✍️ Tự khai báo: ${studyPlan.baselineScore} điểm`
+                      : `🤖 Ước tính: ${studyPlan.baselineScore} điểm`}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                Được tính toán tự động dựa trên khoảng cách điểm, thời gian còn lại ({studyPlan.daysRemaining ? `${studyPlan.daysRemaining} ngày` : 'linh hoạt'}) và lịch học của bạn.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRefreshStudyPlan}
+              disabled={isRefreshingPlan}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-xl border border-indigo-200 bg-white px-3.5 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50 transition shadow-2xs disabled:opacity-60 disabled:cursor-wait"
+              title="Tính toán lại lộ trình dựa trên kết quả thi thử và tiến độ học mới nhất"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingPlan ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingPlan ? 'Đang tính toán...' : 'Cập nhật lại lộ trình'}</span>
+            </button>
+          </div>
+
+          {/* Phân bổ chỉ tiêu hàng ngày / hàng tuần */}
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-blue-100 bg-white/80 p-3.5 text-center shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Từ mới / ngày</span>
+              <div className="text-xl font-black text-slate-900 font-mono mt-1">
+                {studyPlan.recommendedNewWords} <span className="text-xs font-normal text-slate-400">từ</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Đồng bộ trang Từ vựng</span>
+            </div>
+
+            <div className="rounded-xl border border-emerald-100 bg-white/80 p-3.5 text-center shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Ôn tập SRS / ngày</span>
+              <div className="text-xl font-black text-slate-900 font-mono mt-1">
+                {studyPlan.recommendedReview} <span className="text-xs font-normal text-slate-400">từ</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Lặp lại ngắt quãng</span>
+            </div>
+
+            <div className="rounded-xl border border-amber-100 bg-white/80 p-3.5 text-center shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Ngữ pháp / ngày</span>
+              <div className="text-xl font-black text-slate-900 font-mono mt-1">
+                {studyPlan.recommendedGrammar} <span className="text-xs font-normal text-slate-400">câu</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Củng cố nền tảng</span>
+            </div>
+
+            <div className="rounded-xl border border-rose-100 bg-white/80 p-3.5 text-center shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Thi thử / tuần</span>
+              <div className="text-xl font-black text-slate-900 font-mono mt-1">
+                {studyPlan.recommendedMockTestsPerWeek} <span className="text-xs font-normal text-slate-400">đề</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Đo lường tiến bộ</span>
+            </div>
+          </div>
+
+          {/* Lời giải thích minh bạch từ Heuristic Engine */}
+          {studyPlan.planExplanation && (
+            <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5 text-xs text-slate-700 leading-relaxed flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-semibold text-indigo-950">Giải thích đề xuất: </strong>
+                <span>{studyPlan.planExplanation}</span>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 2. KHU VỰC HỌC TẬP (LỘ TRÌNH 5 PHÂN HỆ TOEIC) */}
       <section aria-labelledby="modules-title" className="space-y-4">

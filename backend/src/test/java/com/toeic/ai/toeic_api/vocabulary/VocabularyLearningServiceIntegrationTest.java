@@ -83,6 +83,8 @@ class VocabularyLearningServiceIntegrationTest {
                     assertThat(weakWord.incorrectCount()).isEqualTo(1);
                 });
         assertThat(vocabularyService.getWeakVocabularyWords(UUID.randomUUID(), 10)).isEmpty();
+        assertThat(vocabularyService.getDueReviewWords(studentId, null, 100))
+                .noneMatch(word -> word.id().equals(wordId));
         assertThat(vocabularyService.getDailyLearningStats(studentId))
                 .singleElement()
                 .satisfies(stat -> {
@@ -90,6 +92,12 @@ class VocabularyLearningServiceIntegrationTest {
                     assertThat(stat.correctCount()).isEqualTo(1);
                 });
         assertThat(vocabularyService.getDueReviewWords(UUID.randomUUID(), null, 50)).isEmpty();
+        vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                UUID.randomUUID(), wordId, "PRACTICE", "VIETNAMESE_TO_ENGLISH", "invoice", null, 900, null, null));
+        assertThat(jdbc.queryForObject(
+                "SELECT incorrect_count FROM user_vocabulary_progress WHERE user_id = ? AND word_id = ?",
+                Integer.class, studentId, wordId)).isZero();
+        assertThat(vocabularyService.getWeakVocabularyWords(studentId, 10)).isEmpty();
         assertThatThrownBy(() -> vocabularyService.recordAnswer(studentId,
                 new VocabularyService.RecordVocabularyAnswerRequest(
                         requestId, wordId, "PRACTICE", "VIETNAMESE_TO_ENGLISH", "receipt", null, 2_500, null, null)))
@@ -380,5 +388,109 @@ class VocabularyLearningServiceIntegrationTest {
         assertThat(completed.score()).isEqualTo(10);
         assertThat(completed.correctCount()).isEqualTo(1);
         assertThat(completed.maxCombo()).isEqualTo(1);
+    }
+
+    @Test
+    void matchingConsecutiveCorrectAttempts_completesWithThreeStars() {
+        String wordId2 = "test-word2-" + UUID.randomUUID();
+        String wordId3 = "test-word3-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO vocabulary_items (id, set_id, word, part_of_speech, meaning, order_index) VALUES (?, ?, 'contract', 'Noun', 'hợp đồng', 1)", wordId2, setId);
+        jdbc.update("INSERT INTO vocabulary_items (id, set_id, word, part_of_speech, meaning, order_index) VALUES (?, ?, 'payment', 'Noun', 'thanh toán', 2)", wordId3, setId);
+
+        var session = vocabularyService.startGameSession(studentId,
+                new VocabularyService.StartVocabularyGameRequest(setId, "matching"));
+
+        String[] words = { wordId, wordId2, wordId3 };
+        for (int i = 0; i < words.length; i++) {
+            UUID reqId = UUID.randomUUID();
+            var res = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                    reqId, words[i], "GAME", "ENGLISH_TO_VIETNAMESE", words[i], null, 1_000,
+                    session.id(), i, null, null, null, null, null, null, null, words[i], words[i]));
+            assertThat(res.correct()).isTrue();
+            assertThat(res.result()).isEqualTo("correct");
+        }
+
+        var completed = vocabularyService.completeGameSession(studentId, session.id());
+        assertThat(completed.correctCount()).isEqualTo(3);
+        assertThat(completed.wrongCount()).isZero();
+        assertThat(completed.totalQuestions()).isEqualTo(3);
+        assertThat(completed.stars()).isEqualTo(3);
+        assertThat(completed.won()).isTrue();
+    }
+
+    @Test
+    void matchingWrongAttempt_recordsExactlyOneEventWithoutIndexDrift() {
+        String wordId2 = "test-word2-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO vocabulary_items (id, set_id, word, part_of_speech, meaning, order_index) VALUES (?, ?, 'contract', 'Noun', 'hợp đồng', 1)", wordId2, setId);
+
+        var session = vocabularyService.startGameSession(studentId,
+                new VocabularyService.StartVocabularyGameRequest(setId, "matching"));
+
+        // Attempt 0: mismatch wordId and wordId2
+        var wrongAttempt = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                UUID.randomUUID(), wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId2, null, 1_200,
+                session.id(), 0, null, null, null, null, null, null, null, wordId, wordId2));
+        assertThat(wrongAttempt.correct()).isFalse();
+        assertThat(wrongAttempt.result()).isEqualTo("wrong");
+
+        // Attempt 1: match wordId correctly -> index 1 succeeds without index drift!
+        var correctAttempt1 = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                UUID.randomUUID(), wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId, null, 800,
+                session.id(), 1, null, null, null, null, null, null, null, wordId, wordId));
+        assertThat(correctAttempt1.correct()).isTrue();
+
+        // Attempt 2: match wordId2 correctly -> index 2 succeeds!
+        var correctAttempt2 = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                UUID.randomUUID(), wordId2, "GAME", "ENGLISH_TO_VIETNAMESE", wordId2, null, 900,
+                session.id(), 2, null, null, null, null, null, null, null, wordId2, wordId2));
+        assertThat(correctAttempt2.correct()).isTrue();
+
+        var completed = vocabularyService.completeGameSession(studentId, session.id());
+        assertThat(completed.correctCount()).isEqualTo(2);
+        assertThat(completed.wrongCount()).isEqualTo(1);
+    }
+
+    @Test
+    void matchingNearAnswer_isScoredAsWrongWithoutLevenshtein() {
+        String wordId2 = "test-word2-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO vocabulary_items (id, set_id, word, part_of_speech, meaning, order_index) VALUES (?, ?, 'invoices', 'Noun', 'các hóa đơn', 1)", wordId2, setId);
+
+        var session = vocabularyService.startGameSession(studentId,
+                new VocabularyService.StartVocabularyGameRequest(setId, "matching"));
+
+        // Even though meanings or strings might be similar, matching must compare IDs only
+        var res = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                UUID.randomUUID(), wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId2, null, 1_000,
+                session.id(), 0, null, null, null, null, null, null, null, wordId, wordId2));
+        assertThat(res.correct()).isFalse();
+        assertThat(res.result()).isEqualTo("wrong");
+    }
+
+    @Test
+    void matchingIdempotency_sameRequestIdReturnsDuplicate_differentPayloadThrowsConflict() {
+        String wordId2 = "test-word2-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO vocabulary_items (id, set_id, word, part_of_speech, meaning, order_index) VALUES (?, ?, 'contract', 'Noun', 'hợp đồng', 1)", wordId2, setId);
+
+        var session = vocabularyService.startGameSession(studentId,
+                new VocabularyService.StartVocabularyGameRequest(setId, "matching"));
+
+        UUID reqId = UUID.randomUUID();
+        var first = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                reqId, wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId, null, 1_000,
+                session.id(), 0, null, null, null, null, null, null, null, wordId, wordId));
+        assertThat(first.duplicate()).isFalse();
+
+        // Duplicate with exact same payload
+        var dup = vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                reqId, wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId, null, 1_000,
+                session.id(), 0, null, null, null, null, null, null, null, wordId, wordId));
+        assertThat(dup.duplicate()).isTrue();
+
+        // Same requestId with different payload -> 409 CONFLICT
+        assertThatThrownBy(() -> vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                reqId, wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId2, null, 1_000,
+                session.id(), 0, null, null, null, null, null, null, null, wordId, wordId2)))
+                .isInstanceOf(ResponseStatusException.class)
+                .matches(ex -> ((ResponseStatusException) ex).getStatusCode().value() == 409);
     }
 }

@@ -385,6 +385,35 @@ export default function StudentOnboardingPage() {
                 <SummaryRow label="Ngày học" value={form.studyDays.length ? weekdays.filter((day) => form.studyDays.includes(day.value)).map((day) => day.label).join(', ') : 'Chưa chọn'} />
                 <SummaryRow label="Quan tâm" value={form.interests.length ? interests.filter((interest) => form.interests.includes(interest.value)).map((interest) => interest.label).join(', ') : 'Chưa chọn'} />
               </dl>
+
+              {/* Dự kiến Lộ trình cá nhân hóa */}
+              <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4">
+                <div className="flex items-center gap-2 text-cyan-300 text-xs font-bold uppercase tracking-wider">
+                  <Sparkles className="size-4" />
+                  <span>Dự kiến phân bổ mục tiêu học tập hàng ngày</span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 text-center">
+                  <div className="rounded-lg bg-white/[0.04] p-2.5">
+                    <span className="text-[11px] text-slate-400 block">Từ mới / ngày</span>
+                    <span className="text-base font-bold text-white font-mono mt-0.5 block">
+                      {form.dailyStudyMinutes ? (form.dailyStudyMinutes <= 15 ? '5 - 8' : form.dailyStudyMinutes <= 30 ? '10 - 15' : '15 - 25') : '10'} từ
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.04] p-2.5">
+                    <span className="text-[11px] text-slate-400 block">Ôn tập SRS / ngày</span>
+                    <span className="text-base font-bold text-white font-mono mt-0.5 block">
+                      {form.dailyStudyMinutes ? (form.dailyStudyMinutes <= 15 ? '15 - 20' : form.dailyStudyMinutes <= 30 ? '25 - 30' : '40 - 50') : '20'} từ
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.04] p-2.5 col-span-2 sm:col-span-1">
+                    <span className="text-[11px] text-slate-400 block">Luyện thi thử</span>
+                    <span className="text-base font-bold text-white font-mono mt-0.5 block">1 - 2 đề / tuần</span>
+                  </div>
+                </div>
+                <p className="mt-2.5 text-[11px] text-cyan-200/80 leading-relaxed">
+                  Lộ trình chi tiết sẽ được tự động đồng bộ vào Bảng điều khiển và mục tiêu học hàng ngày ngay khi bạn bấm hoàn tất.
+                </p>
+              </div>
             </div>
           )}
 

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Crosshair, Flame, Heart, HelpCircle, Maximize2, Minimize2,
-  Pause, Play, RotateCcw, Shield, Sparkles, Volume2, VolumeX, X, Zap,
+  ArrowLeft, BookOpen, Check, CheckCircle2, ChevronDown, Crosshair, Flame, FolderKanban, Heart, HelpCircle, Layers, Loader2, Maximize2, Minimize2,
+  Pause, Play, RotateCcw, Search, Shield, Sparkles, Volume2, VolumeX, X, Zap,
 } from "lucide-react";
 import type { VocabularyTestSet, WordItem } from "@/app/admin/content/vocabulary/types";
 import {
@@ -38,9 +38,18 @@ import {
 } from "./battleship/questionGenerator";
 import { ShipSvg } from "./battleship/ShipSvg";
 import { soundEffects } from "./battleship/soundEffects";
+import { getWordLevel, type WordLevelTag } from "./runner/wordSelector";
 
-// CEFR Level options for "by_level" mode
-const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+// CEFR Level options
+const CEFR_LEVEL_OPTIONS: { level: WordLevelTag; label: string; desc: string }[] = [
+  { level: "A1", label: "A1", desc: "Cơ bản" },
+  { level: "A2", label: "A2", desc: "Sơ cấp" },
+  { level: "B1", label: "B1", desc: "Trung cấp" },
+  { level: "B2", label: "B2", desc: "Khá" },
+  { level: "C1", label: "C1", desc: "Nâng cao" },
+  { level: "C2", label: "C2", desc: "Thành thạo" },
+  { level: "unclassified", label: "Khác", desc: "Mở rộng" },
+];
 
 interface BattleSessionRuntime {
   id: string;
@@ -86,8 +95,13 @@ export default function BattleshipGame({ setId }: { setId: string }) {
   const sessionRef = useRef<BattleSessionRuntime | null>(null);
 
   // General App State
-  const [sets, setSets] = useState<VocabularyTestSet[]>([]);
-  const [selectedSetId, setSelectedSetId] = useState(setId);
+  const [activeSetId, setActiveSetId] = useState<string>(setId);
+  const [selectedSetId, setSelectedSetId] = useState<string>(setId);
+  const [activeTestSet, setActiveTestSet] = useState<VocabularyTestSet | null>(null);
+  const [availableSets, setAvailableSets] = useState<VocabularyTestSet[]>([]);
+  const [isSetPickerOpen, setIsSetPickerOpen] = useState(false);
+  const [searchSetQuery, setSearchSetQuery] = useState("");
+  const [isLoadingSet, setIsLoadingSet] = useState(false);
   const [primaryWords, setPrimaryWords] = useState<WordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -97,10 +111,52 @@ export default function BattleshipGame({ setId }: { setId: string }) {
 
   // Preference Settings
   const [difficulty, setDifficulty] = useState<BattleDifficulty>("medium");
-  const [mode, setMode] = useState<BattleSetup["mode"]>("single_deck");
-  const [selectedLevels, setSelectedLevels] = useState<string[]>(["B1", "B2"]);
+  const [deckScope, setDeckScope] = useState<"single_deck" | "all_decks">("single_deck");
+  const [filterByLevel, setFilterByLevel] = useState<boolean>(false);
+  const [selectedLevels, setSelectedLevels] = useState<WordLevelTag[]>([
+    "A1",
+    "A2",
+    "B1",
+    "B2",
+    "C1",
+    "C2",
+    "unclassified",
+  ]);
   const [soundMuted, setSoundMuted] = useState(false);
   const [tabMaximized, setTabMaximized] = useState(false);
+
+  // Computed Word Pools
+  const allSetsWords = useMemo(() => {
+    return availableSets
+      .map((set) => ({
+        setId: set.id,
+        words: (set.words ?? []).filter((w) => w.word?.trim()),
+      }))
+      .filter((set) => set.words.length > 0);
+  }, [availableSets]);
+
+  const allDeckWords = useMemo(() => {
+    const list = allSetsWords.flatMap((set) => set.words);
+    const seen = new Set<string>();
+    return list.filter((w) => {
+      const key = (w.word || "").toLowerCase().trim().replace(/[-\s]+/g, "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [allSetsWords]);
+
+  const isAllDecksSelected = deckScope === "all_decks" || activeSetId === "ALL";
+  const baseWordPool = isAllDecksSelected
+    ? (allDeckWords.length > 0 ? allDeckWords : primaryWords)
+    : primaryWords;
+
+  const availableWordPool = useMemo(() => {
+    if (!filterByLevel) return baseWordPool;
+    return baseWordPool.filter((w) => selectedLevels.includes(getWordLevel(w)));
+  }, [baseWordPool, filterByLevel, selectedLevels]);
+
+  const totalAllWordsCount = allDeckWords.length > 0 ? allDeckWords.length : primaryWords.length;
 
   // Game Runtime State
   const [session, setSession] = useState<BattleSessionRuntime | null>(null);
@@ -116,31 +172,144 @@ export default function BattleshipGame({ setId }: { setId: string }) {
   const [impactEffect, setImpactEffect] = useState<"hit" | "crit" | "miss" | null>(null);
   const [screenShake, setScreenShake] = useState(false);
 
-  // 1. Load initial sets & words
-  useEffect(() => {
-    let active = true;
-    soundEffects.setEnabled(!soundMuted);
+  // Filtered sets for picker modal
+  const filteredSets = useMemo(() => {
+    return availableSets.filter((s) => {
+      if (!searchSetQuery.trim()) return true;
+      const q = searchSetQuery.toLowerCase().trim();
+      return (
+        s.title?.toLowerCase().includes(q) ||
+        s.category?.toLowerCase().includes(q) ||
+        s.description?.toLowerCase().includes(q)
+      );
+    });
+  }, [availableSets, searchSetQuery]);
 
-    void Promise.all([getVocabularySetSummaries(), getVocabularySet(setId)])
-      .then(([availableSets, currentSet]) => {
+  // 1. Load active set details
+  useEffect(() => {
+    if (activeSetId === "ALL") return;
+    let active = true;
+    setLoading(true);
+    setSetupError(null);
+    void getVocabularySet(activeSetId)
+      .then((set) => {
         if (!active) return;
-        setSets(availableSets);
-        setSelectedSetId(setId);
-        setPrimaryWords(currentSet.words ?? []);
-        setSetupError(null);
+        setActiveTestSet(set);
+        const usable = (set.words ?? []).filter((w) => w.word?.trim());
+        setPrimaryWords(usable);
       })
       .catch((err) => {
-        if (!active) return;
-        setSetupError(err instanceof Error ? err.message : "Không thể tải bộ từ vựng.");
+        if (active) setSetupError(err instanceof Error ? err.message : "Không thể tải bộ từ vựng.");
       })
       .finally(() => {
         if (active) setLoading(false);
       });
 
-    return () => {
-      active = false;
-    };
-  }, [setId, soundMuted]);
+    return () => { active = false; };
+  }, [activeSetId]);
+
+  // 2. Load all available sets & their details
+  useEffect(() => {
+    let active = true;
+    soundEffects.setEnabled(!soundMuted);
+
+    void getVocabularySets()
+      .then(async (sets) => {
+        if (!active || !Array.isArray(sets)) return;
+        setAvailableSets(sets);
+
+        // Load detailed sets to get full word list for all-decks mix
+        const detailedSets = await Promise.all(
+          sets.map(async (s) => {
+            if (s.words && s.words.length > 0) return s;
+            try {
+              return await getVocabularySet(s.id);
+            } catch {
+              return s;
+            }
+          })
+        );
+
+        if (active) {
+          setAvailableSets(detailedSets);
+          if (activeSetId === "ALL") {
+            const allWordsList = detailedSets
+              .flatMap((s) => s.words ?? [])
+              .filter((w) => w.word?.trim());
+            setPrimaryWords(allWordsList);
+            setActiveTestSet({
+              id: "ALL",
+              title: "Tất cả bộ đề (Toàn bộ kho từ)",
+              category: "Kho từ vựng tổng hợp",
+              wordCount: allWordsList.length,
+              words: allWordsList,
+            } as VocabularyTestSet);
+            setLoading(false);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load all vocabulary sets", err);
+      });
+
+    return () => { active = false; };
+  }, [activeSetId, soundMuted]);
+
+  // Deck change handler
+  const handleSelectDeck = async (targetSet: VocabularyTestSet) => {
+    if (targetSet.id === activeSetId) {
+      setIsSetPickerOpen(false);
+      return;
+    }
+    setIsLoadingSet(true);
+    try {
+      if (targetSet.id === "ALL") {
+        const allWordsList = allDeckWords.length > 0
+          ? allDeckWords
+          : (primaryWords.length > 0 ? primaryWords : []);
+        setActiveSetId("ALL");
+        setSelectedSetId("ALL");
+        setDeckScope("all_decks");
+        setActiveTestSet({
+          id: "ALL",
+          title: "Tất cả bộ đề (Toàn bộ kho từ)",
+          category: "Kho từ vựng tổng hợp",
+          wordCount: allWordsList.length,
+          words: allWordsList,
+        } as VocabularyTestSet);
+        setPrimaryWords(allWordsList);
+        setIsSetPickerOpen(false);
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("setId", "ALL");
+          window.history.replaceState({}, "", url.toString());
+        }
+        return;
+      }
+
+      let fullSet = targetSet;
+      if (!fullSet.words || fullSet.words.length === 0) {
+        fullSet = await getVocabularySet(targetSet.id);
+      }
+      const usable = (fullSet.words ?? []).filter((w: WordItem) => w.word?.trim());
+      setActiveSetId(fullSet.id);
+      setSelectedSetId(fullSet.id);
+      setActiveTestSet(fullSet);
+      setPrimaryWords(usable);
+      setIsSetPickerOpen(false);
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("setId", fullSet.id);
+        window.history.replaceState({}, "", url.toString());
+      }
+    } catch (err) {
+      console.error("Failed to load deck:", err);
+    } finally {
+      setIsLoadingSet(false);
+    }
+  };
 
   // Sync mute state with sound effects synthesizer
   const toggleSound = () => {
@@ -209,31 +378,39 @@ export default function BattleshipGame({ setId }: { setId: string }) {
 
   // Start a new Battle Session
   const startBattle = async () => {
+    if (availableWordPool.length === 0) return;
+    if (isAllDecksSelected && availableSets.length === 0) {
+      setSetupError("Không tải được danh sách bộ đề. Vui lòng thử lại trước khi chơi trộn.");
+      return;
+    }
     setLoading(true);
     setSetupError(null);
     setCompletionError(null);
     setSubmissionError(null);
 
     try {
-      // 1. Gather word candidates based on mode
+      // 1. Gather word candidates based on deckScope
       let decks: { id: string; words: WordItem[] }[] = [];
 
-      if (mode === "single_deck") {
-        const setDetails = selectedSetId === setId ? { words: primaryWords } : await getVocabularySet(selectedSetId);
-        decks = [{ id: selectedSetId, words: setDetails.words ?? [] }];
-      } else if (mode === "all_decks" || mode === "by_level") {
-        const availableDecks = await getVocabularySets();
-        decks = availableDecks.map((deck) => ({
+      if (!isAllDecksSelected) {
+        decks = [{ id: activeSetId, words: primaryWords }];
+      } else {
+        decks = availableSets.map((deck) => ({
           id: deck.id,
           words: deck.words ?? [],
         }));
+        if (decks.length === 0) {
+          decks = [{ id: "all", words: availableWordPool }];
+        }
       }
 
       const selectedWords = selectBattleWords({
         decks,
-        primaryDeckId: selectedSetId,
+        primaryDeckId: activeSetId === "ALL" ? (availableSets[0]?.id || "ALL") : activeSetId,
         setup: {
-          mode,
+          mode: isAllDecksSelected ? "all_decks" : "single_deck",
+          deckScope,
+          filterByLevel,
           selectedLevels,
           difficulty,
           questionCount: BATTLESHIP_CONFIG.MAX_QUESTIONS_PER_SESSION,
@@ -246,15 +423,19 @@ export default function BattleshipGame({ setId }: { setId: string }) {
         throw new Error("Không có từ vựng nào phù hợp với bộ lọc đã chọn.");
       }
 
-      const wordPool = decks.flatMap((deck) => deck.words);
-      const deckIds = new Set(mode === "single_deck" ? [selectedSetId] : decks.map((deck) => deck.id));
+      const wordPool = isAllDecksSelected ? allDeckWords : primaryWords;
+      const deckIds = new Set(
+        isAllDecksSelected
+          ? [activeSetId, ...availableSets.map((d) => d.id), ...selectedWords.map((w) => w.setId).filter((id): id is string => !!id)]
+          : [activeSetId, ...selectedWords.map((w) => w.setId).filter((id): id is string => !!id)]
+      );
 
       // 2. Initialize fleet: 3 waves (3 Patrol, 2 Destroyer, 1 Boss)
       const ships = generateFleet(20);
 
       // 3. Request backend game session
       const backendSession = await startVocabularyGameSession({
-        setId: selectedSetId,
+        setId: activeSetId === "ALL" ? (availableSets[0]?.id || "unknown") : activeSetId,
         gameType: "BATTLE",
         deckIds: [...deckIds],
       });
@@ -690,96 +871,154 @@ export default function BattleshipGame({ setId }: { setId: string }) {
               </div>
             )}
 
+            {/* 0. Bộ đề đang chọn */}
+            <div className="flex items-center justify-between rounded-2xl border border-sky-500/30 bg-slate-900/90 p-3 sm:p-4 shadow-lg shadow-sky-950/40">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-400/10 text-sky-300">
+                  <FolderKanban className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Bộ đề đang chọn</p>
+                  <p className="truncate text-sm font-extrabold sm:text-base text-white">
+                    {activeTestSet?.title || "Đang tải bộ đề..."}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {activeTestSet?.category || "Từ vựng TOEIC"} · {activeTestSet?.words?.length || activeTestSet?.wordCount || primaryWords.length} từ khả dụng
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSetPickerOpen(true)}
+                className="ml-2 inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sky-400/40 bg-sky-500/20 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-500/30 transition active:scale-95 sm:px-4 sm:text-sm"
+              >
+                <span>Đổi bộ đề</span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </div>
+
             {/* Mode & Deck Selection */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl flex flex-col gap-4">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                1. Chọn Chế Độ & Bộ Từ Vựng
-              </label>
-
-              {/* Mode Tabs */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { key: "single_deck", label: "Theo bộ đề" },
-                  { key: "all_decks", label: "Tất cả bộ" },
-                  { key: "by_level", label: "Theo cấp độ" },
-                ].map((tab) => (
+              {/* 1. Phạm vi từ vựng */}
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-sky-300">
+                  <BookOpen className="h-4 w-4 text-sky-400" /> Phạm vi từ vựng
+                </p>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    key={tab.key}
-                    onClick={() => setMode(tab.key as BattleSetup["mode"])}
-                    className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all border ${
-                      mode === tab.key
-                        ? "bg-sky-600 text-white border-sky-400 shadow-md shadow-sky-900/40"
-                        : "bg-slate-800/60 text-slate-400 border-slate-700 hover:bg-slate-800 hover:text-slate-200"
+                    type="button"
+                    onClick={() => setDeckScope("single_deck")}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      deckScope === "single_deck"
+                        ? "border-sky-400 bg-sky-500/15 text-sky-200 shadow-sm"
+                        : "border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800"
                     }`}
                   >
-                    {tab.label}
+                    <p className="text-xs font-bold sm:text-sm">📚 Bộ đề hiện tại</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      {primaryWords.length} từ trong bộ đã chọn
+                    </p>
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setDeckScope("all_decks")}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      deckScope === "all_decks"
+                        ? "border-sky-400 bg-sky-500/15 text-sky-200 shadow-sm"
+                        : "border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    <p className="text-xs font-bold sm:text-sm">🗂 Trộn tất cả bộ đề</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      {totalAllWordsCount} từ từ mọi bộ đề
+                    </p>
+                  </button>
+                </div>
               </div>
 
-              {/* Single Deck Dropdown */}
-              {mode === "single_deck" && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] text-slate-400">Chọn bộ đề TOEIC trực tiếp:</span>
-                  <select
-                    value={selectedSetId}
-                    onChange={(e) => setSelectedSetId(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-sky-500"
-                  >
-                    {sets.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title} ({s.wordCount ?? 0} từ)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* 1b. Lọc theo cấp độ CEFR (độc lập với phạm vi) */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setFilterByLevel((v) => !v)}
+                  className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                    filterByLevel
+                      ? "border-cyan-400 bg-cyan-400/15 text-cyan-200 shadow-sm"
+                      : "border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  <div>
+                    <p className="text-xs font-bold sm:text-sm">🎯 Lọc theo cấp độ CEFR</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      {filterByLevel
+                        ? `Áp dụng trên ${deckScope === "all_decks" ? "toàn bộ kho từ" : "bộ đề đã chọn"}`
+                        : "Bấm để bật lọc theo cấp CEFR"}
+                    </p>
+                  </div>
+                  <span className={`ml-3 shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold ${
+                    filterByLevel
+                      ? "border-cyan-400 bg-cyan-500 text-slate-950 font-black"
+                      : "border-slate-700 text-slate-400"
+                  }`}>
+                    {filterByLevel ? "Đang bật" : "Tắt"}
+                  </span>
+                </button>
 
-              {/* By Level CEFR Checkboxes (Fixing user feedback) */}
-              {mode === "by_level" && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-400">Chọn cấp độ CEFR mong muốn rèn luyện:</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedLevels(selectedLevels.length === CEFR_LEVELS.length ? ["B1"] : [...CEFR_LEVELS])}
-                      className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300"
-                    >
-                      {selectedLevels.length === CEFR_LEVELS.length ? "Bỏ chọn tất cả" : "Chọn tất cả"}
-                    </button>
+                {/* CEFR Level Multi-selector */}
+                {filterByLevel && (
+                  <div className="mt-2.5 rounded-2xl border border-cyan-400/20 bg-slate-900/90 p-3 space-y-2 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-cyan-300">Chọn thang cấp độ:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedLevels.length === 7) {
+                            setSelectedLevels(["B1"]);
+                          } else {
+                            setSelectedLevels(["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"]);
+                          }
+                        }}
+                        className="text-xs font-bold text-cyan-400 hover:text-cyan-200"
+                      >
+                        {selectedLevels.length === 7 ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+                      {CEFR_LEVEL_OPTIONS.map(({ level, label, desc }) => {
+                        const isSelected = selectedLevels.includes(level);
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                if (selectedLevels.length > 1) {
+                                  setSelectedLevels(selectedLevels.filter((l) => l !== level));
+                                }
+                              } else {
+                                setSelectedLevels([...selectedLevels, level]);
+                              }
+                            }}
+                            className={`flex flex-col items-center rounded-xl border p-2 text-center transition ${
+                              isSelected
+                                ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-sm"
+                                : "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700"
+                            }`}
+                          >
+                            <span className="text-xs font-black">{label}</span>
+                            <span className={`text-[9px] ${isSelected ? "text-cyan-200" : "text-slate-500"}`}>
+                              {desc}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {CEFR_LEVELS.map((lvl) => {
-                      const active = selectedLevels.includes(lvl);
-                      return (
-                        <button
-                          key={lvl}
-                          type="button"
-                          onClick={() => {
-                            setSelectedLevels((prev) =>
-                              prev.includes(lvl)
-                                ? prev.length > 1
-                                  ? prev.filter((l) => l !== lvl)
-                                  : prev
-                                : [...prev, lvl]
-                            );
-                          }}
-                          className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                            active
-                              ? "bg-cyan-500 text-slate-950 border-cyan-300 shadow-md shadow-cyan-900/40"
-                              : "bg-slate-800/80 text-slate-400 border-slate-700 hover:border-slate-600"
-                          }`}
-                        >
-                          {lvl}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Difficulty Selection */}
-              <div className="flex flex-col gap-2 mt-2 pt-3 border-t border-slate-800">
+              <div className="flex flex-col gap-2 pt-1 border-t border-slate-800">
                 <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
                   2. Chọn Độ Khó Chiến Đấu
                 </label>
@@ -805,7 +1044,24 @@ export default function BattleshipGame({ setId }: { setId: string }) {
                 </div>
               </div>
 
-              {/* Fleet Rules Card */}
+              {/* Fleet Rules Card & Quick Stats */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 text-left">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-[11px] text-sky-300 font-bold">Từ vựng khả dụng</p>
+                  <p className="mt-1 text-sm font-black text-white">{availableWordPool.length} từ</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-[11px] text-sky-300 font-bold">Máu chiến hạm</p>
+                  <p className="mt-1 flex items-center gap-1 text-sm font-black text-rose-400">
+                    <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" /> 5 HP
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-[11px] text-sky-300 font-bold">Quy mô hạm đội</p>
+                  <p className="mt-1 text-sm font-black text-white">12 HP (3 đợt)</p>
+                </div>
+              </div>
+
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs text-slate-400">
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-sky-400" />
@@ -822,14 +1078,20 @@ export default function BattleshipGame({ setId }: { setId: string }) {
                 </button>
               </div>
 
-              {/* Start Button */}
-              <button
-                onClick={startBattle}
-                className="w-full mt-2 py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2"
-              >
-                <Crosshair className="w-4 h-4" />
-                VÀO TRẬN CHIẾN HẠM
-              </button>
+              {availableWordPool.length === 0 ? (
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs text-center font-medium">
+                  ⚠️ Không tìm thấy từ vựng nào khớp với bộ đề và cấp độ CEFR đã chọn. Vui lòng chọn thêm cấp độ hoặc đổi bộ đề.
+                </div>
+              ) : (
+                /* Start Button */
+                <button
+                  onClick={startBattle}
+                  className="w-full mt-2 py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Crosshair className="w-4 h-4" />
+                  VÀO TRẬN CHIẾN HẠM
+                </button>
+              )}
             </div>
           </div>
         ) : session.state === "RESULT" ? (
@@ -917,7 +1179,7 @@ export default function BattleshipGame({ setId }: { setId: string }) {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-md">
+            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 w-full max-w-lg">
               {session.wrongWords.length > 0 && (
                 <button
                   onClick={() => {
@@ -936,6 +1198,21 @@ export default function BattleshipGame({ setId }: { setId: string }) {
               >
                 <Crosshair className="w-3.5 h-3.5" />
                 Chơi lại trận này
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSetPickerOpen(true)}
+                className="w-full sm:flex-1 py-3 rounded-xl border border-sky-500/40 bg-sky-950/60 hover:bg-sky-900/60 text-sky-200 font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <FolderKanban className="w-3.5 h-3.5" />
+                Đổi bộ đề
+              </button>
+              <button
+                type="button"
+                onClick={() => setSession(null)}
+                className="w-full sm:flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors text-center"
+              >
+                Phòng chờ
               </button>
               <Link
                 href="/vocabulary/games"
@@ -1413,6 +1690,131 @@ export default function BattleshipGame({ setId }: { setId: string }) {
                 className="flex-1 py-2 rounded-xl bg-sky-500 disabled:opacity-40 text-slate-950 text-xs font-bold"
               >
                 Từ tiếp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL CHỌN BỘ ĐỀ ── */}
+      {isSetPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="flex max-h-[85dvh] w-full max-w-md flex-col space-y-3 rounded-3xl border border-sky-400/30 bg-slate-950 p-4 sm:p-5 shadow-2xl text-slate-100">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <FolderKanban className="h-5 w-5 text-sky-400" />
+                <h3 className="text-sm font-extrabold text-white sm:text-base">Chọn bộ đề từ vựng</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSetPickerOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchSetQuery}
+                onChange={(e) => setSearchSetQuery(e.target.value)}
+                placeholder="Tìm kiếm bộ đề từ vựng..."
+                className="w-full rounded-xl border border-white/15 bg-slate-900/90 py-2.5 pl-9 pr-4 text-sm font-semibold text-white placeholder-slate-500 outline-none transition focus:border-sky-400"
+              />
+            </div>
+
+            {/* Set List */}
+            <div className="flex-1 space-y-1.5 overflow-y-auto pr-1 max-h-[50dvh]">
+              {isLoadingSet ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-8 text-slate-400">
+                  <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+                  <span className="text-sm font-bold">Đang tải bộ từ vựng...</span>
+                </div>
+              ) : filteredSets.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">Không tìm thấy bộ đề phù hợp</p>
+              ) : (
+                <>
+                  {!searchSetQuery.trim() && (
+                    <button
+                      type="button"
+                      disabled={isLoadingSet}
+                      onClick={() => void handleSelectDeck({
+                        id: "ALL",
+                        title: "Tất cả bộ đề",
+                        category: "Kho từ vựng tổng hợp",
+                        wordCount: totalAllWordsCount,
+                        words: allDeckWords,
+                      } as VocabularyTestSet)}
+                      className={`flex w-full items-center justify-between rounded-2xl border p-3 text-left transition ${
+                        activeSetId === "ALL"
+                          ? "border-sky-400 bg-sky-950/60 font-bold text-sky-200 shadow-sm"
+                          : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20 hover:bg-slate-900"
+                      }`}
+                    >
+                      <div className="min-w-0 pr-2 flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-sky-400 shrink-0" />
+                        <div>
+                          <p className="truncate text-sm font-bold text-white">🗂 Tất cả bộ đề (Toàn kho từ)</p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            Kho từ vựng tổng hợp · {totalAllWordsCount} từ
+                          </p>
+                        </div>
+                      </div>
+                      {activeSetId === "ALL" ? (
+                        <CheckCircle2 className="h-5 w-5 shrink-0 text-sky-400" />
+                      ) : (
+                        <span className="shrink-0 rounded-lg border border-sky-400/30 px-2.5 py-1 text-xs font-bold text-sky-300 hover:bg-sky-400/10">
+                          Chọn
+                        </span>
+                      )}
+                    </button>
+                  )}
+                  {filteredSets.map((s) => {
+                    const isCurrent = s.id === activeSetId;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        disabled={isLoadingSet}
+                        onClick={() => void handleSelectDeck(s)}
+                        className={`flex w-full items-center justify-between rounded-2xl border p-3 text-left transition ${
+                          isCurrent
+                            ? "border-sky-400 bg-sky-950/60 font-bold text-sky-200 shadow-sm"
+                            : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20 hover:bg-slate-900"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="truncate text-sm font-bold text-white">{s.title}</p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {s.category || "Từ vựng TOEIC"} · {s.words?.length || s.wordCount || 0} từ
+                          </p>
+                        </div>
+                        {isCurrent ? (
+                          <CheckCircle2 className="h-5 w-5 shrink-0 text-sky-400" />
+                        ) : (
+                          <span className="shrink-0 rounded-lg border border-sky-400/30 px-2.5 py-1 text-xs font-bold text-sky-300 hover:bg-sky-400/10">
+                            Chọn
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end border-t border-white/10 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsSetPickerOpen(false)}
+                className="rounded-xl px-4 py-2 text-sm font-bold text-slate-400 transition hover:bg-white/5 hover:text-white"
+              >
+                Đóng
               </button>
             </div>
           </div>

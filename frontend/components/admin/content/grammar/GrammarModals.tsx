@@ -24,6 +24,7 @@ import {
 import { GrammarTopicItem, GrammarQuestionItem, GrammarCategory, GrammarWordFamilyLink, GrammarExampleAnnotation } from "@/app/admin/content/grammar/types";
 
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
+import { getGrammarLearningConfig } from "@/lib/api/grammar";
 import {
   GrammarFormulaViewer,
   GrammarSignalsViewer,
@@ -391,7 +392,7 @@ export const GrammarTopicDetailModal: React.FC<GrammarTopicDetailModalProps> = (
             </span>
             {audience === "student" ? (
               <QuestionErrorReportButton
-                source="QUESTION_BANK"
+                source="GRAMMAR"
                 questionRef={`grammar-theory-${topic.id}`}
                 relatedContent={`Lý thuyết ngữ pháp: ${topic.titleVi || topic.title}`}
                 questionSnapshot={{
@@ -2905,7 +2906,12 @@ interface GrammarQuizModalProps {
   questions: GrammarQuestionItem[];
   onClose: () => void;
   activeTopic: GrammarTopicItem | null;
-  onRecordResult?: (topicId: string, isCorrect: boolean) => void;
+  onRecordResult?: (
+    topicId: string,
+    questionId: string,
+    selectedOption: string,
+    isCorrect: boolean,
+  ) => void;
 }
 
 export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
@@ -2918,8 +2924,6 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
   initialIndex = 0,
   isRedoWrongOnly = false,
 }) => {
-  const LOCAL_STORAGE_KEY = "toeic_grammar_curriculum_config";
-
   const [grammarConfig, setGrammarConfig] = useState({
     minAccuracyPass: 80,
     srsGrammarInterval: 3,
@@ -2928,14 +2932,25 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
   });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setGrammarConfig((prev) => ({ ...prev, ...parsed }));
-      }
-    } catch {}
-  }, [isOpen]);
+    if (!isOpen) return;
+    void getGrammarLearningConfig(activeTopic?.id)
+      .then((config) => {
+        setGrammarConfig({
+          minAccuracyPass: config.passThreshold,
+          srsGrammarInterval: config.srsInitialDays,
+          shuffleQuestions: config.shuffleQuestions,
+          showExplanationImmediately: config.showExplanationImmediately,
+        });
+      })
+      .catch(() => {
+        setGrammarConfig({
+          minAccuracyPass: 80,
+          srsGrammarInterval: 3,
+          shuffleQuestions: true,
+          showExplanationImmediately: true,
+        });
+      });
+  }, [isOpen, activeTopic?.id]);
 
   const fullQuestions = useMemo(() => {
     let list = rawQuestions;
@@ -3001,9 +3016,10 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
     }
 
     if (activeTopic) {
-      recordQuestionAnswer(`grammar-${activeTopic.id}`, currentQ.id, isCorrect, questions.length);
+      const questionId = String(currentQ.id);
+      recordQuestionAnswer(`grammar-${activeTopic.id}`, questionId, isCorrect, questions.length);
       if (onRecordResult) {
-        onRecordResult(activeTopic.id, isCorrect);
+        onRecordResult(activeTopic.id, questionId, optKey, isCorrect);
       }
     }
   };
@@ -3260,7 +3276,7 @@ export const GrammarQuizModal: React.FC<GrammarQuizModalProps> = ({
                   : "Chọn 1 đáp án để kiểm tra ngay"}
               </span>
               <QuestionErrorReportButton
-                source="QUESTION_BANK"
+                source="GRAMMAR"
                 questionRef={String(currentQ.id || `grammar-${activeTopic?.id || 'quiz'}-${currentIndex + 1}`)}
                 relatedContent={`Ngữ pháp: ${activeTopic?.title || title || 'Quiz'} - Câu ${currentIndex + 1}`}
                 questionSnapshot={{

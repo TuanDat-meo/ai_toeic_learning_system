@@ -1,19 +1,18 @@
 "use client";
 
 /**
- * Word Rain – Vocabulary Survival
+ * Mưa Từ Vựng – Sinh tồn từ vựng
  * ================================
- * Gameplay cốt lõi Active Recall:
- *  - Giọt mưa hiển thị nghĩa tiếng Việt + các ô chữ cái trống
+ * Gameplay cốt lõi ghi nhớ chủ động:
+ *  - Giọt mưa hiển thị nghĩa tiếng Việt + từ tiếng Anh
  *  - Nhập chữ đầu → khóa mục tiêu có đáp án bắt đầu bằng chữ đó
  *  - Tiếp tục gõ từng chữ → phá hủy giọt khi đúng toàn bộ
  *  - Backspace → bỏ khóa, chuyển mục tiêu
  *  - Giọt chạm đáy → mất 1 mạng (3 mạng/trận)
- *  - Chữ gợi ý được tiết lộ dần theo thời gian
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -22,6 +21,7 @@ import {
   ChevronDown,
   FolderKanban,
   Heart,
+  Layers,
   Loader2,
   Maximize2,
   Minimize2,
@@ -36,6 +36,8 @@ import {
   Sun,
   Timer,
   Shield,
+  Volume2,
+  VolumeX,
   X,
   Zap,
 } from "lucide-react";
@@ -49,14 +51,14 @@ import {
   type VocabularyGameSession,
 } from "@/lib/api/vocabulary";
 import {
-  selectWordsForSession,
-  type StudyMode,
+  getWordLevel,
   type WordLevelTag,
-  type QuestionCountSelection,
 } from "./runner/wordSelector";
 import { RUNNER_SPEED_PRESETS, type SpeedPresetKey } from "./runner/config";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+export type WordRainCountSelection = 10 | 20 | 30 | "full" | 0;
 
 type GamePhase = "lobby" | "playing" | "paused" | "result";
 
@@ -92,6 +94,12 @@ interface FeedbackMessage {
   x: number;
   y: number;
   correct: boolean;
+}
+
+interface WrongWordStat {
+  word: WordItem;
+  missedCount: number;
+  wrongCharCount: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -148,6 +156,15 @@ function normalizeWord(word: string): string {
   return word.toLowerCase().trim().replace(/[-\s]+/g, "");
 }
 
+function shuffleWords<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 function playTTS(word: WordItem): void {
   const src = word.audioUrl || word.audio;
   if (src && (/^https?:\/\//i.test(src) || src.startsWith("/"))) {
@@ -184,6 +201,8 @@ export default function WordRainGame({ setId }: { setId: string }) {
   const [lockedId, setLockedId] = useState<string | null>(null);
   const [feedbacks, setFeedbacks] = useState<FeedbackMessage[]>([]);
   const [missedWords, setMissedWords] = useState<WordItem[]>([]);
+  const [wrongWordStats, setWrongWordStats] = useState<Record<string, WrongWordStat>>({});
+  const [wrongCharCount, setWrongCharCount] = useState(0);
   const [finalSession, setFinalSession] = useState<VocabularyGameSession | null>(null);
   const [finishError, setFinishError] = useState<string | null>(null);
   const [powerUps, setPowerUps] = useState<PowerUp[]>([
@@ -193,12 +212,15 @@ export default function WordRainGame({ setId }: { setId: string }) {
   ]);
   const [frozenUntil, setFrozenUntil] = useState(0);
   const [shieldActive, setShieldActive] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [wrongFlash, setWrongFlash] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMaximizedTab, setIsMaximizedTab] = useState(false);
+  const [isDefeatEffect, setIsDefeatEffect] = useState(false);
 
   // ── Lobby settings ──
-  const [studyMode, setStudyMode] = useState<StudyMode>("single_deck");
+  const [deckScope, setDeckScope] = useState<"single_deck" | "all_decks">("single_deck");
+  const [filterByLevel, setFilterByLevel] = useState<boolean>(false);
   const [selectedLevels, setSelectedLevels] = useState<WordLevelTag[]>([
     "A1",
     "A2",
@@ -208,7 +230,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
     "C2",
     "unclassified",
   ]);
-  const [targetQuestionCount, setTargetQuestionCount] = useState<QuestionCountSelection>(20);
+  const [targetQuestionCount, setTargetQuestionCount] = useState<WordRainCountSelection>(20);
   const [speedPresetKey, setSpeedPresetKey] = useState<SpeedPresetKey>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("vocab_wordrain_speed") as SpeedPresetKey;
@@ -227,11 +249,38 @@ export default function WordRainGame({ setId }: { setId: string }) {
   const [isSetPickerOpen, setIsSetPickerOpen] = useState(false);
   const [searchSetQuery, setSearchSetQuery] = useState("");
   const [isLoadingSet, setIsLoadingSet] = useState(false);
-  const allSetsWords = availableSets
-    .map((set) => ({ setId: set.id, words: set.words ?? [] }))
-    .filter((set) => set.words.length > 0);
-  const allDeckWords = allSetsWords.flatMap((set) => set.words);
-  const availableWordPool = studyMode === "single_deck" ? allWords : allDeckWords;
+
+  const allSetsWords = useMemo(() => {
+    return availableSets
+      .map((set) => ({
+        setId: set.id,
+        words: (set.words ?? []).filter((w) => getMeaning(w).trim() && w.word?.trim()),
+      }))
+      .filter((set) => set.words.length > 0);
+  }, [availableSets]);
+
+  const allDeckWords = useMemo(() => {
+    const list = allSetsWords.flatMap((set) => set.words);
+    const seen = new Set<string>();
+    return list.filter((w) => {
+      const key = normalizeWord(w.word);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [allSetsWords]);
+
+  const isAllDecksSelected = deckScope === "all_decks" || activeSetId === "ALL";
+  const baseWordPool = isAllDecksSelected
+    ? (allDeckWords.length > 0 ? allDeckWords : allWords)
+    : allWords;
+
+  const availableWordPool = useMemo(() => {
+    if (!filterByLevel) return baseWordPool;
+    return baseWordPool.filter((w) => selectedLevels.includes(getWordLevel(w)));
+  }, [baseWordPool, filterByLevel, selectedLevels]);
+
+  const totalAllWordsCount = allDeckWords.length > 0 ? allDeckWords.length : allWords.length;
 
   // ── Refs ──
   const dropsRef = useRef<RainDrop[]>([]);
@@ -241,9 +290,11 @@ export default function WordRainGame({ setId }: { setId: string }) {
   const maxComboRef = useRef(0);
   const correctRef = useRef(0);
   const missedRef = useRef(0);
+  const wrongCharCountRef = useRef(0);
   const wordQueueRef = useRef<WordItem[]>([]);
   const speedPresetRef = useRef<SpeedPresetKey>(speedPresetKey);
-  const targetCountRef = useRef<QuestionCountSelection>(targetQuestionCount);
+  const targetCountRef = useRef<WordRainCountSelection>(targetQuestionCount);
+  const endingRef = useRef(false);
 
   useEffect(() => {
     speedPresetRef.current = speedPresetKey;
@@ -258,6 +309,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
   const startTimeRef = useRef(0);
   const lastSpawnRef = useRef(0);
   const lockedIdRef = useRef<string | null>(null);
+  const skippedDropIdsRef = useRef(new Set<string>());
   const finalizingRef = useRef(false);
   const shieldRef = useRef(false);
   const frozenUntilRef = useRef(0);
@@ -273,6 +325,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
 
   // ─── Load words & sets ───────────────────────────────────────────────────
   useEffect(() => {
+    if (activeSetId === "ALL") return;
     let active = true;
     setLoading(true);
     setLoadError(null);
@@ -293,16 +346,43 @@ export default function WordRainGame({ setId }: { setId: string }) {
   useEffect(() => {
     let active = true;
     void getVocabularySets()
-      .then((sets) => {
-        if (active && Array.isArray(sets)) {
-          setAvailableSets(sets);
+      .then(async (sets) => {
+        if (!active || !Array.isArray(sets)) return;
+        setAvailableSets(sets);
+        // Tải chi tiết các bộ đề để có đầy đủ danh sách từ phục vụ trộn bộ đề
+        const detailedSets = await Promise.all(
+          sets.map(async (s) => {
+            if (s.words && s.words.length > 0) return s;
+            try {
+              return await getVocabularySet(s.id);
+            } catch {
+              return s;
+            }
+          })
+        );
+        if (active) {
+          setAvailableSets(detailedSets);
+          if (activeSetId === "ALL") {
+            const allWordsList = detailedSets
+              .flatMap((s) => s.words ?? [])
+              .filter((w) => getMeaning(w).trim() && w.word?.trim());
+            setAllWords(allWordsList);
+            setActiveTestSet({
+              id: "ALL",
+              title: "Tất cả bộ đề (Toàn bộ kho từ)",
+              category: "Kho từ vựng tổng hợp",
+              wordCount: allWordsList.length,
+              words: allWordsList,
+            } as VocabularyTestSet);
+            setLoading(false);
+          }
         }
       })
       .catch((err) => {
         console.warn("Could not load all vocabulary sets", err);
       });
     return () => { active = false; };
-  }, []);
+  }, [activeSetId]);
 
   // ─── Change Deck Handler ──────────────────────────────────────────────────
   const handleSelectDeck = async (targetSet: VocabularyTestSet) => {
@@ -312,6 +392,33 @@ export default function WordRainGame({ setId }: { setId: string }) {
     }
     setIsLoadingSet(true);
     try {
+      if (targetSet.id === "ALL") {
+        const allWordsList = allDeckWords.length > 0
+          ? allDeckWords
+          : (allWords.length > 0 ? allWords : []);
+        setActiveSetId("ALL");
+        setActiveTestSet({
+          id: "ALL",
+          title: "Tất cả bộ đề (Toàn bộ kho từ)",
+          category: "Kho từ vựng tổng hợp",
+          wordCount: allWordsList.length,
+          words: allWordsList,
+        } as VocabularyTestSet);
+        setAllWords(allWordsList);
+        setIsSetPickerOpen(false);
+        setMissedWords([]);
+        setReviewOnly(false);
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("setId", "ALL");
+          window.history.replaceState({}, "", url.toString());
+        }
+
+        if (phase === "result") setPhase("lobby");
+        return;
+      }
+
       let fullSet = targetSet;
       if (!fullSet.words || fullSet.words.length === 0) {
         fullSet = await getVocabularySet(targetSet.id);
@@ -387,15 +494,17 @@ export default function WordRainGame({ setId }: { setId: string }) {
     setFeedbacks((cur) => [...cur, fb]);
     window.setTimeout(() => setFeedbacks((cur) => cur.filter((f) => f.id !== fb.id)), 900);
 
-    // Remove drop
+    // Remove a drop only after it has been answered or has reached the bottom.
     updateDrops((cur) => cur.filter((d) => d.id !== drop.id));
     if (lockedIdRef.current === drop.id) {
       lockedIdRef.current = null;
       setLockedId(null);
     }
+    skippedDropIdsRef.current.delete(drop.id);
 
     if (answer) {
       // Correct
+      if (soundEnabled) playTTS(drop.word);
       const nextCombo = comboRef.current + 1;
       const pts = 10 + Math.min(nextCombo - 1, 4) * 5;
       scoreRef.current += pts;
@@ -426,10 +535,29 @@ export default function WordRainGame({ setId }: { setId: string }) {
         if (cur.some((w) => w.id === drop.word.id)) return cur;
         return [...cur, drop.word];
       });
-      playTTS(drop.word);
+      setWrongWordStats((cur) => {
+        const key = drop.word.id;
+        const old = cur[key];
+        return {
+          ...cur,
+          [key]: {
+            word: drop.word,
+            missedCount: (old?.missedCount ?? 0) + 1,
+            wrongCharCount: old?.wrongCharCount ?? 0,
+          },
+        };
+      });
+      if (soundEnabled) playTTS(drop.word);
 
       if (livesRef.current <= 0) {
-        await finalizeSession();
+        if (!endingRef.current) {
+          endingRef.current = true;
+          setIsDefeatEffect(true);
+          window.setTimeout(() => {
+            setIsDefeatEffect(false);
+            void finalizeSession();
+          }, 900);
+        }
         return;
       }
     }
@@ -439,7 +567,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
     const activeDrops = dropsRef.current.filter((d) => d.id !== drop.id).length;
     if (remaining === 0 && activeDrops === 0) {
       if (targetCountRef.current === 0 && livesRef.current > 0) {
-        wordQueueRef.current = [...wordQueueRef.current].sort(() => Math.random() - 0.5);
+        wordQueueRef.current = shuffleWords(wordQueueRef.current);
         nextSpawnIndexRef.current = 0;
       } else {
         await finalizeSession();
@@ -448,14 +576,14 @@ export default function WordRainGame({ setId }: { setId: string }) {
     }
 
     void saveDrop(drop, answer);
-  }, [finalizeSession, saveDrop, updateDrops]);
+  }, [finalizeSession, saveDrop, soundEnabled, updateDrops]);
 
   useEffect(() => { resolveDropRef.current = resolveDrop; }, [resolveDrop]);
 
   // ─── Start game ───────────────────────────────────────────────────────────
   const startGame = async () => {
     if ((reviewOnly ? missedWords : availableWordPool).length === 0) return;
-    if (!reviewOnly && studyMode !== "single_deck" && availableSets.length === 0) {
+    if (!reviewOnly && isAllDecksSelected && availableSets.length === 0) {
       setLoadError("Không tải được danh sách bộ đề. Vui lòng thử lại trước khi chơi trộn.");
       return;
     }
@@ -471,19 +599,12 @@ export default function WordRainGame({ setId }: { setId: string }) {
     const pool = reviewOnly && missedWords.length > 0
       ? missedWords
       : availableWordPool;
-    const selection = selectWordsForSession(pool, allSetsWords, {
-      mode: reviewOnly ? "single_deck" : studyMode,
-      targetCount: targetQuestionCount,
-      selectedLevels,
-      wrongWordsHistory: missedWords,
-      seed: crypto.getRandomValues(new Uint32Array(1))[0],
-    });
 
-    setSelectorWarning(selection.warningMessage ?? null);
-
-    let wordsToQueue = selection.selectedWords;
-    if (targetQuestionCount === 0) {
-      wordsToQueue = [...pool].sort(() => Math.random() - 0.5);
+    let wordsToQueue: WordItem[] = [];
+    if (targetQuestionCount === "full" || targetQuestionCount === 0) {
+      wordsToQueue = shuffleWords(pool);
+    } else {
+      wordsToQueue = shuffleWords(pool).slice(0, targetQuestionCount);
     }
     if (wordsToQueue.length === 0) {
       wordsToQueue = pool;
@@ -496,11 +617,11 @@ export default function WordRainGame({ setId }: { setId: string }) {
 
     try {
       const session = await startVocabularyGameSession({
-        setId: activeSetId,
+        setId: activeSetId === "ALL" ? (availableSets[0]?.id || "ALL") : activeSetId,
         gameType: "TYPING",
         deckIds: [...new Set([
           activeSetId,
-          ...(reviewOnly || studyMode === "single_deck" ? [] : availableSets.map((set) => set.id)),
+          ...(reviewOnly || !isAllDecksSelected ? [] : availableSets.map((set) => set.id)),
           ...wordsToQueue.map((word) => word.setId).filter((id): id is string => typeof id === "string" && id.length > 0),
         ])],
       });
@@ -518,7 +639,11 @@ export default function WordRainGame({ setId }: { setId: string }) {
     maxComboRef.current = 0;
     correctRef.current = 0;
     missedRef.current = 0;
+    wrongCharCountRef.current = 0;
     lockedIdRef.current = null;
+    skippedDropIdsRef.current.clear();
+    endingRef.current = false;
+    setIsDefeatEffect(false);
     shieldRef.current = false;
     frozenUntilRef.current = 0;
     dropsRef.current = [];
@@ -530,6 +655,8 @@ export default function WordRainGame({ setId }: { setId: string }) {
     setMaxCombo(0);
     setCorrectCount(0);
     setMissedCount(0);
+    setWrongCharCount(0);
+    setWrongWordStats({});
     setMissedWords([]);
     setElapsedSeconds(0);
     setLockedId(null);
@@ -586,7 +713,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
         nextSpawnIndexRef.current >= wordQueueRef.current.length &&
         wordQueueRef.current.length > 0
       ) {
-        wordQueueRef.current = [...wordQueueRef.current].sort(() => Math.random() - 0.5);
+        wordQueueRef.current = shuffleWords(wordQueueRef.current);
         nextSpawnIndexRef.current = 0;
       }
 
@@ -604,13 +731,20 @@ export default function WordRainGame({ setId }: { setId: string }) {
         if (ans.length > 0) {
           const qIdx = questionIndexRef.current++;
           nextSpawnIndexRef.current++;
+          // Keep a minimum horizontal gap so cards remain readable on mobile and desktop.
+          const preferredX = 8 + Math.random() * 76;
+          const x = updated.reduce((candidate, existing) => {
+            return Math.abs(candidate - existing.x) < 18
+              ? (candidate + 24) % 84 + 8
+              : candidate;
+          }, preferredX);
           const newDrop: RainDrop = {
             id: `drop-${qIdx}-${word.id}`,
             word,
             meaning: getMeaning(word),
             answer: ans,
             answerDisplay: word.word.trim(),
-            x: 8 + Math.random() * 76,
+            x: Math.min(92, Math.max(8, x)),
             y: 4,
             typed: 0,
             revealed: 0,
@@ -663,6 +797,31 @@ export default function WordRainGame({ setId }: { setId: string }) {
         return;
       }
 
+      // Space → chuyển sang mục tiêu khác, giữ nguyên các giọt đã bỏ qua.
+      if (e.key === " ") {
+        e.preventDefault();
+        const currentId = lockedIdRef.current;
+        if (currentId) {
+          skippedDropIdsRef.current.add(currentId);
+          updateDrops((cur) =>
+            cur.map((d) => d.id === currentId ? { ...d, typed: 0 } : d)
+          );
+        }
+        let nextCandidates = dropsRef.current
+          .filter((d) => d.id !== currentId && !skippedDropIdsRef.current.has(d.id))
+          .sort((a, b) => b.y - a.y);
+        if (nextCandidates.length === 0) {
+          skippedDropIdsRef.current.clear();
+          nextCandidates = dropsRef.current
+            .filter((d) => d.id !== currentId)
+            .sort((a, b) => b.y - a.y);
+        }
+        const nextTarget = nextCandidates[0];
+        lockedIdRef.current = nextTarget?.id ?? null;
+        setLockedId(nextTarget?.id ?? null);
+        return;
+      }
+
       // Single printable character input
       if (e.key.length !== 1) return;
       const ch = e.key.toLowerCase();
@@ -685,6 +844,22 @@ export default function WordRainGame({ setId }: { setId: string }) {
           }
         } else {
           // Wrong char – flash
+          wrongCharCountRef.current += 1;
+          setWrongCharCount(wrongCharCountRef.current);
+          comboRef.current = 0;
+          setCombo(0);
+          setWrongWordStats((cur) => {
+            const key = activeDrop.word.id;
+            const old = cur[key];
+            return {
+              ...cur,
+              [key]: {
+                word: activeDrop.word,
+                missedCount: old?.missedCount ?? 0,
+                wrongCharCount: (old?.wrongCharCount ?? 0) + 1,
+              },
+            };
+          });
           setWrongFlash(true);
           window.setTimeout(() => setWrongFlash(false), 250);
         }
@@ -779,7 +954,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
         </Link>
         <div className="flex items-center gap-2 min-w-0">
           <div className="text-right min-w-0">
-            <h1 className="text-base sm:text-xl font-black text-slate-900 truncate">Mưa Từ Vựng (Word Rain) ☔</h1>
+            <h1 className="text-base sm:text-xl font-black text-slate-900 truncate">Mưa Từ Vựng ☔</h1>
             <p className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">Đọc nghĩa tiếng Việt → Gõ từng chữ tiếng Anh để phá giọt</p>
           </div>
           <button
@@ -807,8 +982,8 @@ export default function WordRainGame({ setId }: { setId: string }) {
         // ── LOBBY ──────────────────────────────────────────────────────────
         <section className={`overflow-hidden rounded-3xl p-6 text-center shadow-2xl sm:p-10 ${isDarkMode ? "border border-cyan-400/30 bg-gradient-to-br from-slate-950 via-indigo-950 to-cyan-950 text-white" : "border-2 border-cyan-200 bg-gradient-to-br from-white via-cyan-50/60 to-indigo-50 text-slate-900"}`}>
           <div className="text-5xl">☔</div>
-          <p className={`mt-4 text-xs font-black uppercase tracking-[0.3em] ${isDarkMode ? "text-cyan-300" : "text-cyan-700"}`}>Mưa Từ Vựng · Word Rain</p>
-          <h2 className={`mt-2 text-2xl font-black sm:text-4xl ${isDarkMode ? "text-white" : "text-slate-900"}`}>Sinh Tồn Phản Xạ Active Recall</h2>
+          <p className={`mt-4 text-xs font-black uppercase tracking-[0.3em] ${isDarkMode ? "text-cyan-300" : "text-cyan-700"}`}>Mưa Từ Vựng</p>
+          <h2 className={`mt-2 text-2xl font-black sm:text-4xl ${isDarkMode ? "text-white" : "text-slate-900"}`}>Sinh tồn ghi nhớ chủ động</h2>
           <p className={`mx-auto mt-3 max-w-xl text-xs sm:text-sm leading-6 font-medium ${isDarkMode ? "text-cyan-100/90" : "text-slate-600"}`}>
             Đọc <strong>nghĩa tiếng Việt</strong> trên giọt mưa, gõ chữ cái đầu của từ tiếng Anh tương ứng để khóa mục tiêu, rồi gõ tiếp các chữ còn lại để phá hủy giọt mưa trước khi chạm đáy.
           </p>
@@ -827,7 +1002,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
                     {activeTestSet?.title || "Đang tải bộ đề..."}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {activeTestSet?.category || "Từ vựng TOEIC"} · {availableWordPool.length} từ khả dụng
+                    {activeTestSet?.category || "Từ vựng TOEIC"} · {activeTestSet?.words?.length || activeTestSet?.wordCount || availableWordPool.length} từ khả dụng
                   </p>
                 </div>
               </div>
@@ -845,17 +1020,17 @@ export default function WordRainGame({ setId }: { setId: string }) {
               </button>
             </div>
 
-            {/* 1. Chế độ học */}
+            {/* 1. Phạm vi từ vựng */}
             <div>
               <p className={`mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${isDarkMode ? "text-cyan-200" : "text-slate-800"}`}>
-                <BookOpen className={`h-4 w-4 ${isDarkMode ? "text-cyan-400" : "text-cyan-600"}`} /> Chế độ học từ vựng
+                <BookOpen className={`h-4 w-4 ${isDarkMode ? "text-cyan-400" : "text-cyan-600"}`} /> Phạm vi từ vựng
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setStudyMode("single_deck")}
+                  onClick={() => setDeckScope("single_deck")}
                   className={`rounded-xl border p-3 text-left transition ${
-                    studyMode === "single_deck"
+                    deckScope === "single_deck"
                       ? isDarkMode
                         ? "border-cyan-400 bg-cyan-400/15 text-cyan-200 shadow-sm"
                         : "border-cyan-600 bg-cyan-50 text-cyan-950 shadow-sm ring-1 ring-cyan-500"
@@ -864,14 +1039,16 @@ export default function WordRainGame({ setId }: { setId: string }) {
                       : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
                   }`}
                 >
-                  <p className="text-xs font-bold sm:text-sm">Bộ đề hiện tại</p>
-                  <p className={`mt-0.5 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Toàn bộ từ trong bộ từ vựng đã chọn</p>
+                  <p className="text-xs font-bold sm:text-sm">📚 Bộ đề hiện tại</p>
+                  <p className={`mt-0.5 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    {allWords.length} từ trong bộ đã chọn
+                  </p>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStudyMode("all_decks")}
+                  onClick={() => setDeckScope("all_decks")}
                   className={`rounded-xl border p-3 text-left transition ${
-                    studyMode === "all_decks"
+                    deckScope === "all_decks"
                       ? isDarkMode
                         ? "border-cyan-400 bg-cyan-400/15 text-cyan-200 shadow-sm"
                         : "border-cyan-600 bg-cyan-50 text-cyan-950 shadow-sm ring-1 ring-cyan-500"
@@ -880,34 +1057,53 @@ export default function WordRainGame({ setId }: { setId: string }) {
                       : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
                   }`}
                 >
-                  <p className="text-xs font-bold sm:text-sm">Trộn tất cả bộ đề</p>
-                  <p className={`mt-0.5 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Lấy từ mọi bộ đã phát hành</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStudyMode("by_level")}
-                  className={`rounded-xl border p-3 text-left transition ${
-                    studyMode === "by_level"
-                      ? isDarkMode
-                        ? "border-cyan-400 bg-cyan-400/15 text-cyan-200 shadow-sm"
-                        : "border-cyan-600 bg-cyan-50 text-cyan-950 shadow-sm ring-1 ring-cyan-500"
-                      : isDarkMode
-                      ? "border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800"
-                      : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
-                  }`}
-                >
-                  <p className="text-xs font-bold sm:text-sm">Theo cấp độ CEFR</p>
-                  <p className={`mt-0.5 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Chọn một hoặc nhiều cấp CEFR</p>
+                  <p className="text-xs font-bold sm:text-sm">🗂 Trộn tất cả bộ đề</p>
+                  <p className={`mt-0.5 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    {totalAllWordsCount} từ từ mọi bộ đề
+                  </p>
                 </button>
               </div>
+            </div>
+
+            {/* 1b. Lọc theo cấp độ CEFR (độc lập với phạm vi) */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setFilterByLevel((v) => !v)}
+                className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                  filterByLevel
+                    ? isDarkMode
+                      ? "border-violet-400 bg-violet-400/15 text-violet-200 shadow-sm"
+                      : "border-violet-600 bg-violet-50 text-violet-950 shadow-sm ring-1 ring-violet-500"
+                    : isDarkMode
+                    ? "border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800"
+                    : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
+                }`}
+              >
+                <div>
+                  <p className="text-xs font-bold sm:text-sm">🎯 Lọc theo cấp độ CEFR</p>
+                  <p className={`mt-0.5 text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    {filterByLevel
+                      ? `Áp dụng trên ${deckScope === "all_decks" ? "toàn bộ kho từ" : "bộ đề đã chọn"}`
+                      : "Bấm để bật lọc theo cấp CEFR"}
+                  </p>
+                </div>
+                <span className={`ml-3 shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold ${
+                  filterByLevel
+                    ? isDarkMode ? "border-violet-400 bg-violet-500 text-white" : "border-violet-600 bg-violet-600 text-white"
+                    : isDarkMode ? "border-slate-700 text-slate-400" : "border-slate-300 text-slate-500"
+                }`}>
+                  {filterByLevel ? "Đang bật" : "Tắt"}
+                </span>
+              </button>
 
               {/* CEFR Level Multi-selector */}
-              {studyMode === "by_level" && (
+              {filterByLevel && (
                 <div className={`mt-2.5 rounded-2xl border p-3 space-y-2 animate-in fade-in duration-200 ${
-                  isDarkMode ? "border-cyan-400/20 bg-slate-900/90" : "border-slate-200 bg-white shadow-sm"
+                  isDarkMode ? "border-violet-400/20 bg-slate-900/90" : "border-slate-200 bg-white shadow-sm"
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-bold ${isDarkMode ? "text-cyan-300" : "text-slate-800"}`}>Chọn thang cấp độ:</span>
+                    <span className={`text-xs font-bold ${isDarkMode ? "text-violet-300" : "text-slate-800"}`}>Chọn thang cấp độ:</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -917,12 +1113,12 @@ export default function WordRainGame({ setId }: { setId: string }) {
                           setSelectedLevels(["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"]);
                         }
                       }}
-                      className={`text-xs font-bold ${isDarkMode ? "text-cyan-400 hover:text-cyan-200" : "text-cyan-700 hover:text-cyan-900"}`}
+                      className={`text-xs font-bold ${isDarkMode ? "text-violet-400 hover:text-violet-200" : "text-violet-700 hover:text-violet-900"}`}
                     >
                       {selectedLevels.length === 7 ? "Bỏ chọn tất cả" : "Chọn tất cả"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
                     {[
                       { level: "A1" as const, desc: "Cơ bản" },
                       { level: "A2" as const, desc: "Sơ cấp" },
@@ -949,19 +1145,19 @@ export default function WordRainGame({ setId }: { setId: string }) {
                           className={`flex flex-col items-center rounded-xl border p-2 text-center transition ${
                             isSelected
                               ? isDarkMode
-                                ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-sm"
-                                : "border-cyan-600 bg-cyan-600 text-white shadow-sm"
+                                ? "border-violet-400 bg-violet-500/25 text-violet-100 shadow-sm"
+                                : "border-violet-600 bg-violet-600 text-white shadow-sm"
                               : isDarkMode
                               ? "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700"
                               : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
                           }`}
                         >
-                          <span className="text-xs font-black">{level.toUpperCase()}</span>
-                          <span className={`text-[10px] ${
+                          <span className="text-xs font-black">{level === "unclassified" ? "Khác" : level}</span>
+                          <span className={`text-[9px] ${
                             isSelected
-                              ? isDarkMode ? "text-cyan-200" : "text-cyan-100"
+                              ? isDarkMode ? "text-violet-200" : "text-violet-100"
                               : isDarkMode ? "text-slate-500" : "text-slate-500"
-                          }`}>{desc}</span>
+                          }`}>{level === "unclassified" ? "Mở rộng" : desc}</span>
                         </button>
                       );
                     })}
@@ -1008,8 +1204,8 @@ export default function WordRainGame({ setId }: { setId: string }) {
               <p className={`mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${isDarkMode ? "text-emerald-300" : "text-emerald-900"}`}>
                 <SlidersHorizontal className={`h-4 w-4 ${isDarkMode ? "text-emerald-400" : "text-emerald-600"}`} /> Số giọt mưa
               </p>
-              <div className="grid grid-cols-4 gap-2">
-                {([10, 20, 30, 0] as QuestionCountSelection[]).map((num) => (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {([10, 20, 30] as WordRainCountSelection[]).map((num) => (
                   <button
                     key={num}
                     type="button"
@@ -1024,9 +1220,42 @@ export default function WordRainGame({ setId }: { setId: string }) {
                         : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
-                    {num === 0 ? "Vô tận (∞)" : `${num} từ`}
+                    {num} từ
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setTargetQuestionCount("full")}
+                  className={`rounded-xl border py-2 px-1 text-center text-xs font-bold transition ${
+                    targetQuestionCount === "full"
+                      ? isDarkMode
+                        ? "border-emerald-400 bg-emerald-400/15 text-emerald-200 shadow-sm"
+                        : "border-emerald-600 bg-emerald-50 text-emerald-950 shadow-sm ring-1 ring-emerald-500"
+                      : isDarkMode
+                      ? "border-slate-800 bg-slate-900/80 text-slate-400 hover:bg-slate-800"
+                      : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="block">Full bộ đề</span>
+                  <span className={`block text-[10px] font-normal ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    ({availableWordPool.length} từ)
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetQuestionCount(0)}
+                  className={`rounded-xl border py-2.5 text-center text-xs font-bold transition sm:text-sm ${
+                    targetQuestionCount === 0
+                      ? isDarkMode
+                        ? "border-emerald-400 bg-emerald-400/15 text-emerald-200 shadow-sm"
+                        : "border-emerald-600 bg-emerald-50 text-emerald-950 shadow-sm ring-1 ring-emerald-500"
+                      : isDarkMode
+                      ? "border-slate-800 bg-slate-900/80 text-slate-400 hover:bg-slate-800"
+                      : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300"
+                  }`}
+                >
+                  ♾ Vô tận
+                </button>
               </div>
             </div>
 
@@ -1085,6 +1314,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
           }`}>
             <p>⌨️ <strong className={isDarkMode ? "text-white" : "text-slate-900"}>Chữ đầu tiên</strong>: Khóa giọt có từ tiếng Anh bắt đầu bằng chữ đó</p>
             <p>⌨️ <strong className={isDarkMode ? "text-white" : "text-slate-900"}>Gõ tiếp</strong>: Điền từng chữ — đúng toàn bộ sẽ phá giọt</p>
+            <p>⌨️ <strong className={isDarkMode ? "text-white" : "text-slate-900"}>Nhập sai</strong>: Không trừ mạng ngay; ghi lỗi ký tự, đặt lại combo và cho phép nhập lại</p>
             <p>⌨️ <strong className={isDarkMode ? "text-white" : "text-slate-900"}>Backspace</strong>: Bỏ khóa mục tiêu để chọn giọt khác</p>
             <p>⌨️ <strong className={isDarkMode ? "text-white" : "text-slate-900"}>F1</strong> Gợi ý thêm chữ · <strong className={isDarkMode ? "text-white" : "text-slate-900"}>F2</strong> Đóng băng 5s · <strong className={isDarkMode ? "text-white" : "text-slate-900"}>F3</strong> Lá chắn bảo vệ</p>
           </div>
@@ -1112,12 +1342,13 @@ export default function WordRainGame({ setId }: { setId: string }) {
             {lives > 0 ? "Bạn đã phá hủy toàn bộ giọt mưa!" : "Một số giọt đã lọt qua. Luyện thêm nào!"}
           </p>
 
-          <div className="mx-auto mt-6 grid max-w-2xl grid-cols-3 gap-3 sm:grid-cols-6">
+          <div className="mx-auto mt-6 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Điểm" value={finalSession?.score ?? score} isDark={isDarkMode} />
             <StatCard label="Chính xác" value={`${accuracy}%`} isDark={isDarkMode} />
-            <StatCard label="Combo×" value={finalSession?.maxCombo ?? maxCombo} isDark={isDarkMode} />
+            <StatCard label="Combo" value={finalSession?.maxCombo ?? maxCombo} isDark={isDarkMode} />
             <StatCard label="Đúng" value={correctCount} isDark={isDarkMode} />
             <StatCard label="Bỏ lỡ" value={missedCount} isDark={isDarkMode} />
+            <StatCard label="Sai ký tự" value={wrongCharCount} isDark={isDarkMode} />
             <StatCard label="Thời gian" value={`${elapsedSeconds}s`} isDark={isDarkMode} />
           </div>
 
@@ -1127,22 +1358,46 @@ export default function WordRainGame({ setId }: { setId: string }) {
             </div>
           ) : null}
 
-          {missedWords.length > 0 ? (
+          {Object.keys(wrongWordStats).length > 0 ? (
             <div className={`mx-auto mt-5 max-w-2xl rounded-2xl border p-4 text-left ${isDarkMode ? "border-amber-800/40 bg-amber-950/30" : "border-amber-200 bg-amber-50/60"}`}>
               <p className={`mb-2 text-xs font-bold uppercase tracking-wider ${isDarkMode ? "text-amber-300" : "text-amber-800"}`}>
-                Từ cần luyện thêm ({missedWords.length})
+                Từ làm sai ({Object.keys(wrongWordStats).length})
               </p>
-              <div className="flex flex-wrap gap-2">
-                {missedWords.map((w) => (
-                  <span key={w.id} className={`rounded-lg px-2 py-1 text-xs ${isDarkMode ? "bg-amber-900/40 text-amber-200" : "bg-amber-100 text-amber-900"}`}>
-                    <strong>{w.word}</strong>: {getMeaning(w).slice(0, 30)}
-                  </span>
+              <div className="space-y-2">
+                {Object.values(wrongWordStats).map((stat) => (
+                  <div
+                    key={stat.word.id}
+                    className={`flex items-start justify-between gap-3 rounded-xl px-3 py-2.5 ${isDarkMode ? "bg-slate-900/70" : "bg-white"}`}
+                  >
+                    <div className="min-w-0">
+                      <p className={`font-black ${isDarkMode ? "text-amber-200" : "text-amber-900"}`}>{stat.word.word}</p>
+                      <p className={`mt-0.5 text-xs ${isDarkMode ? "text-slate-300" : "text-slate-600"}`}>
+                        {getMeaning(stat.word) || "Chưa có nghĩa tiếng Việt"}
+                      </p>
+                    </div>
+                    <div className={`shrink-0 text-right text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                      {stat.missedCount > 0 && <p>Rơi đáy: {stat.missedCount}</p>}
+                      {stat.wrongCharCount > 0 && <p>Sai ký tự: {stat.wrongCharCount}</p>}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
           ) : null}
 
           <div className="mt-7 flex flex-wrap justify-center gap-3">
+            {missedWords.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewOnly(true);
+                  setPhase("lobby");
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-3 font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-95"
+              >
+                <RotateCcw className="h-4 w-4" /> Luyện lại từ làm sai
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => { sessionRef.current = null; setFinalSession(null); setPhase("lobby"); }}
@@ -1183,7 +1438,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
             {/* Progress */}
             <div className="text-center">
               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                Tiến độ {targetQuestionCount === 0 ? "(Vô tận)" : ""}
+                Tiến độ {targetQuestionCount === 0 ? "(Không giới hạn)" : targetQuestionCount === "full" ? "(Full bộ đề)" : ""}
               </p>
               <p className="text-xs font-bold text-white">
                 {processed} / {targetQuestionCount === 0 ? "∞" : sessionTotalWords || totalWords}
@@ -1212,6 +1467,15 @@ export default function WordRainGame({ setId }: { setId: string }) {
               {isFreezeActive && <span title="Đóng băng"><Timer className="h-4 w-4 text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" /></span>}
               <button
                 type="button"
+                onClick={() => setSoundEnabled((enabled) => !enabled)}
+                aria-label={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
+                title={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
+                className="rounded-lg border border-slate-700 bg-slate-800 p-1.5 text-slate-200 hover:bg-slate-700"
+              >
+                {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5 text-slate-500" />}
+              </button>
+              <button
+                type="button"
                 onClick={() => setPhase((p) => p === "paused" ? "playing" : "paused")}
                 className="ml-1 rounded-lg border border-slate-700 bg-slate-800 p-1.5 text-slate-200 hover:bg-slate-700"
               >
@@ -1222,6 +1486,15 @@ export default function WordRainGame({ setId }: { setId: string }) {
 
           {/* Arena */}
           <div className="relative h-[min(65vh,580px)] min-h-[400px] overflow-hidden bg-[radial-gradient(ellipse_at_30%_80%,rgba(6,182,212,0.12),transparent_50%),radial-gradient(ellipse_at_75%_15%,rgba(99,102,241,0.15),transparent_45%),linear-gradient(180deg,#020c18,#071225_60%,#0a1a2e)]">
+            {isDefeatEffect && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="animate-pulse text-center">
+                  <div className="text-6xl">💀</div>
+                  <p className="mt-3 text-lg font-black text-rose-300">Bạn đã hết mạng</p>
+                  <p className="mt-1 text-xs font-bold text-slate-300">Đang tổng kết trận đấu...</p>
+                </div>
+              </div>
+            )}
 
             {/* Animated rain streaks */}
             {Array.from({ length: 24 }, (_, i) => (
@@ -1261,7 +1534,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
                 >
                   {/* Direction badge */}
                   <span className="absolute -top-2 left-2 rounded-full border border-white/20 bg-slate-900 px-1.5 py-0.5 text-[8px] font-bold text-slate-400">
-                    VI→EN
+                    Tiếng Việt → Tiếng Anh
                   </span>
 
                   {/* Meaning */}
@@ -1274,7 +1547,6 @@ export default function WordRainGame({ setId }: { setId: string }) {
                     {letters.map((letter, li) => {
                       const isTyped = li < drop.typed;
                       const isRevealed = !isTyped && li < drop.revealed;
-                      const isBlank = !isTyped && !isRevealed;
                       return (
                         <span
                           key={li}
@@ -1286,7 +1558,7 @@ export default function WordRainGame({ setId }: { setId: string }) {
                               : "border-white/20 bg-white/5 text-white/30"
                           }`}
                         >
-                          {isBlank ? "_" : letter.toUpperCase()}
+                          {isTyped || isRevealed ? letter.toUpperCase() : "_"}
                         </span>
                       );
                     })}
@@ -1309,18 +1581,6 @@ export default function WordRainGame({ setId }: { setId: string }) {
             {/* Danger zone line */}
             <div className="absolute inset-x-0 bottom-[10%] border-t border-dashed border-rose-500/60" />
             <span className="absolute bottom-[10.5%] right-2 text-[9px] font-bold text-rose-500/70">DANGER</span>
-
-            {/* Locked target indicator */}
-            {lockedId && (() => {
-              const ld = drops.find((d) => d.id === lockedId);
-              return ld ? (
-                <div className="absolute bottom-[14%] left-1/2 -translate-x-1/2 rounded-full border border-cyan-400/30 bg-slate-950/80 px-4 py-1 text-[10px] font-bold text-cyan-300">
-                  Đang nhập: {ld.answerDisplay.slice(0, ld.typed)}
-                  <span className="animate-pulse">|</span>
-                  {ld.answerDisplay.slice(ld.typed)}
-                </div>
-              ) : null;
-            })()}
 
             {/* Paused overlay */}
             {phase === "paused" ? (
@@ -1439,27 +1699,35 @@ export default function WordRainGame({ setId }: { setId: string }) {
               ) : filteredSets.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-500">Không tìm thấy bộ đề phù hợp</p>
               ) : (
-                filteredSets.map((s) => {
-                  const isCurrent = s.id === activeSetId;
-                  return (
+                <>
+                  {/* Toàn bộ đề entry */}
+                  {!searchSetQuery.trim() && (
                     <button
-                      key={s.id}
                       type="button"
                       disabled={isLoadingSet}
-                      onClick={() => void handleSelectDeck(s)}
+                      onClick={() => void handleSelectDeck({
+                        id: "ALL",
+                        title: "Tất cả bộ đề",
+                        category: "Kho từ vựng tổng hợp",
+                        wordCount: totalAllWordsCount,
+                        words: allDeckWords,
+                      } as VocabularyTestSet)}
                       className={`flex w-full items-center justify-between rounded-2xl border p-3 text-left transition ${
-                        isCurrent
+                        activeSetId === "ALL"
                           ? "border-cyan-400 bg-cyan-950/60 font-bold text-cyan-200 shadow-sm"
                           : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20 hover:bg-slate-900"
                       }`}
                     >
-                      <div className="min-w-0 pr-2">
-                        <p className="truncate text-sm font-bold text-white">{s.title}</p>
-                        <p className="mt-0.5 text-xs text-slate-400">
-                          {s.category || "Từ vựng TOEIC"} · {s.wordCount ?? s.words?.length ?? 0} từ
-                        </p>
+                      <div className="min-w-0 pr-2 flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-cyan-400 shrink-0" />
+                        <div>
+                          <p className="truncate text-sm font-bold text-white">🗂 Tất cả bộ đề (Toàn kho từ)</p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            Kho từ vựng tổng hợp · {totalAllWordsCount} từ
+                          </p>
+                        </div>
                       </div>
-                      {isCurrent ? (
+                      {activeSetId === "ALL" ? (
                         <CheckCircle2 className="h-5 w-5 shrink-0 text-cyan-400" />
                       ) : (
                         <span className="shrink-0 rounded-lg border border-cyan-400/30 px-2.5 py-1 text-xs font-bold text-cyan-300 hover:bg-cyan-400/10">
@@ -1467,8 +1735,38 @@ export default function WordRainGame({ setId }: { setId: string }) {
                         </span>
                       )}
                     </button>
-                  );
-                })
+                  )}
+                  {filteredSets.map((s) => {
+                    const isCurrent = s.id === activeSetId;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        disabled={isLoadingSet}
+                        onClick={() => void handleSelectDeck(s)}
+                        className={`flex w-full items-center justify-between rounded-2xl border p-3 text-left transition ${
+                          isCurrent
+                            ? "border-cyan-400 bg-cyan-950/60 font-bold text-cyan-200 shadow-sm"
+                            : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-white/20 hover:bg-slate-900"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="truncate text-sm font-bold text-white">{s.title}</p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {s.category || "Từ vựng TOEIC"} · {s.words?.length || s.wordCount || 0} từ
+                          </p>
+                        </div>
+                        {isCurrent ? (
+                          <CheckCircle2 className="h-5 w-5 shrink-0 text-cyan-400" />
+                        ) : (
+                          <span className="shrink-0 rounded-lg border border-cyan-400/30 px-2.5 py-1 text-xs font-bold text-cyan-300 hover:bg-cyan-400/10">
+                            Chọn
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </>
               )}
             </div>
 

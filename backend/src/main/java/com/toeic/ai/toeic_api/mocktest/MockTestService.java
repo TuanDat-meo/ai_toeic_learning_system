@@ -9,20 +9,28 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.toeic.ai.toeic_api.learning.StudyPlanService;
+
 @Service
 public class MockTestService {
 
+    private static final Logger log = LoggerFactory.getLogger(MockTestService.class);
+
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final StudyPlanService studyPlanService;
 
-    public MockTestService(JdbcTemplate jdbc) {
+    public MockTestService(JdbcTemplate jdbc, StudyPlanService studyPlanService) {
         this.jdbc = jdbc;
+        this.studyPlanService = studyPlanService;
     }
 
     public List<MockTestItem> listTests(String volId, UUID userId) {
@@ -194,10 +202,20 @@ public class MockTestService {
         jdbc.update(sql, attemptId, userId, req.testId(), req.score(), req.listeningScore(), req.readingScore(),
                 req.correctCount(), req.totalCount(), req.durationSeconds());
 
-        return new MockTestAttempt(
+        MockTestAttempt result = new MockTestAttempt(
                 attemptId, req.testId(), req.score(), req.listeningScore(), req.readingScore(),
                 req.correctCount(), req.totalCount(), req.durationSeconds(), java.time.Instant.now()
         );
+
+        // Tự động cập nhật lại lộ trình học tập sau khi có điểm thi thử mới
+        try {
+            studyPlanService.generateOrRefreshStudyPlan(userId);
+        } catch (Exception ex) {
+            // Không để lỗi refresh plan làm hỏng luồng nộp bài
+            log.warn("Không thể tự động cập nhật study plan sau khi nộp bài thi thử userId={}: {}", userId, ex.getMessage());
+        }
+
+        return result;
     }
 
     public List<MockTestSubmissionDto> listAllSubmissions(Integer testId) {

@@ -6,22 +6,22 @@ export const RUNNER_SPEED_PRESETS = {
   slow: {
     label: "Chậm",
     description: "Nhịp điệu thư thái, phù hợp làm quen và học từ mới",
-    baseSpeed: 120, // px/s
-    maxSpeed: 210,
+    baseSpeed: 95, // px/s
+    maxSpeed: 165,
     accelPerStep: 0.12,
   },
   medium: {
     label: "Vừa",
     description: "Tốc độ tiêu chuẩn, cân bằng giữa phản xạ và ghi nhớ",
-    baseSpeed: 165, // px/s (đã giảm ~36% so với bản gốc 260 px/s)
-    maxSpeed: 290,
+    baseSpeed: 125, // px/s
+    maxSpeed: 220,
     accelPerStep: 0.15,
   },
   fast: {
     label: "Nhanh",
     description: "Tốc độ cao, thách thức phản xạ đỉnh cao",
-    baseSpeed: 220, // px/s
-    maxSpeed: 385,
+    baseSpeed: 175, // px/s
+    maxSpeed: 300,
     accelPerStep: 0.18,
   },
 } as const;
@@ -34,11 +34,12 @@ export const RUNNER_CONFIG = {
   MAX_LIVES: 3,
 
   // ── Kẻ đuổi & Khoảng cách (Khởi động êm) ──
-  INITIAL_DISTANCE_TO_CHASER: 80,      // Khoảng cách khởi đầu an toàn (80%)
+  INITIAL_DISTANCE_TO_CHASER: 88,      // Khoảng cách khởi đầu an toàn (88%)
   MAX_DISTANCE_TO_CHASER: 100,         // Trần khoảng cách tối đa
   MIN_DISTANCE_TO_CHASER: 0,           // Mốc nguy hiểm (<= 0 sẽ phạt mạng)
   DISTANCE_GAIN_CORRECT: 12,           // Tăng khoảng cách khi trả lời đúng
   DISTANCE_LOSS_WRONG: 20,             // Rút ngắn khoảng cách khi sai/hết giờ
+  DISTANCE_LOSS_TIMEOUT_WARNING: 6,    // Kẻ đuổi áp sát thêm mỗi giây trong 5 giây cuối
   CHASER_CATCH_PENALTY_LIVES: 1,       // Mất tim khi kẻ đuổi bắt kịp
   DISTANCE_RESET_AFTER_CATCH: 45,      // Đẩy lùi kẻ đuổi sau khi bị bắt
 
@@ -51,13 +52,13 @@ export const RUNNER_CONFIG = {
   MISTAKE_STREAK_TO_DOWNGRADE: 2,      // Sai 2 lần liên tiếp tự động giảm 1 bậc tốc độ
 
   // ── Khoảng cách giữa các chướng ngại TÍNH THEO THỜI GIAN NGHỈ ──
-  REST_TIME_BETWEEN_ENCOUNTERS_SEC: 1.6, // Nghỉ >= 1-2s giữa 2 chướng ngại
-  TRIGGER_ENCOUNTER_DISTANCE_PX: 95,   // Vùng kích hoạt câu hỏi trước chướng ngại
+  REST_TIME_BETWEEN_ENCOUNTERS_SEC: 3.2, // Đủ thời gian quan sát cảnh và chuẩn bị
+  TRIGGER_ENCOUNTER_DISTANCE_PX: 130,   // Cảnh báo sớm trước chướng ngại
 
   // ── Thời gian trả lời (Timers) ──
   DEFAULT_QUESTION_TIMEOUT_SEC: 15,    // Thời gian tiêu chuẩn từng câu
   TSUNAMI_QUESTION_TIMEOUT_SEC: 9,     // Thời gian sóng thần (8-10 giây)
-  TOAST_FEEDBACK_DURATION_MS: 1200,    // Toast phản hồi nhanh
+  TOAST_FEEDBACK_DURATION_MS: 1600,    // Đủ thời gian nhìn hành động nhảy/trượt
   STUNNED_DURATION_MS: 900,            // Thời gian vấp ngã
 
   // ── Chấm điểm & Combo ──

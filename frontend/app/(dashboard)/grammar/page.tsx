@@ -1,10 +1,28 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
+import {
+  Brain,
+  Milestone,
+  RotateCcw,
+  AlertTriangle,
+  BookMarked,
+  Settings,
+  Sparkles,
+  BookOpen,
+  HelpCircle,
+} from "lucide-react";
 import { GrammarTopicItem } from "@/app/admin/content/grammar/types";
 import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
-import { getGrammarTopics, saveGrammarProgress } from "@/lib/api/grammar";
+import {
+  getGrammarTopics,
+  saveGrammarProgress,
+  getDueGrammarReviews,
+  getGrammarAnalytics,
+} from "@/lib/api/grammar";
 import { StudentGrammarGrid } from "@/components/grammar/StudentGrammarGrid";
+import { GrammarTodayStrip } from "@/components/grammar/GrammarTodayStrip";
 import {
   GrammarTopicDetailModal,
   GrammarQuizModal,
@@ -21,14 +39,24 @@ export default function StudentGrammarPage() {
   const [activeTopicForQuiz, setActiveTopicForQuiz] = useState<GrammarTopicItem | null>(null);
   const [quizStartIndex, setQuizStartIndex] = useState<number>(0);
   const [isQuizRedoWrong, setIsQuizRedoWrong] = useState<boolean>(false);
-  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
+
+  // Live dynamic stats
+  const [dueReviewsCount, setDueReviewsCount] = useState<number>(0);
+  const [repeatedErrorCount, setRepeatedErrorCount] = useState<number>(0);
 
   const loadTopics = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
-      const data = await getGrammarTopics();
+      const [data, dueList, analytics] = await Promise.all([
+        getGrammarTopics(),
+        getDueGrammarReviews().catch(() => []),
+        getGrammarAnalytics().catch(() => null),
+      ]);
+
       setTopics(data.filter((topic) => topic.status === "PUBLISHED"));
+      if (Array.isArray(dueList)) setDueReviewsCount(dueList.length);
+      if (analytics?.repeatedErrorCount) setRepeatedErrorCount(analytics.repeatedErrorCount);
     } catch (err) {
       setTopics([]);
       setLoadError(err instanceof Error ? err.message : "Không thể tải dữ liệu ngữ pháp từ máy chủ.");
@@ -38,8 +66,10 @@ export default function StudentGrammarPage() {
   }, []);
 
   useEffect(() => {
-    loadTopics();
-    const handleSync = () => { loadTopics(); };
+    void Promise.resolve().then(loadTopics);
+    const handleSync = () => {
+      void Promise.resolve().then(loadTopics);
+    };
     window.addEventListener("toeic-grammar-topics-updated", handleSync);
     return () => {
       window.removeEventListener("toeic-grammar-topics-updated", handleSync);
@@ -53,61 +83,202 @@ export default function StudentGrammarPage() {
     setQuizActive(true);
   };
 
-  const handleRecordResult = async (topicId: string, isCorrect: boolean) => {
+  const handleRecordResult = async (
+    topicId: string,
+    questionId: string,
+    selectedOption: string,
+    isCorrect: boolean,
+  ) => {
     try {
-      const topic = topics.find((t) => t.id === topicId);
-      const total = topic?.questions?.length || 1;
-      const completed = Math.min(total, (topic?.completedQuestions || 0) + 1);
-      const status = completed >= total ? "COMPLETED" : "IN_PROGRESS";
-      await saveGrammarProgress(topicId, completed, total, status);
+      const eventId = crypto.randomUUID();
+      await saveGrammarProgress(
+        topicId,
+        questionId,
+        selectedOption,
+        "PRACTICE",
+        0,
+        eventId,
+      );
+      void isCorrect;
     } catch (err) {
       console.warn("Không thể đồng bộ tiến độ ngữ pháp lên máy chủ:", err);
     }
   };
 
-  const totalQuestionsCount = React.useMemo(() => {
-    return topics.reduce((acc, t) => acc + (t.questions ? t.questions.length : 0), 0);
+  // Aggregated system stats for hero banner
+  const systemMetrics = useMemo(() => {
+    const totalQuestions = topics.reduce(
+      (sum, t) => sum + (t.questions?.length || t.totalQuestions || 0),
+      0,
+    );
+    const totalTraps = topics.reduce((sum, t) => sum + (t.traps?.length || 0), 0);
+    const completedQuestions = topics.reduce(
+      (sum, t) => sum + (t.completedQuestions || 0),
+      0,
+    );
+    return { totalQuestions, totalTraps, completedQuestions };
   }, [topics]);
+
+  const subpageShortcuts = [
+    { label: "Chuyên đề", href: "/grammar", icon: Brain, active: true },
+    { label: "Lộ trình mục tiêu", href: "/grammar/path", icon: Milestone },
+    {
+      label: "Ôn tập SRS",
+      href: "/grammar/review",
+      icon: RotateCcw,
+      badge: dueReviewsCount > 0 ? `${dueReviewsCount} câu` : undefined,
+      badgeColor: "bg-amber-500 text-white",
+    },
+    {
+      label: "Lỗi của tôi & Bẫy",
+      href: "/grammar/mistakes",
+      icon: AlertTriangle,
+      badge: repeatedErrorCount > 0 ? `${repeatedErrorCount} câu` : undefined,
+      badgeColor: "bg-rose-500 text-white",
+    },
+    { label: "Sổ tay ngữ pháp", href: "/grammar/notebook", icon: BookMarked },
+    { label: "Cài đặt học tập", href: "/grammar/settings", icon: Settings },
+  ];
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
-      {quotaMessage ? <div role="alert" className="fixed right-5 top-5 z-[70] max-w-sm rounded-xl bg-red-700 px-4 py-3 text-xs font-semibold text-white shadow-xl">{quotaMessage}</div> : null}
-      {/* Header chuẩn tối giản, thanh lịch như Admin */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
-        <div>
-          <p className="text-xs font-medium text-slate-400">
-            Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
-            <span className="font-semibold text-blue-700">Ngữ pháp trọng tâm</span>
-          </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
-            Chuyên Đề Ngữ Pháp TOEIC Trọng Tâm
-          </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
-            Các chủ điểm ngữ pháp TOEIC đã được phát hành.
-          </p>
-        </div>
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Link href="/dashboard" className="hover:text-blue-600 transition-colors">
+          Trang chủ
+        </Link>
+        <span className="text-slate-300">/</span>
+        <span className="font-semibold text-blue-700">Ngữ pháp TOEIC trọng tâm</span>
+      </nav>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <LearningQuotaBadge featureKey="GRAMMAR" />
+      {/* Hero Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-linear-to-r from-white via-blue-50/30 to-indigo-50/40 p-6 md:p-8 shadow-xs">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100/80 px-3 py-1 text-xs font-bold text-blue-800">
+              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+              Ngữ pháp TOEIC Part 5 & Part 6
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl lg:text-4xl">
+              Chuyên Đề Ngữ Pháp TOEIC Trọng Tâm
+            </h1>
+            <p className="text-xs md:text-sm text-slate-600 leading-relaxed">
+              Học lý thuyết và luyện tập theo các chủ điểm ngữ pháp TOEIC đang được xuất bản.
+            </p>
+
+            {/* Quick Metrics Pills */}
+            {!loading && !loadError && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-slate-600">
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 font-bold shadow-2xs border border-slate-200">
+                <Brain className="h-4 w-4 text-blue-600" />
+                {topics.length} chuyên đề
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 font-bold shadow-2xs border border-slate-200">
+                <HelpCircle className="h-4 w-4 text-indigo-600" />
+                {systemMetrics.totalQuestions} câu trắc nghiệm
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 font-bold shadow-2xs border border-slate-200">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                {systemMetrics.totalTraps} bẫy đề thi
+              </span>
+            </div>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-3 shrink-0">
+            <LearningQuotaBadge featureKey="GRAMMAR" />
+            <Link
+              href="/grammar/path"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
+            >
+              <Milestone className="h-4 w-4" />
+              Xem bản đồ lộ trình
+            </Link>
+          </div>
         </div>
-      </header>
+      </div>
+
+      {/* Daily Study Widget (Today Strip) */}
+      <GrammarTodayStrip />
+
+      {/* Subpage Shortcut Tab Bar */}
+      <nav
+        aria-label="Lối tắt phân hệ ngữ pháp"
+        className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-xs scrollbar-none"
+      >
+        {subpageShortcuts.map((item) => {
+          const IconComp = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+                item.active
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <IconComp className={`h-4 w-4 ${item.active ? "text-white" : "text-slate-400"}`} />
+              <span>{item.label}</span>
+              {item.badge && (
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-extrabold ${
+                    item.badgeColor || "bg-blue-100 text-blue-700"
+                  }`}
+                >
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Loading & Error States */}
+      {loadError && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center justify-between"
+        >
+          <span>Không thể tải danh sách chuyên đề: {loadError}</span>
+          <button
+            type="button"
+            onClick={() => void loadTopics()}
+            className="font-bold underline cursor-pointer"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 animate-pulse">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-64 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5" />
+          ))}
+        </div>
+      )}
+
+      {!loading && !loadError && topics.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <BookOpen className="h-10 w-10 text-slate-300 mb-3" />
+          <h3 className="text-sm font-bold text-slate-800">Chưa có chuyên đề ngữ pháp được phát hành</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm">
+            Nội dung đang được ban chuyên môn biên soạn và cập nhật. Vui lòng quay lại sau!
+          </p>
+        </div>
+      )}
 
       {/* Grid chuyên đề cho học viên */}
-      {loadError ? (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Không thể tải chủ điểm từ backend: {loadError}
-        </div>
-      ) : null}
-      {!loading && !loadError && topics.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
-          Chưa có chủ điểm ngữ pháp được phát hành.
-        </div>
-      ) : null}
-      <StudentGrammarGrid
-        topics={topics}
-        onOpenTheory={(topic) => setTheoryTopic(topic)}
-        onStartQuiz={(topic, sIdx, isRedo) => { void startTopicQuiz(topic, sIdx, isRedo); }}
-      />
+      {!loading && topics.length > 0 && (
+        <StudentGrammarGrid
+          topics={topics}
+          onOpenTheory={(topic) => setTheoryTopic(topic)}
+          onStartQuiz={(topic, sIdx, isRedo) => {
+            void startTopicQuiz(topic, sIdx, isRedo);
+          }}
+        />
+      )}
 
       {/* Modal Xem chi tiết lý thuyết (Công thức, Dấu hiệu, Bẫy, Ví dụ) */}
       <GrammarTopicDetailModal
@@ -125,13 +296,14 @@ export default function StudentGrammarPage() {
         <GrammarQuizModal
           isOpen={quizActive}
           title={`Luyện tập: ${activeTopicForQuiz.titleVi || activeTopicForQuiz.title} (${activeTopicForQuiz.code})`}
-          questions={activeTopicForQuiz.questions}
+          questions={activeTopicForQuiz.questions || []}
           activeTopic={activeTopicForQuiz}
           initialIndex={quizStartIndex}
           isRedoWrongOnly={isQuizRedoWrong}
           onClose={() => {
             setQuizActive(false);
             setActiveTopicForQuiz(null);
+            void loadTopics(); // Refresh progress after quiz
           }}
           onRecordResult={handleRecordResult}
         />

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -26,6 +26,8 @@ import {
   X,
   Sun,
   Moon,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { WordItem, VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
 import {
@@ -38,7 +40,8 @@ import {
   type VocabularyGameSession,
 } from "@/lib/api/vocabulary";
 import { selectVocabularyGameWords } from "./battleship/engine";
-import { getWordLevel, type WordLevelTag } from "./runner/wordSelector";
+import { soundEffects } from "./battleship/soundEffects";
+import { getWordLevel, type DeckScope, type WordLevelTag } from "./runner/wordSelector";
 import { BATTLESHIP_CONFIG } from "./battleship/config";
 import {
   buildBidirectionalQuestion,
@@ -186,7 +189,8 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
   const [direction, setDirection] = useState<LearningDirection>("mixed");
   const [speedMode, setSpeedMode] = useState<BattleSpeedMode>("auto");
   const [questionCount, setQuestionCount] = useState<QuestionCount>(10);
-  const [studyMode, setStudyMode] = useState<"single_deck" | "all_decks" | "by_level">("single_deck");
+  const [deckScope, setDeckScope] = useState<DeckScope>("single_deck");
+  const [filterByLevel, setFilterByLevel] = useState(false);
   const [selectedLevels, setSelectedLevels] = useState<WordLevelTag[]>([
     "A1", "A2", "B1", "B2", "C1", "C2", "unclassified",
   ]);
@@ -195,11 +199,18 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
   const [isMaximizedTab, setIsMaximizedTab] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const mixedWords = availableSets.flatMap((set) => set.words ?? []);
-  const knownWordIds = new Set(mixedWords.map((word) => word.id));
-  const allDeckWords: WordItem[] = [
-    ...mixedWords,
-    ...words.filter((word) => !knownWordIds.has(word.id)),
-  ];
+  const allDeckWords: WordItem[] = [];
+  const knownWords = new Set<string>();
+  [...mixedWords, ...words].forEach((word) => {
+    const key = word.word?.trim().toLocaleLowerCase().replace(/[-\s]+/g, "");
+    if (!key || knownWords.has(key)) return;
+    knownWords.add(key);
+    allDeckWords.push(word);
+  });
+  const scopedWords = deckScope === "all_decks" ? allDeckWords : words;
+  const levelFilteredWords = filterByLevel
+    ? scopedWords.filter((word) => selectedLevels.includes(getWordLevel(word)))
+    : scopedWords;
 
   // ── Game loop state ──
   const [targets, setTargets] = useState<FallingWord[]>([]);
@@ -218,6 +229,8 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
   const [lastShotId, setLastShotId] = useState<string | null>(null);
   const [hitFeedback, setHitFeedback] = useState<{ id: string; correct: boolean } | null>(null);
   const [shieldActive, setShieldActive] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const typingInputRef = useRef<HTMLInputElement>(null);
 
   // ── Power-up state ──
   const [inventory, setInventory] = useState<InventorySlot[]>([]);
@@ -284,8 +297,18 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
   useEffect(() => {
     let active = true;
     void getVocabularySets()
-      .then((sets) => {
-        if (active && Array.isArray(sets)) setAvailableSets(sets);
+      .then(async (sets) => {
+        if (!active || !Array.isArray(sets)) return;
+        setAvailableSets(sets);
+        const detailedSets = await Promise.all(sets.map(async (set) => {
+          if (set.words?.length) return set;
+          try {
+            return await getVocabularySet(set.id);
+          } catch {
+            return set;
+          }
+        }));
+        if (active) setAvailableSets(detailedSets);
       })
       .catch((err) => console.warn("Could not load all vocabulary sets", err));
     return () => { active = false; };
@@ -346,9 +369,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
     });
     window.setTimeout(() => {
       setProjectiles((cur) => cur.filter((p) => p.id !== id));
-    }, 500);
-    setLastShotId(target.id);
-    window.setTimeout(() => setLastShotId((cur) => cur === target.id ? null : cur), 450);
+    }, 400);
   }, []);
 
   // ───────────────────────────────────────────────
@@ -361,6 +382,13 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
     setFinalizing(true);
     setPhase("result");
     setFinishError(null);
+
+    if (livesRef.current > 0) {
+      soundEffects.playVictory();
+    } else {
+      soundEffects.playDefeat();
+    }
+
     try {
       const completed = await completeVocabularyGameSession(activeSession.id);
       setFinalSession(completed);
@@ -422,11 +450,8 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
       const nextResolved = resolvedCountRef.current + 1;
       resolvedCountRef.current = nextResolved;
       setResolvedCount(nextResolved);
-      updateTargets((cur) => cur.filter((t) => t.id !== pending.target.id));
-      setLockedTargetId((cur) => cur === pending.target.id ? null : cur);
 
       setHitFeedback({ id: pending.target.id, correct: response.correct });
-      window.setTimeout(() => setHitFeedback(null), 700);
 
       if (response.correct) {
         const nextCombo = comboRef.current + 1;
@@ -440,8 +465,31 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
         setScore(nextScore);
         setCorrectCount(correctCountRef.current);
         setMaxCombo(maxComboRef.current);
+
+        // 1. Khai hỏa: Phóng đạn từ phi thuyền & phát âm thanh đại bác
+        soundEffects.playCannon(nextCombo >= 5);
         fireProjectile(pending.target);
+
+        // 2. Sau 300ms (đạn bay tới mục tiêu): nổ tan biến & âm thanh trúng đích
+        window.setTimeout(() => {
+          soundEffects.playHit(nextCombo >= 5);
+          setLastShotId(pending.target.id);
+
+          // 3. Sau thêm 250ms (khi đã hoàn tất hoạt ảnh nổ tan biến): xóa khỏi targets
+          window.setTimeout(() => {
+            updateTargets((cur) => cur.filter((t) => t.id !== pending.target.id));
+            setLockedTargetId((cur) => (cur === pending.target.id ? null : cur));
+            setLastShotId((cur) => (cur === pending.target.id ? null : cur));
+
+            if (nextResolved >= wordsRef.current.length || livesRef.current <= 0) {
+              void finalizeSession();
+            }
+          }, 250);
+        }, 300);
       } else {
+        // Trả lời sai hoặc bỏ lỡ: âm thanh trượt
+        soundEffects.playSplash();
+
         if (!reviewOnly) {
           // Shield absorbs one hit
           if (shieldRef.current) {
@@ -454,16 +502,37 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
           }
         }
         comboRef.current = 0;
+        setCombo(0);
+
+        // Lưu vào danh sách từ sai
         if (!missedWordsRef.current.some((word) => word.id === pending.target.word.id)) {
           missedWordsRef.current = [...missedWordsRef.current, pending.target.word];
           setMissedWords(missedWordsRef.current);
         }
-        setCombo(0);
+
+        // TÁI NẠP TỪ SAI: Chèn từ sai vào sau 3 câu trong danh sách để người học gặp lại
+        if (!reviewOnly) {
+          const insertIdx = Math.min(wordsRef.current.length, nextWordIndexRef.current + 3);
+          const nextWords = [...wordsRef.current];
+          nextWords.splice(insertIdx, 0, pending.target.word);
+          wordsRef.current = nextWords;
+          setSessionQuestionCount(nextWords.length);
+        }
+
+        // Hiển thị viền đỏ cảnh báo 400ms rồi xóa khỏi màn hình
+        window.setTimeout(() => {
+          updateTargets((cur) => cur.filter((t) => t.id !== pending.target.id));
+          setLockedTargetId((cur) => (cur === pending.target.id ? null : cur));
+
+          if (nextResolved >= wordsRef.current.length || livesRef.current <= 0) {
+            void finalizeSession();
+          }
+        }, 400);
       }
 
-      if (nextResolved >= wordsRef.current.length || livesRef.current <= 0) {
-        await finalizeSession();
-      } else {
+      window.setTimeout(() => setHitFeedback(null), 600);
+
+      if (livesRef.current > 0 && nextResolved < wordsRef.current.length) {
         setPhase("playing");
       }
     } catch (reason) {
@@ -493,14 +562,10 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
     setFinalSession(null);
     finalizingRef.current = false;
     try {
-      if (!reviewOnly && studyMode !== "single_deck" && availableSets.length === 0) {
+      if (!reviewOnly && deckScope === "all_decks" && availableSets.length === 0) {
         throw new Error("Không tải được danh sách bộ đề. Vui lòng thử lại trước khi chơi trộn.");
       }
-      const sourceWords = reviewOnly
-        ? missedWords
-        : studyMode === "single_deck"
-          ? words
-          : allDeckWords.filter((word) => studyMode !== "by_level" || selectedLevels.includes(getWordLevel(word)));
+      const sourceWords = reviewOnly ? missedWords : levelFilteredWords;
       const selectedWords = selectVocabularyGameWords(
         sourceWords,
         reviewOnly ? "all" : questionCount,
@@ -515,7 +580,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
         gameType: "TYPING",
         deckIds: [...new Set([
           activeSetId,
-          ...(reviewOnly || studyMode === "single_deck"
+          ...(reviewOnly || deckScope === "single_deck"
             ? []
             : availableSets.map((set) => set.id)),
           ...selectedWords.map((word) => word.setId).filter((id): id is string => typeof id === "string" && id.length > 0),
@@ -611,13 +676,19 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
           directionRef.current,
           wordsRef.current,
         );
+        const preferredX = 8 + Math.random() * 76;
+        const x = updated.reduce((candidate, existing) => {
+          return Math.abs(candidate - existing.x) < 18
+            ? (candidate + 24) % 84 + 8
+            : candidate;
+        }, preferredX);
         updated = [
           ...updated,
           {
             id: `${index}-${word.id}`,
             word,
             displayText: question.displayTerm,
-            x: 8 + Math.random() * 76,
+            x: Math.min(92, Math.max(8, x)),
             y: 5,
             progress: 0,
             color: WORD_COLORS[index % WORD_COLORS.length],
@@ -703,11 +774,26 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
   }, [updateTargets]);
 
   // ───────────────────────────────────────────────
+  // Focus typing input automatically
+  // ───────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === "playing" && answerMode === "typing") {
+      typingInputRef.current?.focus();
+    }
+  }, [phase, answerMode, lockedTargetId, targets.length]);
+
+  // ───────────────────────────────────────────────
   // Keyboard handler
   // ───────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setPhase((cur) => (cur === "playing" ? "paused" : "playing"));
+        }
+        return;
+      }
       if ((phase !== "playing" || answerModeRef.current !== "typing") && (event.key === "f" || event.key === "F")) {
         event.preventDefault();
         toggleMaximizeTab();
@@ -819,11 +905,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
   // Derived values
   // ───────────────────────────────────────────────
   const progressPercent = Math.min(100, (resolvedCount / Math.max(1, sessionQuestionCount)) * 100);
-  const selectableWords = reviewOnly
-    ? missedWords
-    : studyMode === "single_deck"
-      ? words
-      : allDeckWords.filter((word) => studyMode !== "by_level" || selectedLevels.includes(getWordLevel(word)));
+  const selectableWords = reviewOnly ? missedWords : levelFilteredWords;
   const availableWordCount = selectVocabularyGameWords(selectableWords, "all", 1).length;
   const reviewWordCount = selectVocabularyGameWords(missedWords, "all", 1).length;
   const plannedQuestionCount = reviewOnly
@@ -854,6 +936,15 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
     finalizingRef.current = false;
     void finalizeSession();
   };
+
+  const activeTypingTarget = useMemo(() => {
+    if (answerMode !== "typing") return null;
+    const locked = targets.find((t) => t.id === lockedTargetId);
+    const nearest = targets.length > 0
+      ? targets.reduce((a, b) => (b.y > a.y ? b : a))
+      : null;
+    return locked ?? nearest;
+  }, [answerMode, targets, lockedTargetId]);
 
   // ───────────────────────────────────────────────
   // Render
@@ -938,7 +1029,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
                     {activeTestSet?.title || "Đang tải bộ đề..."}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {activeTestSet?.category || "Từ vựng TOEIC"} · {words.length} từ khả dụng
+                    {activeTestSet?.category || "Từ vựng TOEIC"} · {activeTestSet?.words?.length || activeTestSet?.wordCount || words.length} từ khả dụng
                   </p>
                 </div>
               </div>
@@ -958,41 +1049,69 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
 
             <div>
               <p className={`mb-2 text-xs font-bold uppercase tracking-wider ${isDarkMode ? "text-slate-400" : "text-slate-800"}`}>Phạm vi từ vựng</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {([
-                  { id: "single_deck", label: "Bộ đề hiện tại" },
-                  { id: "all_decks", label: "Trộn tất cả bộ đề" },
-                  { id: "by_level", label: "Theo cấp độ" },
-                ] as const).map((option) => (
+                  { id: "single_deck" as const, label: "📚 Bộ đề hiện tại", count: words.length },
+                  { id: "all_decks" as const, label: "🗂 Trộn tất cả bộ đề", count: allDeckWords.length },
+                ]).map((option) => (
                   <button
                     key={option.id}
                     type="button"
-                    aria-pressed={studyMode === option.id}
-                    onClick={() => setStudyMode(option.id)}
+                    aria-pressed={deckScope === option.id}
+                    onClick={() => setDeckScope(option.id)}
                     className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition ${
-                      studyMode === option.id
+                      deckScope === option.id
                         ? isDarkMode ? "border-cyan-400 bg-cyan-400/15 text-cyan-200" : "border-indigo-600 bg-indigo-50 text-indigo-950"
                         : isDarkMode ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-white text-slate-700"
                     }`}
                   >
-                    {option.label}
+                    <span className="block">{option.label}</span>
+                    <span className="mt-0.5 block text-[10px] font-medium text-slate-500">{option.count} từ</span>
                   </button>
                 ))}
               </div>
-              {studyMode === "by_level" ? (
+              <button
+                type="button"
+                aria-pressed={filterByLevel}
+                onClick={() => setFilterByLevel((current) => !current)}
+                className={`mt-2 flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                  filterByLevel
+                    ? isDarkMode ? "border-violet-400 bg-violet-400/15 text-violet-200" : "border-violet-600 bg-violet-50 text-violet-950 shadow-sm"
+                    : isDarkMode ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-white text-slate-700"
+                }`}
+              >
+                <span>
+                  <span className="block text-xs font-bold sm:text-sm">🎯 Lọc theo cấp độ CEFR</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                    {filterByLevel ? `Áp dụng trên ${deckScope === "all_decks" ? "toàn bộ kho từ" : "bộ đề đã chọn"}` : "Bấm để bật lọc theo cấp CEFR"}
+                  </span>
+                </span>
+                <span className={`ml-3 shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold ${filterByLevel ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 text-slate-500"}`}>
+                  {filterByLevel ? "Đang bật" : "Tắt"}
+                </span>
+              </button>
+              {filterByLevel ? (
                 <div className={`mt-2 rounded-xl border p-3 ${isDarkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"}`}>
                   <div className="mb-2 flex items-center justify-between">
                     <span className={`text-xs font-bold ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>Cấp độ CEFR</span>
                     <button
                       type="button"
                       onClick={() => setSelectedLevels(selectedLevels.length === 7 ? ["B1"] : ["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"])}
-                      className="text-xs font-bold text-indigo-600"
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
                     >
                       {selectedLevels.length === 7 ? "Bỏ chọn tất cả" : "Chọn tất cả"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {(["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"] as WordLevelTag[]).map((level) => (
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+                    {([
+                      { level: "A1" as const, desc: "Cơ bản" },
+                      { level: "A2" as const, desc: "Sơ cấp" },
+                      { level: "B1" as const, desc: "Trung cấp" },
+                      { level: "B2" as const, desc: "Khá" },
+                      { level: "C1" as const, desc: "Nâng cao" },
+                      { level: "C2" as const, desc: "Thành thạo" },
+                      { level: "unclassified" as const, desc: "Khác" },
+                    ]).map(({ level, desc }) => (
                       <button
                         key={level}
                         type="button"
@@ -1000,13 +1119,14 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
                         onClick={() => setSelectedLevels((current) => current.includes(level)
                           ? current.length > 1 ? current.filter((item) => item !== level) : current
                           : [...current, level])}
-                        className={`rounded-lg border px-2 py-2 text-[11px] font-bold ${
+                        className={`flex flex-col items-center rounded-xl border p-2 text-center transition ${
                           selectedLevels.includes(level)
-                            ? "border-indigo-600 bg-indigo-600 text-white"
-                            : isDarkMode ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-700"
+                            ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                            : isDarkMode ? "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
                         }`}
                       >
-                        {level === "unclassified" ? "Khác" : level}
+                        <span className="text-xs font-black">{level === "unclassified" ? "Khác" : level}</span>
+                        <span className={`text-[9px] ${selectedLevels.includes(level) ? "text-indigo-200" : "text-slate-400"}`}>{desc}</span>
                       </button>
                     ))}
                   </div>
@@ -1168,18 +1288,18 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
               <p className={`mt-2 text-[11px] leading-5 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
                 {reviewOnly
                   ? "Tất cả từ sai được ôn trong cùng một phiên; chế độ ôn không giới hạn mạng và vẫn ghi kết quả lên hệ thống."
-                  : `Trận này có ${plannedQuestionCount} từ duy nhất. Các từ sai được gom thành một danh sách để ôn tập cùng lúc sau trận.`}
+                  : `Có ${availableWordCount} từ phù hợp với phạm vi và cấp độ đã chọn. Trận này lấy ${plannedQuestionCount} từ trong số đó, mỗi từ tương ứng một câu.`}
               </p>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 pt-2">
               <div className={`rounded-xl border p-3 ${isDarkMode ? "border-white/10 bg-white/5" : "border-slate-200 bg-white shadow-sm"}`}>
-                <p className={`text-xs ${isDarkMode ? "text-indigo-200" : "text-slate-600 font-bold"}`}>Bộ từ vựng</p>
-                <p className={`mt-1 text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{words.length} từ</p>
+                <p className={`text-xs ${isDarkMode ? "text-indigo-200" : "text-slate-600 font-bold"}`}>{reviewOnly ? "Từ ôn tập" : "Từ khả dụng"}</p>
+                <p className={`mt-1 text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{reviewOnly ? reviewWordCount : availableWordCount} từ</p>
               </div>
               <div className={`rounded-xl border p-3 ${isDarkMode ? "border-white/10 bg-white/5" : "border-slate-200 bg-white shadow-sm"}`}>
-                <p className={`text-xs ${isDarkMode ? "text-indigo-200" : "text-slate-600 font-bold"}`}>Số câu</p>
+                <p className={`text-xs ${isDarkMode ? "text-indigo-200" : "text-slate-600 font-bold"}`}>Câu trong trận</p>
                 <p className={`mt-1 text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{plannedQuestionCount} câu</p>
               </div>
               <div className={`rounded-xl border p-3 ${isDarkMode ? "border-white/10 bg-white/5" : "border-slate-200 bg-white shadow-sm"}`}>
@@ -1360,6 +1480,23 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
                   <Timer className="h-4 w-4 text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" />
                 </span>
               )}
+              {/* Sound toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !soundEnabled;
+                  setSoundEnabled(next);
+                  soundEffects.setEnabled(next);
+                }}
+                className="ml-1 rounded-lg border border-slate-700 bg-slate-800 p-1.5 text-slate-200 hover:bg-slate-700 transition"
+                title={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
+              >
+                {soundEnabled ? (
+                  <Volume2 className="h-3.5 w-3.5 text-cyan-300" />
+                ) : (
+                  <VolumeX className="h-3.5 w-3.5 text-slate-500" />
+                )}
+              </button>
               {/* Pause / exit */}
               <button
                 type="button"
@@ -1397,7 +1534,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
                 isShot={lastShotId === target.id}
                 hitFeedback={hitFeedback?.id === target.id ? hitFeedback.correct : null}
                 answerMode={answerMode}
-                onChoiceSelect={(option) => void resolveTargetRef.current(target, option)}
+                onChoiceSelect={(option) => void saveResolvedWord(target, option)}
                 onLock={() => setLockedTargetId(target.id)}
               />
             ))}
@@ -1407,7 +1544,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
               <span
                 key={p.id}
                 aria-hidden="true"
-                className="pointer-events-none absolute z-10 h-5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-100 shadow-[0_0_10px_4px_rgba(34,211,238,0.9)] transition-[left,top] duration-500 ease-out"
+                className="pointer-events-none absolute z-10 h-5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-100 shadow-[0_0_12px_4px_rgba(34,211,238,0.95)] transition-[left,top] duration-300 ease-linear"
                 style={{
                   left: `${p.launched ? p.targetX : p.x}%`,
                   top: `${p.launched ? p.targetY : p.y}%`,
@@ -1511,40 +1648,58 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
             </div>
 
             {/* Typing input area (shown in typing mode) */}
-            {answerMode === "typing" && (() => {
-              const locked = targets.find((t) => t.id === lockedTargetId);
-              const nearest = targets.length > 0
-                ? targets.reduce((a, b) => (b.y > a.y ? b : a))
-                : null;
-              const active = locked ?? nearest;
-              return active ? (
+            {answerMode === "typing" && (
+              activeTypingTarget ? (
                 <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2">
                   <span className="text-xs text-slate-400 shrink-0">
-                    {active.question.direction === "en-vi" ? "Nhập nghĩa tiếng Việt:" : "Nhập từ tiếng Anh:"}
+                    {activeTypingTarget.question.direction === "en-vi" ? "Nhập nghĩa tiếng Việt:" : "Nhập từ tiếng Anh:"}
                   </span>
-                  <span className="flex-1 font-mono text-sm text-white">
-                    {active.inputBuffer || <span className="text-slate-600">_</span>}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (active.inputBuffer.trim()) {
-                        setLockedTargetId(null);
-                        setTypedAnswerSubmission({
-                          target: active,
-                          answer: active.inputBuffer.trim(),
-                        });
+                  <input
+                    ref={typingInputRef}
+                    type="text"
+                    value={activeTypingTarget.inputBuffer}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      updateTargets((cur) =>
+                        cur.map((t) => (t.id === activeTypingTarget.id ? { ...t, inputBuffer: val } : t))
+                      );
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const buf = activeTypingTarget.inputBuffer.trim();
+                        if (buf && !saving) {
+                          setLockedTargetId(null);
+                          void saveResolvedWord(activeTypingTarget, buf);
+                        }
                       }
                     }}
-                    className="rounded-lg bg-cyan-400 px-3 py-1 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                    placeholder={
+                      activeTypingTarget.question.direction === "en-vi"
+                        ? "Gõ nghĩa tiếng Việt rồi bấm Enter..."
+                        : `Gợi ý: ${activeTypingTarget.question.hintMask}`
+                    }
+                    className="flex-1 bg-transparent font-mono text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={!activeTypingTarget.inputBuffer.trim() || saving}
+                    onClick={() => {
+                      if (activeTypingTarget.inputBuffer.trim() && !saving) {
+                        const buf = activeTypingTarget.inputBuffer.trim();
+                        setLockedTargetId(null);
+                        void saveResolvedWord(activeTypingTarget, buf);
+                      }
+                    }}
+                    className="rounded-lg bg-cyan-400 px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
                   >
                     Bắn ↵
                   </button>
                 </div>
               ) : (
                 <p className="text-[10px] text-slate-600">Gõ để khóa mục tiêu gần nhất · Enter để bắn</p>
-              );
-            })()}
+              )
+            )}
 
             {answerMode === "choice" && (
               <p className="text-[10px] text-slate-500">
@@ -1616,7 +1771,7 @@ export default function VocabularyTypingGame({ setId }: { setId: string }) {
                       <div className="min-w-0 pr-2">
                         <p className="truncate text-sm font-bold text-white">{s.title}</p>
                         <p className="mt-0.5 text-xs text-slate-400">
-                          {s.category || "Từ vựng TOEIC"} · {s.wordCount ?? s.words?.length ?? 0} từ
+                          {s.category || "Từ vựng TOEIC"} · {s.words?.length || s.wordCount || 0} từ
                         </p>
                       </div>
                       {isCurrent ? (
@@ -1671,7 +1826,7 @@ function TargetChip({ target, isLocked, isShot, hitFeedback, answerMode, onChoic
 
   return (
     <div
-      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-2xl border shadow-xl transition-all duration-200 ${target.color} ${isLocked ? "scale-105 ring-2 ring-white/60 z-10" : "z-0"} ${isShot ? "opacity-0 scale-150" : "opacity-100"} ${feedbackClass}`}
+      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-2xl border shadow-xl transition-all duration-300 ${target.color} ${isLocked ? "scale-105 ring-2 ring-white/60 z-10" : "z-0"} ${isShot ? "opacity-0 scale-150 rotate-6 pointer-events-none" : "opacity-100"} ${feedbackClass}`}
       style={{ left: `${target.x}%`, top: `${target.y}%`, minWidth: "160px", maxWidth: "240px" }}
     >
       {/* Direction badge */}

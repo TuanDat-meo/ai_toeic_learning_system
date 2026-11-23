@@ -37,13 +37,13 @@ export function ParallaxTrack({
 }: ParallaxTrackProps) {
   // Tính toán mức độ nguy hiểm từ kẻ đuổi (0% - 100%)
   const dangerLevel = Math.max(0, 100 - distanceToChaser);
-  const chaserScale = 0.85 + (dangerLevel / 100) * 0.4;
-  const chaserLeftPx = -60 + dangerLevel * 0.9;
+  const chaserScale = 1 + (dangerLevel / 100) * 0.45;
+  const chaserLeftPx = -20 + dangerLevel * 2.3;
   const isDangerZone = distanceToChaser < 30;
 
-  // Cảnh báo sớm: khi chướng ngại còn cách 120px - 340px
-  const showEarlyWarning = distanceToNextEncounter <= 340 && distanceToNextEncounter > 120;
-  const isEncounterZone = distanceToNextEncounter <= 120;
+  // Cảnh báo sớm đủ lâu để người chơi nhìn thấy chướng ngại.
+  const showEarlyWarning = distanceToNextEncounter <= 480 && distanceToNextEncounter > 150;
+  const isEncounterZone = distanceToNextEncounter <= 150;
 
   return (
     <div
@@ -211,7 +211,7 @@ export function ParallaxTrack({
 
       {/* ── KẺ ĐUỔI BÁM ĐUỔI PHÍA SAU (THỦY QUÁI BÓNG ĐÊM CHASER) ── */}
       <div
-        className="absolute bottom-6 pointer-events-none transition-all duration-200 z-10 select-none flex items-center"
+        className="absolute bottom-6 pointer-events-none transition-all duration-1000 ease-out z-10 select-none flex items-center"
         style={{
           left: `${chaserLeftPx}px`,
           transform: `scale(${chaserScale})`,
@@ -287,7 +287,9 @@ export function ParallaxTrack({
           isEncounterZone ? "scale-110 drop-shadow-[0_0_20px_rgba(251,191,36,0.9)]" : ""
         }`}
         style={{
-          left: `${180 + distanceToNextEncounter * 0.82}px`,
+          // Anchor the obstacle to the runner; a fixed left offset made it
+          // appear behind the character on narrow screens.
+          left: `calc(24% + ${Math.max(20, distanceToNextEncounter * 0.72)}px)`,
         }}
       >
         {/* 1. HỘP MÙ MAY RỦI (MYSTERY BOX - Rương Báu Hoàng Kim Vector) */}

@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -72,14 +73,73 @@ public class GrammarService {
                        COALESCE(jsonb_array_length(g.questions), 0) AS total_questions,
                        (SELECT COUNT(*) FROM grammar_topic_questions linked WHERE linked.topic_id = g.id) AS linked_toeic_question_count,
                        COALESCE(p.status, 'Chưa học') AS user_status,
+                       CASE
+                           WHEN g.status = 'ARCHIVED' OR g.status = 'DRAFT' THEN 'TẠM NGƯNG'
+                           WHEN EXISTS (
+                               SELECT 1 FROM grammar_review_schedule s
+                               WHERE s.user_id = ? AND s.due_at <= now()
+                                 AND s.question_id IN (
+                                     SELECT elem->>'id' FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                                 )
+                           ) THEN 'CẦN ÔN LẠI'
+                           WHEN COALESCE(p.status, '') = 'COMPLETED' THEN 'ĐÃ ĐẠT'
+                           WHEN p.completed_questions > 0 THEN 'ĐANG HỌC'
+                           ELSE 'CHƯA HỌC'
+                       END AS learning_status,
+                       (SELECT count(*) FROM grammar_review_schedule s
+                        WHERE s.user_id = ? AND s.due_at <= now()
+                          AND s.question_id IN (
+                              SELECT elem->>'id' FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                          )) AS due_count,
+                       (SELECT count(DISTINCT a.question_id) FROM grammar_attempt a
+                        WHERE a.user_id = ? AND a.topic_id = g.id AND NOT a.is_correct) AS wrong_count,
+                       (SELECT count(*) FROM grammar_bookmark b
+                        WHERE b.user_id = ? AND b.target_type = 'TOPIC' AND b.target_id = g.id) AS saved_count,
+                       (SELECT elem->>'id'
+                        FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM grammar_attempt a
+                            WHERE a.user_id = ? AND a.topic_id = g.id
+                              AND a.question_id = elem->>'id'
+                        )
+                        LIMIT 1) AS resume_question_id,
+                       CASE WHEN g.parent_topic_id IS NOT NULL AND EXISTS (
+                           SELECT 1 FROM user_grammar_progress pp
+                           JOIN grammar_topics parent ON parent.id = pp.topic_id
+                           WHERE pp.user_id = ? AND pp.topic_id = g.parent_topic_id
+                             AND pp.status <> 'COMPLETED'
+                       ) THEN true ELSE false END AS locked_soft,
+                       COALESCE((
+                           SELECT jsonb_agg(parent.title ORDER BY parent.title)
+                           FROM grammar_topics parent
+                           JOIN user_grammar_progress pp ON pp.topic_id = parent.id
+                           WHERE pp.user_id = ? AND parent.id = g.parent_topic_id
+                             AND pp.status <> 'COMPLETED'
+                       ), '[]'::jsonb)::text AS prerequisite_names,
+                       (SELECT count(DISTINCT r.id)
+                        FROM grammar_rule r
+                        JOIN grammar_question_rule qr ON qr.rule_id = r.id
+                        JOIN grammar_attempt a ON a.question_id = qr.question_id
+                        WHERE r.topic_id = g.id AND a.user_id = ? AND NOT a.is_correct) AS weak_rule_count,
+                       COALESCE((
+                           SELECT round(100.0 * count(*) FILTER (WHERE s.streak >= 3) / NULLIF(count(*), 0))
+                           FROM grammar_review_schedule s
+                           WHERE s.user_id = ? AND s.question_id IN (
+                               SELECT elem->>'id' FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                           )
+                       ), 0) AS mastery_percent,
                        g.created_at, g.updated_at, g.archived_at
                 FROM grammar_topics g
                 LEFT JOIN user_grammar_progress p ON p.topic_id = g.id AND p.user_id = ?
-                WHERE ? OR g.status <> 'ARCHIVED'
+                WHERE g.deleted_at IS NULL AND (? OR g.status <> 'ARCHIVED')
                 ORDER BY g.order_index ASC, g.id ASC
                 """;
 
-        return jdbc.query(sql, this::mapTopicFull, userId, includeArchived);
+        Object[] args = new Object[11];
+        args[0] = userId;
+        for (int i = 1; i <= 9; i++) args[i] = userId;
+        args[10] = includeArchived;
+        return jdbc.query(sql, this::mapTopicFull, args);
     }
 
     public GrammarTopic getTopic(String topicId, UUID userId) {
@@ -107,13 +167,71 @@ public class GrammarService {
                        COALESCE(jsonb_array_length(g.questions), 0) AS total_questions,
                        (SELECT COUNT(*) FROM grammar_topic_questions linked WHERE linked.topic_id = g.id) AS linked_toeic_question_count,
                        COALESCE(p.status, 'Chưa học') AS user_status,
+                       CASE
+                           WHEN g.status = 'ARCHIVED' OR g.status = 'DRAFT' THEN 'TẠM NGƯNG'
+                           WHEN EXISTS (
+                               SELECT 1 FROM grammar_review_schedule s
+                               WHERE s.user_id = ? AND s.due_at <= now()
+                                 AND s.question_id IN (
+                                     SELECT elem->>'id' FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                                 )
+                           ) THEN 'CẦN ÔN LẠI'
+                           WHEN COALESCE(p.status, '') = 'COMPLETED' THEN 'ĐÃ ĐẠT'
+                           WHEN p.completed_questions > 0 THEN 'ĐANG HỌC'
+                           ELSE 'CHƯA HỌC'
+                       END AS learning_status,
+                       (SELECT count(*) FROM grammar_review_schedule s
+                        WHERE s.user_id = ? AND s.due_at <= now()
+                          AND s.question_id IN (
+                              SELECT elem->>'id' FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                          )) AS due_count,
+                       (SELECT count(DISTINCT a.question_id) FROM grammar_attempt a
+                        WHERE a.user_id = ? AND a.topic_id = g.id AND NOT a.is_correct) AS wrong_count,
+                       (SELECT count(*) FROM grammar_bookmark b
+                        WHERE b.user_id = ? AND b.target_type = 'TOPIC' AND b.target_id = g.id) AS saved_count,
+                       (SELECT elem->>'id'
+                        FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM grammar_attempt a
+                            WHERE a.user_id = ? AND a.topic_id = g.id
+                              AND a.question_id = elem->>'id'
+                        )
+                        LIMIT 1) AS resume_question_id,
+                       CASE WHEN g.parent_topic_id IS NOT NULL AND EXISTS (
+                           SELECT 1 FROM user_grammar_progress pp
+                           WHERE pp.user_id = ? AND pp.topic_id = g.parent_topic_id
+                             AND pp.status <> 'COMPLETED'
+                       ) THEN true ELSE false END AS locked_soft,
+                       COALESCE((
+                           SELECT jsonb_agg(parent.title ORDER BY parent.title)
+                           FROM grammar_topics parent
+                           JOIN user_grammar_progress pp ON pp.topic_id = parent.id
+                           WHERE pp.user_id = ? AND parent.id = g.parent_topic_id
+                             AND pp.status <> 'COMPLETED'
+                       ), '[]'::jsonb)::text AS prerequisite_names,
+                       (SELECT count(DISTINCT r.id)
+                        FROM grammar_rule r
+                        JOIN grammar_question_rule qr ON qr.rule_id = r.id
+                        JOIN grammar_attempt a ON a.question_id = qr.question_id
+                        WHERE r.topic_id = g.id AND a.user_id = ? AND NOT a.is_correct) AS weak_rule_count,
+                       COALESCE((
+                           SELECT round(100.0 * count(*) FILTER (WHERE s.streak >= 3) / NULLIF(count(*), 0))
+                           FROM grammar_review_schedule s
+                           WHERE s.user_id = ? AND s.question_id IN (
+                               SELECT elem->>'id' FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb)) elem
+                           )
+                       ), 0) AS mastery_percent,
                        g.created_at, g.updated_at, g.archived_at
                 FROM grammar_topics g
                 LEFT JOIN user_grammar_progress p ON p.topic_id = g.id AND p.user_id = ?
-                WHERE g.id = ? AND g.status <> 'ARCHIVED'
+                WHERE g.id = ? AND g.status <> 'ARCHIVED' AND g.deleted_at IS NULL
                 """;
 
-        List<GrammarTopic> topics = jdbc.query(sql, this::mapTopicFull, userId, topicId);
+        Object[] args = new Object[11];
+        args[0] = userId;
+        for (int i = 1; i <= 9; i++) args[i] = userId;
+        args[10] = topicId;
+        List<GrammarTopic> topics = jdbc.query(sql, this::mapTopicFull, args);
         if (topics.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm ngữ pháp: " + topicId);
         }
@@ -410,22 +528,33 @@ public class GrammarService {
             throw badRequest("Chủ điểm không có con cần chuyển.");
         }
 
-        if (impact.userProgressCount() > 0 || impact.wordFamilyLinkCount() > 0
-                || impact.toeicQuestionLinkCount() > 0 || impact.learningPathLinkCount() > 0) {
+        if (impact.toeicQuestionLinkCount() > 0 || impact.learningPathLinkCount() > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Không thể xóa vì chủ điểm còn dữ liệu liên kết. Hãy lưu trữ để giữ nguyên tiến độ, Word Family và câu hỏi TOEIC.");
+                    "Không thể xóa chủ điểm đang có câu hỏi TOEIC hoặc liên kết lộ trình. Hãy lưu trữ để bảo toàn dữ liệu.");
         }
-        int rows;
-        try {
-            rows = jdbc.update("DELETE FROM grammar_topics WHERE id = ?", id);
-        } catch (DataIntegrityViolationException exception) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Không thể xóa vì dữ liệu liên kết vừa được cập nhật. Hãy lưu trữ chủ điểm để giữ nguyên dữ liệu.",
-                    exception);
+        if (impact.userProgressCount() == 0 && impact.wordFamilyLinkCount() == 0) {
+            try {
+                int rows = jdbc.update("DELETE FROM grammar_topics WHERE id = ?", id);
+                if (rows == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Không tìm thấy chủ điểm: " + id);
+                return;
+            } catch (DataIntegrityViolationException exception) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Không thể xóa cứng chủ điểm đang có dữ liệu liên kết.",
+                        exception);
+            }
         }
-        if (rows == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm: " + id);
-        }
+        jdbc.update("""
+                UPDATE grammar_topics
+                SET deleted_at = COALESCE(deleted_at, now()),
+                    original_parent_id = COALESCE(original_parent_id, parent_topic_id),
+                    parent_topic_id = NULL,
+                    status = 'ARCHIVED',
+                    archived_from_status = COALESCE(archived_from_status, 'PUBLISHED'),
+                    archived_at = COALESCE(archived_at, now()),
+                    updated_at = now()
+                WHERE id = ?
+                """, id);
     }
 
     @Transactional
@@ -449,6 +578,14 @@ public class GrammarService {
     @Transactional
     public GrammarTopic restoreTopic(String id) {
         lockGrammarHierarchy();
+        jdbc.update("""
+                UPDATE grammar_topics
+                SET deleted_at = NULL,
+                    parent_topic_id = COALESCE(parent_topic_id, original_parent_id),
+                    original_parent_id = NULL,
+                    updated_at = now()
+                WHERE id = ?
+                """, id);
         int rows = jdbc.update("""
                 UPDATE grammar_topics
                 SET status = COALESCE(NULLIF(archived_from_status, 'ARCHIVED'), 'DRAFT'),
@@ -573,7 +710,7 @@ public class GrammarService {
     @Transactional
     public void bulkUpdateStatus(List<String> ids, String status) {
         if (ids == null || ids.isEmpty()) return;
-        if (!List.of("DRAFT", "PUBLISHED").contains(status)) {
+        if (!List.of("DRAFT", "IN_REVIEW", "PUBLISHED").contains(status)) {
             throw badRequest("Trạng thái chỉ có thể là bản nháp hoặc đã phát hành.");
         }
         if ("PUBLISHED".equals(status)) {
@@ -598,9 +735,67 @@ public class GrammarService {
                 && !hasChildTopics(topicId) && !hasLinkedToeicQuestions(topicId)) {
             throw badRequest("Chủ điểm chưa có câu hỏi. Hãy thêm ít nhất một câu hỏi trước khi phát hành.");
         }
-        if (questions != null) {
-            for (Map<String, Object> question : questions) validateQuestion(question);
+        Integer minQuestions = jdbc.queryForObject("""
+                SELECT COALESCE(
+                    (SELECT min_questions_to_publish FROM grammar_learning_config WHERE topic_id = ?),
+                    (SELECT min_questions_to_publish FROM grammar_learning_config WHERE topic_id IS NULL),
+                    10
+                )
+                """, Integer.class, topicId);
+        int questionCount = questions == null ? 0 : questions.size();
+        if (questionCount < (minQuestions == null ? 10 : minQuestions)
+                && !hasChildTopics(topicId) && !hasLinkedToeicQuestions(topicId)) {
+            throw badRequest("Chủ điểm lá cần ít nhất " + minQuestions + " câu hỏi để phát hành.");
         }
+        if (questions != null) {
+            for (Map<String, Object> question : questions) {
+                validateQuestion(question);
+                String explanation = String.valueOf(question.getOrDefault("explanation",
+                        question.getOrDefault("solutionMethod", ""))).trim();
+                if (explanation.length() < 20) {
+                    throw badRequest("Câu hỏi cần giải thích ít nhất 20 ký tự trước khi phát hành.");
+                }
+                String sourceType = String.valueOf(question.getOrDefault("sourceType", "UNKNOWN")).toUpperCase();
+                String reviewerId = String.valueOf(question.getOrDefault("reviewerId", ""));
+                if (List.of("AI_ASSISTED", "IMPORTED").contains(sourceType)
+                        && reviewerId.isBlank()) {
+                    throw badRequest("Câu AI/nhập ngoài phải có người duyệt trước khi phát hành.");
+                }
+                if ("LICENSED".equals(sourceType)
+                        && String.valueOf(question.getOrDefault("licenseNote", "")).isBlank()) {
+                    throw badRequest("Câu có nguồn LICENSED phải khai báo license_note.");
+                }
+            }
+        }
+        if (!hasChildTopics(topicId) && !hasRule(topicId)) {
+            throw badRequest("Chủ điểm lá phải có ít nhất một quy tắc ngữ pháp trước khi phát hành.");
+        }
+        if (topicId != null) {
+            List<String> parts = jdbc.queryForList(
+                    "SELECT value FROM jsonb_array_elements_text(COALESCE((SELECT toeic_parts FROM grammar_topics WHERE id = ?), '[]'::jsonb)) value",
+                    String.class, topicId);
+            if (parts.contains("Part 6") || parts.contains("Part 7") || parts.contains("6") || parts.contains("7")) {
+                Integer passages = jdbc.queryForObject("""
+                        SELECT count(*) FROM grammar_question_passage qp
+                        JOIN grammar_topics g ON g.id = ?
+                        WHERE qp.question_id IN (
+                            SELECT question_value
+                            FROM jsonb_array_elements(COALESCE(g.questions, '[]'::jsonb))
+                            CROSS JOIN LATERAL jsonb_extract_path_text(value, 'id') AS question_value
+                        )
+                        """, Integer.class, topicId);
+                if (passages == null || passages == 0) {
+                    throw badRequest("Câu Part 6/7 phải được gắn đoạn văn trước khi phát hành.");
+                }
+            }
+        }
+    }
+
+    private boolean hasRule(String topicId) {
+        Boolean exists = jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM grammar_rule WHERE topic_id = ?)",
+                Boolean.class, topicId);
+        return Boolean.TRUE.equals(exists);
     }
 
     private boolean hasChildTopics(String topicId) {
@@ -639,41 +834,295 @@ public class GrammarService {
     }
 
     @Transactional
-    public void saveProgress(UUID userId, String topicId, int completed, int total, String status) {
-        if (userId == null || topicId == null || topicId.isBlank()) return;
-
-        String normalizedStatus = "NOT_STARTED";
-        if ("COMPLETED".equalsIgnoreCase(status) || "Đã hoàn thành".equalsIgnoreCase(status) || (total > 0 && completed >= total)) {
-            normalizedStatus = "COMPLETED";
-        } else if ("IN_PROGRESS".equalsIgnoreCase(status) || "Đang học".equalsIgnoreCase(status) || completed > 0) {
-            normalizedStatus = "IN_PROGRESS";
+    public GrammarAttemptResult saveAttempt(UUID userId, SaveGrammarAttemptRequest request) {
+        if (userId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        if (request == null || isBlank(request.topicId()) || isBlank(request.questionId())
+                || isBlank(request.clientEventId())) {
+            throw badRequest("Thiếu topicId, questionId hoặc clientEventId.");
         }
+        Integer topicCount = jdbc.queryForObject(
+                "SELECT count(*) FROM grammar_topics WHERE id = ?", Integer.class, request.topicId());
+        if (topicCount == null || topicCount == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm.");
+        }
+
+        Integer existing = jdbc.queryForObject(
+                "SELECT count(*) FROM grammar_attempt WHERE user_id = ? AND client_event_id = ?",
+                Integer.class, userId, request.clientEventId());
+        if (existing != null && existing > 0) {
+            return calculateAttemptResult(userId, request.topicId(), request.questionId());
+        }
+
+        JsonNode question = findQuestion(request.topicId(), request.questionId());
+        if (question == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy câu hỏi.");
+        String correct = question.path("correctAnswer").asText("");
+        boolean isCorrect = !correct.isBlank()
+                && correct.equalsIgnoreCase(request.selectedOption());
+        String mode = normalizeAttemptMode(request.mode());
+        int attemptNo = jdbc.queryForObject(
+                "SELECT count(*) FROM grammar_attempt WHERE user_id = ? AND question_id = ?",
+                Integer.class, userId, request.questionId()) + 1;
 
         try {
-            Integer exists = jdbc.queryForObject("SELECT count(*) FROM grammar_topics WHERE id = ?", Integer.class, topicId);
-            if (exists == null || exists == 0) {
-                String code = topicId.toUpperCase().replace("-", "_");
-                jdbc.update("""
-                        INSERT INTO grammar_topics (id, code, title, english_title, part, target_score, status, summary, formula, signal_words, traps, examples, questions, order_index, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, 'Part 5', '350-500', 'PUBLISHED', '', '', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0, now(), now())
-                        ON CONFLICT (id) DO NOTHING
-                        """, topicId, code, "Chuyên đề " + topicId, "Topic " + topicId);
-            }
-
-            String upsert = """
-                    INSERT INTO user_grammar_progress (user_id, topic_id, completed_questions, total_questions, status, updated_at)
-                    VALUES (?, ?, ?, ?, ?, now())
-                    ON CONFLICT (user_id, topic_id) DO UPDATE SET
-                        completed_questions = EXCLUDED.completed_questions,
-                        total_questions = EXCLUDED.total_questions,
-                        status = EXCLUDED.status,
-                        updated_at = now()
-                    """;
-
-            jdbc.update(upsert, userId, topicId, completed, total, normalizedStatus);
-        } catch (Exception e) {
-            System.err.println("Failed to save grammar progress for user " + userId + " topic " + topicId + ": " + e.getMessage());
+            jdbc.update("""
+                    INSERT INTO grammar_attempt
+                    (user_id, question_id, topic_id, selected_option, is_correct, attempt_no, mode, time_spent_ms, client_event_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, userId, request.questionId(), request.topicId(), request.selectedOption(),
+                    isCorrect, attemptNo, mode, Math.max(0, request.timeSpentMs()), request.clientEventId());
+        } catch (DataIntegrityViolationException exception) {
+            return calculateAttemptResult(userId, request.topicId(), request.questionId());
         }
+
+        updateDerivedProgress(userId, request.topicId());
+        updateReviewSchedule(userId, request.questionId(), isCorrect);
+        return calculateAttemptResult(userId, request.topicId(), request.questionId());
+    }
+
+    public Map<String, Object> getResumeIndex(UUID userId, String topicId) {
+        if (userId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        List<String> rawQuestions = jdbc.query(
+                "SELECT COALESCE(questions::text, '[]') FROM grammar_topics WHERE id = ?",
+                (rs, rowNum) -> rs.getString(1), topicId);
+        if (rawQuestions.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm.");
+        List<String> answered = jdbc.query(
+                "SELECT DISTINCT question_id FROM grammar_attempt WHERE user_id = ? AND topic_id = ?",
+                (rs, rowNum) -> rs.getString(1), userId, topicId);
+        Set<String> answeredSet = new java.util.HashSet<>(answered);
+        try {
+            JsonNode questions = objectMapper.readTree(rawQuestions.get(0));
+            if (questions.isArray()) {
+                for (int index = 0; index < questions.size(); index++) {
+                    String id = questions.get(index).path("id").asText("");
+                    if (!id.isBlank() && !answeredSet.contains(id)) {
+                        return Map.of("startIndex", index, "answeredQuestions", answeredSet.size());
+                    }
+                }
+            }
+        } catch (Exception exception) {
+            throw badRequest("Dữ liệu câu hỏi ngữ pháp không hợp lệ.");
+        }
+        return Map.of("startIndex", 0, "answeredQuestions", answeredSet.size());
+    }
+
+    private JsonNode findQuestion(String topicId, String questionId) {
+        List<String> rawQuestions = jdbc.query(
+                "SELECT COALESCE(questions::text, '[]') FROM grammar_topics WHERE id = ?",
+                (rs, rowNum) -> rs.getString(1), topicId);
+        if (rawQuestions.isEmpty()) return null;
+        try {
+            JsonNode questions = objectMapper.readTree(rawQuestions.get(0));
+            if (questions.isArray()) {
+                for (JsonNode question : questions) {
+                    if (questionId.equals(question.path("id").asText(""))) return question;
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private void updateDerivedProgress(UUID userId, String topicId) {
+        Integer total = jdbc.queryForObject(
+                "SELECT COALESCE(jsonb_array_length(questions), 0) FROM grammar_topics WHERE id = ?",
+                Integer.class, topicId);
+        Integer answered = jdbc.queryForObject(
+                "SELECT count(DISTINCT question_id) FROM grammar_attempt WHERE user_id = ? AND topic_id = ?",
+                Integer.class, userId, topicId);
+        Double firstAccuracy = jdbc.queryForObject("""
+                SELECT COALESCE(AVG(CASE WHEN first_attempt.is_correct THEN 1.0 ELSE 0.0 END), 0)
+                FROM (
+                    SELECT DISTINCT ON (question_id) is_correct
+                    FROM grammar_attempt
+                    WHERE user_id = ? AND topic_id = ?
+                    ORDER BY question_id, created_at ASC, id ASC
+                ) first_attempt
+                """, Double.class, userId, topicId);
+        Integer threshold = jdbc.queryForObject("""
+                SELECT COALESCE(
+                    (SELECT pass_threshold FROM grammar_learning_config WHERE topic_id = ?),
+                    (SELECT pass_threshold FROM grammar_learning_config WHERE topic_id IS NULL),
+                    80
+                )
+                """, Integer.class, topicId);
+        String status = total != null && answered != null && answered >= total
+                && firstAccuracy != null && firstAccuracy * 100 >= threshold
+                ? "COMPLETED" : "IN_PROGRESS";
+        jdbc.update("""
+                INSERT INTO user_grammar_progress
+                (user_id, topic_id, completed_questions, total_questions, status, updated_at)
+                VALUES (?, ?, ?, ?, ?, now())
+                ON CONFLICT (user_id, topic_id) DO UPDATE SET
+                    completed_questions = EXCLUDED.completed_questions,
+                    total_questions = EXCLUDED.total_questions,
+                    status = EXCLUDED.status,
+                    updated_at = now()
+                """, userId, topicId, answered == null ? 0 : answered,
+                total == null ? 0 : total, status);
+    }
+
+    private GrammarAttemptResult calculateAttemptResult(UUID userId, String topicId, String questionId) {
+        Boolean current = jdbc.query(
+                "SELECT is_correct FROM grammar_attempt WHERE user_id = ? AND question_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+                rs -> rs.next() ? rs.getBoolean("is_correct") : null,
+                userId, questionId);
+        Integer answered = jdbc.queryForObject(
+                "SELECT count(DISTINCT question_id) FROM grammar_attempt WHERE user_id = ? AND topic_id = ?",
+                Integer.class, userId, topicId);
+        Integer total = jdbc.queryForObject(
+                "SELECT COALESCE(jsonb_array_length(questions), 0) FROM grammar_topics WHERE id = ?",
+                Integer.class, topicId);
+        Double firstAccuracy = jdbc.queryForObject("""
+                SELECT COALESCE(AVG(CASE WHEN first_attempt.is_correct THEN 1.0 ELSE 0.0 END), 0)
+                FROM (
+                    SELECT DISTINCT ON (question_id) is_correct
+                    FROM grammar_attempt
+                    WHERE user_id = ? AND topic_id = ?
+                    ORDER BY question_id, created_at ASC, id ASC
+                ) first_attempt
+                """, Double.class, userId, topicId);
+        return new GrammarAttemptResult(
+                Boolean.TRUE.equals(current),
+                answered == null ? 0 : answered,
+                total == null ? 0 : total,
+                firstAccuracy == null ? 0.0 : firstAccuracy);
+    }
+
+    private void updateReviewSchedule(UUID userId, String questionId, boolean isCorrect) {
+        Integer initialDays = jdbc.queryForObject("""
+                SELECT COALESCE(
+                    (SELECT srs_initial_days FROM grammar_learning_config
+                     WHERE topic_id = (SELECT topic_id FROM grammar_attempt WHERE user_id = ? AND question_id = ? ORDER BY created_at DESC LIMIT 1)),
+                    (SELECT srs_initial_days FROM grammar_learning_config WHERE topic_id IS NULL),
+                    3
+                )
+                """, Integer.class, userId, questionId);
+        List<Map<String, Object>> currentRows = jdbc.queryForList(
+                "SELECT interval_days, ease, streak FROM grammar_review_schedule WHERE user_id = ? AND question_id = ?",
+                userId, questionId);
+        Map<String, Object> current = currentRows.isEmpty() ? Collections.emptyMap() : currentRows.get(0);
+        int interval = current.isEmpty()
+                ? (initialDays == null ? 3 : initialDays)
+                : isCorrect
+                    ? Math.max(1, ((Number) current.get("interval_days")).intValue() * 2)
+                    : 1;
+        double ease = current.isEmpty() ? 2.5 : ((Number) current.get("ease")).doubleValue();
+        ease = isCorrect ? Math.min(3.0, ease + 0.05) : Math.max(1.3, ease - 0.2);
+        int streak = isCorrect
+                ? (current.isEmpty() ? 1 : ((Number) current.get("streak")).intValue() + 1)
+                : 0;
+        jdbc.update("""
+                INSERT INTO grammar_review_schedule
+                (user_id, question_id, due_at, interval_days, ease, streak, last_result, updated_at)
+                VALUES (?, ?, now() + (? * INTERVAL '1 day'), ?, ?, ?, ?, now())
+                ON CONFLICT (user_id, question_id) DO UPDATE SET
+                    due_at = now() + (EXCLUDED.interval_days * INTERVAL '1 day'),
+                    interval_days = EXCLUDED.interval_days,
+                    ease = EXCLUDED.ease,
+                    streak = EXCLUDED.streak,
+                    last_result = EXCLUDED.last_result,
+                    updated_at = now()
+                """, userId, questionId, interval, interval, ease, streak, isCorrect);
+    }
+
+    private String normalizeAttemptMode(String mode) {
+        if (mode == null) return "PRACTICE";
+        return switch (mode.toUpperCase(Locale.ROOT)) {
+            case "RETRY_WRONG", "EXAM", "REVIEW", "MIXED" -> mode.toUpperCase(Locale.ROOT);
+            default -> "PRACTICE";
+        };
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    public GrammarLearningConfig getLearningConfig(String topicId) {
+        List<GrammarLearningConfig> rows = jdbc.query("""
+                SELECT pass_threshold, srs_initial_days, shuffle_questions, shuffle_options,
+                       show_explanation_immediately, exam_mode, min_questions_to_publish,
+                       mastery_streak, mastery_min_gap_days, difficulty_low_threshold,
+                       report_auto_hide_threshold, behavior_retention_days
+                FROM grammar_learning_config
+                WHERE topic_id IS NOT DISTINCT FROM CAST(? AS VARCHAR)
+                """, (rs, rowNum) -> new GrammarLearningConfig(
+                        rs.getInt("pass_threshold"),
+                        rs.getInt("srs_initial_days"),
+                        rs.getBoolean("shuffle_questions"),
+                        rs.getBoolean("shuffle_options"),
+                        rs.getBoolean("show_explanation_immediately"),
+                        rs.getBoolean("exam_mode"),
+                        rs.getInt("min_questions_to_publish"),
+                        rs.getInt("mastery_streak"),
+                        rs.getInt("mastery_min_gap_days"),
+                        rs.getDouble("difficulty_low_threshold"),
+                        rs.getInt("report_auto_hide_threshold"),
+                        rs.getInt("behavior_retention_days")),
+                topicId);
+        if (!rows.isEmpty()) return rows.get(0);
+
+        if (topicId != null && !topicId.isBlank()) {
+            List<GrammarLearningConfig> inherited = jdbc.query("""
+                    SELECT pass_threshold, srs_initial_days, shuffle_questions, shuffle_options,
+                           show_explanation_immediately, exam_mode, min_questions_to_publish,
+                           mastery_streak, mastery_min_gap_days, difficulty_low_threshold,
+                           report_auto_hide_threshold, behavior_retention_days
+                    FROM grammar_learning_config WHERE topic_id IS NULL
+                    """, (rs, rowNum) -> mapLearningConfig(rs));
+            if (!inherited.isEmpty()) return inherited.get(0);
+        }
+        return new GrammarLearningConfig(80, 3, true, true, true, false, 10, 3, 2, 0.40, 3, 365);
+    }
+
+    @Transactional
+    public GrammarLearningConfig putLearningConfig(String topicId, GrammarLearningConfig config, UUID actorId) {
+        if (config == null) throw badRequest("Thiếu cấu hình.");
+        if (topicId != null && !topicId.isBlank()
+                && jdbc.queryForObject("SELECT count(*) FROM grammar_topics WHERE id = ?", Integer.class, topicId) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chủ điểm.");
+        }
+        jdbc.update("""
+                INSERT INTO grammar_learning_config
+                (topic_id, pass_threshold, srs_initial_days, shuffle_questions, shuffle_options,
+                 show_explanation_immediately, exam_mode, min_questions_to_publish, mastery_streak,
+                 mastery_min_gap_days, difficulty_low_threshold, report_auto_hide_threshold,
+                 behavior_retention_days, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+                ON CONFLICT (topic_id) DO UPDATE SET
+                 pass_threshold = EXCLUDED.pass_threshold,
+                 srs_initial_days = EXCLUDED.srs_initial_days,
+                 shuffle_questions = EXCLUDED.shuffle_questions,
+                 shuffle_options = EXCLUDED.shuffle_options,
+                 show_explanation_immediately = EXCLUDED.show_explanation_immediately,
+                 exam_mode = EXCLUDED.exam_mode,
+                 min_questions_to_publish = EXCLUDED.min_questions_to_publish,
+                 mastery_streak = EXCLUDED.mastery_streak,
+                 mastery_min_gap_days = EXCLUDED.mastery_min_gap_days,
+                 difficulty_low_threshold = EXCLUDED.difficulty_low_threshold,
+                 report_auto_hide_threshold = EXCLUDED.report_auto_hide_threshold,
+                 behavior_retention_days = EXCLUDED.behavior_retention_days,
+                 updated_at = now()
+                """, topicId, config.passThreshold(), config.srsInitialDays(), config.shuffleQuestions(),
+                config.shuffleOptions(), config.showExplanationImmediately(), config.examMode(),
+                config.minQuestionsToPublish(), config.masteryStreak(), config.masteryMinGapDays(),
+                config.difficultyLowThreshold(), config.reportAutoHideThreshold(), config.behaviorRetentionDays());
+        jdbc.update("""
+                INSERT INTO grammar_audit_log(actor_id, action, entity_type, entity_id, before_json, after_json)
+                VALUES (?, 'UPDATE_CONFIG', 'GRAMMAR_CONFIG', ?, NULL, ?::jsonb)
+                """, actorId, topicId == null ? "GLOBAL" : topicId,
+                toJsonString(config));
+        return getLearningConfig(topicId);
+    }
+
+    private GrammarLearningConfig mapLearningConfig(ResultSet rs) throws SQLException {
+        return new GrammarLearningConfig(
+                rs.getInt("pass_threshold"), rs.getInt("srs_initial_days"),
+                rs.getBoolean("shuffle_questions"), rs.getBoolean("shuffle_options"),
+                rs.getBoolean("show_explanation_immediately"), rs.getBoolean("exam_mode"),
+                rs.getInt("min_questions_to_publish"), rs.getInt("mastery_streak"),
+                rs.getInt("mastery_min_gap_days"), rs.getDouble("difficulty_low_threshold"),
+                rs.getInt("report_auto_hide_threshold"), rs.getInt("behavior_retention_days"));
     }
 
     @Transactional
@@ -693,7 +1142,7 @@ public class GrammarService {
                 : data.path("level").asText("350-500").trim();
         String targetScore = normalizeTargetScore(rawTargetScore);
         String status = data.path("status").asText("PUBLISHED").trim().toUpperCase(Locale.ROOT);
-        if (!List.of("DRAFT", "PUBLISHED").contains(status)) {
+        if (!List.of("DRAFT", "IN_REVIEW", "PUBLISHED").contains(status)) {
             throw badRequest("Trạng thái chủ điểm nhập vào không hợp lệ.");
         }
         String summary = data.has("summary") && !data.path("summary").asText("").isBlank()
@@ -968,7 +1417,16 @@ public class GrammarService {
                 rs.getString("user_status"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant(),
-                rs.getTimestamp("archived_at") == null ? null : rs.getTimestamp("archived_at").toInstant()
+                rs.getTimestamp("archived_at") == null ? null : rs.getTimestamp("archived_at").toInstant(),
+                rs.getString("learning_status"),
+                rs.getInt("due_count"),
+                rs.getInt("wrong_count"),
+                rs.getInt("saved_count"),
+                rs.getString("resume_question_id"),
+                rs.getBoolean("locked_soft"),
+                parseStringList(rs.getString("prerequisite_names")),
+                rs.getInt("weak_rule_count"),
+                rs.getInt("mastery_percent")
         );
     }
 
@@ -1185,7 +1643,7 @@ public class GrammarService {
         if (!TARGET_SCORES.contains(targetScore)) {
             throw badRequest("Mục tiêu điểm TOEIC không hợp lệ.");
         }
-        if (!List.of("DRAFT", "PUBLISHED", "ARCHIVED").contains(status)) {
+        if (!List.of("DRAFT", "IN_REVIEW", "PUBLISHED", "ARCHIVED").contains(status)) {
             throw badRequest("Trạng thái chủ điểm không hợp lệ.");
         }
         if (!DIFFICULTIES.contains(difficulty)) {
@@ -1477,7 +1935,8 @@ public class GrammarService {
         String slug = slugify(title).toUpperCase(Locale.ROOT).replace("-", "");
         if (slug.length() > 8) slug = slug.substring(0, 8);
         if (slug.isBlank()) slug = "GT";
-        return "GT-" + slug + "-" + (int)(Math.random() * 900 + 100);
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
+        return "GT-" + slug + "-" + suffix;
     }
 
     private String slugify(String input) {
@@ -1518,7 +1977,16 @@ public class GrammarService {
             String userStatus,
             java.time.Instant createdAt,
             java.time.Instant updatedAt,
-            java.time.Instant archivedAt
+            java.time.Instant archivedAt,
+            String learningStatus,
+            int dueCount,
+            int wrongCount,
+            int savedCount,
+            String resumeQuestionId,
+            boolean lockedSoft,
+            List<String> prerequisiteNames,
+            int weakRuleCount,
+            int masteryPercent
     ) {}
 
     public record ChildTopicSummary(String id, String code, String title, String status) {}
@@ -1614,6 +2082,37 @@ public class GrammarService {
             int completedQuestions,
             int totalQuestions,
             String status
+    ) {}
+
+    public record SaveGrammarAttemptRequest(
+            String topicId,
+            String questionId,
+            String selectedOption,
+            String mode,
+            long timeSpentMs,
+            String clientEventId
+    ) {}
+
+    public record GrammarAttemptResult(
+            boolean isCorrect,
+            int answeredQuestions,
+            int totalQuestions,
+            double firstAttemptAccuracy
+    ) {}
+
+    public record GrammarLearningConfig(
+            int passThreshold,
+            int srsInitialDays,
+            boolean shuffleQuestions,
+            boolean shuffleOptions,
+            boolean showExplanationImmediately,
+            boolean examMode,
+            int minQuestionsToPublish,
+            int masteryStreak,
+            int masteryMinGapDays,
+            double difficultyLowThreshold,
+            int reportAutoHideThreshold,
+            int behaviorRetentionDays
     ) {}
 
     public record BulkStatusRequest(

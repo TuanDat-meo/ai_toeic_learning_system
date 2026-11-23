@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { BookOpen, Target, BrainCircuit, CalendarClock, Trophy, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
+import { VocabularyTestSet, WordItem } from "@/app/admin/content/vocabulary/types";
 import { getDueVocabularyWords, getStudentVocabularyDashboard, getStudentVocabularyGoals, getVocabularyDailyStats, getVocabularySets, getWeakVocabularyWords, updateStudentVocabularyGoals, type StudentVocabularyDashboard, type StudentVocabularyGoal, type VocabularyDailyStat, type WeakVocabularyWord } from "@/lib/api/vocabulary";
+import { updateStudyPlan } from "@/lib/api/study-plan";
 import { StudentVocabularyGrid } from "@/components/vocabulary/StudentVocabularyGrid";
 import { StudentVocabularyModals } from "@/components/vocabulary/StudentVocabularyModals";
 import { LearningQuotaBadge } from "@/components/billing/LearningQuotaBadge";
@@ -18,6 +19,13 @@ export default function StudentVocabularyPage() {
   const [dashboard, setDashboard] = useState<StudentVocabularyDashboard | null>(null);
   const [dailyGoal, setDailyGoal] = useState<StudentVocabularyGoal | null>(null);
   const [weakWords, setWeakWords] = useState<WeakVocabularyWord[]>([]);
+  const [dueWords, setDueWords] = useState<WordItem[]>([]);
+  const [weakWordsExpanded, setWeakWordsExpanded] = useState(false);
+  const [dueWordsExpanded, setDueWordsExpanded] = useState(false);
+  const weakWordsListRef = useRef<HTMLUListElement>(null);
+  const dueWordsListRef = useRef<HTMLUListElement>(null);
+  const weakWordsScrollTop = useRef(0);
+  const dueWordsScrollTop = useRef(0);
   const [dailyStats, setDailyStats] = useState<VocabularyDailyStat[]>([]);
   const [goalForm, setGoalForm] = useState({ newWordsGoal: 10, reviewGoal: 20 });
   const [savingGoal, setSavingGoal] = useState(false);
@@ -46,11 +54,12 @@ export default function StudentVocabularyPage() {
 
   const loadSets = useCallback(async () => {
     try {
-      const [setList, dashboardStats, goals, weakWordList, recentStats] = await Promise.all([
+      const [setList, dashboardStats, goals, weakWordList, dueWordList, recentStats] = await Promise.all([
         getVocabularySets(),
         getStudentVocabularyDashboard(),
         getStudentVocabularyGoals(),
-        getWeakVocabularyWords(8),
+        getWeakVocabularyWords(500),
+        getDueVocabularyWords(undefined, 500),
         getVocabularyDailyStats(),
       ]);
       setLoadError(null);
@@ -58,6 +67,7 @@ export default function StudentVocabularyPage() {
       setDashboard(dashboardStats);
       setDailyGoal(goals);
       setWeakWords(weakWordList);
+      setDueWords(dueWordList);
       setDailyStats(recentStats);
       setGoalForm({ newWordsGoal: goals.newWordsGoal, reviewGoal: goals.reviewGoal });
     } catch (err) {
@@ -65,6 +75,7 @@ export default function StudentVocabularyPage() {
       setDashboard(null);
       setDailyGoal(null);
       setWeakWords([]);
+      setDueWords([]);
       setDailyStats([]);
       setLoadError(err instanceof Error ? err.message : "Không thể tải bộ từ vựng từ máy chủ.");
     } finally {
@@ -88,6 +99,18 @@ export default function StudentVocabularyPage() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [loadSets]);
+
+  useEffect(() => {
+    if (weakWordsExpanded && weakWordsListRef.current) {
+      weakWordsListRef.current.scrollTop = weakWordsScrollTop.current;
+    }
+  }, [weakWordsExpanded]);
+
+  useEffect(() => {
+    if (dueWordsExpanded && dueWordsListRef.current) {
+      dueWordsListRef.current.scrollTop = dueWordsScrollTop.current;
+    }
+  }, [dueWordsExpanded]);
 
   // Audio synthesis phát âm tiếng Anh chuẩn MP3 hoặc fallback
   const playAudio = (textOrUrl: string) => {
@@ -122,6 +145,16 @@ export default function StudentVocabularyPage() {
       setDailyGoal(nextGoal);
       setGoalForm({ newWordsGoal: nextGoal.newWordsGoal, reviewGoal: nextGoal.reviewGoal });
       setGoalFeedback("Đã lưu mục tiêu học tập.");
+
+      // Đồng bộ ngược lên Study Plan để giữ nhất quán
+      try {
+        await updateStudyPlan({
+          newWordsPerDay: nextGoal.newWordsGoal,
+          reviewPerDay: nextGoal.reviewGoal,
+        });
+      } catch {
+        // Không để lỗi sync plan làm hỏng luồng lưu mục tiêu từ vựng
+      }
     } catch (err) {
       setGoalFeedback(err instanceof Error ? err.message : "Không thể lưu mục tiêu học tập.");
     } finally {
@@ -132,7 +165,7 @@ export default function StudentVocabularyPage() {
   const startDueReview = async () => {
     try {
       setReviewLoading(true);
-      const dueWords = await getDueVocabularyWords();
+      const dueWords = await getDueVocabularyWords(undefined, 500);
       if (dueWords.length === 0) {
         setGoalFeedback("Hiện chưa có từ nào đến hạn ôn tập.");
         return;
@@ -219,10 +252,18 @@ export default function StudentVocabularyPage() {
 
       <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2 text-slate-900">
-            <Target className="h-5 w-5 text-blue-600" />
-            <h2 className="text-lg font-bold">Mục tiêu học tập hằng ngày</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-900">
+              <Target className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-bold">Mục tiêu học tập hằng ngày</h2>
+            </div>
+            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200">
+              Lộ trình cá nhân hóa
+            </span>
           </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Tự động đồng bộ từ khảo sát mục tiêu (Onboarding) và lịch học của bạn. Bạn có thể tùy chỉnh lại bất kỳ lúc nào.
+          </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-700">
               Từ mới mỗi ngày
@@ -304,7 +345,7 @@ export default function StudentVocabularyPage() {
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Hoạt động 7 ngày qua</h2>
               <p className="mt-1 text-xs text-slate-500">Số câu trả lời đã được ghi nhận mỗi ngày.</p>
@@ -332,37 +373,123 @@ export default function StudentVocabularyPage() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Từ cần củng cố</h2>
-              <p className="mt-1 text-xs text-slate-500">Dựa trên các câu trả lời sai đã lưu.</p>
+              <p className="mt-1 text-xs text-slate-500">Từ sai xuất hiện ở đây ngay; ôn tập SRS sẽ đưa từ vào lượt ôn khi đến lịch.</p>
             </div>
+            {weakWords.length > 0 ? (
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <Link
+                  href={`/vocabulary/${encodeURIComponent(weakWords[0].setId)}/practice?source=weak`}
+                  className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                >
+                  Chọn đáp án
+                </Link>
+                <Link
+                  href={`/vocabulary/${encodeURIComponent(weakWords[0].setId)}/review?source=weak`}
+                  className="rounded-lg bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100"
+                >
+                  Flashcard
+                </Link>
+                <Link
+                  href={`/vocabulary/games/matching?setId=${encodeURIComponent(weakWords[0].setId)}&source=weak`}
+                  className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100"
+                >
+                  Ghép cặp
+                </Link>
+              </div>
+            ) : null}
           </div>
           {weakWords.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Chưa có từ nào cần củng cố. Hãy tiếp tục luyện tập!</p> : (
-            <ul className="mt-4 divide-y divide-slate-100">
-              {weakWords.map((word) => (
+            <ul
+              ref={weakWordsListRef}
+              onScroll={(event) => { weakWordsScrollTop.current = event.currentTarget.scrollTop; }}
+              className={`mt-4 divide-y divide-slate-100 ${weakWordsExpanded ? "max-h-80 overflow-y-auto overscroll-contain pr-2" : ""}`}
+              style={weakWordsExpanded ? { scrollbarWidth: "thin", scrollbarColor: "#94a3b8 #f1f5f9" } : undefined}
+            >
+              {(weakWordsExpanded ? weakWords : weakWords.slice(0, 5)).map((word) => (
                 <li key={word.wordId} className="flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-slate-900">{word.word}<span className="ml-2 text-sm font-normal text-slate-500">{word.meaning}</span></p>
                     <p className="mt-1 truncate text-xs text-slate-500">{word.setTitle} · Sai {word.incorrectCount} lần</p>
+                    <p className="mt-1 text-xs font-medium text-indigo-600">
+                      {word.nextReviewAt
+                        ? `Lịch ôn SRS: ${new Date(word.nextReviewAt).toLocaleString("vi-VN")}`
+                        : "Chưa có lịch ôn SRS"}
+                    </p>
                   </div>
                   <Link href={`/vocabulary/${encodeURIComponent(word.setId)}/practice?wordId=${encodeURIComponent(word.wordId)}`} className="shrink-0 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Luyện từ này</Link>
                 </li>
               ))}
             </ul>
           )}
+          {weakWords.length > 5 ? (
+            <button
+              type="button"
+              onClick={() => {
+                weakWordsScrollTop.current = weakWordsListRef.current?.scrollTop ?? weakWordsScrollTop.current;
+                setWeakWordsExpanded((expanded) => !expanded);
+              }}
+              className="mt-3 rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"
+            >
+              {weakWordsExpanded ? "Thu gọn" : `Xem tất cả (${weakWords.length})`}
+            </button>
+          ) : null}
         </div>
       </section>
 
-      <button
-        type="button"
-        onClick={() => void startDueReview()}
-        disabled={reviewLoading || (dashboard?.dueForReview ?? 0) === 0}
-        className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <CalendarClock className="h-4 w-4" />
-        {reviewLoading ? "Đang tải từ cần ôn..." : `Ôn tập từ đến hạn (${dashboard?.dueForReview ?? 0})`}
-      </button>
+      <section className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Ôn tập từ đến hạn</h2>
+            <p className="mt-1 text-xs text-slate-500">Các từ đã đến lịch ôn lặp lại ({dashboard?.dueForReview ?? dueWords.length} từ).</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void startDueReview()}
+            disabled={reviewLoading || dueWords.length === 0}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <CalendarClock className="h-4 w-4" />
+            {reviewLoading ? "Đang tải từ cần ôn..." : `Ôn cả nhóm (${dashboard?.dueForReview ?? dueWords.length})`}
+          </button>
+        </div>
+        {dueWords.length === 0 ? (
+          <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Hiện chưa có từ nào đến hạn ôn.</p>
+        ) : (
+          <>
+            <ul
+              ref={dueWordsListRef}
+              onScroll={(event) => { dueWordsScrollTop.current = event.currentTarget.scrollTop; }}
+              className={`mt-4 divide-y divide-slate-100 ${dueWordsExpanded ? "max-h-80 overflow-y-auto overscroll-contain pr-2" : ""}`}
+              style={dueWordsExpanded ? { scrollbarWidth: "thin", scrollbarColor: "#94a3b8 #f1f5f9" } : undefined}
+            >
+              {(dueWordsExpanded ? dueWords : dueWords.slice(0, 5)).map((word) => (
+                <li key={word.id} className="flex min-w-0 items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">
+                      {word.word}<span className="ml-2 text-sm font-normal text-slate-500">{word.meaning}</span>
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {dueWords.length > 5 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  dueWordsScrollTop.current = dueWordsListRef.current?.scrollTop ?? dueWordsScrollTop.current;
+                  setDueWordsExpanded((expanded) => !expanded);
+                }}
+                className="mt-3 rounded-lg px-2 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50"
+              >
+                {dueWordsExpanded ? "Thu gọn" : `Xem tất cả (${dashboard?.dueForReview ?? dueWords.length})`}
+              </button>
+            ) : null}
+          </>
+        )}
+      </section>
 
       {/* Grid danh sách bộ từ cho học viên */}
       {loadError ? (
