@@ -458,19 +458,26 @@ export const ListeningDictationModal: React.FC<ListeningDictationModalProps> = (
       lastQuestionIndex: activeDictationQIndex,
       status: updatedProgress.completedQuestions >= totalCardQuestions ? "Đã hoàn thành" : "Đang luyện tập",
     });
+    const isSentencePassed = blankCount === 0 || correctCount / blankCount >= 0.8;
     void recordListeningAttempt({
       targetType: "DICTATION",
       targetId: dictationModalCard.id,
       targetTitle: dictationModalCard.title || `Test ${dictationModalCard.testNumber} - ${dictationModalCard.part}`,
       part: dictationModalCard.part,
       mode: "DICTATION_FILL",
-      totalQuestions: blankCount > 0 ? blankCount : 1,
-      completedQuestions: blankCount > 0 ? blankCount : 1,
-      correctCount: blankCount > 0 ? correctCount : 1,
-      wrongCount: Math.max(0, blankCount - correctCount),
+      totalQuestions: 1,
+      completedQuestions: 1,
+      correctCount: isSentencePassed ? 1 : 0,
+      wrongCount: isSentencePassed ? 0 : 1,
       durationSeconds: dictationTimerSeconds,
       xpEarned: isAllCorrect ? 10 : Math.round((correctCount / Math.max(1, blankCount)) * 10),
-      details: { questionId: q.id, fillPercentage, segmentIndex: activeSegmentIdx },
+      details: {
+        questionId: q.id,
+        fillPercentage,
+        segmentIndex: activeSegmentIdx,
+        blankWordsTotal: blankCount,
+        blankWordsCorrect: correctCount,
+      },
     });
 
     if (isAllCorrect) {

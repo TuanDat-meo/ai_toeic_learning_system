@@ -70,6 +70,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/media-assets/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.POST,
+                            "/api/listening/progress",
+                            "/api/listening/units/progress",
+                            "/api/listening/attempts")
+                            .authenticated()
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
                             "/api/auth/logout",
                             "/api/auth/google/**",

@@ -20,8 +20,53 @@ function sanitizeBaseName(name: string): string {
   return clean || "media";
 }
 
+async function verifyAdminOrTeacherSession(req: NextRequest): Promise<{ ok: boolean; status: number; message?: string }> {
+  const cookieHeader = req.headers.get("cookie") || "";
+  if (!cookieHeader.trim()) {
+    return { ok: false, status: 401, message: "Vui lòng đăng nhập tài khoản Quản trị viên hoặc Giảng viên để tải tệp lên." };
+  }
+  const candidates = [
+    process.env.BACKEND_INTERNAL_URL,
+    process.env.NEXT_PUBLIC_API_BASE_URL,
+    "http://backend:8080",
+    "http://127.0.0.1:8080",
+  ].filter((u): u is string => Boolean(u && u.trim()));
+
+  for (const base of candidates) {
+    try {
+      const res = await fetch(`${base.replace(/\/$/, "")}/api/auth/me`, {
+        method: "GET",
+        headers: { cookie: cookieHeader, accept: "application/json" },
+        cache: "no-store",
+      });
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." };
+      }
+      if (res.ok) {
+        const user = (await res.json()) as { role?: string; roles?: string[] };
+        const roleStr = String(user.role || (Array.isArray(user.roles) ? user.roles.join(",") : "")).toUpperCase();
+        if (roleStr.includes("ADMIN") || roleStr.includes("TEACHER")) {
+          return { ok: true, status: 200 };
+        }
+        return { ok: false, status: 403, message: "Chỉ Quản trị viên hoặc Giảng viên mới có quyền tải tệp media lên hệ thống." };
+      }
+    } catch {
+      // Thử endpoint nội bộ tiếp theo
+    }
+  }
+  return { ok: false, status: 401, message: "Không thể xác thực quyền tải tệp với máy chủ." };
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const authCheck = await verifyAdminOrTeacherSession(req);
+    if (!authCheck.ok) {
+      return NextResponse.json(
+        { error: authCheck.message || "Không có quyền truy cập." },
+        { status: authCheck.status }
+      );
+    }
+
     const formData = await req.formData();
     const fileEntry = formData.get("file");
 

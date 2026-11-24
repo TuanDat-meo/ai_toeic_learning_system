@@ -112,6 +112,8 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
   const [isRealExamMode, setIsRealExamMode] = useState<boolean>(Boolean(initialRealExamMode));
   const [isExamSubmitted, setIsExamSubmitted] = useState<boolean>(false);
   const [showExamResultModal, setShowExamResultModal] = useState<boolean>(false);
+  const [playedExamAudioUrls, setPlayedExamAudioUrls] = useState<Set<string>>(() => new Set());
+  const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState<number | null>(null);
   const examTimeLimitSeconds = Math.max(120, quizModalCard.questions.length * 45);
   const [isAnnotatorActive, setIsAnnotatorActive] = useState(false);
   const [annotatorColor, setAnnotatorColor] = useState<"yellow" | "green" | "pink" | "blue">("yellow");
@@ -227,7 +229,40 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
+    setAutoAdvanceCountdown(null);
   }, [activeQuizQIndex, setIsPlayingAudio]);
+
+  const advanceToNextInRealExam = () => {
+    setAutoAdvanceCountdown(null);
+    const isGroup = quizModalCard.part === "Part 3" || quizModalCard.part === "Part 4";
+    if (!isGroup) {
+      if (activeQuizQIndex < quizModalCard.questions.length - 1) {
+        setActiveQuizQIndex((prev) => Math.min(quizModalCard.questions.length - 1, prev + 1));
+      } else {
+        triggerToast("Đã hết lượt phát băng của bài thi. Hãy kiểm tra lại đáp án và bấm Nộp bài thi!");
+      }
+    } else {
+      const currentAudio = quizModalCard.questions[activeQuizQIndex]?.audioUrl;
+      const nextIdx = quizModalCard.questions.findIndex((q, idx) => idx > activeQuizQIndex && q.audioUrl !== currentAudio);
+      if (nextIdx !== -1) {
+        setActiveQuizQIndex(nextIdx);
+      } else {
+        triggerToast("Đã hết lượt phát băng của bài thi. Hãy kiểm tra lại đáp án và bấm Nộp bài thi!");
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    if (autoAdvanceCountdown === null || !isRealExamMode || isExamSubmitted) return;
+    if (autoAdvanceCountdown <= 0) {
+      advanceToNextInRealExam();
+      return;
+    }
+    const t = setTimeout(() => {
+      setAutoAdvanceCountdown((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [autoAdvanceCountdown, isRealExamMode, isExamSubmitted]);
 
   const baseQuestion = quizModalCard.questions[activeQuizQIndex] || quizModalCard.questions[0];
   const questionRef = `LISTENING-${quizModalCard.id}-${baseQuestion.id}`;
@@ -490,6 +525,8 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
               onClick={() => {
                 if (isRealExamMode) {
                   setIsRealExamMode(false);
+                  setAutoAdvanceCountdown(null);
+                  setPlayedExamAudioUrls(new Set());
                   triggerToast("Đã chuyển sang Chế độ Luyện tập 🎯");
                 }
               }}
@@ -507,11 +544,13 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                   setIsExamSubmitted(false);
                   setShowExamResultModal(false);
                   setShowBilingualQuiz(false);
+                  setPlayedExamAudioUrls(new Set());
+                  setAutoAdvanceCountdown(null);
                   setQuizAnswerChecked({});
                   setQuizSelectedOption({});
                   setQuizTimerSeconds(0);
                   setActiveQuizQIndex(0);
-                  triggerToast("Đã bật Chế độ Thi thật ⏱: Audio nghe 1 lần, chấm điểm khi Nộp bài!");
+                  triggerToast("Đã bật Chế độ Thi thật ⏱: Audio tự chạy 1 lần, tự chuyển câu, chấm điểm khi Nộp bài!");
                 }
               }}
               className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition cursor-pointer ${
@@ -969,8 +1008,38 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                     showSpeedControl={!isRealExamMode || isExamSubmitted}
                     showReplayButton={!isRealExamMode || isExamSubmitted}
                     examMode={isRealExamMode && !isExamSubmitted}
+                    examAutoPlay={isRealExamMode && !isExamSubmitted}
+                    playedExamAudioUrls={playedExamAudioUrls}
+                    onExamAudioPlayed={(url) => {
+                      setPlayedExamAudioUrls((prev) => {
+                        const next = new Set(prev);
+                        next.add(url);
+                        return next;
+                      });
+                    }}
+                    onAudioEnded={() => {
+                      if (isRealExamMode && !isExamSubmitted) {
+                        setAutoAdvanceCountdown(5);
+                      }
+                    }}
                     title={`Audio ${quizModalCard.part || "Part 1"} • Câu ${activeQuizQIndex + 1}`}
                   />
+
+                  {isRealExamMode && !isExamSubmitted && autoAdvanceCountdown !== null && (
+                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-3 text-xs font-bold text-rose-900 animate-in fade-in duration-150">
+                      <span>
+                        ⏱ Đã phát xong băng: Tự động chuyển {isGroupMode ? "đoạn tiếp theo" : "câu tiếp theo"} sau{" "}
+                        <strong className="text-rose-600 text-sm font-black">{autoAdvanceCountdown}s</strong>...
+                      </span>
+                      <button
+                        type="button"
+                        onClick={advanceToNextInRealExam}
+                        className="px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold transition cursor-pointer shrink-0"
+                      >
+                        Chuyển ngay →
+                      </button>
+                    </div>
+                  )}
 
                   {/* Photograph for Part 1 */}
                   {q.imageUrl && (
@@ -1040,14 +1109,16 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setIsAiTutorModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" />
-                        <span>Hỏi bài AI</span>
-                      </button>
+                      {(!isRealExamMode || isExamSubmitted) && (
+                        <button
+                          type="button"
+                          onClick={() => setIsAiTutorModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
+                          <span>Hỏi bài AI</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="space-y-6">
@@ -1384,14 +1455,16 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
                           {quizModalCard.targetLevel || "Lv.1"}
                         </span>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setIsAiTutorModalOpen(true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
-                          >
-                            <HelpCircle className="w-3.5 h-3.5" />
-                            <span>Hỏi bài AI</span>
-                          </button>
+                          {(!isRealExamMode || isExamSubmitted) && (
+                            <button
+                              type="button"
+                              onClick={() => setIsAiTutorModalOpen(true)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
+                            >
+                              <HelpCircle className="w-3.5 h-3.5" />
+                              <span>Hỏi bài AI</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleToggleFlagReview(q.id)}
@@ -1710,35 +1783,43 @@ export const ListeningQuizModal: React.FC<ListeningQuizModalProps> = ({
             questionSnapshot={{ questionText: currentQ.question || currentQ.fullTranscript, options: currentQ.options, correctAnswer: currentQ.correctAnswer, explanation: currentQ.explanation, imageUrl: currentQ.imageUrl, audioUrl: resolvedAudioUrl, part: currentQ.part }}
             compact onSubmitted={(ticket) => triggerToast(`Đã gửi báo cáo ${ticket} đến ban quản trị.`)} />
 
-          <button
-            type="button"
-            onClick={() => setIsVocabBagModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
-          >
-            <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
-            <span>Giỏ từ ({savedVocabItems.length})</span>
-          </button>
+          {(!isRealExamMode || isExamSubmitted) ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsVocabBagModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
+                <span>Giỏ từ ({savedVocabItems.length})</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setDictionaryInitialWord("");
-              setIsDictionaryModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
-          >
-            <Search className="w-3.5 h-3.5 text-slate-500" />
-            <span>Tra từ</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDictionaryInitialWord("");
+                  setIsDictionaryModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5 text-slate-500" />
+                <span>Tra từ</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setIsHistoryModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
-          >
-            <History className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Lịch sử</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setIsHistoryModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Lịch sử</span>
+              </button>
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+              🔒 Đang trong Chế độ Thi thật (Tạm khóa Tra từ &amp; Trợ lý AI cho đến khi nộp bài)
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
