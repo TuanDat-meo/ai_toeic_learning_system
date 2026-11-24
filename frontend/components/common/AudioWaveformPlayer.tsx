@@ -22,6 +22,9 @@ export interface AudioWaveformPlayerProps {
     nonce: number;
   } | null;
   examMode?: boolean;
+  examAutoPlay?: boolean;
+  playedExamAudioUrls?: Set<string>;
+  onExamAudioPlayed?: (audioUrl: string) => void;
   onAudioEnded?: () => void;
 }
 
@@ -46,10 +49,14 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   onTimeUpdateCallback,
   seekCommand,
   examMode = false,
+  examAutoPlay = false,
+  playedExamAudioUrls,
+  onExamAudioPlayed,
   onAudioEnded,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const playedExamUrlsRef = useRef<Set<string>>(new Set());
 
   // Trạng thái phát
   const [internalIsPlaying, setInternalIsPlaying] = useState(false);
@@ -59,6 +66,13 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [hasPlayedInExamMode, setHasPlayedInExamMode] = useState(false);
+  const normalizedUrl = audioUrl?.trim() || "";
+  const isExamAudioLocked =
+    examMode &&
+    Boolean(
+      hasPlayedInExamMode ||
+        (normalizedUrl && playedExamAudioUrls?.has(normalizedUrl))
+    );
   const skipStep = 3; // Tua mặc định 3 giây theo yêu cầu
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -122,9 +136,24 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     }
   }, [playbackSpeed, examMode]);
 
+  useEffect(() => {
+    if (!examMode) {
+      playedExamUrlsRef.current.clear();
+      setHasPlayedInExamMode(false);
+    }
+  }, [examMode]);
+
   // Chỉ reset khi audioUrl THẬT SỰ thay đổi (tránh pause oan khi cha re-render)
   const prevAudioUrlRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const trimmed = audioUrl?.trim() || "";
+    const alreadyPlayed =
+      examMode &&
+      Boolean(
+        (trimmed && playedExamUrlsRef.current.has(trimmed)) ||
+          (trimmed && playedExamAudioUrls?.has(trimmed))
+      );
+
     if (prevAudioUrlRef.current !== undefined && prevAudioUrlRef.current !== audioUrl) {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -133,13 +162,38 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
       }
       setCurrentTime(0);
       setDuration(0);
-      setHasPlayedInExamMode(false);
+      setHasPlayedInExamMode(alreadyPlayed);
       setInternalIsPlaying(false);
       onPlayPauseChangeRef.current?.(false);
       setErrorMessage(null);
+    } else if (alreadyPlayed && !hasPlayedInExamMode) {
+      setHasPlayedInExamMode(true);
     }
     prevAudioUrlRef.current = audioUrl;
-  }, [audioUrl]);
+
+    // Tự động phát băng trong chế độ Thi thật (chuẩn phòng thi máy IIG) nếu câu này chưa phát
+    if (examMode && examAutoPlay && trimmed && !alreadyPlayed) {
+      const timer = setTimeout(() => {
+        if (!audioRef.current) return;
+        const stillUnplayed =
+          !playedExamUrlsRef.current.has(trimmed) && !playedExamAudioUrls?.has(trimmed);
+        if (stillUnplayed && audioRef.current.paused) {
+          audioRef.current.playbackRate = 1.0;
+          audioRef.current
+            .play()
+            .then(() => {
+              setInternalIsPlaying(true);
+              onPlayPauseChangeRef.current?.(true);
+              setErrorMessage(null);
+            })
+            .catch(() => {
+              // Nếu trình duyệt chặn autoplay lần đầu, để học viên bấm Play
+            });
+        }
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [audioUrl, examMode, examAutoPlay, playedExamAudioUrls, hasPlayedInExamMode]);
 
   // Hàm bật/tắt phát âm thanh
   const togglePlay = () => {
@@ -149,7 +203,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
       onPlayPauseChangeRef.current?.(false);
       return;
     }
-    if (examMode && hasPlayedInExamMode) {
+    if (isExamAudioLocked) {
       setErrorMessage("Chế độ Thi thật: Mỗi đoạn băng chỉ được phát 1 lần duy nhất.");
       return;
     }
@@ -402,6 +456,10 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           onPlayPauseChangeRef.current?.(false);
           if (examMode) {
             setHasPlayedInExamMode(true);
+            if (normalizedUrl) {
+              playedExamUrlsRef.current.add(normalizedUrl);
+              onExamAudioPlayed?.(normalizedUrl);
+            }
           }
           // Giữ thanh sóng ở trạng thái hoàn thành đầy đủ khi nói xong
           if (duration > 0) {
@@ -429,7 +487,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
         </div>
         {examMode && (
           <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-extrabold">
-            {hasPlayedInExamMode ? "ĐÃ PHÁT XONG (1/1)" : "CHUẨN PHÒNG THI"}
+            {isExamAudioLocked ? "ĐÃ PHÁT XONG (1/1)" : "CHUẨN PHÒNG THI"}
           </span>
         )}
       </div>
@@ -459,10 +517,10 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           {/* Nút Play / Pause tròn màu xanh lớn */}
           <button
             type="button"
-            disabled={examMode && hasPlayedInExamMode}
+            disabled={isExamAudioLocked}
             onClick={togglePlay}
             className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
-            title={examMode && hasPlayedInExamMode ? "Đã phát hết lượt nghe trong chế độ Thi thật" : isPlaying ? "Tạm dừng" : "Phát audio"}
+            title={isExamAudioLocked ? "Đã phát hết lượt nghe trong chế độ Thi thật" : isPlaying ? "Tạm dừng" : "Phát audio"}
           >
             {isPlaying ? (
               <Pause className="w-5 h-5 fill-white" />

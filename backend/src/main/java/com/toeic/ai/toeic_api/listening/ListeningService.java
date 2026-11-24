@@ -494,6 +494,14 @@ public class ListeningService {
     }
 
     public ListeningDictationCard getCard(String cardId, UUID userId) {
+        return getCardInternal(cardId, userId, true);
+    }
+
+    private ListeningDictationCard getCardForAdmin(String cardId) {
+        return getCardInternal(cardId, null, false);
+    }
+
+    private ListeningDictationCard getCardInternal(String cardId, UUID userId, boolean publishedOnly) {
         String sql = """
                 SELECT c.id, c.title, c.test_number, c.part, c.year, c.total_questions,
                        COALESCE(p.completed_questions, 0) AS completed_questions,
@@ -511,7 +519,7 @@ public class ListeningService {
                 FROM listening_dictation_cards c
                 LEFT JOIN user_listening_progress p ON p.card_id = c.id AND p.user_id = ?
                 WHERE c.id = ?
-                """;
+                """ + (publishedOnly ? " AND COALESCE(c.publication_status, 'PUBLISHED') = 'PUBLISHED'\n" : "");
 
         List<ListeningDictationCard> cards = jdbc.query(sql, (rs, rowNum) -> {
             int totalQ = rs.getInt("total_questions");
@@ -566,7 +574,7 @@ public class ListeningService {
                 VALUES (?, ?, ?, ?, ?, ?, 'NOT_STARTED', ?)
                 """, id, request.title().trim(), request.testNumber(), part, request.year(), totalQ, pubStatus);
         saveCardQuestions(id, part, request);
-        return getCard(id, null);
+        return getCardForAdmin(id);
     }
 
     @Transactional
@@ -586,7 +594,7 @@ public class ListeningService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bài nghe: " + id);
         }
         saveCardQuestions(id, part, request);
-        return getCard(id, null);
+        return getCardForAdmin(id);
     }
 
     @Transactional
@@ -600,7 +608,7 @@ public class ListeningService {
         if (updated == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bài nghe: " + id);
         }
-        return getCard(id, null);
+        return getCardForAdmin(id);
     }
 
     @Transactional
@@ -1264,9 +1272,17 @@ public class ListeningService {
                 totalXpEarned += Math.max(0, att.xpEarned());
                 String p = canonicalPartLabel(att.part());
                 int[] counts = partCounts.computeIfAbsent(p, k -> new int[] { 0, 0, 0 });
-                counts[0] += Math.max(att.completedQuestions(), att.correctCount() + att.wrongCount());
-                counts[1] += Math.max(0, att.correctCount());
-                counts[2] += Math.max(0, att.wrongCount());
+                if ("DICTATION_FILL".equalsIgnoreCase(att.mode()) && att.totalQuestions() > 1) {
+                    // Chuẩn hóa lượt điền từ đục lỗ về đơn vị 1 câu hỏi cho mô hình BKT
+                    boolean passed = att.accuracyPercent() >= 80;
+                    counts[0] += 1;
+                    counts[1] += passed ? 1 : 0;
+                    counts[2] += passed ? 0 : 1;
+                } else {
+                    counts[0] += Math.max(att.completedQuestions(), att.correctCount() + att.wrongCount());
+                    counts[1] += Math.max(0, att.correctCount());
+                    counts[2] += Math.max(0, att.wrongCount());
+                }
             }
 
             // Merge unit progress so even users whose progress was saved before attempts table have full stats
@@ -1427,9 +1443,9 @@ public class ListeningService {
 
         jdbc.query("""
                 SELECT part,
-                       COALESCE(SUM(completed_questions), 0) AS ans,
-                       COALESCE(SUM(correct_count), 0) AS cor,
-                       COALESCE(SUM(wrong_count), 0) AS wrg
+                       COALESCE(SUM(CASE WHEN upper(mode) = 'DICTATION_FILL' AND total_questions > 1 THEN 1 ELSE completed_questions END), 0) AS ans,
+                       COALESCE(SUM(CASE WHEN upper(mode) = 'DICTATION_FILL' AND total_questions > 1 THEN (CASE WHEN accuracy_percent >= 80 THEN 1 ELSE 0 END) ELSE correct_count END), 0) AS cor,
+                       COALESCE(SUM(CASE WHEN upper(mode) = 'DICTATION_FILL' AND total_questions > 1 THEN (CASE WHEN accuracy_percent >= 80 THEN 0 ELSE 1 END) ELSE wrong_count END), 0) AS wrg
                 FROM user_listening_attempts
                 GROUP BY part
                 """, rs -> {
