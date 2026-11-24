@@ -6,6 +6,7 @@ import {
   Plus,
   BookOpen,
   FileText,
+  FileSpreadsheet,
   TrendingUp,
   Sliders,
   Download,
@@ -76,9 +77,10 @@ export const ReadingHeader: React.FC<ReadingHeaderProps> = ({
             type="button"
             onClick={onExportCsv}
             className="inline-flex h-10 sm:h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs transition whitespace-nowrap"
+            title="Xuất danh sách bài đọc ra file Excel có hàng cột rõ ràng"
           >
-            <Download size={16} className="text-slate-500" aria-hidden="true" />
-            <span>Xuất file CSV</span>
+            <FileSpreadsheet size={16} className="text-emerald-600" aria-hidden="true" />
+            <span>Xuất file Excel</span>
           </button>
           <button
             type="button"

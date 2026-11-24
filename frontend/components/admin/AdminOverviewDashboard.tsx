@@ -73,6 +73,13 @@ export function AdminOverviewDashboard() {
 
   useEffect(() => {
     void Promise.resolve().then(loadData);
+    const handleUpdated = () => void Promise.resolve().then(loadData);
+    window.addEventListener("support-reports-updated", handleUpdated);
+    window.addEventListener("support-report-created", handleUpdated);
+    return () => {
+      window.removeEventListener("support-reports-updated", handleUpdated);
+      window.removeEventListener("support-report-created", handleUpdated);
+    };
   }, [loadData]);
 
   const summary = dashboard?.summary;

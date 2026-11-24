@@ -99,14 +99,32 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
   const [currentExamParts, setCurrentExamParts] = React.useState<string[]>(activeExamParts);
   const [selectedParts, setSelectedParts] = React.useState<string[]>([]);
   const [selectedModeTab, setSelectedModeTab] = React.useState<"exam" | "practice">("exam");
+  const [preventCopyingExam, setPreventCopyingExam] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("toeic_system_extended_settings") : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.preventCopyingExam === "boolean") {
+          setPreventCopyingExam(parsed.preventCopyingExam);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Review mode states
   const [reviewFilter, setReviewFilter] = React.useState<"ALL" | "CORRECT" | "WRONG" | "UNANSWERED">("ALL");
   const [expandedReviewQuestions, setExpandedReviewQuestions] = React.useState<Record<number, boolean>>({});
   const [expandedVocabReview, setExpandedVocabReview] = React.useState<Record<string, boolean>>({});
+  const [playedExamAudioUrls, setPlayedExamAudioUrls] = React.useState<Set<string>>(() => new Set());
+  const [autoAdvanceCountdown, setAutoAdvanceCountdown] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
+    setAutoAdvanceCountdown(null);
   }, [examCurrentQIndex, setIsPlayingAudio]);
 
   React.useEffect(() => {
@@ -117,10 +135,84 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
         setSelectedParts([]);
         setFlaggedQIds([]);
         setShowSubmitConfirm(false);
+        setPlayedExamAudioUrls(new Set());
+        setAutoAdvanceCountdown(null);
       }, 0);
       return () => clearTimeout(timer);
     }
   }, [examStarted, examSubmitted, activeExamQuestions, activeExamParts]);
+
+  const getExamGroupQuestions = React.useCallback(
+    (qIndex: number): PracticeQuestion[] => {
+      const activeQ = examQuestions[qIndex];
+      if (!activeQ) return [];
+      const partName = normalizeToeicPart(activeQ.part);
+      if (partName !== "Part 3" && partName !== "Part 4") {
+        return [activeQ];
+      }
+      const targetAudio = activeQ.audioUrl?.trim() || "";
+      if (targetAudio) {
+        const sameAudio = examQuestions.filter(
+          (item) => normalizeToeicPart(item.part) === partName && (item.audioUrl?.trim() || "") === targetAudio
+        );
+        if (sameAudio.length >= 2 && sameAudio.length <= 4) {
+          return sameAudio;
+        }
+      }
+      const partQuestions = examQuestions.filter((item) => normalizeToeicPart(item.part) === partName);
+      const posInPart = partQuestions.findIndex((item) => item.id === activeQ.id);
+      if (posInPart !== -1) {
+        const startInPart = Math.floor(posInPart / 3) * 3;
+        return partQuestions.slice(startInPart, startInPart + 3);
+      }
+      return [activeQ];
+    },
+    [examQuestions]
+  );
+
+  const handleNextExamStep = React.useCallback(() => {
+    setAutoAdvanceCountdown(null);
+    const group = getExamGroupQuestions(examCurrentQIndex);
+    if (group.length > 1) {
+      const lastGroupQ = group[group.length - 1];
+      const lastIdx = examQuestions.findIndex((item) => item.id === lastGroupQ.id);
+      if (lastIdx !== -1 && lastIdx < examQuestions.length - 1) {
+        setExamCurrentQIndex(lastIdx + 1);
+        return;
+      }
+    }
+    if (examCurrentQIndex < examQuestions.length - 1) {
+      setExamCurrentQIndex((prev) => Math.min(examQuestions.length - 1, prev + 1));
+    }
+  }, [examCurrentQIndex, examQuestions, getExamGroupQuestions, setExamCurrentQIndex]);
+
+  const handlePrevExamStep = React.useCallback(() => {
+    setAutoAdvanceCountdown(null);
+    const group = getExamGroupQuestions(examCurrentQIndex);
+    const firstIdx = group.length > 0 ? examQuestions.findIndex((item) => item.id === group[0].id) : examCurrentQIndex;
+    const prevCandidateIdx = Math.max(0, (firstIdx !== -1 ? firstIdx : examCurrentQIndex) - 1);
+    const prevGroup = getExamGroupQuestions(prevCandidateIdx);
+    if (prevGroup.length > 0) {
+      const targetIdx = examQuestions.findIndex((item) => item.id === prevGroup[0].id);
+      if (targetIdx !== -1) {
+        setExamCurrentQIndex(targetIdx);
+        return;
+      }
+    }
+    setExamCurrentQIndex((prev) => Math.max(0, prev - 1));
+  }, [examCurrentQIndex, examQuestions, getExamGroupQuestions, setExamCurrentQIndex]);
+
+  React.useEffect(() => {
+    if (autoAdvanceCountdown === null || !examStarted || examSubmitted) return;
+    if (autoAdvanceCountdown <= 0) {
+      handleNextExamStep();
+      return;
+    }
+    const timer = setTimeout(() => {
+      setAutoAdvanceCountdown((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [autoAdvanceCountdown, examStarted, examSubmitted, handleNextExamStep]);
 
   const handleToggleFlag = (qId: number) => {
     setFlaggedQIds((prev) => {
@@ -553,10 +645,39 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
             if (!currentQ) return null;
             const qPart = normalizeToeicPart(currentQ.part);
             const isListeningPart = qPart === "Part 1" || qPart === "Part 2" || qPart === "Part 3" || qPart === "Part 4";
+            const isGroupListening = qPart === "Part 3" || qPart === "Part 4";
+            const currentGroupQuestions = getExamGroupQuestions(examCurrentQIndex);
+            const groupSharedImage =
+              currentQ.imageUrl || currentGroupQuestions.find((item) => Boolean(item.imageUrl))?.imageUrl;
+            const firstGroupNum =
+              currentGroupQuestions.length > 0
+                ? currentGroupQuestions[0].questionNum || examQuestions.findIndex((i) => i.id === currentGroupQuestions[0].id) + 1
+                : examCurrentQIndex + 1;
+            const lastGroupNum =
+              currentGroupQuestions.length > 0
+                ? currentGroupQuestions[currentGroupQuestions.length - 1].questionNum ||
+                  examQuestions.findIndex((i) => i.id === currentGroupQuestions[currentGroupQuestions.length - 1].id) + 1
+                : examCurrentQIndex + 1;
 
             return (
               <div className="flex-1 flex flex-col justify-between overflow-hidden">
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+                <div
+                  className={`flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100 ${
+                    preventCopyingExam ? "select-none" : ""
+                  }`}
+                  onCopy={(e) => {
+                    if (preventCopyingExam) {
+                      e.preventDefault();
+                      triggerToast("⚠️ Hệ thống đã bật khóa chống sao chép đề thi.");
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (preventCopyingExam) {
+                      e.preventDefault();
+                      triggerToast("⚠️ Thao tác chuột phải đã bị khóa trong phòng thi.");
+                    }
+                  }}
+                >
                   {/* LEFT PANE: Instruction & Content */}
                   <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-[#fafafa] border-r border-slate-200/80 flex flex-col justify-between space-y-6">
                     <div className="space-y-4">
@@ -590,139 +711,265 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                         </div>
                       )}
 
-                      {/* Đối với Part 1: Hiển thị ảnh chụp */}
-                      {qPart === "Part 1" && currentQ.imageUrl && (
+                      {/* Đối với Part 1 và các câu hỏi có biểu đồ (Part 3, 4, 7): Hiển thị ảnh chụp / biểu đồ */}
+                      {groupSharedImage && (
                         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
                           <img
-                            src={currentQ.imageUrl}
-                            alt="Photograph"
+                            src={groupSharedImage}
+                            alt="Question stimulus"
                             className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
                           />
                         </div>
                       )}
 
-                      {/* Audio cho Listening */}
+                      {/* Audio cho Listening (Khóa chuẩn phòng thi thật IIG: nghe 1 lần 1.0x, tự phát & tự chuyển câu) */}
                       {currentQ.audioUrl && (
-                        <AudioWaveformPlayer
-                          audioUrl={currentQ.audioUrl}
-                          isPlaying={isPlayingAudio}
-                          onPlayPauseChange={(playing) => {
-                            setIsPlayingAudio(playing);
-                          }}
-                          showSpeedControl={true}
-                          showReplayButton={true}
-                          title={`Audio ${currentQ.part || "Listening"} • Câu ${examCurrentQIndex + 1}`}
-                        />
+                        <>
+                          <AudioWaveformPlayer
+                            audioUrl={currentQ.audioUrl}
+                            isPlaying={isPlayingAudio}
+                            onPlayPauseChange={(playing) => {
+                              setIsPlayingAudio(playing);
+                            }}
+                            showSpeedControl={false}
+                            showReplayButton={false}
+                            examMode={true}
+                            examAutoPlay={true}
+                            playedExamAudioUrls={playedExamAudioUrls}
+                            onExamAudioPlayed={(url) => {
+                              setPlayedExamAudioUrls((prev) => {
+                                const next = new Set(prev);
+                                next.add(url);
+                                return next;
+                              });
+                            }}
+                            onAudioEnded={() => {
+                              setAutoAdvanceCountdown(5);
+                            }}
+                            title={
+                              isGroupListening
+                                ? `Audio ${qPart} • Cụm câu ${firstGroupNum}–${lastGroupNum}`
+                                : `Audio ${qPart} • Câu ${currentQ.questionNum || examCurrentQIndex + 1}`
+                            }
+                          />
+
+                          {autoAdvanceCountdown !== null && (
+                            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-3 text-xs font-bold text-rose-900 animate-in fade-in duration-150">
+                              <span>
+                                ⏱ Đã phát xong băng: Tự động chuyển {isGroupListening ? "đoạn tiếp theo" : "câu tiếp theo"} sau{" "}
+                                <strong className="text-rose-600 text-sm font-black">{autoAdvanceCountdown}s</strong>...
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleNextExamStep}
+                                className="px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold transition cursor-pointer shrink-0"
+                              >
+                                Chuyển ngay →
+                              </button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
 
                   {/* RIGHT PANE: QUESTION & OPTIONS */}
                   <div className="w-full md:w-1/2 p-6 overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
-                    <div className="space-y-5">
-                      <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
-                        {currentQ && (qPart === "Part 6" || qPart === "Part 7") && (
-                          <div className="flex items-center gap-2 pb-1">
-                            <span className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold shadow-2xs">
-                              Nhóm câu {currentQ.groupId || (qPart === "Part 6" ? "131–134" : "147–148")}
-                            </span>
-                            <span className="text-xs text-slate-500 font-semibold">
-                              ({currentQ.groupTotal || (qPart === "Part 6" ? "4" : "2")} câu hỏi)
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                    {isGroupListening && currentGroupQuestions.length > 1 ? (
+                      /* GROUP MODE CHO PART 3 & PART 4 (Hiển thị đồng thời cụm 3 câu hỏi chuẩn phòng thi TOEIC) */
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
                           <div className="flex items-center gap-2">
                             <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
-                              {currentQ.part}
+                              {qPart}
                             </span>
-                            {examAnswers[currentQ.id] ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Đã chọn ({examAnswers[currentQ.id]})
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold border border-rose-200">
-                                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Chưa làm
-                              </span>
-                            )}
+                            <span className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold">
+                              Questions {firstGroupNum}–{lastGroupNum} refer to the following{" "}
+                              {qPart === "Part 3" ? "conversation" : "talk"}
+                              {groupSharedImage ? " and graphic" : ""}.
+                            </span>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleToggleFlag(currentQ.id)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${
-                              flaggedQIds.includes(currentQ.id)
-                                ? "bg-amber-100 border-amber-300 text-amber-900 shadow-xs"
-                                : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
-                            }`}
-                            title="Đánh dấu câu hỏi này để kiểm tra lại trước khi nộp bài"
-                          >
-                            <Flag className={`w-3.5 h-3.5 ${flaggedQIds.includes(currentQ.id) ? "fill-amber-600 text-amber-600" : ""}`} />
-                            <span>{flaggedQIds.includes(currentQ.id) ? "Đã đánh dấu" : "Đánh dấu xem lại"}</span>
-                          </button>
+                          <span className="text-xs font-bold text-emerald-700">
+                            Đã chọn {currentGroupQuestions.filter((item) => Boolean(examAnswers[item.id])).length}/
+                            {currentGroupQuestions.length} câu
+                          </span>
                         </div>
 
-                        {/* Tiêu đề câu hỏi trong lúc thi */}
-                        {qPart === "Part 2" ? (
-                          <div className="space-y-1">
-                            <div className="text-base font-extrabold text-slate-900 leading-relaxed">
-                              {examCurrentQIndex + 1}. Mark your answer on your answer sheet.
-                            </div>
-                            <p className="text-xs text-slate-500 italic">
-                              Lắng nghe câu hỏi trong audio và chọn câu trả lời phù hợp (A), (B) hoặc (C).
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="text-base font-extrabold text-slate-900 leading-relaxed">
-                            {examCurrentQIndex + 1}. {currentQ.questionText}
-                          </div>
-                        )}
-
-                        {/* OPTIONS LIST */}
-                        <div className="space-y-3">
-                          {Object.entries(currentQ.options).map(([optKey, optVal]) => {
-                            if (qPart === "Part 2" && optKey === "D") return null;
-
-                            const isChosen = examAnswers[currentQ.id] === optKey;
-                            const isPart1or2 = qPart === "Part 1" || qPart === "Part 2";
-                            // Trong lúc thi: Part 1 & 2 chỉ hiện (A), (B), (C), (D)
-                            const labelText = isPart1or2 ? `(${optKey})` : `(${optKey}) ${optVal}`;
-
+                        <div className="space-y-4">
+                          {currentGroupQuestions.map((qItem) => {
+                            const qNum =
+                              qItem.questionNum || examQuestions.findIndex((i) => i.id === qItem.id) + 1;
+                            const chosenKey = examAnswers[qItem.id];
                             return (
-                              <button
-                                key={optKey}
-                                type="button"
-                                onClick={() => {
-                                  if (isSfxEnabled) playSfx("click");
-                                  setExamAnswers((prev) => ({ ...prev, [currentQ.id]: optKey }));
-                                  // Tự động chuyển sang câu tiếp theo ngay sau khi chọn đáp án
-                                  if (examCurrentQIndex < examQuestions.length - 1) {
-                                    setTimeout(() => {
-                                      setExamCurrentQIndex((prev) => Math.min(examQuestions.length - 1, prev + 1));
-                                    }, 250);
-                                  }
-                                }}
-                                className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
-                                  isChosen
-                                    ? "bg-blue-50/80 border-blue-500 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-xs"
-                                    : "bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50 text-slate-800"
-                                }`}
+                              <div
+                                key={qItem.id}
+                                className="p-5 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs space-y-3.5"
                               >
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                                  isChosen ? "border-blue-600 bg-white" : "border-slate-300"
-                                }`}>
-                                  {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug">
+                                    {qNum}. {qItem.questionText}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleFlag(qItem.id)}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer border shrink-0 ${
+                                      flaggedQIds.includes(qItem.id)
+                                        ? "bg-amber-100 border-amber-300 text-amber-900 shadow-xs"
+                                        : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
+                                    }`}
+                                    title="Đánh dấu câu hỏi này để xem lại"
+                                  >
+                                    <Flag
+                                      className={`w-3 h-3 ${
+                                        flaggedQIds.includes(qItem.id) ? "fill-amber-600 text-amber-600" : ""
+                                      }`}
+                                    />
+                                    <span>{flaggedQIds.includes(qItem.id) ? "Đã cờ" : "Gắn cờ"}</span>
+                                  </button>
                                 </div>
-                                <span className="text-sm font-semibold">
-                                  {labelText}
-                                </span>
-                              </button>
+
+                                <div className="space-y-2">
+                                  {Object.entries(qItem.options).map(([optKey, optVal]) => {
+                                    const isChosen = chosenKey === optKey;
+                                    return (
+                                      <button
+                                        key={optKey}
+                                        type="button"
+                                        onClick={() => {
+                                          if (isSfxEnabled) playSfx("click");
+                                          setExamAnswers((prev) => ({ ...prev, [qItem.id]: optKey }));
+                                        }}
+                                        className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
+                                          isChosen
+                                            ? "bg-blue-50/80 border-blue-500 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-xs"
+                                            : "bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50 text-slate-800"
+                                        }`}
+                                      >
+                                        <div
+                                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                            isChosen ? "border-blue-600 bg-white" : "border-slate-300"
+                                          }`}
+                                        >
+                                          {isChosen && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                                        </div>
+                                        <span className="text-sm font-semibold">
+                                          ({optKey}) {optVal}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-5">
+                        <div className="p-6 rounded-3xl border-2 border-blue-200/90 bg-white shadow-xs relative space-y-5">
+                          {currentQ && (qPart === "Part 6" || qPart === "Part 7") && (
+                            <div className="flex items-center gap-2 pb-1">
+                              <span className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold shadow-2xs">
+                                Nhóm câu {currentQ.groupId || (qPart === "Part 6" ? "131–134" : "147–148")}
+                              </span>
+                              <span className="text-xs text-slate-500 font-semibold">
+                                ({currentQ.groupTotal || (qPart === "Part 6" ? "4" : "2")} câu hỏi)
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
+                                {qPart}
+                              </span>
+                              {examAnswers[currentQ.id] ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Đã chọn ({examAnswers[currentQ.id]})
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold border border-rose-200">
+                                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> Chưa làm
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFlag(currentQ.id)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                                flaggedQIds.includes(currentQ.id)
+                                  ? "bg-amber-100 border-amber-300 text-amber-900 shadow-xs"
+                                  : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
+                              }`}
+                              title="Đánh dấu câu hỏi này để kiểm tra lại trước khi nộp bài"
+                            >
+                              <Flag className={`w-3.5 h-3.5 ${flaggedQIds.includes(currentQ.id) ? "fill-amber-600 text-amber-600" : ""}`} />
+                              <span>{flaggedQIds.includes(currentQ.id) ? "Đã đánh dấu" : "Đánh dấu xem lại"}</span>
+                            </button>
+                          </div>
+
+                          {/* Tiêu đề câu hỏi trong lúc thi */}
+                          {qPart === "Part 2" ? (
+                            <div className="space-y-1">
+                              <div className="text-base font-extrabold text-slate-900 leading-relaxed">
+                                {currentQ.questionNum || examCurrentQIndex + 1}. Mark your answer on your answer sheet.
+                              </div>
+                              <p className="text-xs text-slate-500 italic">
+                                Lắng nghe câu hỏi trong audio và chọn câu trả lời phù hợp (A), (B) hoặc (C).
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-base font-extrabold text-slate-900 leading-relaxed">
+                              {currentQ.questionNum || examCurrentQIndex + 1}. {currentQ.questionText}
+                            </div>
+                          )}
+
+                          {/* OPTIONS LIST */}
+                          <div className="space-y-3">
+                            {Object.entries(currentQ.options).map(([optKey, optVal]) => {
+                              if (qPart === "Part 2" && optKey === "D") return null;
+
+                              const isChosen = examAnswers[currentQ.id] === optKey;
+                              const isPart1or2 = qPart === "Part 1" || qPart === "Part 2";
+                              // Trong lúc thi: Part 1 & 2 chỉ hiện (A), (B), (C), (D)
+                              const labelText = isPart1or2 ? `(${optKey})` : `(${optKey}) ${optVal}`;
+
+                              return (
+                                <button
+                                  key={optKey}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSfxEnabled) playSfx("click");
+                                    setExamAnswers((prev) => ({ ...prev, [currentQ.id]: optKey }));
+                                    // Đối với Reading (Part 5-7), tự chuyển câu tiếp theo; với Listening để băng tự chạy hết mới chuyển (tránh ngắt audio giữa chừng)
+                                    if (!isListeningPart && examCurrentQIndex < examQuestions.length - 1) {
+                                      setTimeout(() => {
+                                        setExamCurrentQIndex((prev) => Math.min(examQuestions.length - 1, prev + 1));
+                                      }, 250);
+                                    }
+                                  }}
+                                  className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
+                                    isChosen
+                                      ? "bg-blue-50/80 border-blue-500 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-xs"
+                                      : "bg-white border-slate-200 hover:border-blue-400 hover:bg-slate-50 text-slate-800"
+                                  }`}
+                                >
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                    isChosen ? "border-blue-600 bg-white" : "border-slate-300"
+                                  }`}>
+                                    {isChosen && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                                  </div>
+                                  <span className="text-sm font-semibold">
+                                    {labelText}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -732,11 +979,11 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                     <button
                       type="button"
                       disabled={examCurrentQIndex === 0}
-                      onClick={() => setExamCurrentQIndex((prev) => Math.max(0, prev - 1))}
+                      onClick={handlePrevExamStep}
                       className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition cursor-pointer"
                     >
                       <ChevronLeft className="w-4 h-4" />
-                      <span className="hidden sm:inline">Câu trước</span>
+                      <span className="hidden sm:inline">{isGroupListening ? "Đoạn trước" : "Câu trước"}</span>
                     </button>
 
                     <button
@@ -752,7 +999,9 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
 
                   <div className="flex items-center gap-2 sm:gap-3">
                     <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs font-mono">
-                      {examCurrentQIndex + 1}/{examQuestions.length}
+                      {isGroupListening && currentGroupQuestions.length > 1
+                        ? `Câu ${firstGroupNum}–${lastGroupNum} / ${examQuestions.length}`
+                        : `Câu ${currentQ.questionNum || examCurrentQIndex + 1} / ${examQuestions.length}`}
                     </span>
 
                     <button
@@ -790,11 +1039,11 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={examCurrentQIndex === examQuestions.length - 1}
-                      onClick={() => setExamCurrentQIndex((prev) => Math.min(examQuestions.length - 1, prev + 1))}
+                      disabled={examCurrentQIndex >= examQuestions.length - 1}
+                      onClick={handleNextExamStep}
                       className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-xs"
                     >
-                      <span className="hidden sm:inline">Câu tiếp</span>
+                      <span className="hidden sm:inline">{isGroupListening ? "Đoạn tiếp" : "Câu tiếp"}</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
 
@@ -823,10 +1072,9 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
               ["Part 5", "Part 6", "Part 7"].includes(normalizeToeicPart(q.part))
             ).length;
 
-            const isFullScale = examQuestions.length >= 200;
-            const maxLC = lcQuestionsCount * 5;
-            const maxRC = rcQuestionsCount * 5;
-            const maxTotal = examQuestions.length * 5;
+            const maxLC = lcQuestionsCount > 0 ? 495 : 0;
+            const maxRC = rcQuestionsCount > 0 ? 495 : 0;
+            const maxTotal = maxLC + maxRC;
 
             const totalQ = examQuestions.length;
             const correctQ = examResultScore.correctCount;
@@ -856,20 +1104,20 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                       Chúc mừng bạn đã hoàn thành bài thi!
                     </h2>
                     <p className="text-sm text-blue-100 font-medium">
-                      Đề thi: {test.title} • Mỗi câu làm đúng là 5 điểm • Điểm số đã được ghi nhận và gửi qua Admin.
+                      Đề thi: {test.title} • Điểm quy đổi theo thang chuẩn ETS TOEIC (5–495 / 10–990) &amp; đã đồng bộ vào BKT Analytics.
                     </p>
 
                     <div className="flex items-center justify-center gap-3 sm:gap-6 pt-2 flex-wrap">
                       {lcQuestionsCount > 0 && (
                         <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl border border-white/20">
-                          <p className="text-xs uppercase text-blue-200 font-bold">Listening (5đ/câu)</p>
+                          <p className="text-xs uppercase text-blue-200 font-bold">Listening (Chuẩn ETS)</p>
                           <p className="text-2xl font-black">{examResultScore.listening} / {maxLC}</p>
                         </div>
                       )}
 
                       <div className="bg-white/25 backdrop-blur-xs px-6 py-4 rounded-2xl ring-2 ring-white/30 border border-white/30">
                         <p className="text-xs uppercase text-amber-200 font-bold">
-                          Tổng điểm (5 điểm/câu)
+                          Tổng điểm TOEIC quy đổi
                         </p>
                         <p className="text-3xl sm:text-4xl font-black text-amber-300">
                           {examResultScore.total} {maxTotal > 0 ? `/ ${maxTotal}` : ""}
@@ -881,7 +1129,7 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
 
                       {rcQuestionsCount > 0 && (
                         <div className="bg-white/15 backdrop-blur-xs px-5 py-3 rounded-2xl border border-white/20">
-                          <p className="text-xs uppercase text-blue-200 font-bold">Reading (5đ/câu)</p>
+                          <p className="text-xs uppercase text-blue-200 font-bold">Reading (Chuẩn ETS)</p>
                           <p className="text-2xl font-black">{examResultScore.reading} / {maxRC}</p>
                         </div>
                       )}
@@ -1054,12 +1302,12 @@ export const MockTestExamModal: React.FC<MockTestExamModalProps> = ({
                                   </div>
                                 )}
 
-                                {/* Hình ảnh Part 1 */}
-                                {qPart === "Part 1" && q.imageUrl && (
+                                {/* Hình ảnh Part 1 & biểu đồ */}
+                                {q.imageUrl && (
                                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
                                     <img
                                       src={q.imageUrl}
-                                      alt="Part 1 Photograph"
+                                      alt="Question stimulus"
                                       className="max-h-60 w-auto rounded-xl object-contain"
                                     />
                                   </div>

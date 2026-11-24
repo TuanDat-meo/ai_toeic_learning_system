@@ -12,7 +12,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 public record LearningOnboardingRequest(
-        @NotNull @Min(450) @Max(990) Integer targetScore,
+        @NotNull @Min(10) @Max(990) Integer targetScore,
         @FutureOrPresent LocalDate examDate,
         @NotBlank @Pattern(regexp = "CAREER|STUDY|TRAVEL|PERSONAL") String learningReason,
         @Pattern(regexp = "BEGINNER|INTERMEDIATE|ADVANCED") String currentLevel,
@@ -21,9 +21,9 @@ public record LearningOnboardingRequest(
         @NotNull List<@NotNull @Min(1) @Max(7) Integer> studyDays,
         @NotNull List<@NotBlank @Pattern(regexp = "LISTENING|READING|VOCABULARY|GRAMMAR|MOCK_TESTS") String> interests) {
 
-    @AssertTrue(message = "Điểm mục tiêu không hợp lệ.")
+    @AssertTrue(message = "Điểm mục tiêu TOEIC không hợp lệ (phải từ 10 đến 990 điểm và là bội số của 5).")
     public boolean isTargetScoreSupported() {
-        return targetScore == null || List.of(450, 600, 750, 900).contains(targetScore);
+        return targetScore == null || (targetScore >= 10 && targetScore <= 990 && targetScore % 5 == 0);
     }
 
     @AssertTrue(message = "Thời lượng học mỗi ngày không hợp lệ.")

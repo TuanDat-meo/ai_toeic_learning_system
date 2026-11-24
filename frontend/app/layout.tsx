@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TOEIC AI - Quản Trị Hệ Thống",
+  title: "TOEIC AI - Nền Tảng Học & Luyện Thi TOEIC Cá Nhân Hóa",
   description: "Hệ thống hỗ trợ học tập cá nhân hóa bằng AI cho TOEIC",
 };
 

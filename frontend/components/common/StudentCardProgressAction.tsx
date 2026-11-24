@@ -124,14 +124,14 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
     <div className={`space-y-2.5 pt-2 ${className}`}>
       {/* Hàng 1: Thống kê số câu đã làm / tổng, số câu đúng (xanh lá), số câu sai (đỏ) */}
       <div className="flex items-center gap-3 select-none text-sm font-extrabold leading-none">
-        <span className="text-emerald-700">
+        <span className="text-emerald-700 dark:text-emerald-400">
           {completed}/{total}
         </span>
-        <span className="text-emerald-600 inline-flex items-center gap-1">
+        <span className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
           <Check className="w-3.5 h-3.5 stroke-[3]" />
           <span>{correct}</span>
         </span>
-        <span className="text-red-500 inline-flex items-center gap-1">
+        <span className="text-red-500 dark:text-rose-400 inline-flex items-center gap-1">
           <X className="w-3.5 h-3.5 stroke-[3]" />
           <span>{wrong}</span>
         </span>
@@ -142,14 +142,14 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
         <div className="space-y-2">
           {/* Khung viên thuốc tròn */}
           <div className="flex items-center justify-start">
-            <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-white/90 shadow-2xs">
+            <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700 bg-white/90 dark:bg-slate-800 shadow-2xs">
               {/* 1. Giỏ hàng / Đã lưu có badge tròn màu cam */}
               <button
                 type="button"
                 onClick={handleSaved}
-                className="relative text-blue-600 hover:text-blue-700 transition cursor-pointer p-0.5 active:scale-90"
-                title="Sổ tay chủ điểm ngữ pháp"
-                aria-label="Sổ tay chủ điểm ngữ pháp"
+                className="relative text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer p-0.5 active:scale-90"
+                title="Mục đã lưu / Giỏ từ vựng"
+                aria-label="Mục đã lưu / Giỏ từ vựng"
               >
                 <Bookmark className="w-4 h-4" />
                 {savedCount > 0 && (
@@ -164,7 +164,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 type="button"
                 onClick={handleRedo}
                 className={`relative transition cursor-pointer p-0.5 active:scale-90 ${
-                  wrong > 0 ? "text-red-500 hover:text-red-600" : "text-slate-300 hover:text-slate-400"
+                  wrong > 0 ? "text-red-500 dark:text-rose-400 hover:text-red-600" : "text-slate-300 dark:text-slate-600 hover:text-slate-400"
                 }`}
                 title={wrong > 0 ? `Làm lại ${wrong} câu đã sai (Làm đúng sẽ giảm dần)` : "Chưa có câu sai"}
               >
@@ -180,7 +180,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               <button
                 type="button"
                 onClick={handleReset}
-                className="text-red-500 hover:text-red-600 transition cursor-pointer p-0.5 active:scale-90"
+                className="text-red-500 dark:text-rose-400 hover:text-red-600 dark:hover:text-rose-300 transition cursor-pointer p-0.5 active:scale-90"
                 title="Đặt lại tiến độ chủ điểm"
                 aria-label="Đặt lại tiến độ chủ điểm"
               >
@@ -217,12 +217,12 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
         <div className="space-y-2">
           {/* Khung viên thuốc tròn */}
           <div className="flex items-center justify-start">
-            <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-white/90 shadow-2xs">
+            <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700 bg-white/90 dark:bg-slate-800 shadow-2xs">
               {/* 1. Giỏ hàng / Đã lưu có badge tròn màu cam */}
               <button
                 type="button"
                 onClick={handleSaved}
-                className="relative text-blue-600 hover:text-blue-700 transition cursor-pointer p-0.5 active:scale-90"
+                className="relative text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer p-0.5 active:scale-90"
                 title="Mục đã lưu / Giỏ từ vựng"
               >
                 <Bookmark className="w-4 h-4" />
@@ -238,7 +238,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 type="button"
                 onClick={handleRedo}
                 className={`relative transition cursor-pointer p-0.5 active:scale-90 ${
-                  wrong > 0 ? "text-red-500 hover:text-red-600" : "text-slate-300 hover:text-slate-400"
+                  wrong > 0 ? "text-red-500 dark:text-rose-400 hover:text-red-600" : "text-slate-300 dark:text-slate-600 hover:text-slate-400"
                 }`}
                 title={wrong > 0 ? `Làm lại ${wrong} câu đã sai (Làm đúng sẽ giảm dần)` : "Chưa có câu sai"}
               >
@@ -254,7 +254,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               <button
                 type="button"
                 onClick={handleReset}
-                className="text-red-500 hover:text-red-600 transition cursor-pointer p-0.5 active:scale-90"
+                className="text-red-500 dark:text-rose-400 hover:text-red-600 dark:hover:text-rose-300 transition cursor-pointer p-0.5 active:scale-90"
                 title="Đặt lại tiến độ bài này về 0"
               >
                 <RefreshCcw className="w-4 h-4" />
@@ -267,10 +267,10 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
             <button
               type="button"
               onClick={handleTheory}
-              className="w-full py-2 px-3 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-xs transition shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+              className="w-full py-2 px-3 rounded-full border border-blue-200 dark:border-blue-700/60 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-extrabold text-xs transition shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
               title="Xem lý thuyết chuyên đề"
             >
-              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+              <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               <span>Lý thuyết</span>
             </button>
 
@@ -289,12 +289,12 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
         /* Chỉ có 1 nút: Khung viên thuốc tròn bên trái + Nút hành động bên phải */
         <div className="flex items-center justify-between gap-2">
           {/* Khung viên thuốc tròn (Pill Container) */}
-          <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-white/90 shadow-2xs">
+          <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700 bg-white/90 dark:bg-slate-800 shadow-2xs">
             {/* 1. Giỏ hàng / Đã lưu có badge tròn màu cam */}
             <button
               type="button"
               onClick={handleSaved}
-              className="relative text-blue-600 hover:text-blue-700 transition cursor-pointer p-0.5 active:scale-90"
+              className="relative text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer p-0.5 active:scale-90"
               title="Mục đã lưu / Giỏ từ vựng"
             >
               <Bookmark className="w-4 h-4" />
@@ -310,7 +310,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               type="button"
               onClick={handleRedo}
               className={`relative transition cursor-pointer p-0.5 active:scale-90 ${
-                wrong > 0 ? "text-red-500 hover:text-red-600" : "text-slate-300 hover:text-slate-400"
+                wrong > 0 ? "text-red-500 dark:text-rose-400 hover:text-red-600" : "text-slate-300 dark:text-slate-600 hover:text-slate-400"
               }`}
               title={wrong > 0 ? `Làm lại ${wrong} câu đã sai (Làm đúng sẽ giảm dần)` : "Chưa có câu sai"}
             >
@@ -326,7 +326,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
             <button
               type="button"
               onClick={handleReset}
-              className="text-red-500 hover:text-red-600 transition cursor-pointer p-0.5 active:scale-90"
+              className="text-red-500 dark:text-rose-400 hover:text-red-600 dark:hover:text-rose-300 transition cursor-pointer p-0.5 active:scale-90"
               title="Đặt lại tiến độ bài này về 0"
             >
               <RefreshCcw className="w-4 h-4" />
@@ -352,30 +352,30 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
           onClick={handleCancelReset}
         >
           <div
-            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in zoom-in-95 duration-150"
+            className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 relative space-y-4 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Nút X đóng ở góc phải */}
             <button
               type="button"
               onClick={handleCancelReset}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center transition cursor-pointer"
               title="Đóng"
             >
               <X className="w-4 h-4" />
             </button>
 
             {/* Icon thùng rác */}
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-              <RefreshCcw className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
             </div>
 
             {/* Tiêu đề & nội dung thông báo xác nhận */}
             <div className="text-center space-y-1.5 px-2">
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 Đặt lại tiến độ bài học?
               </h3>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
                 Thao tác này đặt lại {completed}/{total} câu đã làm, {correct} câu đúng và {wrong} câu sai về 0. Dấu trang và lịch ôn SRS không bị xóa.
               </p>
             </div>
@@ -385,7 +385,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               <button
                 type="button"
                 onClick={handleCancelReset}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer"
               >
                 Không
               </button>

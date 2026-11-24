@@ -117,22 +117,25 @@ export function saveStudyTrackerData(data: StudyTrackerData): void {
 /**
  * Tích lũy số giây học thực tế của học viên khi đang học bài/làm bài.
  * Cứ mỗi giây/chu kỳ học tích cực trôi qua, thời gian sẽ được cộng dồn và quy đổi ra phút.
+ * Có thể truyền targetDateStr để đảm bảo khi bước qua mốc 00:00:00 (sang ngày mới),
+ * số giây trước 23:59:59 vẫn được ghi chuẩn vào ngày cũ.
  */
-export function addStudySeconds(seconds: number): StudyTrackerData {
+export function addStudySeconds(seconds: number, targetDateStr?: string): StudyTrackerData {
   if (seconds <= 0) return getStudyTrackerData();
   const data = getStudyTrackerData();
   const todayStr = getTodayDateString();
+  const dateKey = targetDateStr || todayStr;
 
-  if (!data.history[todayStr]) {
-    data.history[todayStr] = {
-      date: todayStr,
+  if (!data.history[dateKey]) {
+    data.history[dateKey] = {
+      date: dateKey,
       minutesSpent: 0,
       secondsSpent: 0,
       completedLessons: 0,
     };
   }
 
-  const rec = data.history[todayStr];
+  const rec = data.history[dateKey];
   const oldSec = rec.secondsSpent ?? (rec.minutesSpent * 60);
   const newSec = oldSec + seconds;
   rec.secondsSpent = newSec;
@@ -146,20 +149,30 @@ export function addStudySeconds(seconds: number): StudyTrackerData {
     data.totalMinutesOverall = (data.totalMinutesOverall || 0) + diffMins;
   }
 
-  data.todayMinutes = newMins;
-  data.todaySeconds = newSec;
-  data.lastActiveDate = todayStr;
+  const todayRec = data.history[todayStr];
+  data.todayMinutes = todayRec ? todayRec.minutesSpent : 0;
+  data.todaySeconds = todayRec ? (todayRec.secondsSpent ?? todayRec.minutesSpent * 60) : 0;
+  data.lastActiveDate = dateKey;
 
-  // Cập nhật chuỗi ngày học nếu đạt chỉ tiêu phút hoặc đã hoàn thành bài
-  if (newMins >= data.dailyTargetMinutes || rec.completedLessons > 0) {
-    if (data.currentStreak === 0) {
-      data.currentStreak = 1;
-    }
-    if (data.currentStreak > data.bestStreak) {
-      data.bestStreak = data.currentStreak;
-    }
-  }
+  // Cập nhật chuỗi ngày học thực tế từ history
+  const realStreaks = computeRealStreaks(data);
+  data.currentStreak = realStreaks.currentStreak;
+  data.bestStreak = realStreaks.bestStreak;
 
+  saveStudyTrackerData(data);
+  broadcastTrackerUpdate(data);
+  return data;
+}
+
+/**
+ * Đồng bộ ngay khi đồng hồ hệ thống bước qua 00:00:00 sang ngày mới,
+ * giúp Dashboard tự động chuyển sang 0 phút của ngày mới mà không cần F5.
+ */
+export function syncStudyTrackerDayRollover(): StudyTrackerData {
+  const data = getStudyTrackerData();
+  const realStreaks = computeRealStreaks(data);
+  data.currentStreak = realStreaks.currentStreak;
+  data.bestStreak = realStreaks.bestStreak;
   saveStudyTrackerData(data);
   broadcastTrackerUpdate(data);
   return data;
@@ -238,12 +251,63 @@ export function logStudySession(minutes: number, lessonsCompleted: number = 0): 
   return data;
 }
 
+/**
+ * Tính chính xác chuỗi ngày học liên tục hiện tại và kỷ lục cao nhất
+ * dựa hoàn toàn vào lịch sử học thực tế trong `data.history` (không dùng số giả/cũ bị kẹt).
+ */
+export function computeRealStreaks(data: StudyTrackerData): { currentStreak: number; bestStreak: number } {
+  const targetMins = Math.max(1, data.dailyTargetMinutes || 15);
+  const completedDates = Object.entries(data.history || {})
+    .filter(([, rec]) => rec && (rec.minutesSpent || 0) >= targetMins)
+    .map(([dateStr]) => dateStr)
+    .sort();
+
+  if (completedDates.length === 0) {
+    return { currentStreak: 0, bestStreak: 0 };
+  }
+
+  const completedSet = new Set(completedDates);
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // 1. Tính chuỗi hiện tại (tính lùi từ hôm nay; nếu hôm nay chưa xong thì tính lùi từ hôm qua)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(today);
+  const cursor = new Date(today);
+  if (!completedSet.has(todayStr)) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  let currentStreak = 0;
+  while (completedSet.has(formatDate(cursor))) {
+    currentStreak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  // 2. Tính kỷ lục chuỗi dài nhất từ trước tới nay trong history
+  let bestStreak = currentStreak;
+  let running = 0;
+  let prevDate: Date | null = null;
+  for (const dateStr of completedDates) {
+    const curr = new Date(`${dateStr}T00:00:00`);
+    if (prevDate) {
+      const diffDays = Math.round((curr.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+      running = diffDays === 1 ? running + 1 : 1;
+    } else {
+      running = 1;
+    }
+    if (running > bestStreak) bestStreak = running;
+    prevDate = curr;
+  }
+
+  return { currentStreak, bestStreak };
+}
+
 // Get array of status for Monday through Sunday of current week
 export function getCurrentWeekDaysStatus(data: StudyTrackerData): { dayName: string; dateStr: string; isCompleted: boolean; isToday: boolean }[] {
   const now = new Date();
-  // Get current day of week: Sunday is 0, Monday is 1, ..., Saturday is 6
   const currentDay = now.getDay();
-  // We want Monday (1) as start of week. If currentDay is 0 (Sunday), distance from Monday is -6.
   const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
 
   const monday = new Date(now);
@@ -251,13 +315,14 @@ export function getCurrentWeekDaysStatus(data: StudyTrackerData): { dayName: str
 
   const daysLabel = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
   const todayStr = getTodayDateString();
+  const targetMins = Math.max(1, data.dailyTargetMinutes || 15);
 
   return daysLabel.map((label, idx) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + idx);
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const record = data.history[dateStr];
-    const isCompleted = Boolean(record && (record.minutesSpent >= data.dailyTargetMinutes || record.completedLessons > 0));
+    const isCompleted = Boolean(record && (record.minutesSpent || 0) >= targetMins);
     return {
       dayName: label,
       dateStr,

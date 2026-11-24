@@ -5,9 +5,9 @@ import { getPassageFingerprint, isPlaceholderPassageText } from "@/lib/readingPa
 import { getQuestionTranslation, getOptionMeaning, getSmartPassageTranslation, getEnrichedExplanation } from "@/lib/readingTranslationResolver";
 import { autoExtractVocabListForReading } from "@/lib/readingVocabExtractor";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { ExerciseCardData, ReadingSubPassage, SampleQuestion, VocabItem } from "@/app/admin/content/reading/types";
-import { normalizeOptions } from "@/lib/api/reading";
+import { normalizeOptions, saveReadingProgress } from "@/lib/api/reading";
 import {
   ArrowLeft,
   Languages,
@@ -35,6 +35,7 @@ import {
   FolderPlus,
   Info,
   Loader2,
+  Target,
 } from "lucide-react";
 import { lookupWordDetail, WordDetail } from "./richDictionaryData";
 import { lookupEnglishDictionary } from "@/lib/api/english-dictionary";
@@ -229,50 +230,150 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     };
   }, [fullQuestions, isRedoWrongOnly, card]);
 
-  const [savedLogSummary] = useState<{
-    hasSavedLog: boolean;
+  const leftPaneRef = useRef<HTMLDivElement | null>(null);
+  const rightPaneRef = useRef<HTMLDivElement | null>(null);
+
+  const findFirstUnansweredGroup = (
+    answersMap: Record<number, number>,
+    checkedMap: Record<number, boolean>
+  ): number => {
+    return passageGroups.findIndex((grp, gIdx) => {
+      if (!checkedMap[gIdx]) return true;
+      return grp.questions.some((item) => answersMap[item.globalIndex] === undefined);
+    });
+  };
+
+  const [initialSnapshot] = useState<{
+    answers: Record<number, number>;
+    checkedGroups: Record<number, boolean>;
+    correctCount: number;
+    wrongCount: number;
     answeredCount: number;
-    checkedCount: number;
-    firstUncheckedGroup: number;
+    firstUnansweredGroup: number;
+    allCompleted: boolean;
+    hasSavedLog: boolean;
   }>(() => {
     if (isRedoWrongOnly || typeof window === "undefined") {
-      return { hasSavedLog: false, answeredCount: 0, checkedCount: 0, firstUncheckedGroup: 0 };
+      return {
+        answers: {},
+        checkedGroups: {},
+        correctCount: 0,
+        wrongCount: 0,
+        answeredCount: 0,
+        firstUnansweredGroup: 0,
+        allCompleted: false,
+        hasSavedLog: false,
+      };
     }
     try {
-      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-      let savedAnsCount = 0;
-      let checkedMap: Record<number, boolean> = {};
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        savedAnsCount = parsed?.answers ? Object.keys(parsed.answers).length : 0;
-        checkedMap = parsed?.checkedGroups || {};
-      }
       const prog = getItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length || 0);
-      const answeredCount = Math.max(savedAnsCount, prog.completedQuestions || 0);
-      const checkedCount = Object.values(checkedMap).filter(Boolean).length;
-      const firstUnchecked = passageGroups.findIndex((_, gIdx) => !checkedMap[gIdx]);
+      const savedRaw = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      let answers: Record<number, number> = {};
+      let checkedMap: Record<number, boolean> = {};
+
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        answers = parsed?.answers && typeof parsed.answers === "object" ? parsed.answers : {};
+        checkedMap = parsed?.checkedGroups && typeof parsed.checkedGroups === "object" ? parsed.checkedGroups : {};
+      }
+
+      // Nếu người dùng đã xóa sạch lịch sử ngoài thẻ (cả completed và answered đều = 0) thì xóa luôn log đáp án cũ bị sót
+      if (
+        (prog.completedQuestions || 0) === 0 &&
+        (prog.answeredQuestionIds?.length || 0) === 0 &&
+        Object.keys(answers).length > 0
+      ) {
+        answers = {};
+        checkedMap = {};
+        try {
+          localStorage.removeItem(`toeic_reading_answers_${card.id}`);
+        } catch {}
+      }
+
+      // Tính chính xác số câu đã làm, đúng, sai từ answers + checkedGroups thực tế
+      let correctCount = 0;
+      let wrongCount = 0;
+      let checkedAnsweredCount = 0;
+      let totalSelectedCount = 0;
+
+      passageGroups.forEach((grp, gIdx) => {
+        const allInGrpAnswered = grp.questions.every((item) => answers[item.globalIndex] !== undefined);
+        // Với câu đơn Part 5: nếu đã chọn đáp án thì mặc định đã chấm
+        if (grp.questions.length === 1 && allInGrpAnswered) {
+          checkedMap[gIdx] = true;
+        }
+        grp.questions.forEach((item) => {
+          const chosen = answers[item.globalIndex];
+          if (chosen !== undefined) {
+            totalSelectedCount++;
+            if (checkedMap[gIdx]) {
+              checkedAnsweredCount++;
+              if (chosen === item.question.correctIndex) correctCount++;
+              else wrongCount++;
+            }
+          }
+        });
+      });
+
+      const answeredCount = Math.max(checkedAnsweredCount, totalSelectedCount);
+      const firstUnanswered = passageGroups.findIndex((grp, gIdx) => {
+        if (!checkedMap[gIdx]) return true;
+        return grp.questions.some((item) => answers[item.globalIndex] === undefined);
+      });
+      const allCompleted = passageGroups.length > 0 && firstUnanswered === -1;
+
       return {
-        hasSavedLog: answeredCount > 0,
+        answers,
+        checkedGroups: checkedMap,
+        correctCount,
+        wrongCount,
         answeredCount,
-        checkedCount,
-        firstUncheckedGroup: firstUnchecked !== -1 ? firstUnchecked : 0,
+        firstUnansweredGroup: firstUnanswered !== -1 ? firstUnanswered : 0,
+        allCompleted,
+        hasSavedLog: answeredCount > 0,
       };
     } catch {
-      return { hasSavedLog: false, answeredCount: 0, checkedCount: 0, firstUncheckedGroup: 0 };
+      return {
+        answers: {},
+        checkedGroups: {},
+        correctCount: 0,
+        wrongCount: 0,
+        answeredCount: 0,
+        firstUnansweredGroup: 0,
+        allCompleted: false,
+        hasSavedLog: false,
+      };
     }
   });
 
+  const [savedLogSummary, setSavedLogSummary] = useState<{
+    hasSavedLog: boolean;
+    answeredCount: number;
+    firstUncheckedGroup: number;
+    allCompleted: boolean;
+  }>(() => ({
+    hasSavedLog: initialSnapshot.hasSavedLog,
+    answeredCount: initialSnapshot.answeredCount,
+    firstUncheckedGroup: initialSnapshot.firstUnansweredGroup,
+    allCompleted: initialSnapshot.allCompleted,
+  }));
+
   const [showResumePromptModal, setShowResumePromptModal] = useState<boolean>(
-    () => !isRedoWrongOnly && savedLogSummary.hasSavedLog
+    () => !isRedoWrongOnly && initialSnapshot.hasSavedLog
   );
 
   const [currentGroupIndex, setCurrentGroupIndex] = useState(() => {
     if (isRedoWrongOnly) return 0;
-    if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
-      return Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1));
+    // Luôn ưu tiên nhảy thẳng vào câu / đoạn CHƯA LÀM ĐẦU TIÊN (cho cả Part 5, 6, 7)
+    if (initialSnapshot.hasSavedLog) {
+      return Math.min(initialSnapshot.firstUnansweredGroup, Math.max(0, passageGroups.length - 1));
     }
-    if (savedLogSummary.hasSavedLog && savedLogSummary.firstUncheckedGroup > 0) {
-      return Math.min(savedLogSummary.firstUncheckedGroup, Math.max(0, passageGroups.length - 1));
+    // Nếu chưa có log câu trả lời mà có initialQuestionIndex -> ánh xạ chỉ số CÂU HỎI sang chỉ số ĐOẠN VĂN chuẩn xác
+    if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
+      const targetGrp = passageGroups.findIndex((g) =>
+        g.questions.some((item) => item.globalIndex === initialQuestionIndex)
+      );
+      if (targetGrp !== -1) return targetGrp;
     }
     return 0;
   });
@@ -316,57 +417,75 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
   }, [currentGroup, card.vocabList, card.passageText]);
 
   // Track user selections: globalIndex -> selected option index
-  const [userAnswers, setUserAnswers] = useState<Record<number, number>>(() => {
-    if (isRedoWrongOnly) return {};
-    if (typeof window === "undefined") return {};
-    try {
-      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.answers || {};
-      }
-    } catch {}
-    return {};
-  });
-  
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>(
+    () => (isRedoWrongOnly ? {} : initialSnapshot.answers)
+  );
+
   // Track checked state: groupIndex -> boolean
-  const [checkedGroups, setCheckedGroups] = useState<Record<number, boolean>>(() => {
-    if (isRedoWrongOnly) return {};
-    if (typeof window === "undefined") return {};
-    try {
-      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.checkedGroups || {};
-      }
-    } catch {}
-    return {};
-  });
+  const [checkedGroups, setCheckedGroups] = useState<Record<number, boolean>>(
+    () => (isRedoWrongOnly ? {} : initialSnapshot.checkedGroups)
+  );
   const isCurrentGroupChecked = !!checkedGroups[currentGroupIndex];
 
-  const [sessionCorrectCount, setSessionCorrectCount] = useState<number>(() => {
-    if (typeof window === "undefined" || isRedoWrongOnly) return 0;
-    try {
-      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.correctCount || 0;
-      }
-    } catch {}
-    return 0;
-  });
+  const [sessionCorrectCount, setSessionCorrectCount] = useState<number>(
+    () => (isRedoWrongOnly ? 0 : initialSnapshot.correctCount)
+  );
 
-  const [sessionWrongCount, setSessionWrongCount] = useState<number>(() => {
-    if (typeof window === "undefined" || isRedoWrongOnly) return 0;
-    try {
-      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.wrongCount || 0;
-      }
-    } catch {}
-    return 0;
-  });
+  const [sessionWrongCount, setSessionWrongCount] = useState<number>(
+    () => (isRedoWrongOnly ? 0 : initialSnapshot.wrongCount)
+  );
+
+  // Tự động đồng bộ ngược giữa log đáp án đã lưu và thẻ tiến độ bên ngoài (tránh lệch kiểu ngoài 8/30 trong 19/30)
+  useEffect(() => {
+    if (isRedoWrongOnly || !initialSnapshot.hasSavedLog) return;
+    const total = card.totalQuestions || fullQuestions.length;
+    const answeredIds: (number | string)[] = [];
+    const wrongIds: (number | string)[] = [];
+    let correct = 0;
+    let wrong = 0;
+
+    passageGroups.forEach((grp, gIdx) => {
+      if (!initialSnapshot.checkedGroups[gIdx]) return;
+      grp.questions.forEach((item) => {
+        const chosen = initialSnapshot.answers[item.globalIndex];
+        if (chosen === undefined) return;
+        const qId = item.question.questionNum || item.globalIndex + 1;
+        answeredIds.push(qId);
+        if (chosen === item.question.correctIndex) correct++;
+        else {
+          wrong++;
+          wrongIds.push(qId);
+        }
+      });
+    });
+
+    const prog = getItemProgress(`reading-${card.id}`, total);
+    if (
+      answeredIds.length > 0 &&
+      (prog.completedQuestions !== answeredIds.length ||
+        prog.correctAnswers !== correct ||
+        prog.wrongAnswers !== wrong)
+    ) {
+      saveItemProgress(
+        `reading-${card.id}`,
+        answeredIds.length,
+        total,
+        undefined,
+        correct,
+        wrong,
+        wrongIds,
+        prog.savedCount,
+        answeredIds,
+        true
+      );
+    }
+  }, [isRedoWrongOnly, initialSnapshot, card.id, card.totalQuestions, fullQuestions.length, passageGroups]);
+
+  // Cuộn mượt lên đầu 2 khung khi chuyển sang câu / đoạn mới
+  useEffect(() => {
+    if (rightPaneRef.current) rightPaneRef.current.scrollTop = 0;
+    if (leftPaneRef.current) leftPaneRef.current.scrollTop = 0;
+  }, [currentGroupIndex]);
 
   useEffect(() => {
     if (isRedoWrongOnly) {
@@ -375,10 +494,8 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       setCheckedGroups({});
       setSessionCorrectCount(0);
       setSessionWrongCount(0);
-    } else if (initialQuestionIndex !== undefined && initialQuestionIndex > 0) {
-      setCurrentGroupIndex(Math.min(initialQuestionIndex, Math.max(0, passageGroups.length - 1)));
     }
-  }, [isRedoWrongOnly, initialQuestionIndex, passageGroups.length]);
+  }, [isRedoWrongOnly]);
 
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [energyScore, setEnergyScore] = useState(0);
@@ -391,11 +508,33 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     part7SingleMinutes: number;
     part7MultiMinutes: number;
     targetWpm: number;
+    part5TimeoutSeconds?: number;
+    part6TimeoutSeconds?: number;
+    part7TimeoutSeconds?: number;
+    targetScoreBand?: string;
     enableBilingualByDefault: boolean;
     enablePacingTimer: boolean;
     enableTimeoutAlert: boolean;
     speedDrillMode: boolean;
+    showTargetPaceBadge?: boolean;
   } | null>(null);
+
+  // Thời gian dừng tại câu / nhóm câu hiện tại (đếm giây thực tế)
+  const [timeSpentOnCurrentGroup, setTimeSpentOnCurrentGroup] = useState(0);
+
+  // Reset thời gian câu hỏi khi chuyển câu / cụm câu
+  useEffect(() => {
+    setTimeSpentOnCurrentGroup(0);
+  }, [currentGroupIndex]);
+
+  // Bộ đếm thời gian cho câu hiện tại (tạm dừng khi đã chấm hoặc đang mở modal)
+  useEffect(() => {
+    if (showResumePromptModal || isCurrentGroupChecked) return;
+    const interval = setInterval(() => {
+      setTimeSpentOnCurrentGroup((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showResumePromptModal, isCurrentGroupChecked]);
 
   useEffect(() => {
     const handleConfigSync = (e?: any) => {
@@ -495,6 +634,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
 
   // Standard TOEIC Part Detection & Directions
   const [showDirectionsModal, setShowDirectionsModal] = useState(false);
+  const [showCompletionSummaryModal, setShowCompletionSummaryModal] = useState(false);
 
   const workspacePart: "PART 5" | "PART 6" | "PART 7" = useMemo(() => {
     if (card.category === "part5") return "PART 5";
@@ -507,6 +647,53 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     return "PART 5";
   }, [card]);
 
+  // Cấu hình thời gian được đồng bộ động từ Admin sang
+  const configuredPart5Minutes = readingConfig?.part5Minutes ?? 12;
+  const configuredPart6Minutes = readingConfig?.part6Minutes ?? 10;
+  const configuredPart7SingleMinutes = readingConfig?.part7SingleMinutes ?? 27;
+  const configuredPart7MultiMinutes = readingConfig?.part7MultiMinutes ?? 26;
+  const configuredPart7TotalMinutes = configuredPart7SingleMinutes + configuredPart7MultiMinutes;
+  const configuredWpm = readingConfig?.targetWpm ?? 160;
+
+  // Tính nhịp độ mục tiêu và ngưỡng cảnh báo quá giờ theo từng Part
+  const currentPaceMetrics = useMemo(() => {
+    const isP5 = workspacePart === "PART 5";
+    const isP6 = workspacePart === "PART 6";
+    const isP7 = workspacePart === "PART 7";
+    const qCount = currentGroup?.questions?.length || 1;
+
+    let targetSecPerQ = 24;
+    let timeoutThreshold = 40;
+
+    if (isP5) {
+      targetSecPerQ = Math.round((configuredPart5Minutes * 60) / 30);
+      timeoutThreshold = readingConfig?.part5TimeoutSeconds ?? 40;
+    } else if (isP6) {
+      targetSecPerQ = Math.round((configuredPart6Minutes * 60) / 16);
+      timeoutThreshold = (readingConfig?.part6TimeoutSeconds ?? 60) * Math.min(2, qCount);
+    } else if (isP7) {
+      const isMulti = qCount > 3;
+      const targetMins = isMulti ? configuredPart7MultiMinutes : configuredPart7SingleMinutes;
+      const totalQs = isMulti ? 25 : 29;
+      targetSecPerQ = Math.round((targetMins * 60) / totalQs);
+      timeoutThreshold = (readingConfig?.part7TimeoutSeconds ?? 90) * Math.min(2, qCount);
+    }
+
+    return {
+      targetSecPerQ,
+      targetGroupSec: targetSecPerQ * qCount,
+      timeoutThreshold,
+    };
+  }, [
+    workspacePart,
+    configuredPart5Minutes,
+    configuredPart6Minutes,
+    configuredPart7SingleMinutes,
+    configuredPart7MultiMinutes,
+    readingConfig,
+    currentGroup,
+  ]);
+
   const partDirections = useMemo(() => {
     const configs = {
       "PART 5": {
@@ -518,7 +705,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           "Directions: A word or phrase is missing in each of the sentences below. Four answer choices are given below each sentence. Select the best answer to complete the sentence. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
         directionsVi:
           "Hướng dẫn: Mỗi câu dưới đây bị khuyết một từ hoặc cụm từ. Bốn phương án trả lời được cung cấp bên dưới mỗi câu. Chọn đáp án thích hợp nhất để hoàn thành câu và đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
-        timing: "Thời gian đề xuất: 10 – 12 phút (tối đa 30s/câu)",
+        timing: `Thời gian cấu hình: ${configuredPart5Minutes} phút (~${Math.round((configuredPart5Minutes * 60) / 30)}s/câu)`,
         tips: [
           "Xác định từ loại xung quanh chỗ trống (danh từ, động từ, tính từ, trạng từ).",
           "Phân biệt câu hỏi ngữ pháp (nhìn dấu hiệu) và từ vựng (cần dịch nghĩa).",
@@ -534,7 +721,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           "Directions: Read the texts that follow. A word, phrase, or sentence is missing in parts of each text. Four answer choices for each question are given below the text. Select the best answer to complete the text. Then mark the letter (A), (B), (C), or (D) on your answer sheet.",
         directionsVi:
           "Hướng dẫn: Đọc các đoạn văn sau. Một từ, cụm từ hoặc câu bị khuyết ở các phần của mỗi đoạn văn. Bốn lựa chọn trả lời cho mỗi câu hỏi được đưa ra bên dưới đoạn văn. Chọn câu trả lời tốt nhất để hoàn thành đoạn văn. Sau đó đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
-        timing: "Thời gian đề xuất: 8 – 10 phút (khoảng 2 phút/đoạn văn)",
+        timing: `Thời gian cấu hình: ${configuredPart6Minutes} phút (~${Math.round((configuredPart6Minutes * 60) / 16)}s/câu, ~${(configuredPart6Minutes / 4).toFixed(1)}p/đoạn)`,
         tips: [
           "Mỗi đoạn gồm 4 câu khuyết, trong đó có 3 câu điền từ/ngữ pháp và 1 câu điền nguyên câu văn.",
           "Với câu điền cả câu (sentence insertion), luôn đọc kỹ câu phía trước và câu phía sau để đảm bảo mạch liên kết ngữ nghĩa.",
@@ -550,7 +737,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           "Directions: In this part you will read a selection of texts, such as magazine and newspaper articles, letters, and advertisements. Each text is followed by several questions. Select the best answer for each question and mark the letter (A), (B), (C), or (D) on your answer sheet.",
         directionsVi:
           "Hướng dẫn: Trong phần này bạn sẽ đọc tuyển tập các văn bản, chẳng hạn như bài báo, thư từ, quảng cáo, email, tin nhắn trực tuyến và hoá đơn. Mỗi bài đọc có một số câu hỏi đi kèm. Chọn phương án trả lời chính xác nhất cho mỗi câu hỏi và đánh dấu vào chữ cái (A), (B), (C) hoặc (D) trên phiếu trả lời của bạn.",
-        timing: "Thời gian đề xuất: 50 – 55 phút (~1 phút/câu)",
+        timing: `Thời gian cấu hình: ${configuredPart7TotalMinutes} phút (Đoạn đơn: ${configuredPart7SingleMinutes}p, Đoạn kép/ba: ${configuredPart7MultiMinutes}p)`,
         tips: [
           "Bao gồm đoạn đơn (147-175), đoạn kép (176-185) và đoạn ba (186-200).",
           "Đọc lướt tiêu đề, đối tượng người gửi/nhận trước khi đọc câu hỏi.",
@@ -559,7 +746,14 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       },
     };
     return configs[workspacePart] || configs["PART 5"];
-  }, [workspacePart]);
+  }, [
+    workspacePart,
+    configuredPart5Minutes,
+    configuredPart6Minutes,
+    configuredPart7SingleMinutes,
+    configuredPart7MultiMinutes,
+    configuredPart7TotalMinutes,
+  ]);
 
   // Timer effect (pauses while Resume/Restart confirmation dialog is visible or when timer is hidden)
   React.useEffect(() => {
@@ -733,242 +927,6 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     ? answeredInGroupCount === currentGroup.questions.length
     : false;
 
-  const handleSelectOption = (globalIndex: number, optIdx: number, correctIdx: number) => {
-    if (checkedGroups[currentGroupIndex]) return;
-
-    if (isMultiQuestionGroup) {
-      // For multi-question passages (Part 6/7): record choice and auto-check when all questions are answered
-      const nextAnswers = { ...userAnswers, [globalIndex]: optIdx };
-      setUserAnswers(nextAnswers);
-      if (isSfxEnabled) playSfx("click");
-
-      const allDone = currentGroup.questions.every(
-        (item) => nextAnswers[item.globalIndex] !== undefined
-      );
-
-      let nextCorrect = sessionCorrectCount;
-      let nextWrong = sessionWrongCount;
-      const nextChecked = { ...checkedGroups };
-
-      if (allDone) {
-        nextChecked[currentGroupIndex] = true;
-        setCheckedGroups(nextChecked);
-
-        let groupCorrect = 0;
-        currentGroup.questions.forEach((item) => {
-          const selected = nextAnswers[item.globalIndex];
-          if (selected === item.question.correctIndex) {
-            groupCorrect++;
-          }
-        });
-
-        nextCorrect += groupCorrect;
-        nextWrong += (currentGroup.questions.length - groupCorrect);
-
-        const addedScore = groupCorrect * 10;
-        setEnergyScore((prev) => prev + addedScore);
-        setSessionCorrectCount(nextCorrect);
-        setSessionWrongCount(nextWrong);
-
-    currentGroup.questions.forEach((item) => {
-      const selected = nextAnswers[item.globalIndex] !== undefined ? nextAnswers[item.globalIndex] : userAnswers[item.globalIndex];
-      const isItemCorrect = selected === item.question.correctIndex;
-      const origIdx = fullQuestions.findIndex(
-        (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
-      );
-      const qIdentifier = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
-      recordQuestionAnswer(
-        `reading-${card.id}`,
-        qIdentifier,
-        isItemCorrect,
-        card.totalQuestions || fullQuestions.length
-      );
-    });
-
-        if (groupCorrect === currentGroup.questions.length) {
-          if (isSfxEnabled) playSfx("correct");
-          showToast(`Xuất sắc! Đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
-        } else {
-          if (isSfxEnabled) playSfx("wrong");
-          showToast(`Đúng ${groupCorrect}/${currentGroup.questions.length} câu. Đã hiển thị giải thích chi tiết ở dưới!`);
-        }
-      }
-
-      if (!isRedoWrongOnly) {
-        try {
-          localStorage.setItem(
-            `toeic_reading_answers_${card.id}`,
-            JSON.stringify({
-              answers: nextAnswers,
-              checkedGroups: nextChecked,
-              correctCount: nextCorrect,
-              wrongCount: nextWrong,
-            })
-          );
-        } catch {}
-      } else {
-        try {
-          const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            const updatedAnswers = { ...(parsed.answers || {}) };
-            currentGroup.questions.forEach((item) => {
-              const origIdx = fullQuestions.findIndex(
-                (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
-              );
-              if (origIdx !== -1 && nextAnswers[item.globalIndex] !== undefined) {
-                updatedAnswers[origIdx] = nextAnswers[item.globalIndex];
-              }
-            });
-            localStorage.setItem(
-              `toeic_reading_answers_${card.id}`,
-              JSON.stringify({
-                ...parsed,
-                answers: updatedAnswers,
-              })
-            );
-          }
-        } catch {}
-      }
-    } else {
-      // For single-question items (Part 5): select and check immediately
-      const correct = optIdx === correctIdx;
-      const nextCorrect = correct ? sessionCorrectCount + 1 : sessionCorrectCount;
-      const nextWrong = !correct ? sessionWrongCount + 1 : sessionWrongCount;
-
-      const nextAnswers = { ...userAnswers, [globalIndex]: optIdx };
-      const nextChecked = { ...checkedGroups, [currentGroupIndex]: true };
-
-      setUserAnswers(nextAnswers);
-      setCheckedGroups(nextChecked);
-      setSessionCorrectCount(nextCorrect);
-      setSessionWrongCount(nextWrong);
-
-    const singleItem = currentGroup.questions[0]?.question;
-    const origIdx = fullQuestions.findIndex(
-      (q) => (q.questionNum && q.questionNum === singleItem?.questionNum) || q.question === singleItem?.question
-    );
-    const qIdentifier = singleItem?.questionNum || (origIdx !== -1 ? origIdx + 1 : globalIndex + 1);
-    recordQuestionAnswer(
-      `reading-${card.id}`,
-      qIdentifier,
-      correct,
-      card.totalQuestions || fullQuestions.length
-    );
-
-      if (!isRedoWrongOnly) {
-        try {
-          localStorage.setItem(
-            `toeic_reading_answers_${card.id}`,
-            JSON.stringify({
-              answers: nextAnswers,
-              checkedGroups: nextChecked,
-              correctCount: nextCorrect,
-              wrongCount: nextWrong,
-            })
-          );
-        } catch {}
-      } else {
-        try {
-          const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            const updatedAnswers = { ...(parsed.answers || {}) };
-            currentGroup.questions.forEach((item) => {
-              const origIdx = fullQuestions.findIndex(
-                (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
-              );
-              if (origIdx !== -1 && nextAnswers[item.globalIndex] !== undefined) {
-                updatedAnswers[origIdx] = nextAnswers[item.globalIndex];
-              }
-            });
-            localStorage.setItem(
-              `toeic_reading_answers_${card.id}`,
-              JSON.stringify({
-                ...parsed,
-                answers: updatedAnswers,
-              })
-            );
-          }
-        } catch {}
-      }
-
-      if (correct) {
-        if (isSfxEnabled) playSfx("correct");
-        setEnergyScore((prev) => prev + 10);
-        showToast("Chính xác! +10 Năng lượng ⚡");
-      } else {
-        if (isSfxEnabled) playSfx("wrong");
-        showToast("Chưa đúng rồi! Hãy xem giải thích chi tiết ở dưới.");
-      }
-    }
-  };
-
-  const handleCheckCurrentGroup = () => {
-    if (!currentGroup) return;
-    if (!isAllAnsweredInGroup) {
-      showToast(`Vui lòng chọn đáp án cho cả ${currentGroup.questions.length} câu hỏi trước khi kiểm tra! 📝`);
-      return;
-    }
-
-    const nextChecked = { ...checkedGroups, [currentGroupIndex]: true };
-    setCheckedGroups(nextChecked);
-
-    let groupCorrect = 0;
-    currentGroup.questions.forEach((item) => {
-      const selected = userAnswers[item.globalIndex];
-      if (selected === item.question.correctIndex) {
-        groupCorrect++;
-      }
-    });
-
-    const nextCorrect = sessionCorrectCount + groupCorrect;
-    const nextWrong = sessionWrongCount + (currentGroup.questions.length - groupCorrect);
-    const addedScore = groupCorrect * 10;
-    setEnergyScore((prev) => prev + addedScore);
-    setSessionCorrectCount(nextCorrect);
-    setSessionWrongCount(nextWrong);
-
-    currentGroup.questions.forEach((item) => {
-      const selected = userAnswers[item.globalIndex];
-      const isItemCorrect = selected === item.question.correctIndex;
-      const origIdx = fullQuestions.findIndex(
-        (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
-      );
-      const qIdentifier = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
-      recordQuestionAnswer(
-        `reading-${card.id}`,
-        qIdentifier,
-        isItemCorrect,
-        card.totalQuestions || fullQuestions.length
-      );
-    });
-
-
-
-    if (!isRedoWrongOnly) {
-      try {
-        localStorage.setItem(
-          `toeic_reading_answers_${card.id}`,
-          JSON.stringify({
-            answers: userAnswers,
-            checkedGroups: nextChecked,
-            correctCount: nextCorrect,
-            wrongCount: nextWrong,
-          })
-        );
-      } catch {}
-    }
-
-    if (groupCorrect === currentGroup.questions.length) {
-      if (isSfxEnabled) playSfx("correct");
-      showToast(`Xuất sắc! Bạn làm đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
-    } else {
-      if (isSfxEnabled) playSfx("wrong");
-      showToast(`Đúng ${groupCorrect}/${currentGroup.questions.length} câu. Hãy xem giải thích chi tiết ở dưới nhé!`);
-    }
-  };
-
   const syncProgressFromState = (
     nextAnswers: Record<number, number>,
     nextChecked: Record<number, boolean>
@@ -1000,14 +958,16 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setSessionCorrectCount(correctCount);
     setSessionWrongCount(wrongCount);
 
+    const total = card.totalQuestions || fullQuestions.length;
     if (!isRedoWrongOnly) {
       if (Object.keys(nextAnswers).length === 0 && answeredIds.length === 0) {
-        resetItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length);
+        resetItemProgress(`reading-${card.id}`, total);
+        void saveReadingProgress(card.id, 0, 0, 0);
       } else {
         saveItemProgress(
           `reading-${card.id}`,
           answeredIds.length,
-          card.totalQuestions || fullQuestions.length,
+          total,
           undefined,
           correctCount,
           wrongCount,
@@ -1015,6 +975,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           undefined,
           answeredIds
         );
+        void saveReadingProgress(card.id, answeredIds.length, correctCount, wrongCount);
         try {
           localStorage.setItem(
             `toeic_reading_answers_${card.id}`,
@@ -1027,7 +988,240 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           );
         } catch {}
       }
+
+      const nextUnanswered = findFirstUnansweredGroup(nextAnswers, nextChecked);
+      setSavedLogSummary({
+        hasSavedLog: Object.keys(nextAnswers).length > 0,
+        answeredCount: Math.max(answeredIds.length, Object.keys(nextAnswers).length),
+        firstUncheckedGroup: nextUnanswered !== -1 ? nextUnanswered : 0,
+        allCompleted: passageGroups.length > 0 && nextUnanswered === -1,
+      });
     }
+  };
+
+  const syncRedoAnswersToSavedLog = (nextAnswers: Record<number, number>) => {
+    try {
+      const saved = localStorage.getItem(`toeic_reading_answers_${card.id}`);
+      const parsed = saved ? JSON.parse(saved) : { answers: {}, checkedGroups: {} };
+      const updatedAnswers: Record<number, number> = { ...(parsed.answers || {}) };
+      currentGroup.questions.forEach((item) => {
+        const origIdx = fullQuestions.findIndex(
+          (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+        );
+        if (origIdx !== -1 && nextAnswers[item.globalIndex] !== undefined) {
+          updatedAnswers[origIdx] = nextAnswers[item.globalIndex];
+        }
+      });
+
+      let recalculatedCorrect = 0;
+      let recalculatedWrong = 0;
+      fullQuestions.forEach((q, idx) => {
+        const ans = updatedAnswers[idx];
+        if (ans !== undefined) {
+          if (ans === q.correctIndex) recalculatedCorrect++;
+          else recalculatedWrong++;
+        }
+      });
+
+      localStorage.setItem(
+        `toeic_reading_answers_${card.id}`,
+        JSON.stringify({
+          ...parsed,
+          answers: updatedAnswers,
+          correctCount: recalculatedCorrect,
+          wrongCount: recalculatedWrong,
+        })
+      );
+      const updatedProg = getItemProgress(`reading-${card.id}`, card.totalQuestions || fullQuestions.length);
+      void saveReadingProgress(
+        card.id,
+        updatedProg.completedQuestions || 0,
+        updatedProg.correctAnswers || 0,
+        updatedProg.wrongAnswers || 0
+      );
+    } catch {}
+  };
+
+  const handleSelectOption = (globalIndex: number, optIdx: number, correctIdx: number) => {
+    if (checkedGroups[currentGroupIndex]) return;
+
+    if (isMultiQuestionGroup) {
+      // For multi-question passages (Part 6/7): record choice and auto-check when all questions are answered
+      const nextAnswers = { ...userAnswers, [globalIndex]: optIdx };
+      setUserAnswers(nextAnswers);
+      if (isSfxEnabled) playSfx("click");
+
+      const allDone = currentGroup.questions.every(
+        (item) => nextAnswers[item.globalIndex] !== undefined
+      );
+
+      const nextChecked = { ...checkedGroups };
+
+      if (allDone) {
+        nextChecked[currentGroupIndex] = true;
+        setCheckedGroups(nextChecked);
+
+        let groupCorrect = 0;
+        currentGroup.questions.forEach((item) => {
+          const selected = nextAnswers[item.globalIndex];
+          if (selected === item.question.correctIndex) {
+            groupCorrect++;
+          }
+        });
+
+        const addedScore = groupCorrect * 10;
+        setEnergyScore((prev) => prev + addedScore);
+
+        if (isRedoWrongOnly) {
+          currentGroup.questions.forEach((item) => {
+            const selected = nextAnswers[item.globalIndex] !== undefined ? nextAnswers[item.globalIndex] : userAnswers[item.globalIndex];
+            const isItemCorrect = selected === item.question.correctIndex;
+            const origIdx = fullQuestions.findIndex(
+              (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+            );
+            const qIdentifier = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
+            recordQuestionAnswer(
+              `reading-${card.id}`,
+              qIdentifier,
+              isItemCorrect,
+              card.totalQuestions || fullQuestions.length
+            );
+          });
+          setSessionCorrectCount((prev) => prev + groupCorrect);
+          setSessionWrongCount((prev) => prev + (currentGroup.questions.length - groupCorrect));
+          syncRedoAnswersToSavedLog(nextAnswers);
+        } else {
+          syncProgressFromState(nextAnswers, nextChecked);
+        }
+
+        if (groupCorrect === currentGroup.questions.length) {
+          if (isSfxEnabled) playSfx("correct");
+          showToast(`Xuất sắc! Đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
+        } else {
+          if (isSfxEnabled) playSfx("wrong");
+          showToast(`Đúng ${groupCorrect}/${currentGroup.questions.length} câu. Đã hiển thị giải thích chi tiết ở dưới!`);
+        }
+      } else if (!isRedoWrongOnly) {
+        // Lưu tạm các câu đã chọn dở trong đoạn Part 6/7 để không mất khi thoát ra
+        try {
+          localStorage.setItem(
+            `toeic_reading_answers_${card.id}`,
+            JSON.stringify({
+              answers: nextAnswers,
+              checkedGroups: nextChecked,
+              correctCount: sessionCorrectCount,
+              wrongCount: sessionWrongCount,
+            })
+          );
+        } catch {}
+      }
+    } else {
+      // For single-question items (Part 5): select and check immediately
+      const correct = optIdx === correctIdx;
+      const nextAnswers = { ...userAnswers, [globalIndex]: optIdx };
+      const nextChecked = { ...checkedGroups, [currentGroupIndex]: true };
+
+      setUserAnswers(nextAnswers);
+      setCheckedGroups(nextChecked);
+
+      if (isRedoWrongOnly) {
+        const singleItem = currentGroup.questions[0]?.question;
+        const origIdx = fullQuestions.findIndex(
+          (q) => (q.questionNum && q.questionNum === singleItem?.questionNum) || q.question === singleItem?.question
+        );
+        const qIdentifier = singleItem?.questionNum || (origIdx !== -1 ? origIdx + 1 : globalIndex + 1);
+        recordQuestionAnswer(
+          `reading-${card.id}`,
+          qIdentifier,
+          correct,
+          card.totalQuestions || fullQuestions.length
+        );
+        if (correct) setSessionCorrectCount((prev) => prev + 1);
+        else setSessionWrongCount((prev) => prev + 1);
+        syncRedoAnswersToSavedLog(nextAnswers);
+      } else {
+        syncProgressFromState(nextAnswers, nextChecked);
+      }
+
+      if (correct) {
+        if (isSfxEnabled) playSfx("correct");
+        setEnergyScore((prev) => prev + 10);
+        showToast("Chính xác! +10 Năng lượng ⚡");
+      } else {
+        if (isSfxEnabled) playSfx("wrong");
+        showToast("Chưa đúng rồi! Hãy xem giải thích chi tiết ở dưới.");
+      }
+    }
+  };
+
+  const handleCheckCurrentGroup = () => {
+    if (!currentGroup) return;
+    if (!isAllAnsweredInGroup) {
+      showToast(`Vui lòng chọn đáp án cho cả ${currentGroup.questions.length} câu hỏi trước khi kiểm tra! 📝`);
+      return;
+    }
+
+    const nextChecked = { ...checkedGroups, [currentGroupIndex]: true };
+    setCheckedGroups(nextChecked);
+
+    let groupCorrect = 0;
+    currentGroup.questions.forEach((item) => {
+      const selected = userAnswers[item.globalIndex];
+      if (selected === item.question.correctIndex) {
+        groupCorrect++;
+      }
+    });
+
+    const addedScore = groupCorrect * 10;
+    setEnergyScore((prev) => prev + addedScore);
+
+    if (isRedoWrongOnly) {
+      currentGroup.questions.forEach((item) => {
+        const selected = userAnswers[item.globalIndex];
+        const isItemCorrect = selected === item.question.correctIndex;
+        const origIdx = fullQuestions.findIndex(
+          (q) => (q.questionNum && q.questionNum === item.question.questionNum) || q.question === item.question.question
+        );
+        const qIdentifier = item.question.questionNum || (origIdx !== -1 ? origIdx + 1 : item.globalIndex + 1);
+        recordQuestionAnswer(
+          `reading-${card.id}`,
+          qIdentifier,
+          isItemCorrect,
+          card.totalQuestions || fullQuestions.length
+        );
+      });
+      setSessionCorrectCount((prev) => prev + groupCorrect);
+      setSessionWrongCount((prev) => prev + (currentGroup.questions.length - groupCorrect));
+      syncRedoAnswersToSavedLog(userAnswers);
+    } else {
+      syncProgressFromState(userAnswers, nextChecked);
+    }
+
+    if (groupCorrect === currentGroup.questions.length) {
+      if (isSfxEnabled) playSfx("correct");
+      showToast(`Xuất sắc! Bạn làm đúng cả ${groupCorrect}/${currentGroup.questions.length} câu! 🎉 +${addedScore} Năng lượng ⚡`);
+    } else {
+      if (isSfxEnabled) playSfx("wrong");
+      showToast(`Đúng ${groupCorrect}/${currentGroup.questions.length} câu. Hãy xem giải thích chi tiết ở dưới nhé!`);
+    }
+  };
+
+  const handleContinueUnanswered = () => {
+    if (isSfxEnabled) playSfx("click");
+    const nextUnanswered = findFirstUnansweredGroup(userAnswers, checkedGroups);
+    if (nextUnanswered !== -1) {
+      setCurrentGroupIndex(nextUnanswered);
+      const firstQNum = passageGroups[nextUnanswered]?.questions?.[0]?.question?.questionNum;
+      showToast(
+        passageGroups[nextUnanswered]?.questions?.length > 1
+          ? `Đang tiếp tục tại Đoạn ${nextUnanswered + 1} (chưa hoàn thành)`
+          : `Đang tiếp tục tại Câu ${firstQNum || nextUnanswered + 1} (chưa làm)`
+      );
+    } else {
+      setCurrentGroupIndex(0);
+      showToast("Bạn đã hoàn thành tất cả các câu — đang mở chế độ xem lại bài!");
+    }
+    setShowResumePromptModal(false);
   };
 
   const handleRestartAll = () => {
@@ -1039,9 +1233,19 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setTimerSeconds(0);
     setCurrentGroupIndex(0);
     setShowResumePromptModal(false);
+    setSavedLogSummary({
+      hasSavedLog: false,
+      answeredCount: 0,
+      firstUncheckedGroup: 0,
+      allCompleted: false,
+    });
 
     if (!isRedoWrongOnly) {
+      try {
+        localStorage.removeItem(`toeic_reading_answers_${card.id}`);
+      } catch {}
       resetItemProgress(`reading-${card.id}`, totalQuestionsCount);
+      void saveReadingProgress(card.id, 0, 0, 0);
     }
     showToast("Đã xoá kết quả cũ — bắt đầu làm lại từ đầu! ↺");
   };
@@ -1057,7 +1261,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
     setCheckedGroups(nextChecked);
     setUserAnswers(nextAnswers);
     syncProgressFromState(nextAnswers, nextChecked);
-    showToast("Đã đặt lại để bạn làm lại bài tập đoạn này! ↺");
+    showToast("Đã đặt lại để bạn làm lại câu / đoạn này! ↺");
   };
 
   const jumpToQuestion = (targetGlobalIndex: number) => {
@@ -1412,6 +1616,15 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                 {formatTimer(timerSeconds)}
               </span>
             )}
+            {readingConfig?.enablePacingTimer && (
+              <span
+                className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-500/30 text-blue-100 text-xs font-mono font-bold border border-blue-300/30 shadow-2xs"
+                title={`Mục tiêu nhịp độ chiến lược: ~${currentPaceMetrics.targetSecPerQ}s / câu`}
+              >
+                <Target className="w-3.5 h-3.5 text-blue-300" />
+                <span>~{currentPaceMetrics.targetSecPerQ}s/câu</span>
+              </span>
+            )}
             {readingConfig?.speedDrillMode && (
               <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500 text-white text-[10px] font-bold">
                 ⚡ Speed Drill
@@ -1482,7 +1695,10 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       {/* MAIN DUAL PANE */}
       <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden bg-slate-100">
         {/* LEFT PANE - PASSAGE DISPLAY */}
-        <div className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-[#fafafa] md:border-r border-b md:border-b-0 border-slate-200/80 flex flex-col justify-between space-y-6 shrink-0 md:shrink">
+        <div
+          ref={leftPaneRef}
+          className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-[#fafafa] md:border-r border-b md:border-b-0 border-slate-200/80 flex flex-col justify-between space-y-6 shrink-0 md:shrink"
+        >
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
@@ -1629,9 +1845,22 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                               </span>
                             )}
                           </div>
-                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
-                            English
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {readingConfig?.showTargetPaceBadge && sub.text && (() => {
+                              const words = sub.text.trim().split(/\s+/).filter(Boolean).length;
+                              const estMinutes = (words / configuredWpm).toFixed(1);
+                              return (
+                                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                                  <span>{words} từ</span>
+                                  <span>•</span>
+                                  <span>~{estMinutes}p ({configuredWpm} WPM)</span>
+                                </span>
+                              );
+                            })()}
+                            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
+                              English
+                            </span>
+                          </div>
                         </div>
 
                         {/* Đoạn văn tiếng Anh: hỗ trợ bấm trực tiếp các ô trống [131]-[146] trong Part 6 */}
@@ -1725,8 +1954,24 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
         </div>
 
         {/* RIGHT PANE - ALL QUESTIONS IN PASSAGE DISPLAYED TOGETHER */}
-        <div className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6">
+        <div
+          ref={rightPaneRef}
+          className="w-full md:w-1/2 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar bg-white flex flex-col justify-between space-y-6"
+        >
           <div className="space-y-6">
+            {/* TIMEOUT ALERT & PACING BANNER */}
+            {readingConfig?.enableTimeoutAlert && !isCurrentGroupChecked && timeSpentOnCurrentGroup >= currentPaceMetrics.timeoutThreshold && (
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold flex items-center gap-2.5 animate-pulse shadow-xs">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold">Nhắc nhở nhịp độ chiến lược: </span>
+                  <span>
+                    Bạn đã dừng ở câu này {timeSpentOnCurrentGroup}s (khuyến nghị ~{currentPaceMetrics.targetSecPerQ}s/câu, tối đa {currentPaceMetrics.timeoutThreshold}s). Hãy chọn đáp án để giữ đúng thời gian hoàn thành 75 phút!
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* RENDER EVERY QUESTION IN CURRENT GROUP */}
             {currentGroup.questions.map((item, qIdxInGroup) => {
               const q = item.question;
@@ -1757,6 +2002,22 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
                       <span className="inline-block px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-extrabold tracking-wide shadow-2xs">
                         Câu {q.questionNum || gIdx + 1}
                       </span>
+                      {readingConfig?.showTargetPaceBadge && !isCardChecked && (
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-lg border transition-colors shadow-2xs ${
+                            timeSpentOnCurrentGroup <= currentPaceMetrics.targetSecPerQ
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                              : timeSpentOnCurrentGroup < currentPaceMetrics.timeoutThreshold
+                              ? "bg-amber-50 text-amber-800 border-amber-300"
+                              : "bg-rose-50 text-rose-800 border-rose-400 animate-pulse"
+                          }`}
+                          title={`Thời gian làm câu này: ${timeSpentOnCurrentGroup}s (Mục tiêu: ~${currentPaceMetrics.targetSecPerQ}s, Cảnh báo quá giờ: ${currentPaceMetrics.timeoutThreshold}s)`}
+                        >
+                          <Clock className="w-3 h-3 shrink-0" />
+                          <span>{timeSpentOnCurrentGroup}s</span>
+                          <span className="text-slate-400 font-normal">/ ~{currentPaceMetrics.targetSecPerQ}s</span>
+                        </span>
+                      )}
                       {isCardChecked && (
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
@@ -2246,46 +2507,88 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
               </div>
             )}
 
-            {/* PASSAGE ACTION SUBMIT / CHECK BUTTON (Chỉ hiện khi đã chọn hết đáp án và đoạn đã hoàn thành) */}
-            {isMultiQuestionGroup && isCurrentGroupChecked && (
-              <div className="p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 shadow-sm space-y-4 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span className="font-bold text-sm text-slate-800">
-                      Đoạn {currentGroupIndex + 1} đã hoàn thành!
-                    </span>
+            {/* ACTION BAR SAU KHI HOÀN THÀNH CÂU (PART 5) HOẶC ĐOẠN (PART 6 & PART 7) */}
+            {isCurrentGroupChecked && (() => {
+              const nextUnansweredIdx = findFirstUnansweredGroup(userAnswers, checkedGroups);
+              const hasRemainingUnanswered = nextUnansweredIdx !== -1;
+              return (
+                <div className="p-5 sm:p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 shadow-sm space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <span className="font-bold text-sm text-slate-800">
+                        {isMultiQuestionGroup
+                          ? `Đoạn ${currentGroupIndex + 1} đã hoàn thành!`
+                          : `Câu ${currentGroupFirstQuestion?.questionNum || currentGroupIndex + 1} đã chấm xong!`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResetCurrentGroup}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{isMultiQuestionGroup ? "Làm lại đoạn này" : "Làm lại câu này"}</span>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleResetCurrentGroup}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Làm lại đoạn này</span>
-                  </button>
-                </div>
 
-                {currentGroupIndex < passageGroups.length - 1 ? (
-                  <button
-                    type="button"
-                    onClick={handleNextGroup}
-                    className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
-                  >
-                    <span>Chuyển sang đoạn tiếp theo ({currentGroupIndex + 2}/{passageGroups.length})</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
-                  >
-                    <span>Hoàn thành toàn bộ bài luyện tập! 🎉</span>
-                  </button>
-                )}
-              </div>
-            )}
+                  {currentGroupIndex < passageGroups.length - 1 ? (
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleNextGroup}
+                        className="flex-1 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>
+                          {isMultiQuestionGroup
+                            ? `Đoạn tiếp theo (${currentGroupIndex + 2}/${passageGroups.length})`
+                            : `Câu tiếp theo (${currentGroupIndex + 2}/${passageGroups.length})`}
+                        </span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      {hasRemainingUnanswered && nextUnansweredIdx !== currentGroupIndex + 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setCurrentGroupIndex(nextUnansweredIdx)}
+                          className="px-4 py-3.5 rounded-2xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition cursor-pointer"
+                        >
+                          Tới {isMultiQuestionGroup ? `đoạn chưa làm (#${nextUnansweredIdx + 1})` : `câu chưa làm (#${nextUnansweredIdx + 1})`}
+                        </button>
+                      )}
+                    </div>
+                  ) : hasRemainingUnanswered ? (
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentGroupIndex(nextUnansweredIdx)}
+                        className="flex-1 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>
+                          Còn {questionGridStats.unanswered} câu chưa làm — Chuyển tới ngay
+                        </span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-3.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer"
+                      >
+                        Tạm thoát
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowCompletionSummaryModal(true)}
+                      className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                      <span>Hoàn thành &amp; Xem báo cáo phân tích tốc độ làm bài! 🎉</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -2328,6 +2631,18 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
             <ChevronLeft className="w-5 h-5" />
           </button>
 
+          {questionGridStats.unanswered === 0 && (
+            <button
+              type="button"
+              onClick={() => setShowCompletionSummaryModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs cursor-pointer animate-pulse"
+              title="Xem phân tích tốc độ và nhịp độ làm bài hoàn chỉnh"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Báo cáo tốc độ</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setIsQuestionGridOpen(true)}
@@ -2335,9 +2650,7 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           >
             <Grid className="w-4 h-4" />
             <span>
-              {currentGroup.questions.length > 1
-                ? `Câu ${currentGroup.startIndex + 1} - ${currentGroup.startIndex + currentGroup.questions.length}/${totalQuestionsCount}`
-                : `Câu ${currentGroup.startIndex + 1}/${totalQuestionsCount}`}
+              Câu {currentGroup.startIndex + currentGroup.questions.length}/{totalQuestionsCount}
             </span>
           </button>
 
@@ -3514,63 +3827,90 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
       )}
 
       {/* RESUME VS RESTART MODAL WHEN PRIOR LOG EXISTS */}
-      {showResumePromptModal && !isRedoWrongOnly && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/65 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
-            <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider border border-blue-200">
-                  Phát hiện lịch sử bài làm trước đó
-                </span>
-                <h3 className="text-lg font-extrabold text-slate-900 leading-snug">
-                  Bạn muốn tiếp tục hay làm mới từ đầu?
-                </h3>
-              </div>
-            </div>
+      {showResumePromptModal && !isRedoWrongOnly && (() => {
+        const nextUnansweredIdx = findFirstUnansweredGroup(userAnswers, checkedGroups);
+        const liveAnswered = Math.min(totalQuestionsCount, Object.keys(userAnswers).length || savedLogSummary.answeredCount);
+        const remainingCount = Math.max(0, totalQuestionsCount - liveAnswered);
+        const isAllDone = nextUnansweredIdx === -1 || remainingCount === 0;
+        const nextTargetGroup = nextUnansweredIdx !== -1 ? passageGroups[nextUnansweredIdx] : null;
+        const nextTargetLabel = nextTargetGroup
+          ? nextTargetGroup.questions.length > 1
+            ? `Đoạn ${nextUnansweredIdx + 1} (Câu ${nextTargetGroup.questions[0]?.question?.questionNum || nextTargetGroup.startIndex + 1})`
+            : `Câu ${nextTargetGroup.questions[0]?.question?.questionNum || nextUnansweredIdx + 1}`
+          : "";
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1.5 leading-relaxed">
-              <p>
-                Hệ thống ghi nhận bạn đã làm{" "}
-                <strong className="text-blue-700">
-                  {Math.max(Object.keys(userAnswers).length, savedLogSummary.answeredCount)}/{totalQuestionsCount} câu
-                </strong>{" "}
-                trong bài <strong className="text-slate-900">{card.title}</strong>.
-              </p>
-              <p className="text-slate-500">
-                Chọn <strong>Tiếp tục bài cũ</strong> để giữ lại đáp án đã chọn, hoặc{" "}
-                <strong>Làm mới từ đầu</strong> để xoá toàn bộ log cũ và tính giờ lại.
-              </p>
-            </div>
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/65 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase tracking-wider border border-blue-200">
+                    Phát hiện lịch sử bài làm trước đó
+                  </span>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-snug">
+                    {isAllDone
+                      ? "Bạn đã hoàn thành bài này!"
+                      : "Bạn muốn tiếp tục hay làm mới từ đầu?"}
+                  </h3>
+                </div>
+              </div>
 
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isSfxEnabled) playSfx("click");
-                  setShowResumePromptModal(false);
-                }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-xs transition cursor-pointer"
-              >
-                Tiếp tục bài đang làm
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isSfxEnabled) playSfx("click");
-                  handleRestartAll();
-                }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-extrabold transition cursor-pointer inline-flex items-center justify-center gap-1.5"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Làm mới từ đầu</span>
-              </button>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1.5 leading-relaxed">
+                <p>
+                  Hệ thống ghi nhận bạn đã làm{" "}
+                  <strong className="text-blue-700">
+                    {liveAnswered}/{totalQuestionsCount} câu
+                  </strong>{" "}
+                  trong bài <strong className="text-slate-900">{card.title}</strong>
+                  {!isAllDone && (
+                    <>
+                      {" "}(còn <strong className="text-emerald-700">{remainingCount} câu chưa làm</strong>).
+                    </>
+                  )}
+                </p>
+                <p className="text-slate-500">
+                  {isAllDone ? (
+                    <>
+                      Chọn <strong>Xem lại bài đã làm</strong> để xem đáp án &amp; giải thích, hoặc{" "}
+                      <strong>Làm mới từ đầu</strong> để xóa kết quả cũ và luyện lại.
+                    </>
+                  ) : (
+                    <>
+                      Chọn <strong>Tiếp tục câu chưa làm</strong> để chuyển thẳng tới{" "}
+                      <strong className="text-slate-800">{nextTargetLabel}</strong>, hoặc{" "}
+                      <strong>Làm mới từ đầu</strong> để xóa toàn bộ kết quả cũ.
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleContinueUnanswered}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-xs transition cursor-pointer"
+                >
+                  {isAllDone ? "Xem lại bài đã làm" : "Tiếp tục câu chưa làm"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isSfxEnabled) playSfx("click");
+                    handleRestartAll();
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-extrabold transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Làm mới từ đầu</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ETS TOEIC DIRECTIONS MODAL */}
       {showDirectionsModal && (
@@ -3634,6 +3974,174 @@ export const ReadingPracticeWorkspace: React.FC<ReadingPracticeWorkspaceProps> =
           </div>
         </div>
       )}
+
+      {/* COMPLETION & PACING PERFORMANCE SUMMARY MODAL */}
+      {showCompletionSummaryModal && (() => {
+        const totalTargetSeconds = totalQuestionsCount * currentPaceMetrics.targetSecPerQ;
+        const actualSeconds = timerSeconds;
+        const diffSeconds = totalTargetSeconds - actualSeconds;
+        const isAhead = diffSeconds > 30;
+        const isBehind = diffSeconds < -30;
+        const avgSecPerQ = Math.round(actualSeconds / Math.max(1, totalQuestionsCount));
+        const accuracyPercent = Math.round((currentSessionCorrect / Math.max(1, totalQuestionsCount)) * 100);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 font-sans">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 max-h-[92vh] overflow-y-auto custom-scrollbar">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+                    <Sparkles className="w-5 h-5 fill-amber-400" />
+                  </span>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                      Báo Cáo Tốc Độ &amp; Nhịp Độ Làm Bài Reading
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {card.title} • {totalQuestionsCount} câu hỏi • {workspacePart}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCompletionSummaryModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 4 KPI Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* 1. Độ chính xác */}
+                <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-1">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wide block">
+                    Độ chính xác
+                  </span>
+                  <span className="text-xl font-black text-emerald-950 font-mono block">
+                    {currentSessionCorrect} / {totalQuestionsCount}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded inline-block">
+                    {accuracyPercent}% chuẩn xác
+                  </span>
+                </div>
+
+                {/* 2. Thời gian thực tế */}
+                <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-1">
+                  <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wide block">
+                    Thời gian thực tế
+                  </span>
+                  <span className="text-xl font-black text-blue-950 font-mono block">
+                    {formatTimer(actualSeconds)}
+                  </span>
+                  <span className="text-[10px] text-blue-700 font-medium block">
+                    tổng thời gian làm bài
+                  </span>
+                </div>
+
+                {/* 3. Thời gian mục tiêu */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block">
+                    Thời gian mục tiêu
+                  </span>
+                  <span className="text-xl font-black text-slate-900 font-mono block">
+                    {formatTimer(totalTargetSeconds)}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium block">
+                    {totalQuestionsCount} câu × {currentPaceMetrics.targetSecPerQ}s
+                  </span>
+                </div>
+
+                {/* 4. Tốc độ trung bình */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-1">
+                  <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wide block">
+                    Tốc độ câu
+                  </span>
+                  <span className="text-xl font-black text-purple-950 font-mono block">
+                    ~{avgSecPerQ}s / câu
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-medium block">
+                    mục tiêu: ~{currentPaceMetrics.targetSecPerQ}s
+                  </span>
+                </div>
+              </div>
+
+              {/* Assessment Message Box */}
+              <div
+                className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-2 ${
+                  isAhead
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                    : isBehind
+                    ? "bg-amber-50 border-amber-300 text-amber-950"
+                    : "bg-blue-50 border-blue-300 text-blue-950"
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  {isAhead ? (
+                    <>
+                      <Zap className="w-4 h-4 text-emerald-600 fill-emerald-500" />
+                      <span>
+                        ⚡ Hoàn thành sớm hơn mục tiêu {formatTimer(diffSeconds)} (-{Math.round((diffSeconds / Math.max(1, totalTargetSeconds)) * 100)}%)!
+                      </span>
+                    </>
+                  ) : isBehind ? (
+                    <>
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        ⚠️ Bị trễ hơn mục tiêu {formatTimer(Math.abs(diffSeconds))} (+{Math.round((Math.abs(diffSeconds) / Math.max(1, totalTargetSeconds)) * 100)}%)
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                      <span>✓ Rất chuẩn xác! Hoàn thành sát với thời gian dự kiến</span>
+                    </>
+                  )}
+                </div>
+
+                <p className="font-normal">
+                  {isAhead
+                    ? `Tốc độ phản xạ của bạn đạt ~${avgSecPerQ}s/câu (nhanh hơn chuẩn mục tiêu ${currentPaceMetrics.targetSecPerQ}s/câu). Trong bài thi thật 75 phút, việc tiết kiệm được ${formatTimer(diffSeconds)} ở phần này sẽ giúp bạn có quỹ thời gian quý giá để dồn vào giải quyết các bài đọc khó ở Part 7.`
+                    : isBehind
+                    ? `Bạn đang mất trung bình ~${avgSecPerQ}s cho mỗi câu (chuẩn mục tiêu là ${currentPaceMetrics.targetSecPerQ}s/câu). Nếu duy trì tốc độ này khi làm trọn đề thi 75 phút, bạn có thể bị thiếu từ 5 đến 12 phút ở Part 7. Hãy tập nhận diện nhanh ngữ pháp và chọn đáp án dứt khoát hơn!`
+                    : `Bạn duy trì nhịp độ làm bài rất đều đặn và ổn định (~${avgSecPerQ}s/câu so với chuẩn ${currentPaceMetrics.targetSecPerQ}s/câu). Hãy tiếp tục duy trì cảm giác thời gian này khi bước vào kỳ thi thật!`}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleRestartAll}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Làm lại bài từ đầu</span>
+                </button>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompletionSummaryModal(false)}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition cursor-pointer"
+                  >
+                    Xem lại chi tiết bài làm
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    Hoàn tất &amp; Thoát
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

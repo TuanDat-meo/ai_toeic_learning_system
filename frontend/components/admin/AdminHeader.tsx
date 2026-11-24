@@ -1,8 +1,10 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Bell,
   ChevronDown,
   Clock3,
   LogOut,
@@ -23,6 +25,16 @@ import {
   updateCurrentUserProfile,
   type AccountActivity,
 } from "@/lib/api/auth";
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getReports,
+  updateSupportReport,
+  type AppNotification,
+  type SupportReport,
+} from "@/lib/api/support";
 
 type AdminProfile = {
   name: string;
@@ -88,6 +100,7 @@ function activityActionLabel(action: string) {
 export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [systemName, setSystemName] = useState("TOEIC MASTER");
   const [profile, setProfile] = useState(emptyProfile);
   const [draft, setDraft] = useState(emptyProfile);
   const [activities, setActivities] = useState<AccountActivity[]>([]);
@@ -98,6 +111,11 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [pendingReports, setPendingReports] = useState<SupportReport[]>([]);
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  const notifMenuRef = useRef<HTMLDivElement>(null);
   const [profileError, setProfileError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
@@ -112,6 +130,25 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
         .filter(([href, label]) => normalizeSearch(`${label} ${href}`).includes(normalizedQuery))
         .slice(0, 6)
     : [];
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("toeic_system_branding");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.systemName) setSystemName(parsed.systemName);
+      }
+    } catch {}
+
+    const handleBrandingChange = (event: Event) => {
+      const custom = event as CustomEvent<{ systemName?: string }>;
+      if (custom.detail?.systemName) {
+        setSystemName(custom.detail.systemName);
+      }
+    };
+    window.addEventListener("toeic:system-settings-changed", handleBrandingChange);
+    return () => window.removeEventListener("toeic:system-settings-changed", handleBrandingChange);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -129,21 +166,79 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
         if (active) router.replace("/login");
       });
 
+    const handleProfileUpdate = (event: Event) => {
+      const custom = event as CustomEvent<{ name?: string; email?: string }>;
+      if (custom.detail) {
+        setProfile((prev) => ({
+          name: custom.detail.name ?? prev.name,
+          email: custom.detail.email ?? prev.email,
+        }));
+      }
+    };
+    window.addEventListener("toeic:user-profile-updated", handleProfileUpdate);
+
     return () => {
       active = false;
+      window.removeEventListener("toeic:user-profile-updated", handleProfileUpdate);
     };
   }, [router]);
 
   useEffect(() => {
-    if (!menuOpen) return;
+    let active = true;
+    const loadNotifs = async () => {
+      try {
+        const [list, count, reports] = await Promise.all([
+          getNotifications(5).catch(() => []),
+          getUnreadNotificationCount().catch(() => 0),
+          getReports().catch(() => []),
+        ]);
+        if (active) {
+          setNotifications(list);
+          setUnreadNotifCount(count);
+          setPendingReports(reports.filter((r) => r.status === "PENDING"));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadNotifs();
+    const interval = window.setInterval(() => void loadNotifs(), 30_000);
+    window.addEventListener("notification-updated", loadNotifs);
+    window.addEventListener("support-reports-updated", loadNotifs);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("notification-updated", loadNotifs);
+      window.removeEventListener("support-reports-updated", loadNotifs);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!notifMenuOpen) return;
+
+    function closeOnOutside(event: PointerEvent) {
+      if (notifMenuRef.current && !notifMenuRef.current.contains(event.target as Node)) {
+        setNotifMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutside);
+    return () => document.removeEventListener("pointerdown", closeOnOutside);
+  }, [notifMenuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen && !dialog) return;
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setDialog(null);
+      }
     }
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [menuOpen]);
+  }, [menuOpen, dialog]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -190,6 +285,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
       setProfile(updated);
       setDraft(updated);
       setDialog(null);
+      window.dispatchEvent(new CustomEvent("toeic:user-profile-updated", { detail: updated }));
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Không thể cập nhật hồ sơ. Vui lòng thử lại.");
     } finally {
@@ -245,9 +341,30 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     setLogoutAllSaving(true);
     try {
       await logoutAllSessions();
+      document.documentElement.classList.remove("dark");
+      ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch {}
+      });
       router.replace("/login");
       router.refresh();
     } catch (error) {
+      // Nếu phiên đã hết hạn trên server hoặc trả về lỗi, tiến hành dọn sạch phiên client và điều hướng
+      const isExpired = error instanceof Error && (error.message.includes("hết hạn") || error.message.includes("401"));
+      if (isExpired) {
+        document.documentElement.classList.remove("dark");
+        ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
+          try {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          } catch {}
+        });
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
       setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất các thiết bị.");
     } finally {
       setLogoutAllSaving(false);
@@ -258,14 +375,18 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     setLogoutError("");
     try {
       await logoutSession();
+    } catch (error) {
+      console.warn("Lỗi khi gọi API đăng xuất, tiếp tục đăng xuất client:", error);
+    } finally {
+      document.documentElement.classList.remove("dark");
       ["accessToken", "refreshToken", "token", "authToken", "currentUser", "auth"].forEach((key) => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch {}
       });
       router.replace("/login");
       router.refresh();
-    } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
     }
   }
 
@@ -291,7 +412,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20">AI</span>
           <span className="min-w-0">
             <span className="flex items-center gap-2">
-              <span className="truncate text-sm font-bold tracking-tight text-slate-900">TOEIC MASTER</span>
+              <span className="truncate text-sm font-bold tracking-tight text-slate-900">{systemName}</span>
               <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">PRO</span>
             </span>
             <span className="block text-xs font-medium text-slate-400">Admin Workspace</span>
@@ -346,7 +467,148 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Notification Bell */}
+          <div className="relative" ref={notifMenuRef}>
+            {(() => {
+              const totalAlertCount = unreadNotifCount + pendingReports.length;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setNotifMenuOpen((prev) => !prev)}
+                    aria-label="Thông báo và yêu cầu hỗ trợ"
+                    className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    <Bell className="h-4.5 w-4.5 text-slate-600" />
+                    {totalAlertCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs">
+                        {totalAlertCount > 9 ? "9+" : totalAlertCount}
+                      </span>
+                    )}
+                  </button>
+                  {notifMenuOpen && (
+                    <div className="absolute right-0 top-full z-40 mt-2 w-84 sm:w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 animate-in fade-in zoom-in duration-150">
+                      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-900">Thông báo & Yêu cầu</span>
+                          {totalAlertCount > 0 && (
+                            <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 border border-rose-200">
+                              {totalAlertCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {unreadNotifCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await markAllNotificationsRead().catch(() => {});
+                                setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+                                setUnreadNotifCount(0);
+                                window.dispatchEvent(new Event("notification-updated"));
+                              }}
+                              className="text-[11px] font-semibold text-slate-500 hover:text-blue-600 transition cursor-pointer"
+                            >
+                              Đã đọc tất cả
+                            </button>
+                          )}
+                          <Link
+                            href="/admin/support/reports"
+                            onClick={() => setNotifMenuOpen(false)}
+                            className="text-[11px] font-semibold text-blue-600 hover:underline"
+                          >
+                            Xem tất cả ↗
+                          </Link>
+                        </div>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                        {/* Danh sách ticket học viên chờ xử lý */}
+                        {pendingReports.length > 0 && (
+                          <div className="bg-amber-50/50 px-3.5 py-1.5 border-b border-amber-100 flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                              Học viên gửi yêu cầu ({pendingReports.length})
+                            </span>
+                            <span className="text-[10px] font-medium text-amber-600">Chờ xử lý</span>
+                          </div>
+                        )}
+                        {pendingReports.map((report) => (
+                          <Link
+                            key={report.id}
+                            href={`/admin/support/reports?ticket=${encodeURIComponent(report.ticketCode)}`}
+                            onClick={async () => {
+                              setNotifMenuOpen(false);
+                              try {
+                                await updateSupportReport(report.id, {
+                                  status: "IN_PROGRESS",
+                                  priority: report.priority,
+                                });
+                                setPendingReports((prev) => prev.filter((r) => r.id !== report.id));
+                                window.dispatchEvent(new Event("support-reports-updated"));
+                                window.dispatchEvent(new Event("notification-updated"));
+                              } catch (e) {
+                                console.warn(e);
+                              }
+                            }}
+                            className="block px-4 py-3 text-left transition hover:bg-amber-50/50 bg-amber-50/15"
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                #{report.ticketCode}
+                              </span>
+                              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 border border-rose-200">
+                                Chờ xử lý
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{report.title}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                              Từ: <span className="font-medium text-slate-700">{report.userName || "Học viên"}</span> ({report.userEmail})
+                            </p>
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              {new Date(report.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} • {new Date(report.createdAt).toLocaleDateString("vi-VN")}
+                            </span>
+                          </Link>
+                        ))}
+
+                        {/* Thông báo hệ thống */}
+                        {notifications.length > 0 && notifications.map((notif) => (
+                          <Link
+                            key={notif.id}
+                            href={notif.linkUrl || "/admin/support/reports"}
+                            onClick={async () => {
+                              setNotifMenuOpen(false);
+                              if (!notif.isRead) {
+                                await markNotificationRead(notif.id).catch(() => {});
+                                setNotifications((prev) =>
+                                  prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+                                );
+                                setUnreadNotifCount((prev) => Math.max(0, prev - 1));
+                                window.dispatchEvent(new Event("notification-updated"));
+                              }
+                            }}
+                            className={`block px-4 py-3 text-left transition hover:bg-slate-50 ${
+                              !notif.isRead ? "bg-blue-50/40" : ""
+                            }`}
+                          >
+                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{notif.title}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{notif.message}</p>
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              {new Date(notif.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </Link>
+                        ))}
+
+                        {totalAlertCount === 0 && (
+                          <p className="px-4 py-8 text-center text-xs text-slate-400">Không có thông báo hoặc yêu cầu mới cần xử lý.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
           <div className="relative" ref={profileMenuRef}>
             <button
               type="button"
@@ -466,41 +728,49 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                   <input required minLength={8} maxLength={72} type="password" autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                 </label>
                 {securityError ? <p role="alert" className="text-sm text-rose-700">{securityError}</p> : null}
-                <div className="flex justify-end border-t border-slate-100 pt-4">
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button type="button" onClick={() => setDialog(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Hủy</button>
                   <button type="submit" disabled={passwordSaving} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">
                     <KeyRound aria-hidden="true" className="h-4 w-4" /> {passwordSaving ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-5">
-                {activityLoading ? (
-                  <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải lịch sử thao tác...</p>
-                ) : activityError ? (
-                  <p role="alert" className="py-8 text-center text-sm text-rose-700">{activityError}</p>
-                ) : activities.length > 0 ? (
-                  <ol className="space-y-0">
-                    {activities.map((entry, index) => (
-                      <li key={entry.id} className="relative flex gap-3 pb-5 last:pb-0">
-                        {index < activities.length - 1 ? <span aria-hidden="true" className="absolute left-[7px] top-4 h-full w-px bg-slate-200" /> : null}
-                        <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-blue-500 bg-white" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800">{activityActionLabel(entry.action)}</p>
-                          <p className="mt-0.5 truncate text-xs text-slate-500">{entry.summary || entry.entityType}</p>
-                          <time dateTime={entry.createdAt} className="mt-1 block text-[11px] text-slate-400">
-                            {new Date(entry.createdAt).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}
-                          </time>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <div className="py-8 text-center">
-                    <Clock3 aria-hidden="true" className="mx-auto h-8 w-8 text-slate-300" />
-                    <p className="mt-3 text-sm font-medium text-slate-700">Chưa có thao tác nào</p>
-                    <p className="mt-1 text-xs text-slate-500">Các thao tác CRUD thực hiện bằng tài khoản này sẽ xuất hiện tại đây.</p>
-                  </div>
-                )}
+              <div className="flex flex-col">
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-5">
+                  {activityLoading ? (
+                    <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải lịch sử thao tác...</p>
+                  ) : activityError ? (
+                    <p role="alert" className="py-8 text-center text-sm text-rose-700">{activityError}</p>
+                  ) : activities.length > 0 ? (
+                    <ol className="space-y-0">
+                      {activities.map((entry, index) => (
+                        <li key={entry.id} className="relative flex gap-3 pb-5 last:pb-0">
+                          {index < activities.length - 1 ? <span aria-hidden="true" className="absolute left-[7px] top-4 h-full w-px bg-slate-200" /> : null}
+                          <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-blue-500 bg-white" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-slate-800">{activityActionLabel(entry.action)}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{entry.summary || entry.entityType}</p>
+                            <time dateTime={entry.createdAt} className="mt-1 block text-[11px] text-slate-400">
+                              {new Date(entry.createdAt).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}
+                            </time>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <div className="py-8 text-center">
+                      <Clock3 aria-hidden="true" className="mx-auto h-8 w-8 text-slate-300" />
+                      <p className="mt-3 text-sm font-medium text-slate-700">Chưa có thao tác nào</p>
+                      <p className="mt-1 text-xs text-slate-500">Các thao tác CRUD thực hiện bằng tài khoản này sẽ xuất hiện tại đây.</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end border-t border-slate-100 p-4">
+                  <button type="button" onClick={() => setDialog(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    Đóng
+                  </button>
+                </div>
               </div>
             )}
           </section>

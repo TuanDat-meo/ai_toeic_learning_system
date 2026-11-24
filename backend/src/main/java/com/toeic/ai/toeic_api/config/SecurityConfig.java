@@ -72,7 +72,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
                         .requestMatchers(HttpMethod.POST, "/api/grammar/progress").authenticated()
                         .requestMatchers("/api/admin/grammar/**").hasAnyRole("ADMIN", "TEACHER", "AUTHOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.POST,
+                            "/api/listening/progress",
+                            "/api/listening/units/progress",
+                            "/api/listening/attempts")
+                            .authenticated()
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register",
+                            "/api/auth/logout",
                             "/api/auth/google/**",
                             "/api/auth/password/forgot", "/api/auth/password/reset",
                             "/api/listening/**",
@@ -86,13 +92,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/chat/discussion").permitAll()
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/support-reports/**").authenticated()
+                        .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/api/community/**").authenticated()
-                        .requestMatchers("/api/announcements/**").hasRole("STUDENT")
+                        .requestMatchers("/api/announcements/**").authenticated()
                         .requestMatchers("/api/question-corrections/**").authenticated()
                         .requestMatchers("/api/admin/support/**", "/api/admin/chat/support",
                             "/api/admin/announcements", "/api/admin/announcements/**",
                             "/api/admin/settings", "/api/admin/settings/**",
                             "/api/admin/mock-tests/**", "/api/admin/reading/**",
+                            "/api/admin/ai-review/**",
                             "/api/admin/question-bank/**")
                             .hasAnyRole("ADMIN", "TEACHER")
                         .requestMatchers(HttpMethod.POST, "/api/admin/data/import/preview")

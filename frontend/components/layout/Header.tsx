@@ -16,17 +16,25 @@ import {
   House,
   Lightbulb,
   LogOut,
+  MessageCircle,
   MessagesSquare,
   MessageSquareText,
   Moon,
-  Phone,
   Snowflake,
   Target,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/api/auth';
-import { getStudentAnnouncements } from '@/lib/api/support';
+import { getStudentAnnouncements, getUnreadNotificationCount } from '@/lib/api/support';
+import { computeRealStreaks, getTodayDateString, type StudyTrackerData } from '@/lib/studyTracker';
+import {
+  DOUBLE_CLICK_LOOKUP_EVENT,
+  DOUBLE_CLICK_LOOKUP_STORAGE_KEY,
+} from '@/components/layout/DoubleClickDictionary';
+import { OPEN_FEEDBACK_MODAL_EVENT } from '@/components/layout/FeedbackSupportModal';
+
+const DARK_MODE_STORAGE_KEY = 'toeic_pref_dark_mode';
 
 interface NavigationItem {
   label: string;
@@ -50,9 +58,11 @@ const DEFAULT_STUDY_STATS_SNAPSHOT = JSON.stringify([null, null]);
 function subscribeStudyStats(onStoreChange: () => void) {
   window.addEventListener('storage', onStoreChange);
   window.addEventListener('toeic-study-tracker-updated', onStoreChange);
+  window.addEventListener('toeic-dashboard-score-updated', onStoreChange);
   return () => {
     window.removeEventListener('storage', onStoreChange);
     window.removeEventListener('toeic-study-tracker-updated', onStoreChange);
+    window.removeEventListener('toeic-dashboard-score-updated', onStoreChange);
   };
 }
 
@@ -75,8 +85,10 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [systemName, setSystemName] = useState('TOEIC AI');
   const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
   const [logoutError, setLogoutError] = useState('');
+  const [prefNotice, setPrefNotice] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isDoubleTapLookup, setIsDoubleTapLookup] = useState(true);
   const studyStatsSnapshot = useSyncExternalStore(
@@ -88,14 +100,15 @@ export function Header() {
     try {
       const [rawScore, rawTracker] = JSON.parse(studyStatsSnapshot) as [string | null, string | null];
       const scoreObj = rawScore ? JSON.parse(rawScore) : null;
-      const trackerObj = rawTracker ? JSON.parse(rawTracker) : null;
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const trackerObj = rawTracker ? (JSON.parse(rawTracker) as StudyTrackerData) : null;
+      const todayStr = getTodayDateString();
       const todayRec = trackerObj?.history?.[todayStr];
-      const todayMins = todayRec?.minutesSpent ?? trackerObj?.todayMinutes ?? 0;
+      const todayMins = todayRec?.minutesSpent ?? 0;
+      const realStreak = trackerObj ? computeRealStreaks(trackerObj).currentStreak : 0;
       return {
-        streak: trackerObj?.currentStreak ?? 0,
+        streak: realStreak,
         minutes: todayMins,
-        score: scoreObj?.total ?? null,
+        score: typeof scoreObj?.total === 'number' ? scoreObj.total : null,
       };
     } catch (error) {
       console.error("Could not read dashboard study statistics:", error);
@@ -104,25 +117,102 @@ export function Header() {
   }, [studyStatsSnapshot]);
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
 
+  // Sync saved dark mode & double-click dictionary preferences on mount
   useEffect(() => {
+    try {
+      const savedDark = localStorage.getItem(DARK_MODE_STORAGE_KEY) === 'true';
+      setIsDarkMode(savedDark);
+      document.documentElement.classList.toggle('dark', savedDark);
 
+      const savedLookup = localStorage.getItem(DOUBLE_CLICK_LOOKUP_STORAGE_KEY) !== 'false';
+      setIsDoubleTapLookup(savedLookup);
+
+      const savedBranding = localStorage.getItem('toeic_system_branding');
+      if (savedBranding) {
+        const parsed = JSON.parse(savedBranding);
+        if (parsed?.systemName) setSystemName(parsed.systemName);
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+
+    const handleBrandingChange = (event: Event) => {
+      const custom = event as CustomEvent<{ systemName?: string }>;
+      if (custom.detail?.systemName) {
+        setSystemName(custom.detail.systemName);
+      }
+    };
+    window.addEventListener('toeic:system-settings-changed', handleBrandingChange);
+    return () => window.removeEventListener('toeic:system-settings-changed', handleBrandingChange);
+  }, []);
+
+  const closeMenu = () => {
+    if (profileMenuRef.current) {
+      profileMenuRef.current.open = false;
+    }
+  };
+
+  const showPrefNotice = (msg: string) => {
+    setPrefNotice(msg);
+    window.setTimeout(() => {
+      setPrefNotice((current) => (current === msg ? '' : current));
+    }, 2800);
+  };
+
+  const handleToggleDarkMode = () => {
+    const next = !isDarkMode;
+    setIsDarkMode(next);
+    document.documentElement.classList.toggle('dark', next);
+    try {
+      localStorage.setItem(DARK_MODE_STORAGE_KEY, String(next));
+    } catch {
+      // Ignore storage write errors
+    }
+    showPrefNotice(next ? 'Đã bật Chế độ tối.' : 'Đã chuyển về Chế độ sáng.');
+  };
+
+  const handleToggleDoubleTapLookup = () => {
+    const next = !isDoubleTapLookup;
+    setIsDoubleTapLookup(next);
+    try {
+      localStorage.setItem(DOUBLE_CLICK_LOOKUP_STORAGE_KEY, String(next));
+    } catch {
+      // Ignore storage write errors
+    }
+    window.dispatchEvent(new Event(DOUBLE_CLICK_LOOKUP_EVENT));
+    showPrefNotice(
+      next
+        ? 'Đã bật tra từ: bấm đúp từ tiếng Anh bất kỳ để xem nghĩa & nghe phát âm.'
+        : 'Đã tắt tra từ khi bấm đúp.',
+    );
+  };
+
+  useEffect(() => {
     getCurrentUser()
       .then(setUser)
       .catch((error: unknown) => {
         console.error("Could not load the current user:", error);
       });
+
+    const handleProfileUpdate = () => {
+      getCurrentUser().then(setUser).catch(() => {});
+    };
+    window.addEventListener('toeic:user-profile-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('toeic:user-profile-updated', handleProfileUpdate);
+    };
   }, [router]);
 
   useEffect(() => {
-    if (!user || user.role !== 'STUDENT') {
-      return;
-    }
-
     let active = true;
     const refreshUnreadCount = async () => {
       try {
-        const announcements = await getStudentAnnouncements();
-        if (active) setUnreadAnnouncementCount(announcements.filter((item) => !item.isRead).length);
+        const [announcements, personalUnread] = await Promise.all([
+          getStudentAnnouncements().catch(() => []),
+          getUnreadNotificationCount().catch(() => 0),
+        ]);
+        const unreadAnn = announcements.filter((item) => !item.isRead).length;
+        if (active) setUnreadAnnouncementCount(unreadAnn + personalUnread);
       } catch {
         if (active) setUnreadAnnouncementCount(0);
       }
@@ -132,11 +222,15 @@ export function Header() {
     const interval = window.setInterval(() => void refreshUnreadCount(), 30_000);
     window.addEventListener('focus', refreshUnreadCount);
     window.addEventListener('announcement-read-updated', refreshUnreadCount);
+    window.addEventListener('announcement-updated', refreshUnreadCount);
+    window.addEventListener('notification-updated', refreshUnreadCount);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener('focus', refreshUnreadCount);
       window.removeEventListener('announcement-read-updated', refreshUnreadCount);
+      window.removeEventListener('announcement-updated', refreshUnreadCount);
+      window.removeEventListener('notification-updated', refreshUnreadCount);
     };
   }, [user, pathname]);
 
@@ -158,10 +252,18 @@ export function Header() {
     setLogoutError('');
     try {
       await logout();
+    } catch (error) {
+      console.warn('Lỗi khi gọi API đăng xuất, tiếp tục dọn phiên client:', error);
+    } finally {
+      document.documentElement.classList.remove('dark');
+      ['accessToken', 'refreshToken', 'token', 'authToken', 'currentUser', 'auth'].forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch {}
+      });
       router.replace('/login');
       router.refresh();
-    } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : 'Không thể đăng xuất.');
     }
   }
 
@@ -176,7 +278,7 @@ export function Header() {
           <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm shadow-primary/20">
             <BookOpen className="size-[18px]" aria-hidden="true" />
           </span>
-          <span className="hidden text-[15px] font-bold tracking-tight text-on-surface lg:inline">TOEIC AI</span>
+          <span className="hidden text-[15px] font-bold tracking-tight text-on-surface lg:inline">{systemName}</span>
         </Link>
 
         <nav aria-label="Điều hướng học tập" className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -233,12 +335,29 @@ export function Header() {
               <ProfileStat icon={Snowflake} value={studyStats.score?.toString() ?? "—"} label="điểm" iconClassName="text-cyan-600" />
             </div>
 
-            <Link href="/notifications" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
-              <Bell className="size-4 text-primary" aria-hidden="true" />
-              <span className="flex-1">Thông báo</span>
-              {unreadAnnouncementCount > 0 && <span aria-label={`${unreadAnnouncementCount} chưa đọc`} className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</span>}
+            <Link
+              href="/notifications"
+              onClick={closeMenu}
+              className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface"
+            >
+              <span className="flex items-center gap-3">
+                <Bell className="size-4 text-primary" aria-hidden="true" />
+                <span>Thông báo</span>
+              </span>
+              {unreadAnnouncementCount > 0 && (
+                <span
+                  aria-label={`${unreadAnnouncementCount} chưa đọc`}
+                  className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white shadow-xs tabular-nums"
+                >
+                  {unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}
+                </span>
+              )}
             </Link>
-            <Link href="/onboarding" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
+            <Link
+              href="/onboarding?mode=edit"
+              onClick={closeMenu}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface"
+            >
               <UserRound className="size-4 text-primary" aria-hidden="true" />
               <span className="flex-1">Thông tin cá nhân &amp; Mục tiêu</span>
             </Link>
@@ -246,7 +365,9 @@ export function Header() {
             <div className="my-1 border-t border-outline-variant/40" />
             <button
               type="button"
-              onClick={() => setIsDarkMode(!isDarkMode)}
+              role="switch"
+              aria-checked={isDarkMode}
+              onClick={handleToggleDarkMode}
               className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
             >
               <span className="flex items-center gap-3">
@@ -254,12 +375,17 @@ export function Header() {
                 Chế độ tối
               </span>
               <span className={`relative h-5 w-9 rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${isDarkMode ? 'left-4.5' : 'left-0.5'}`} />
+                <span
+                  style={{ backgroundColor: '#ffffff' }}
+                  className={`absolute top-0.5 size-4 rounded-full shadow-sm transition-all ${isDarkMode ? 'left-4.5' : 'left-0.5'}`}
+                />
               </span>
             </button>
             <button
               type="button"
-              onClick={() => setIsDoubleTapLookup(!isDoubleTapLookup)}
+              role="switch"
+              aria-checked={isDoubleTapLookup}
+              onClick={handleToggleDoubleTapLookup}
               className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
             >
               <span className="flex items-center gap-3">
@@ -267,26 +393,42 @@ export function Header() {
                 Tra từ khi bấm đúp
               </span>
               <span className={`relative h-5 w-9 rounded-full transition-colors ${isDoubleTapLookup ? 'bg-teal-600' : 'bg-slate-300'}`}>
-                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${isDoubleTapLookup ? 'left-4.5' : 'left-0.5'}`} />
+                <span
+                  style={{ backgroundColor: '#ffffff' }}
+                  className={`absolute top-0.5 size-4 rounded-full shadow-sm transition-all ${isDoubleTapLookup ? 'left-4.5' : 'left-0.5'}`}
+                />
               </span>
             </button>
 
             <div className="my-1 border-t border-outline-variant/40" />
             <button
               type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('toeic:open-chat'))}
+              onClick={() => {
+                closeMenu();
+                window.dispatchEvent(new CustomEvent('toeic:open-chat', { detail: { tab: 'support' } }));
+              }}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
             >
-              <Phone className="size-4 text-emerald-600" aria-hidden="true" />
-              <span>Liên hệ hỗ trợ</span>
+              <MessageCircle className="size-4 text-emerald-600" aria-hidden="true" />
+              <span>Liên hệ hỗ trợ (Chat Admin)</span>
             </button>
-            <Link href="/community" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface">
-              <Lightbulb className="size-4 text-amber-500" aria-hidden="true" />
-              <span>Đề xuất tính năng</span>
-            </Link>
             <button
               type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('toeic:open-chat'))}
+              onClick={() => {
+                closeMenu();
+                window.dispatchEvent(new CustomEvent(OPEN_FEEDBACK_MODAL_EVENT, { detail: { mode: 'feature' } }));
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
+            >
+              <Lightbulb className="size-4 text-amber-500" aria-hidden="true" />
+              <span>Đề xuất tính năng</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu();
+                window.dispatchEvent(new CustomEvent(OPEN_FEEDBACK_MODAL_EVENT, { detail: { mode: 'feedback' } }));
+              }}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-on-surface-variant transition hover:bg-surface-container-low hover:text-on-surface cursor-pointer"
             >
               <MessageSquareText className="size-4 text-blue-500" aria-hidden="true" />
@@ -305,6 +447,12 @@ export function Header() {
           </div>
         </details>
       </div>
+
+      {prefNotice ? (
+        <p role="status" className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-xl">
+          {prefNotice}
+        </p>
+      ) : null}
 
       {logoutError ? (
         <p role="alert" className="absolute right-4 top-full mt-2 rounded-lg border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container shadow-lg">

@@ -32,6 +32,7 @@ export default function StudentReadingPage() {
   }, [cards]);
 
   React.useEffect(() => {
+    document.title = "Luyện Thi TOEIC Reading - TOEIC AI";
     let active = true;
 
     const loadCards = async () => {
@@ -105,6 +106,20 @@ export default function StudentReadingPage() {
     return cards.filter((c) => c.status !== "draft");
   }, [cards]);
 
+  const autoOpenedCardRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (loading || publishedCards.length === 0 || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const openCardId = params.get("openCard");
+    if (!openCardId || autoOpenedCardRef.current === openCardId) return;
+    const match = publishedCards.find((c) => c.id === openCardId);
+    if (!match) return;
+    autoOpenedCardRef.current = openCardId;
+    const redoWrong = params.get("redoWrong") === "1";
+    void startReadingPractice(match, 0, redoWrong);
+  }, [loading, publishedCards]);
+
   const totalQuestionsCount = React.useMemo(() => {
     return publishedCards.reduce((acc, c) => acc + c.totalQuestions, 0);
   }, [publishedCards]);
@@ -119,13 +134,13 @@ export default function StudentReadingPage() {
       )}
 
       {/* Header chuẩn phong cách tối giản, sạch sẽ như Admin */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
         <div>
-          <p className="text-xs font-medium text-slate-400">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400">
             Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
-            <span className="font-semibold text-blue-700">Luyện đọc Reading</span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Luyện đọc Reading</span>
           </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-[28px]">
             Luyện Thi TOEIC Reading Trọng Tâm
           </h1>
         </div>
@@ -137,12 +152,12 @@ export default function StudentReadingPage() {
 
       {/* Grid danh sách bài đọc cho học viên */}
       {loadError ? (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           Không thể tải nội dung Reading từ backend: {loadError}
         </div>
       ) : null}
       {!loading && !loadError && cards.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
           Chưa có nội dung Reading được phát hành.
         </div>
       ) : null}
@@ -192,7 +207,7 @@ export default function StudentReadingPage() {
           }}
           playSfx={playSfx}
           showToast={showToast}
-          showTimer={false}
+          showTimer={true}
         />
       )}
     </div>

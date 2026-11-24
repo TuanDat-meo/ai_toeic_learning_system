@@ -55,4 +55,10 @@ public class AnnouncementController {
     public void markRead(@PathVariable UUID id, Authentication auth) {
         announcements.markRead(id, users.findManagedUser(auth.getName()).id());
     }
+
+    @PatchMapping("/api/announcements/read-all")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markAllRead(Authentication auth) {
+        announcements.markAllRead(users.findManagedUser(auth.getName()).id());
+    }
 }

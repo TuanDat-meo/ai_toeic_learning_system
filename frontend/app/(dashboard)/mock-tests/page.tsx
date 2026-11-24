@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Sparkles } from "lucide-react";
 import { MockTest, MockTestQuestion, TestItem, PracticeQuestion, normalizeToeicPart } from "@/app/admin/content/mock-tests/types";
 import { fetchMockTests, fetchMockTestQuestions, submitMockTestAttempt } from "@/lib/api/mockTests";
+import { recordListeningAttempt } from "@/lib/api/listening";
 import { StudentMockTestCardGrid } from "@/components/mock-tests/StudentMockTestCardGrid";
 import { MockTestExamModal } from "@/components/admin/content/mock-tests/MockTestExamModal";
 import { MockTestPracticeModal } from "@/components/admin/content/mock-tests/MockTestPracticeModal";
@@ -18,6 +19,7 @@ import { playUnifiedAnswerSound } from "@/lib/sound";
 
 export default function StudentMockTestsPage() {
   const [selectedVol, setSelectedVol] = useState<"vol1" | "vol2" | "vol3">("vol1");
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [testsVol1, setTestsVol1] = useState<TestItem[]>([]);
   const [testsVol2, setTestsVol2] = useState<TestItem[]>([]);
   const [testsVol3, setTestsVol3] = useState<TestItem[]>([]);
@@ -49,8 +51,30 @@ export default function StudentMockTestsPage() {
   }, []);
 
   useEffect(() => {
+    document.title = "Phòng Thi Thử TOEIC Trực Tuyến - TOEIC AI";
     loadTests();
   }, [loadTests]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("toeic_system_extended_settings");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed?.maintenanceMode === "boolean") {
+          setMaintenanceMode(parsed.maintenanceMode);
+        }
+      }
+    } catch {}
+
+    const handleSettingsChange = (event: Event) => {
+      const custom = event as CustomEvent<{ maintenanceMode?: boolean }>;
+      if (custom.detail && typeof custom.detail.maintenanceMode === "boolean") {
+        setMaintenanceMode(custom.detail.maintenanceMode);
+      }
+    };
+    window.addEventListener("toeic:system-settings-changed", handleSettingsChange);
+    return () => window.removeEventListener("toeic:system-settings-changed", handleSettingsChange);
+  }, []);
 
 
   // State Toast Notification
@@ -185,6 +209,24 @@ export default function StudentMockTestsPage() {
     }
   };
 
+  // Quy đổi điểm TOEIC chuẩn ETS (5 - 495 điểm, bước nhảy 5 điểm)
+  const convertEtsToeicScore = (correctCount: number, totalSectionQuestions: number, isListening: boolean): number => {
+    if (totalSectionQuestions <= 0 || correctCount <= 0) return 5;
+    // Quy đổi tương đương ra thang 100 câu của ETS
+    const equivalentCorrect100 = Math.round((correctCount / totalSectionQuestions) * 100);
+    if (isListening) {
+      if (equivalentCorrect100 >= 93) return 495;
+      if (equivalentCorrect100 <= 6) return 5;
+      const raw = 5 + ((equivalentCorrect100 - 6) / (93 - 6)) * 490;
+      return Math.min(495, Math.max(5, Math.round(raw / 5) * 5));
+    } else {
+      if (equivalentCorrect100 >= 97) return 495;
+      if (equivalentCorrect100 <= 9) return 5;
+      const raw = 5 + ((equivalentCorrect100 - 9) / (97 - 9)) * 490;
+      return Math.min(495, Math.max(5, Math.round(raw / 5) * 5));
+    }
+  };
+
   const handleSubmitExam = async (effectiveQuestions?: PracticeQuestion[]) => {
     const questionsToGrade = effectiveQuestions ?? activeExamQuestions;
     if (questionsToGrade.length === 0) {
@@ -195,27 +237,54 @@ export default function StudentMockTestsPage() {
     let correct = 0;
     let correctLC = 0;
     let correctRC = 0;
+    let totalLC = 0;
+    let totalRC = 0;
+    const partStats: Record<string, { total: number; answered: number; correct: number; wrong: number }> = {};
     const wrongQuestionIds: (string | number)[] = [];
     const answeredQuestionIds: (string | number)[] = [];
     questionsToGrade.forEach((q) => {
+      const normPart = normalizeToeicPart(q.part);
+      const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(normPart);
+      if (isListening) {
+        totalLC += 1;
+        if (!partStats[normPart]) {
+          partStats[normPart] = { total: 0, answered: 0, correct: 0, wrong: 0 };
+        }
+        partStats[normPart].total += 1;
+      } else {
+        totalRC += 1;
+      }
+
       const userAns = examAnswers[q.id];
       if (userAns !== undefined && userAns !== null && userAns !== "") {
         answeredQuestionIds.push(q.id);
+        if (isListening && partStats[normPart]) {
+          partStats[normPart].answered += 1;
+        }
         if (userAns === q.correctAnswer) {
           correct += 1;
-          const isListening = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(normalizeToeicPart(q.part));
-          if (isListening) correctLC++;
-          else correctRC++;
+          if (isListening) {
+            correctLC++;
+            if (partStats[normPart]) partStats[normPart].correct += 1;
+          } else {
+            correctRC++;
+          }
         } else {
           wrongQuestionIds.push(q.id);
+          if (isListening && partStats[normPart]) {
+            partStats[normPart].wrong += 1;
+          }
         }
+      } else if (isListening && partStats[normPart]) {
+        partStats[normPart].wrong += 1;
       }
     });
 
-    // Mỗi câu làm đúng là 5 điểm
-    const estLC = correctLC * 5;
-    const estRC = correctRC * 5;
-    const estTotal = correct * 5;
+    // Quy đổi điểm TOEIC theo đường cong chuẩn ETS (5..495 mỗi kỹ năng, tổng tối đa 990)
+    const estLC = totalLC > 0 ? convertEtsToeicScore(correctLC, totalLC, true) : 0;
+    const estRC = totalRC > 0 ? convertEtsToeicScore(correctRC, totalRC, false) : 0;
+    const estTotal = estLC + estRC;
+    const maxPossibleScore = (totalLC > 0 ? 495 : 0) + (totalRC > 0 ? 495 : 0);
 
     const wrongCount = wrongQuestionIds.length;
     const answeredCount = answeredQuestionIds.length;
@@ -251,6 +320,32 @@ export default function StudentMockTestsPage() {
         logStudySession(durationMin, 1);
       } catch {}
 
+      // Đồng bộ kết quả từng Part Listening sang BKT Analytics & Recommendation Engine
+      const activeListeningParts = Object.entries(partStats);
+      if (activeListeningParts.length > 0) {
+        const perPartDuration = Math.max(1, Math.round(durationSec / activeListeningParts.length));
+        activeListeningParts.forEach(([partName, st]) => {
+          void recordListeningAttempt({
+            targetType: "UNIT",
+            targetId: `mock-test-${examModalTest.id}-${partName.toLowerCase().replace(/\s+/g, "")}`,
+            targetTitle: `${examModalTest.title} · ${partName} (Thi thử)`,
+            part: partName,
+            mode: "REAL_EXAM",
+            totalQuestions: st.total,
+            completedQuestions: st.answered,
+            correctCount: st.correct,
+            wrongCount: st.wrong,
+            durationSeconds: perPartDuration,
+            xpEarned: st.correct * 15,
+            details: {
+              source: "MOCK_TEST_EXAM",
+              testId: examModalTest.id,
+              scaledListeningScore: estLC,
+            },
+          });
+        });
+      }
+
       try {
         await submitMockTestAttempt({
           testId: examModalTest.id,
@@ -261,7 +356,7 @@ export default function StudentMockTestsPage() {
           totalCount: questionsToGrade.length,
           durationSeconds: durationSec,
         });
-        triggerToast(`Đã lưu kết quả thi thật vào tài khoản của bạn.`);
+        triggerToast(`Đã lưu kết quả thi thật và cập nhật chỉ số BKT Listening!`);
       } catch (error) {
         triggerToast(error instanceof Error
           ? `Kết quả chưa được lưu trên máy chủ: ${error.message}`
@@ -269,8 +364,16 @@ export default function StudentMockTestsPage() {
       }
     }
 
-    triggerToast(`Bạn đạt ${estTotal}/${questionsToGrade.length * 5} điểm (${correct}/${questionsToGrade.length} câu đúng).`);
+    triggerToast(`Bạn đạt ${estTotal}/${maxPossibleScore} điểm chuẩn ETS (${correct}/${questionsToGrade.length} câu đúng).`);
   };
+
+  // Tự động thu bài và chấm điểm khi đồng hồ thi thử đếm ngược về 0
+  React.useEffect(() => {
+    if (examStarted && !examSubmitted && examTimeRemaining === 0 && activeExamQuestions.length > 0) {
+      triggerToast("⏰ Đã hết thời gian làm bài! Hệ thống tự động thu bài và chấm điểm.");
+      void handleSubmitExam();
+    }
+  }, [examStarted, examSubmitted, examTimeRemaining, activeExamQuestions.length]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
@@ -282,16 +385,16 @@ export default function StudentMockTestsPage() {
       )}
 
       {/* Header chuẩn phong cách tối giản, sạch sẽ như Admin */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
         <div>
-          <p className="text-xs font-medium text-slate-400">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400">
             Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
-            <span className="font-semibold text-blue-700">Thi thử trực tuyến</span>
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Thi thử trực tuyến</span>
           </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-[28px]">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-[28px]">
             Phòng Thi Thử TOEIC Trực Tuyến
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 md:text-sm">
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
             Làm các đề thi đã được phát hành, với đồng hồ đếm ngược hoặc luyện tập linh hoạt theo tiến độ của bạn.
           </p>
         </div>
@@ -300,6 +403,19 @@ export default function StudentMockTestsPage() {
           <LearningQuotaBadge featureKey="MOCK_TEST" />
         </div>
       </header>
+
+      {/* Banner thông báo bảo trì hệ thống */}
+      {maintenanceMode && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm animate-in fade-in">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <p className="font-bold text-sm">Hệ thống đang trong chế độ bảo trì &amp; cập nhật dữ liệu</p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              Quản trị viên đang cập nhật và tối ưu hóa ngân hàng đề thi. Các kết quả làm bài vẫn được ghi nhận, vui lòng lưu ý thời gian hoàn thành bài thi.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Grid danh sách các đề thi thử */}
       {catalogError && (

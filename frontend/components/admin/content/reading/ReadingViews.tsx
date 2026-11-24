@@ -674,13 +674,21 @@ export const ReadingCurriculumView: React.FC = () => {
   const [part7MultiMinutes, setPart7MultiMinutes] = useState(26);
   const [targetWpm, setTargetWpm] = useState(160);
 
+  // Cấu hình thời gian tối đa cho phép / ngưỡng cảnh báo từng câu hỏi
+  const [part5TimeoutSeconds, setPart5TimeoutSeconds] = useState(40);
+  const [part6TimeoutSeconds, setPart6TimeoutSeconds] = useState(60);
+  const [part7TimeoutSeconds, setPart7TimeoutSeconds] = useState(90);
+
+  // Phân loại lộ trình mục tiêu điểm
+  const [targetScoreBand, setTargetScoreBand] = useState<"500-650" | "650-750" | "750-850" | "850-990">("650-750");
+
   const [enableBilingualByDefault, setEnableBilingualByDefault] = useState(true);
   const [enablePacingTimer, setEnablePacingTimer] = useState(true);
   const [enableTimeoutAlert, setEnableTimeoutAlert] = useState(true);
   const [speedDrillMode, setSpeedDrillMode] = useState(false);
+  const [showTargetPaceBadge, setShowTargetPaceBadge] = useState(true);
 
   const [saved, setSaved] = useState(false);
-
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load cấu hình từ localStorage nếu đã từng lưu
@@ -694,6 +702,10 @@ export const ReadingCurriculumView: React.FC = () => {
         if (parsed.part7SingleMinutes) setPart7SingleMinutes(parsed.part7SingleMinutes);
         if (parsed.part7MultiMinutes) setPart7MultiMinutes(parsed.part7MultiMinutes);
         if (parsed.targetWpm) setTargetWpm(parsed.targetWpm);
+        if (parsed.part5TimeoutSeconds) setPart5TimeoutSeconds(parsed.part5TimeoutSeconds);
+        if (parsed.part6TimeoutSeconds) setPart6TimeoutSeconds(parsed.part6TimeoutSeconds);
+        if (parsed.part7TimeoutSeconds) setPart7TimeoutSeconds(parsed.part7TimeoutSeconds);
+        if (parsed.targetScoreBand) setTargetScoreBand(parsed.targetScoreBand);
         if (typeof parsed.enableBilingualByDefault === "boolean")
           setEnableBilingualByDefault(parsed.enableBilingualByDefault);
         if (typeof parsed.enablePacingTimer === "boolean")
@@ -702,13 +714,15 @@ export const ReadingCurriculumView: React.FC = () => {
           setEnableTimeoutAlert(parsed.enableTimeoutAlert);
         if (typeof parsed.speedDrillMode === "boolean")
           setSpeedDrillMode(parsed.speedDrillMode);
+        if (typeof parsed.showTargetPaceBadge === "boolean")
+          setShowTargetPaceBadge(parsed.showTargetPaceBadge);
       }
     } catch {} finally {
       setIsLoaded(true);
     }
   }, []);
 
-  // Tự động đồng bộ ngay lập tức sang Tab Phân tích khi người dùng kéo sliders hoặc chọn Presets
+  // Tự động đồng bộ ngay lập tức sang hệ thống khi người dùng kéo sliders hoặc chọn Presets
   useEffect(() => {
     if (!isLoaded) return;
     const currentConfig = {
@@ -717,10 +731,15 @@ export const ReadingCurriculumView: React.FC = () => {
       part7SingleMinutes,
       part7MultiMinutes,
       targetWpm,
+      part5TimeoutSeconds,
+      part6TimeoutSeconds,
+      part7TimeoutSeconds,
+      targetScoreBand,
       enableBilingualByDefault,
       enablePacingTimer,
       enableTimeoutAlert,
       speedDrillMode,
+      showTargetPaceBadge,
     };
     try {
       localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(currentConfig));
@@ -735,35 +754,93 @@ export const ReadingCurriculumView: React.FC = () => {
     part7SingleMinutes,
     part7MultiMinutes,
     targetWpm,
+    part5TimeoutSeconds,
+    part6TimeoutSeconds,
+    part7TimeoutSeconds,
+    targetScoreBand,
     enableBilingualByDefault,
     enablePacingTimer,
     enableTimeoutAlert,
     speedDrillMode,
+    showTargetPaceBadge,
   ]);
 
   const totalMinutes = part5Minutes + part6Minutes + part7SingleMinutes + part7MultiMinutes;
   const part7TotalMinutes = part7SingleMinutes + part7MultiMinutes;
 
+  // Tự động cân bằng thời gian về đúng chuẩn 75 phút
+  const handleAutoBalance = () => {
+    const current = part5Minutes + part6Minutes + part7SingleMinutes + part7MultiMinutes;
+    const diff = 75 - current;
+    if (diff === 0) return;
+
+    let rem = diff;
+    let newP7Multi = part7MultiMinutes;
+    let newP7Single = part7SingleMinutes;
+    let newP6 = part6Minutes;
+
+    // Phân bổ phần chênh lệch đều cho Part 7 đoạn đơn & kép/ba
+    const half1 = Math.round(rem / 2);
+    const half2 = rem - half1;
+
+    newP7Multi = Math.min(35, Math.max(20, newP7Multi + half1));
+    rem -= (newP7Multi - part7MultiMinutes);
+
+    newP7Single = Math.min(35, Math.max(20, newP7Single + rem));
+    rem -= (newP7Single - part7SingleMinutes);
+
+    if (rem !== 0) {
+      newP6 = Math.min(15, Math.max(6, newP6 + rem));
+    }
+
+    setPart7MultiMinutes(newP7Multi);
+    setPart7SingleMinutes(newP7Single);
+    setPart6Minutes(newP6);
+  };
+
   // Áp dụng bộ Preset chiến lược phân bổ nhanh
-  const applyPreset = (type: "balanced" | "part7_focus" | "grammar_focus") => {
+  const applyPreset = (type: "balanced" | "part7_focus" | "grammar_focus" | "speed_master") => {
     if (type === "balanced") {
       setPart5Minutes(12);
       setPart6Minutes(10);
       setPart7SingleMinutes(27);
       setPart7MultiMinutes(26);
       setTargetWpm(160);
+      setPart5TimeoutSeconds(40);
+      setPart6TimeoutSeconds(60);
+      setPart7TimeoutSeconds(90);
+      setTargetScoreBand("650-750");
     } else if (type === "part7_focus") {
       setPart5Minutes(10);
       setPart6Minutes(8);
       setPart7SingleMinutes(29);
       setPart7MultiMinutes(28);
       setTargetWpm(175);
-    } else {
+      setPart5TimeoutSeconds(30);
+      setPart6TimeoutSeconds(45);
+      setPart7TimeoutSeconds(80);
+      setTargetScoreBand("750-850");
+    } else if (type === "grammar_focus") {
       setPart5Minutes(15);
       setPart6Minutes(10);
       setPart7SingleMinutes(27);
       setPart7MultiMinutes(23);
       setTargetWpm(145);
+      setPart5TimeoutSeconds(45);
+      setPart6TimeoutSeconds(70);
+      setPart7TimeoutSeconds(100);
+      setTargetScoreBand("500-650");
+    } else {
+      // speed_master
+      setPart5Minutes(8);
+      setPart6Minutes(7);
+      setPart7SingleMinutes(30);
+      setPart7MultiMinutes(30);
+      setTargetWpm(190);
+      setPart5TimeoutSeconds(25);
+      setPart6TimeoutSeconds(40);
+      setPart7TimeoutSeconds(75);
+      setTargetScoreBand("850-990");
     }
   };
 
@@ -775,10 +852,15 @@ export const ReadingCurriculumView: React.FC = () => {
         part7SingleMinutes,
         part7MultiMinutes,
         targetWpm,
+        part5TimeoutSeconds,
+        part6TimeoutSeconds,
+        part7TimeoutSeconds,
+        targetScoreBand,
         enableBilingualByDefault,
         enablePacingTimer,
         enableTimeoutAlert,
         speedDrillMode,
+        showTargetPaceBadge,
       };
       localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(config));
       window.dispatchEvent(
@@ -813,8 +895,19 @@ export const ReadingCurriculumView: React.FC = () => {
             </div>
           </div>
 
-          {/* Badge tổng thời gian */}
-          <div className="flex items-center gap-2 shrink-0 self-start @2xl:self-auto">
+          {/* Badge tổng thời gian & Nút tự động cân bằng */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-start @2xl:self-auto">
+            {totalMinutes !== 75 && (
+              <button
+                type="button"
+                onClick={handleAutoBalance}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer animate-pulse"
+                title="Tự động cân bằng thời gian các phần về đúng chuẩn 75 phút"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Tự động cân bằng 75 phút</span>
+              </button>
+            )}
             <span
               className={`px-4 py-2 rounded-2xl font-black text-xs font-mono inline-flex items-center gap-1.5 shadow-xs transition-colors whitespace-nowrap shrink-0 ${
                 totalMinutes === 75
@@ -830,18 +923,68 @@ export const ReadingCurriculumView: React.FC = () => {
           </div>
         </div>
 
-        {/* 3 PRESETS CHIẾN LƯỢC 1-CLICK */}
-        <div className="space-y-2.5 pt-1">
+        {/* Thanh trực quan hóa tỷ lệ phần trăm phân bổ 75 phút (Stacked Progress Bar) */}
+        <div className="space-y-1.5 pt-1 pb-1">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+            <span>Tỷ lệ phân bổ thời gian thực tế giữa các phần thi:</span>
+            <span className="font-mono text-slate-700">
+              {totalMinutes} phút ({Math.round((totalMinutes / 75) * 100)}% chuẩn thi)
+            </span>
+          </div>
+          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+            <div
+              style={{ width: `${(part5Minutes / totalMinutes) * 100}%` }}
+              className="bg-blue-600 transition-all duration-300"
+              title={`Part 5: ${part5Minutes}p (~${Math.round((part5Minutes / totalMinutes) * 100)}%)`}
+            />
+            <div
+              style={{ width: `${(part6Minutes / totalMinutes) * 100}%` }}
+              className="bg-purple-600 transition-all duration-300"
+              title={`Part 6: ${part6Minutes}p (~${Math.round((part6Minutes / totalMinutes) * 100)}%)`}
+            />
+            <div
+              style={{ width: `${(part7SingleMinutes / totalMinutes) * 100}%` }}
+              className="bg-indigo-600 transition-all duration-300"
+              title={`Part 7 Đoạn đơn: ${part7SingleMinutes}p (~${Math.round((part7SingleMinutes / totalMinutes) * 100)}%)`}
+            />
+            <div
+              style={{ width: `${(part7MultiMinutes / totalMinutes) * 100}%` }}
+              className="bg-emerald-600 transition-all duration-300"
+              title={`Part 7 Đoạn kép/ba: ${part7MultiMinutes}p (~${Math.round((part7MultiMinutes / totalMinutes) * 100)}%)`}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] pt-0.5">
+            <span className="flex items-center gap-1.5 font-medium text-slate-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+              Part 5: {part5Minutes}p ({Math.round((part5Minutes / totalMinutes) * 100)}%)
+            </span>
+            <span className="flex items-center gap-1.5 font-medium text-slate-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+              Part 6: {part6Minutes}p ({Math.round((part6Minutes / totalMinutes) * 100)}%)
+            </span>
+            <span className="flex items-center gap-1.5 font-medium text-slate-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+              Part 7 Đoạn đơn: {part7SingleMinutes}p ({Math.round((part7SingleMinutes / totalMinutes) * 100)}%)
+            </span>
+            <span className="flex items-center gap-1.5 font-medium text-slate-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+              Part 7 Kép/Ba: {part7MultiMinutes}p ({Math.round((part7MultiMinutes / totalMinutes) * 100)}%)
+            </span>
+          </div>
+        </div>
+
+        {/* 4 PRESETS CHIẾN LƯỢC 1-CLICK */}
+        <div className="space-y-2.5 pt-2">
           <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
             Chọn nhanh chiến lược phân bổ thời gian:
           </span>
-          <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-4 gap-3">
             <button
               type="button"
               onClick={() => applyPreset("balanced")}
               className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
                 part5Minutes === 12 && part6Minutes === 10 && part7SingleMinutes === 27 && part7MultiMinutes === 26
-                  ? "border-blue-500 bg-blue-50/70 shadow-xs"
+                  ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500"
                   : "border-slate-200 hover:border-blue-400 hover:bg-slate-50"
               }`}
             >
@@ -863,7 +1006,7 @@ export const ReadingCurriculumView: React.FC = () => {
               onClick={() => applyPreset("part7_focus")}
               className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
                 part5Minutes === 10 && part6Minutes === 8 && part7SingleMinutes === 29 && part7MultiMinutes === 28
-                  ? "border-indigo-500 bg-indigo-50/70 shadow-xs"
+                  ? "border-indigo-500 bg-indigo-50/70 shadow-xs ring-1 ring-indigo-500"
                   : "border-slate-200 hover:border-indigo-400 hover:bg-slate-50"
               }`}
             >
@@ -885,7 +1028,7 @@ export const ReadingCurriculumView: React.FC = () => {
               onClick={() => applyPreset("grammar_focus")}
               className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
                 part5Minutes === 15 && part6Minutes === 10 && part7SingleMinutes === 27 && part7MultiMinutes === 23
-                  ? "border-emerald-500 bg-emerald-50/70 shadow-xs"
+                  ? "border-emerald-500 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500"
                   : "border-slate-200 hover:border-emerald-400 hover:bg-slate-50"
               }`}
             >
@@ -899,6 +1042,28 @@ export const ReadingCurriculumView: React.FC = () => {
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 P5: 15p • P6: 10p • P7: 50p (Làm chắc chắn điểm ngữ pháp Part 5-6).
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => applyPreset("speed_master")}
+              className={`p-3.5 sm:p-4 rounded-2xl border text-left transition cursor-pointer group flex flex-col justify-between gap-2 ${
+                part5Minutes === 8 && part6Minutes === 7 && part7SingleMinutes === 30 && part7MultiMinutes === 30
+                  ? "border-amber-500 bg-amber-50/70 shadow-xs ring-1 ring-amber-500"
+                  : "border-slate-200 hover:border-amber-400 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-xs text-slate-900 group-hover:text-amber-700 leading-snug">
+                  🚀 Thần tốc 900+ (Tốc độ đỉnh)
+                </span>
+                <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded whitespace-nowrap shrink-0">
+                  Cao cấp
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                P5: 8p • P6: 7p • P7: 60p (Tối ưu 16s/câu Part 5, 190 WPM Part 7).
               </p>
             </button>
           </div>
@@ -953,7 +1118,7 @@ export const ReadingCurriculumView: React.FC = () => {
               <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
                 <span className="font-black text-blue-700 font-mono text-base whitespace-nowrap">{part6Minutes} phút</span>
                 <span className="text-[11px] text-slate-500 font-mono whitespace-nowrap">
-                  ~{Math.round((part6Minutes * 60) / 16)} giây / câu (~2.3p / đoạn)
+                  ~{Math.round((part6Minutes * 60) / 16)} giây / câu (~{(part6Minutes / 4).toFixed(1)}p / đoạn)
                 </span>
               </div>
             </div>
@@ -1054,7 +1219,7 @@ export const ReadingCurriculumView: React.FC = () => {
               <span>Mục Tiêu Tốc Độ Đọc (Target WPM - Words Per Minute)</span>
             </h4>
             <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-              Tốc độ đọc lướt và quét thông tin khuyến nghị cho học viên trong khi đọc bài văn dài.
+              Tốc độ đọc lướt và quét thông tin khuyến nghị cho học viên trong khi đọc bài văn dài Part 7.
             </p>
           </div>
           <div className="flex items-baseline @xl:flex-col @xl:items-end justify-between @xl:justify-center gap-2 @xl:gap-0 shrink-0 @xl:text-right">
@@ -1081,7 +1246,269 @@ export const ReadingCurriculumView: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. CHẾ ĐỘ HỖ TRỢ & CẢNH BÁO TIẾN ĐỘ THỜI GIAN THỰC */}
+      {/* 4. CẤU HÌNH NGƯỠNG CẢNH BÁO TỪNG CÂU (PER-QUESTION TIMEOUT THRESHOLDS) */}
+      <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex items-start sm:items-center gap-2.5">
+          <span className="p-2 rounded-2xl bg-amber-50 text-amber-600 shrink-0">
+            <AlertTriangle className="w-5 h-5" />
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-sm font-black text-slate-900 leading-snug">
+              Cấu Hình Ngưỡng Cảnh Báo Từng Câu (Per-Question Pace Limits)
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+              Thiết lập thời gian tối đa học viên được phép dừng ở một câu hỏi trước khi hệ thống cảnh báo chuyển câu để tránh sa lầy vào câu hỏi bẫy.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 @2xl:grid-cols-3 gap-3.5 pt-1 text-xs">
+          {/* Part 5 threshold */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800">Part 5 (Câu đơn)</span>
+              <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                {part5TimeoutSeconds}s / câu
+              </span>
+            </div>
+            <input
+              type="range"
+              min="20"
+              max="60"
+              step="5"
+              value={part5TimeoutSeconds}
+              onChange={(e) => setPart5TimeoutSeconds(Number(e.target.value))}
+              className="w-full accent-amber-600 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+              <span>20s</span>
+              <span className="text-amber-700 font-semibold">Chuẩn: 40s</span>
+              <span>60s</span>
+            </div>
+          </div>
+
+          {/* Part 6 threshold */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800">Part 6 (Điền đoạn)</span>
+              <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                {part6TimeoutSeconds}s / câu
+              </span>
+            </div>
+            <input
+              type="range"
+              min="30"
+              max="90"
+              step="5"
+              value={part6TimeoutSeconds}
+              onChange={(e) => setPart6TimeoutSeconds(Number(e.target.value))}
+              className="w-full accent-amber-600 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+              <span>30s</span>
+              <span className="text-amber-700 font-semibold">Chuẩn: 60s</span>
+              <span>90s</span>
+            </div>
+          </div>
+
+          {/* Part 7 threshold */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800">Part 7 (Đọc hiểu)</span>
+              <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                {part7TimeoutSeconds}s / câu
+              </span>
+            </div>
+            <input
+              type="range"
+              min="45"
+              max="150"
+              step="5"
+              value={part7TimeoutSeconds}
+              onChange={(e) => setPart7TimeoutSeconds(Number(e.target.value))}
+              className="w-full accent-amber-600 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+              <span>45s</span>
+              <span className="text-amber-700 font-semibold">Chuẩn: 90s</span>
+              <span>150s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. MA TRẬN PHÂN BỔ ĐIỂM & LỘ TRÌNH MỤC TIÊU (SCORE TARGET ROADMAP) */}
+      <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex items-start sm:items-center gap-2.5">
+          <span className="p-2 rounded-2xl bg-indigo-50 text-indigo-600 shrink-0">
+            <Target className="w-5 h-5" />
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-sm font-black text-slate-900 leading-snug">
+              Ma Trận Phân Bổ Điểm &amp; Lộ Trình Mục Tiêu (Target Score Strategy Matrix)
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+              Khuyến nghị số câu đúng và trọng tâm học tập cho từng band điểm mục tiêu TOEIC Reading (thang điểm 495).
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-4 gap-3 text-xs">
+          {/* Band 500-650 */}
+          <div
+            onClick={() => {
+              applyPreset("grammar_focus");
+              setTargetScoreBand("500-650");
+            }}
+            className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between gap-3 ${
+              targetScoreBand === "500-650"
+                ? "bg-emerald-50/70 border-emerald-500 shadow-xs ring-1 ring-emerald-500"
+                : "bg-slate-50/70 border-slate-200 hover:border-emerald-300"
+            }`}
+          >
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-emerald-900">Band 500 - 650</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  Cơ bản
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">Mục tiêu: đúng ≥ 65/100 câu</p>
+            </div>
+            <div className="space-y-1 text-[11px] text-slate-600 font-medium">
+              <p>• P5: 22/30 câu (15 phút)</p>
+              <p>• P6: 10/16 câu (10 phút)</p>
+              <p>• P7: 33/54 câu (50 phút, ưu tiên đoạn đơn)</p>
+            </div>
+            <button
+              type="button"
+              className={`w-full py-1.5 rounded-xl font-bold text-[11px] transition ${
+                targetScoreBand === "500-650"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50"
+              }`}
+            >
+              {targetScoreBand === "500-650" ? "Đang áp dụng ✓" : "Áp dụng lộ trình"}
+            </button>
+          </div>
+
+          {/* Band 650-750 */}
+          <div
+            onClick={() => {
+              applyPreset("balanced");
+              setTargetScoreBand("650-750");
+            }}
+            className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between gap-3 ${
+              targetScoreBand === "650-750"
+                ? "bg-blue-50/70 border-blue-500 shadow-xs ring-1 ring-blue-500"
+                : "bg-slate-50/70 border-slate-200 hover:border-blue-300"
+            }`}
+          >
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-blue-900">Band 650 - 750</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                  Chuẩn ETS
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">Mục tiêu: đúng ≥ 78/100 câu</p>
+            </div>
+            <div className="space-y-1 text-[11px] text-slate-600 font-medium">
+              <p>• P5: 25/30 câu (12 phút)</p>
+              <p>• P6: 12/16 câu (10 phút)</p>
+              <p>• P7: 41/54 câu (53 phút, hoàn thành đủ)</p>
+            </div>
+            <button
+              type="button"
+              className={`w-full py-1.5 rounded-xl font-bold text-[11px] transition ${
+                targetScoreBand === "650-750"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white border border-slate-200 text-slate-700 hover:bg-blue-50"
+              }`}
+            >
+              {targetScoreBand === "650-750" ? "Đang áp dụng ✓" : "Áp dụng lộ trình"}
+            </button>
+          </div>
+
+          {/* Band 750-850 */}
+          <div
+            onClick={() => {
+              applyPreset("part7_focus");
+              setTargetScoreBand("750-850");
+            }}
+            className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between gap-3 ${
+              targetScoreBand === "750-850"
+                ? "bg-indigo-50/70 border-indigo-500 shadow-xs ring-1 ring-indigo-500"
+                : "bg-slate-50/70 border-slate-200 hover:border-indigo-300"
+            }`}
+          >
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-indigo-900">Band 750 - 850</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                  Nâng cao
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">Mục tiêu: đúng ≥ 88/100 câu</p>
+            </div>
+            <div className="space-y-1 text-[11px] text-slate-600 font-medium">
+              <p>• P5: 27/30 câu (10 phút)</p>
+              <p>• P6: 14/16 câu (8 phút)</p>
+              <p>• P7: 47/54 câu (57 phút, quét nhanh)</p>
+            </div>
+            <button
+              type="button"
+              className={`w-full py-1.5 rounded-xl font-bold text-[11px] transition ${
+                targetScoreBand === "750-850"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white border border-slate-200 text-slate-700 hover:bg-indigo-50"
+              }`}
+            >
+              {targetScoreBand === "750-850" ? "Đang áp dụng ✓" : "Áp dụng lộ trình"}
+            </button>
+          </div>
+
+          {/* Band 850-990 */}
+          <div
+            onClick={() => {
+              applyPreset("speed_master");
+              setTargetScoreBand("850-990");
+            }}
+            className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between gap-3 ${
+              targetScoreBand === "850-990"
+                ? "bg-amber-50/70 border-amber-500 shadow-xs ring-1 ring-amber-500"
+                : "bg-slate-50/70 border-slate-200 hover:border-amber-300"
+            }`}
+          >
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-sm text-amber-900">Band 850 - 990</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  Xuất sắc
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">Mục tiêu: đúng ≥ 95/100 câu</p>
+            </div>
+            <div className="space-y-1 text-[11px] text-slate-600 font-medium">
+              <p>• P5: 29/30 câu (8 phút, 16s/câu)</p>
+              <p>• P6: 15/16 câu (7 phút)</p>
+              <p>• P7: 51+/54 câu (60 phút, vét cạn)</p>
+            </div>
+            <button
+              type="button"
+              className={`w-full py-1.5 rounded-xl font-bold text-[11px] transition ${
+                targetScoreBand === "850-990"
+                  ? "bg-amber-600 text-white"
+                  : "bg-white border border-slate-200 text-slate-700 hover:bg-amber-50"
+              }`}
+            >
+              {targetScoreBand === "850-990" ? "Đang áp dụng ✓" : "Áp dụng lộ trình"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. CHẾ ĐỘ HỖ TRỢ & CẢNH BÁO TIẾN ĐỘ THỜI GIAN THỰC */}
       <div className="p-4 sm:p-6 bg-white rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
         <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
@@ -1097,9 +1524,9 @@ export const ReadingCurriculumView: React.FC = () => {
               className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 shrink-0"
             />
             <div className="min-w-0">
-              <span className="block font-bold">Xem bản dịch song ngữ khi xem lại câu sai</span>
+              <span className="block font-bold">Mặc định mở chế độ song ngữ</span>
               <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
-                Hiển thị bản dịch tiếng Việt song song đoạn văn để đối chiếu từ vựng.
+                Tự động hiển thị song ngữ Anh - Việt đối chiếu khi học viên bắt đầu luyện tập.
               </span>
             </div>
           </label>
@@ -1114,7 +1541,7 @@ export const ReadingCurriculumView: React.FC = () => {
             <div className="min-w-0">
               <span className="block font-bold">Đồng hồ tiến độ từng phần (Pacing Timer)</span>
               <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
-                Cảnh báo học viên khi dành quá thời gian khuyến nghị cho mỗi phần.
+                Hiển thị nhãn mục tiêu giây/câu và thời gian thực tế trong workspace làm bài.
               </span>
             </div>
           </label>
@@ -1129,7 +1556,7 @@ export const ReadingCurriculumView: React.FC = () => {
             <div className="min-w-0">
               <span className="block font-bold">Cảnh báo dừng quá lâu ở 1 câu hỏi</span>
               <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
-                Nhắc nhở học viên chuyển câu nếu quá 45s (Part 5) hoặc 90s (Part 7).
+                Nhắc nhở học viên khi vượt quá thời gian tối đa ({part5TimeoutSeconds}s P5 / {part6TimeoutSeconds}s P6 / {part7TimeoutSeconds}s P7).
               </span>
             </div>
           </label>
@@ -1148,10 +1575,25 @@ export const ReadingCurriculumView: React.FC = () => {
               </span>
             </div>
           </label>
+
+          <label className="flex items-start gap-3 p-3.5 bg-slate-50 hover:bg-slate-100/80 rounded-2xl cursor-pointer border border-slate-200 transition">
+            <input
+              type="checkbox"
+              checked={showTargetPaceBadge}
+              onChange={(e) => setShowTargetPaceBadge(e.target.checked)}
+              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 shrink-0"
+            />
+            <div className="min-w-0">
+              <span className="block font-bold">Hiển thị nhãn mục tiêu nhịp độ (Pace Badge)</span>
+              <span className="text-[11px] text-slate-500 font-normal leading-relaxed">
+                Hiển thị mục tiêu ~X giây/câu và thời gian đọc ước tính theo WPM trên đoạn văn.
+              </span>
+            </div>
+          </label>
         </div>
       </div>
 
-      {/* 5. THANH THAO TÁC NÚT LƯU & RESET */}
+      {/* 7. THANH THAO TÁC NÚT LƯU & RESET */}
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
         <button
           type="button"

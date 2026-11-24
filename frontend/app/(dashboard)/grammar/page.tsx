@@ -142,14 +142,21 @@ export default function StudentGrammarPage() {
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-150">
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Link href="/dashboard" className="hover:text-blue-600 transition-colors">
-          Trang chủ
-        </Link>
-        <span className="text-slate-300">/</span>
-        <span className="font-semibold text-blue-700">Ngữ pháp TOEIC trọng tâm</span>
-      </nav>
+      {/* Header chuẩn tối giản, thanh lịch như Admin */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
+        <div>
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-400">
+            Trang chủ <span className="px-1.5">/</span> Lộ trình TOEIC <span className="px-1.5">/</span>{" "}
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Ngữ pháp trọng tâm</span>
+          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-[28px]">
+            Chuyên Đề Ngữ Pháp TOEIC Trọng Tâm
+          </h1>
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
+            Các chủ điểm ngữ pháp TOEIC đã được phát hành.
+          </p>
+          </div>
+        </header>
 
       {/* Hero Header Banner */}
       <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-linear-to-r from-white via-blue-50/30 to-indigo-50/40 p-6 md:p-8 shadow-xs">
