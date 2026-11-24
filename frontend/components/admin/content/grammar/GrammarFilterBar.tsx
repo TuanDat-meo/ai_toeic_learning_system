@@ -16,7 +16,7 @@ import {
   Archive,
 } from "lucide-react";
 
-export type GrammarAdminTab = "topics" | "archived" | "questions" | "review" | "traps_matrix" | "curriculum";
+export type GrammarAdminTab = "topics" | "archived" | "questions" | "review" | "traps_matrix" | "curriculum" | "operations";
 
 interface GrammarFilterBarProps {
   activeMainTab: GrammarAdminTab;
@@ -164,6 +164,19 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
 
         <button
           type="button"
+          onClick={() => setActiveMainTab("operations")}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
+            activeMainTab === "operations"
+              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Import · Revision · Passage · Quy tắc</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveMainTab("review")}
           className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
             activeMainTab === "review"
@@ -213,6 +226,7 @@ export const GrammarFilterBar: React.FC<GrammarFilterBarProps> = ({
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 <option value="PUBLISHED">Đã phát hành</option>
+                <option value="IN_REVIEW">Chờ duyệt</option>
                 <option value="DRAFT">Bản nháp</option>
               </select>
 

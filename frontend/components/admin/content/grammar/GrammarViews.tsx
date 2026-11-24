@@ -24,6 +24,11 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { GrammarTopicItem, GrammarQuestionItem } from "@/app/admin/content/grammar/types";
+import {
+  getAdminGrammarLearningConfig,
+  putAdminGrammarLearningConfig,
+  getGrammarTrapAnalysis,
+} from "@/lib/api/grammar";
 
 // ==========================================
 // 1. NGÂN HÀNG TOÀN BỘ CÂU HỎI NGỮ PHÁP
@@ -411,8 +416,11 @@ interface TrapsMatrixViewProps {
 }
 
 export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics }) => {
-  const LOCAL_STORAGE_KEY = "toeic_grammar_curriculum_config";
   const [configError, setConfigError] = useState<string | null>(null);
+  const [trapData, setTrapData] = useState<{questions: Array<Record<string, unknown>>; hasData: boolean}>({
+    questions: [],
+    hasData: false,
+  });
   const [config, setConfig] = useState({
     minAccuracyPass: 80,
     srsGrammarInterval: 3,
@@ -421,22 +429,24 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
   });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setConfig((prev) => ({ ...prev, ...parsed }));
-      }
-    } catch {
-      setConfigError("Không thể đọc cấu hình đã lưu trên trình duyệt; đang dùng giá trị xem trước mặc định.");
-    }
-
-    const handleConfigUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<Partial<typeof config>>).detail;
-      if (detail) setConfig((prev) => ({ ...prev, ...detail }));
-    };
-    window.addEventListener("toeic-grammar-config-updated", handleConfigUpdated);
-    return () => window.removeEventListener("toeic-grammar-config-updated", handleConfigUpdated);
+    void getAdminGrammarLearningConfig()
+      .then((backendConfig) => {
+        setConfig({
+          minAccuracyPass: backendConfig.passThreshold,
+          srsGrammarInterval: backendConfig.srsInitialDays,
+          shuffleQuestions: backendConfig.shuffleQuestions,
+          showExplanationImmediately: backendConfig.showExplanationImmediately,
+        });
+        setConfigError(null);
+      })
+      .catch((error) => setConfigError(
+        error instanceof Error ? error.message : "Không thể đọc cấu hình từ máy chủ.",
+      ));
+    void getGrammarTrapAnalysis()
+      .then(setTrapData)
+      .catch((error) => setConfigError(
+        error instanceof Error ? error.message : "Không thể tải dữ liệu phân tích bẫy.",
+      ));
   }, []);
 
   // Aggregate traps across all topics
@@ -475,13 +485,13 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
             <Sliders className="w-4 h-4" />
           </span>
           <div>
-            <span className="font-bold">Cấu hình xem trước trong trình duyệt:</span>{" "}
+            <span className="font-bold">Cấu hình lộ trình từ máy chủ:</span>{" "}
             <span className="text-amber-900 font-mono">
               Chuẩn đầu ra: ≥{config.minAccuracyPass}% đúng • Lặp lại ngắt quãng (SRS): {config.srsGrammarInterval} ngày • Xáo trộn câu hỏi: {config.shuffleQuestions ? "Bật" : "Tắt"}
             </span>
           </div>
         </div>
-        <span className="max-w-sm text-[11px] font-medium">Chưa đồng bộ backend; chỉ áp dụng trong trình duyệt hiện tại.</span>
+        <span className="max-w-sm text-[11px] font-medium">Cấu hình và tiến độ học viên được lấy trực tiếp từ backend.</span>
       </div>
 
       {/* Traps Table */}
@@ -522,7 +532,11 @@ export const GrammarTrapsMatrixView: React.FC<TrapsMatrixViewProps> = ({ topics 
                     <p className="font-bold text-slate-900">{trap.trapTitle}</p>
                   </td>
                   <td className="py-3.5 px-4 whitespace-nowrap">{trap.questionsWithTrapNotes}</td>
-                  <td className="py-3.5 px-4 text-slate-500">Chưa có dữ liệu</td>
+                  <td className="py-3.5 px-4 text-slate-500">
+                    {!trapData.hasData
+                      ? "Chưa có dữ liệu"
+                      : `${trapData.questions.length} câu có dữ liệu lượt làm`}
+                  </td>
                   <td className="py-3 px-4 text-slate-600 text-[11px]">
                     <span className="font-mono bg-slate-50 px-2 py-1 rounded border border-slate-200 block text-slate-700">
                       {trap.formula || "Chưa có công thức"}
@@ -550,8 +564,6 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
   topicsCount,
   topics = [],
 }) => {
-  const LOCAL_STORAGE_KEY = "toeic_grammar_curriculum_config";
-
   const [minAccuracyPass, setMinAccuracyPass] = useState(80);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [srsGrammarInterval, setSrsGrammarInterval] = useState(3);
@@ -560,21 +572,19 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
   const [downloadMsg, setDownloadMsg] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
 
-  // Load cấu hình đã lưu
+  // Cấu hình nguồn dữ liệu là backend; localStorage không còn là nguồn chính.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed.minAccuracyPass === "number") setMinAccuracyPass(parsed.minAccuracyPass);
-        if (typeof parsed.srsGrammarInterval === "number") setSrsGrammarInterval(parsed.srsGrammarInterval);
-        if (typeof parsed.shuffleQuestions === "boolean") setShuffleQuestions(parsed.shuffleQuestions);
-        if (typeof parsed.showExplanationImmediately === "boolean")
-          setShowExplanationImmediately(parsed.showExplanationImmediately);
-      }
-    } catch {
-      setConfigError("Không thể đọc cấu hình đã lưu trên trình duyệt.");
-    }
+    void getAdminGrammarLearningConfig()
+      .then((config) => {
+        setMinAccuracyPass(config.passThreshold);
+        setSrsGrammarInterval(config.srsInitialDays);
+        setShuffleQuestions(config.shuffleQuestions);
+        setShowExplanationImmediately(config.showExplanationImmediately);
+        setConfigError(null);
+      })
+      .catch((error) => {
+        setConfigError(error instanceof Error ? error.message : "Không thể đọc cấu hình từ máy chủ.");
+      });
   }, []);
 
   // Áp dụng bộ Preset chiến lược sư phạm 1-click
@@ -597,26 +607,26 @@ export const GrammarCurriculumConfigView: React.FC<CurriculumConfigViewProps> = 
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
-      const config = {
-        minAccuracyPass,
-        srsGrammarInterval,
+      const current = await getAdminGrammarLearningConfig();
+      await putAdminGrammarLearningConfig({
+        ...current,
+        passThreshold: minAccuracyPass,
+        srsInitialDays: srsGrammarInterval,
         shuffleQuestions,
         showExplanationImmediately,
-        updatedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
-      window.dispatchEvent(new CustomEvent("toeic-grammar-config-updated", { detail: config }));
+      });
+      window.dispatchEvent(new CustomEvent("toeic-grammar-config-updated", {
+        detail: { minAccuracyPass, srsGrammarInterval, shuffleQuestions, showExplanationImmediately },
+      }));
       setConfigError(null);
-    } catch {
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (error) {
       setSavedSuccess(false);
-      setConfigError("Không thể lưu cấu hình vào trình duyệt.");
-      return;
+      setConfigError(error instanceof Error ? error.message : "Không thể lưu cấu hình trên máy chủ.");
     }
-
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
   };
 
   const handleExportJSON = () => {

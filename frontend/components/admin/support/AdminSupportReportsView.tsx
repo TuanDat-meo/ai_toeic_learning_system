@@ -46,6 +46,7 @@ const categoryLabels: Record<SupportReportCategory, { label: string; bg: string 
 };
 
 const sourceLabels: Record<NonNullable<SupportReport["source"]>, { label: string; bg: string }> = {
+  GRAMMAR: { label: "Ngữ pháp", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   READING: { label: "Reading (Part 5-7)", bg: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   LISTENING: { label: "Listening (Part 1-4)", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   MOCK_TEST: { label: "Đề thi thử (Mock)", bg: "bg-orange-50 text-orange-700 border-orange-200" },

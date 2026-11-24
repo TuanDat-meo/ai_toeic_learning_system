@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, Volume2, Gamepad2, ChevronLeft, ChevronRight, RotateCcw, BookOpen, Award, Check } from "lucide-react";
+import { X, Volume2, Gamepad2, ChevronLeft, ChevronRight, ChevronDown, RotateCcw, BookOpen, Award, Check } from "lucide-react";
 import { WordItem, TestItem } from "@/app/admin/content/vocabulary/types";
 import { recordQuestionAnswer } from "@/lib/practiceProgress";
 import { QuestionErrorReportButton } from "@/components/support/QuestionErrorReportButton";
@@ -52,8 +52,15 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
   const [isFlipped, setIsFlipped] = useState(false);
   const [flashcardSaving, setFlashcardSaving] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
+  const [flashcardSwipeOffset, setFlashcardSwipeOffset] = useState(0);
+  const [flashcardIsDragging, setFlashcardIsDragging] = useState(false);
+  const [flashcardSwipeDirection, setFlashcardSwipeDirection] = useState<"left" | "right" | null>(null);
+  const [flashcardRatingMenuOpen, setFlashcardRatingMenuOpen] = useState(false);
   const flashcardStartedAt = useRef(0);
   const flashcardRequestIds = useRef(new Map<string, string>());
+  const flashcardSavingRef = useRef(false);
+  const flashcardPointerStart = useRef<{ x: number; y: number; time: number; pointerId: number } | null>(null);
+  const flashcardDidSwipe = useRef(false);
 
   // Game local state
   const [gameQuestionIndex, setGameQuestionIndex] = useState(0);
@@ -73,6 +80,9 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
       setFlashcardIndex(initialFlashcardIndex || 0);
       setIsFlipped(false);
       setProgressError(null);
+      setFlashcardSwipeOffset(0);
+      setFlashcardSwipeDirection(null);
+      setFlashcardRatingMenuOpen(false);
     }
   }
 
@@ -80,6 +90,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
     if (flashcardModalTest) {
       flashcardStartedAt.current = Date.now();
       flashcardRequestIds.current.clear();
+      flashcardSavingRef.current = false;
     }
   }, [flashcardModalTest]);
 
@@ -103,7 +114,8 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
   const rateFlashcard = async (rating: VocabularySrsRating) => {
     const words = flashcardModalTest?.words || [];
     const word = words[flashcardIndex];
-    if (!flashcardModalTest || !word || flashcardSaving) return;
+    if (!flashcardModalTest || !word || !isFlipped || flashcardSavingRef.current) return;
+    flashcardSavingRef.current = true;
     const requestKey = `${flashcardModalTest.id}:${word.id}:${rating}`;
     let requestId = flashcardRequestIds.current.get(requestKey);
     if (!requestId) {
@@ -122,6 +134,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
         rating,
         responseTimeMs: Math.max(0, Date.now() - flashcardStartedAt.current),
       });
+      flashcardRequestIds.current.delete(requestKey);
       const totalWords = flashcardModalTest.wordCount || words.length;
       recordQuestionAnswer(
         `vocab-${flashcardModalTest.id}`,
@@ -129,13 +142,92 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
         rating === "GOOD" || rating === "EASY",
         totalWords,
       );
+      await new Promise((resolve) => window.setTimeout(resolve, 260));
       setIsFlipped(false);
+      setFlashcardSwipeDirection(null);
+      setFlashcardSwipeOffset(0);
+      setFlashcardRatingMenuOpen(false);
       setFlashcardIndex((prev) => (prev < words.length - 1 ? prev + 1 : 0));
       flashcardStartedAt.current = Date.now();
     } catch (error) {
+      setFlashcardSwipeDirection(null);
+      setFlashcardSwipeOffset(0);
       setProgressError(error instanceof Error ? error.message : "Không thể lưu tiến độ từ vựng.");
     } finally {
+      flashcardSavingRef.current = false;
       setFlashcardSaving(false);
+    }
+  };
+
+  const submitFlashcardRating = (rating: VocabularySrsRating, direction: "left" | "right") => {
+    if (!isFlipped || flashcardSavingRef.current) return;
+    setFlashcardRatingMenuOpen(false);
+    setFlashcardSwipeDirection(direction);
+    setFlashcardSwipeOffset(direction === "left" ? -320 : 320);
+    void rateFlashcard(rating);
+  };
+
+  const handleFlashcardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isFlipped || flashcardSavingRef.current || flashcardRatingMenuOpen) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("button, a, input, select, textarea, [role='menu']")) return;
+    flashcardPointerStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      time: performance.now(),
+      pointerId: event.pointerId,
+    };
+    setFlashcardIsDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleFlashcardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = flashcardPointerStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaY) > Math.abs(deltaX) * 1.2 && Math.abs(deltaY) > 24) {
+      flashcardPointerStart.current = null;
+      setFlashcardIsDragging(false);
+      setFlashcardSwipeOffset(0);
+      return;
+    }
+    setFlashcardSwipeOffset(Math.max(-320, Math.min(320, deltaX)));
+  };
+
+  const handleFlashcardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = flashcardPointerStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    flashcardPointerStart.current = null;
+    setFlashcardIsDragging(false);
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    const elapsed = Math.max(1, performance.now() - start.time);
+    const velocity = Math.abs(deltaX) / elapsed;
+    const crossedThreshold = Math.abs(deltaX) >= 90 || (Math.abs(deltaX) >= 48 && velocity >= 0.65);
+    if (Math.abs(deltaY) > Math.abs(deltaX) || !crossedThreshold) {
+      setFlashcardSwipeOffset(0);
+      return;
+    }
+    flashcardDidSwipe.current = true;
+    window.setTimeout(() => {
+      flashcardDidSwipe.current = false;
+    }, 0);
+    submitFlashcardRating(deltaX < 0 ? "AGAIN" : "GOOD", deltaX < 0 ? "left" : "right");
+  };
+
+  const handleFlashcardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest("button, a, input, select, textarea, [role='menu']")) return;
+    if ((event.key === " " || event.key === "Enter") && !isFlipped) {
+      event.preventDefault();
+      setIsFlipped(true);
+    } else if (isFlipped && event.key === "ArrowLeft") {
+      event.preventDefault();
+      submitFlashcardRating("AGAIN", "left");
+    } else if (isFlipped && event.key === "ArrowRight") {
+      event.preventDefault();
+      submitFlashcardRating("GOOD", "right");
     }
   };
 
@@ -316,6 +408,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                 <button
                   type="button"
                   onClick={onCloseFlashcards}
+                  disabled={flashcardSaving}
                   className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer shrink-0"
                   title="Đóng Flashcard"
                 >
@@ -346,9 +439,39 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
 
               return (
                 <div
-                  onClick={() => setIsFlipped(!isFlipped)}
-                  className="cursor-pointer transition-all duration-300 min-h-[260px] rounded-3xl border-2 border-dashed border-blue-200 bg-gradient-to-br from-blue-50/40 via-sky-50/30 to-white p-6 flex flex-col justify-between hover:border-blue-500 hover:shadow-lg shadow-xs"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (flashcardDidSwipe.current) {
+                      flashcardDidSwipe.current = false;
+                      return;
+                    }
+                    if (!flashcardSavingRef.current) setIsFlipped((value) => !value);
+                  }}
+                  onKeyDown={handleFlashcardKeyDown}
+                  onPointerDown={handleFlashcardPointerDown}
+                  onPointerMove={handleFlashcardPointerMove}
+                  onPointerUp={handleFlashcardPointerUp}
+                  onPointerCancel={() => {
+                    flashcardPointerStart.current = null;
+                    setFlashcardIsDragging(false);
+                    setFlashcardSwipeOffset(0);
+                  }}
+                  style={{ transform: `translateX(${flashcardSwipeOffset}px) rotate(${flashcardSwipeOffset / 32}deg)` }}
+                  className={`relative cursor-pointer touch-pan-y overflow-hidden ${flashcardIsDragging ? "transition-none" : "transition-transform duration-300"} min-h-[260px] rounded-3xl border-2 border-dashed p-6 flex flex-col justify-between hover:shadow-lg shadow-xs ${
+                    flashcardSwipeDirection === "left"
+                      ? "border-rose-300 bg-rose-50"
+                      : flashcardSwipeDirection === "right"
+                        ? "border-emerald-300 bg-emerald-50"
+                        : "border-blue-200 bg-gradient-to-br from-blue-50/40 via-sky-50/30 to-white hover:border-blue-500"
+                  }`}
                 >
+                  {flashcardSwipeOffset !== 0 ? (
+                    <div className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-opacity-10 text-2xl font-black uppercase tracking-widest ${
+                      flashcardSwipeOffset < 0 ? "bg-rose-500/10 text-rose-700" : "bg-emerald-500/10 text-emerald-700"
+                    }`}>
+                      {flashcardSwipeOffset < 0 ? "Chưa nhớ" : "Đã nhớ"}
+                    </div>
+                  ) : null}
                   {!isFlipped ? (
                     <div className="flex flex-col items-center justify-center flex-1 text-center space-y-3 py-4">
                       <div className="flex items-center gap-2">
@@ -431,7 +554,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                     setIsFlipped(false);
                     setFlashcardIndex((prev) => Math.max(0, prev - 1));
                   }}
-                  disabled={flashcardIndex === 0}
+                  disabled={flashcardIndex === 0 || flashcardSaving}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1"
                 >
                   <ChevronLeft className="w-4 h-4" /> Từ trước
@@ -444,7 +567,7 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
                       Math.min((flashcardModalTest.words || []).length - 1, prev + 1)
                     );
                   }}
-                  disabled={flashcardIndex >= (flashcardModalTest.words || []).length - 1}
+                  disabled={flashcardIndex >= (flashcardModalTest.words || []).length - 1 || flashcardSaving}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1"
                 >
                   Từ tiếp theo <ChevronRight className="w-4 h-4" />
@@ -452,38 +575,60 @@ export const StudentVocabularyModals: React.FC<StudentVocabularyModalsProps> = (
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <p className="col-span-2 text-center text-xs font-semibold text-slate-500">
+                  {isFlipped
+                    ? "Vuốt trái: chưa nhớ · vuốt phải: đã nhớ · dùng phím ← / →"
+                    : "Lật thẻ để đánh giá khả năng ghi nhớ"}
+                </p>
                 <button
                   type="button"
-                  onClick={() => void rateFlashcard("AGAIN")}
+                  onClick={() => submitFlashcardRating("AGAIN", "left")}
                   disabled={!isFlipped || flashcardSaving}
-                  className="py-2 px-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer text-center disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-black text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {flashcardSaving ? "Đang lưu..." : "Again · Chưa nhớ"}
+                  {flashcardSaving ? "Đang lưu..." : "← Chưa nhớ"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => void rateFlashcard("HARD")}
+                  onClick={() => submitFlashcardRating("GOOD", "right")}
                   disabled={!isFlipped || flashcardSaving}
-                  className="py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer text-center disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Hard · Khó
+                  Đã nhớ →
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void rateFlashcard("GOOD")}
-                  disabled={!isFlipped || flashcardSaving}
-                  className="py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition cursor-pointer text-center disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Good · Đã nhớ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void rateFlashcard("EASY")}
-                  disabled={!isFlipped || flashcardSaving}
-                  className="py-2 px-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition cursor-pointer text-center disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Easy · Rất dễ
-                </button>
+                <div className="relative col-span-2 flex justify-center">
+                  <button
+                    type="button"
+                    disabled={!isFlipped || flashcardSaving}
+                    aria-expanded={flashcardRatingMenuOpen}
+                    onClick={() => setFlashcardRatingMenuOpen((open) => !open)}
+                    className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Mức đánh giá khác <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                  {flashcardRatingMenuOpen ? (
+                    <div role="menu" className="absolute bottom-full z-20 mb-1 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={flashcardSaving}
+                        onClick={() => submitFlashcardRating("HARD", "left")}
+                        className="w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-amber-50"
+                      >
+                        Khó nhớ
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={flashcardSaving}
+                        onClick={() => submitFlashcardRating("EASY", "right")}
+                        className="w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-emerald-50"
+                      >
+                        Rất dễ
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>

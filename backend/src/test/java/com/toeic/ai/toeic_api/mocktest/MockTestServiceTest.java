@@ -29,11 +29,14 @@ class MockTestServiceTest {
     @Mock
     private JdbcTemplate jdbc;
 
+    @Mock
+    private com.toeic.ai.toeic_api.learning.StudyPlanService studyPlanService;
+
     private MockTestService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockTestService(jdbc);
+        service = new MockTestService(jdbc, studyPlanService);
     }
 
     @Test

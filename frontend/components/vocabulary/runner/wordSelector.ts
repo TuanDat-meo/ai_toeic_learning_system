@@ -1,11 +1,33 @@
 import type { WordItem, VocabularyTestSet } from "@/app/admin/content/vocabulary/types";
 
-export type StudyMode = "single_deck" | "all_decks" | "by_level";
+export type DeckScope = "single_deck" | "all_decks";
+/** Kept as an alias for session metadata written by older runner versions. */
+export type StudyMode = DeckScope | "by_level";
 export type WordLevelTag = "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "unclassified";
-export type QuestionCountSelection = 10 | 20 | 30 | 0; // 0: Vô tận (Endless)
+export type QuestionCountSelection = 10 | 20 | 30 | "full" | 0; // full: toàn bộ pool một lần; 0: vô tận
+
+export function getLevelDisplayName(level: WordLevelTag): string {
+  if (level === "unclassified") return "Khác";
+  return level;
+}
+
+export function getLevelDescription(level: WordLevelTag): string {
+  switch (level) {
+    case "A1": return "Cơ bản";
+    case "A2": return "Sơ cấp";
+    case "B1": return "Trung cấp";
+    case "B2": return "Khá";
+    case "C1": return "Nâng cao";
+    case "C2": return "Thành thạo";
+    case "unclassified": return "Mở rộng";
+    default: return "";
+  }
+}
 
 export interface WordSelectionOptions {
-  mode: StudyMode;
+  mode?: StudyMode;
+  deckScope?: DeckScope;
+  filterByLevel?: boolean;
   targetCount: QuestionCountSelection;
   selectedLevels?: WordLevelTag[];
   wrongWordsHistory?: WordItem[];
@@ -95,18 +117,20 @@ export function selectWordsForSession(
 } {
   const random = createSeededRandom(options.seed);
   const mixRatio = options.mixWrongRatio ?? 0.25;
-  const targetCount = options.targetCount === 0 ? 30 : options.targetCount;
+  const requestedCount = options.targetCount;
 
   // 1. Lọc và xử lý nguồn từ theo chế độ
   let candidatePool: WordItem[] = [];
   let warningMessage: string | undefined;
 
-  if (options.mode === "single_deck") {
+  const deckScope = options.deckScope ?? (options.mode === "all_decks" ? "all_decks" : "single_deck");
+  const filterByLevel = options.filterByLevel ?? options.mode === "by_level";
+  if (deckScope === "single_deck") {
     candidatePool = [...primaryWords];
     if (candidatePool.length < 10) {
       warningMessage = `Bộ đề này chỉ có ${candidatePool.length} từ. Nên có ít nhất 10 từ để trải nghiệm tốt nhất!`;
     }
-  } else if (options.mode === "all_decks") {
+  } else {
     // Thu thập từ từ nhiều bộ, tránh trùng id/từ
     const seenWords = new Set<string>();
     const multiSetPool: WordItem[] = [];
@@ -132,12 +156,16 @@ export function selectWordsForSession(
       round++;
     }
     candidatePool = multiSetPool.length > 0 ? multiSetPool : [...primaryWords];
-  } else if (options.mode === "by_level") {
+  }
+
+  if (filterByLevel) {
     const selectedLevels = options.selectedLevels && options.selectedLevels.length > 0
       ? options.selectedLevels
       : ["A1", "A2", "B1", "B2", "C1", "C2", "unclassified"];
 
-    const allAvailable = allSetsWords.flatMap((s) => s.words).concat(primaryWords);
+    const allAvailable = deckScope === "all_decks"
+      ? allSetsWords.flatMap((s) => s.words).concat(primaryWords)
+      : primaryWords;
     const seen = new Set<string>();
     candidatePool = allAvailable.filter((w) => {
       const norm = w.word.toLowerCase().trim();
@@ -146,14 +174,11 @@ export function selectWordsForSession(
       return selectedLevels.includes(getWordLevel(w));
     });
 
-    if (candidatePool.length === 0) {
-      candidatePool = [...primaryWords]; // Fallback an toàn nếu không tìm thấy từ theo cấp
-      warningMessage = "Không tìm thấy từ thuộc cấp độ đã chọn, chuyển về bộ mặc định.";
-    }
+    if (candidatePool.length === 0) warningMessage = "Không tìm thấy từ thuộc cấp độ đã chọn trong phạm vi này.";
   }
 
   // Fallback nếu candidatePool rỗng
-  if (candidatePool.length === 0) {
+  if (candidatePool.length === 0 && !filterByLevel) {
     candidatePool = [
       {
         id: "fb-1",
@@ -164,6 +189,10 @@ export function selectWordsForSession(
     ];
     warningMessage = "Dữ liệu bộ từ rỗng. Đã kích hoạt từ vựng dự phòng.";
   }
+
+  const targetCount = requestedCount === 0 || requestedCount === "full"
+    ? candidatePool.length
+    : Math.min(requestedCount, candidatePool.length);
 
   // 2. Tách từ từng sai (Spaced Repetition) để hòa trộn
   const wrongCandidates = (options.wrongWordsHistory || []).filter((w) =>

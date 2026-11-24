@@ -19,7 +19,7 @@ test("SpeedCalculator: 3 warmup questions remain at base speed and tier 0", () =
     });
     assert.equal(res.tier, 0, `Warmup question ${q} must remain at tier 0`);
     assert.equal(res.isWarmup, true);
-    assert.equal(res.effectiveSpeed, 165); // Mặc định medium
+    assert.equal(res.effectiveSpeed, 125); // Tốc độ khởi động medium
   }
 });
 
@@ -31,7 +31,7 @@ test("SpeedCalculator: 5 correct streak increases tier by 1; 2 wrong streak decr
     wrongStreak: 0,
   });
   assert.equal(normalSpeed.tier, 1, "5 correct streak should yield tier 1");
-  assert.ok(normalSpeed.effectiveSpeed > 165, "Speed should increase at tier 1");
+  assert.ok(normalSpeed.effectiveSpeed > 125, "Speed should increase at tier 1");
 
   const demotedSpeed = calculateDynamicSpeed({
     preset: "medium",
@@ -42,7 +42,7 @@ test("SpeedCalculator: 5 correct streak increases tier by 1; 2 wrong streak decr
   assert.equal(demotedSpeed.tier, 0, "2 wrong streak should reduce tier back to 0");
 });
 
-test("SpeedCalculator: Distance between obstacles scales with speed to guarantee >= 1.6s rest", () => {
+test("SpeedCalculator: Distance between obstacles scales with speed to guarantee >= 3.2s rest", () => {
   const slowRes = calculateDynamicSpeed({
     preset: "slow",
     questionIndex: 5,
@@ -62,11 +62,11 @@ test("SpeedCalculator: Distance between obstacles scales with speed to guarantee
     "Fast speed must have longer distance to keep rest time constant"
   );
 
-  // Thời gian chạy qua quãng đường (trừ vùng kích hoạt) phải xấp xỉ 1.6 giây
-  const restTimeSlow = (slowRes.nextEncounterDistancePx - 95) / slowRes.effectiveSpeed;
-  const restTimeFast = (fastRes.nextEncounterDistancePx - 95) / fastRes.effectiveSpeed;
-  assert.ok(Math.abs(restTimeSlow - 1.6) < 0.1, "Slow rest time must be ~1.6s");
-  assert.ok(Math.abs(restTimeFast - 1.6) < 0.1, "Fast rest time must be ~1.6s");
+  // Thời gian chạy qua quãng đường (trừ vùng kích hoạt) phải xấp xỉ 3.2 giây
+  const restTimeSlow = (slowRes.nextEncounterDistancePx - 130) / slowRes.effectiveSpeed;
+  const restTimeFast = (fastRes.nextEncounterDistancePx - 130) / fastRes.effectiveSpeed;
+  assert.ok(Math.abs(restTimeSlow - 3.2) < 0.1, "Slow rest time must be ~3.2s");
+  assert.ok(Math.abs(restTimeFast - 3.2) < 0.1, "Fast rest time must be ~3.2s");
 });
 
 test("WordSelector: ShuffleBag extracts each item before repeating", () => {

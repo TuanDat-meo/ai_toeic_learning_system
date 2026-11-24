@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Check, X, ShoppingBag, RotateCcw, Trash2, BookOpen, Play } from "lucide-react";
+import { Check, X, Bookmark, RotateCcw, RefreshCcw, Trash2, BookOpen, Play } from "lucide-react";
 import { useItemProgress, resetItemProgress, ItemProgress } from "@/lib/practiceProgress";
+import { getGrammarResumeIndex } from "@/lib/api/grammar";
 
 export interface StudentCardProgressActionProps {
   progressKey: string;
@@ -15,6 +16,9 @@ export interface StudentCardProgressActionProps {
   actionLabel?: string;
   className?: string;
   savedCount?: number;
+  completedCount?: number;
+  correctCount?: number;
+  wrongCountOverride?: number;
   secondaryAction?: {
     label: string;
     onClick: () => void;
@@ -33,6 +37,9 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   actionLabel = "Luyện tập",
   className = "",
   savedCount: initialSavedCount,
+  completedCount,
+  correctCount,
+  wrongCountOverride,
   secondaryAction,
 }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -45,15 +52,25 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   const progress: ItemProgress = useItemProgress(progressKey, totalQuestions);
 
   const total = totalQuestions || progress.totalQuestions || 0;
-  const wrong = progress.wrongAnswers !== undefined ? progress.wrongAnswers : (progress.wrongQuestionIds?.length || 0);
-  const correct = progress.correctAnswers !== undefined ? progress.correctAnswers : 0;
-  let completed = progress.completedQuestions || 0;
+  const wrong = wrongCountOverride ?? (progress.wrongAnswers !== undefined ? progress.wrongAnswers : (progress.wrongQuestionIds?.length || 0));
+  const correct = correctCount ?? (progress.correctAnswers !== undefined ? progress.correctAnswers : 0);
+  let completed = completedCount ?? (progress.completedQuestions || 0);
   completed = Math.min(total, Math.max(completed, correct + wrong));
   const savedCount = initialSavedCount !== undefined ? initialSavedCount : progress.savedCount || 0;
 
-  const handleStart = (e: React.MouseEvent) => {
+  const handleStart = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Bắt đầu từ câu tiếp theo (nếu làm được 5/30 thì mở câu số 6 (index 5))
+    if (progressKey.startsWith("grammar-")) {
+      try {
+        const topicId = progressKey.slice("grammar-".length);
+        const resume = await getGrammarResumeIndex(topicId);
+        onStart(resume.startIndex);
+        return;
+      } catch {
+        onStart(0);
+        return;
+      }
+    }
     const nextQuestionIndex = completed < total ? completed : 0;
     onStart(nextQuestionIndex);
   };
@@ -95,7 +112,12 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
   const handleSaved = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onOpenSaved) onOpenSaved();
-    else alert(`Đã lưu ${savedCount} mục vào giỏ từ vựng/câu hỏi cá nhân.`);
+    else if (progressKey.startsWith("grammar-")) {
+      const topicId = progressKey.slice("grammar-".length);
+      window.location.assign(`/grammar/notebook?topicId=${encodeURIComponent(topicId)}`);
+    } else {
+      alert(`Đã lưu ${savedCount} mục vào giỏ từ vựng/câu hỏi cá nhân.`);
+    }
   };
 
   return (
@@ -127,8 +149,9 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 onClick={handleSaved}
                 className="relative text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer p-0.5 active:scale-90"
                 title="Mục đã lưu / Giỏ từ vựng"
+                aria-label="Mục đã lưu / Giỏ từ vựng"
               >
-                <ShoppingBag className="w-4 h-4" />
+                <Bookmark className="w-4 h-4" />
                 {savedCount > 0 && (
                   <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow-xs">
                     {savedCount}
@@ -158,9 +181,10 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 type="button"
                 onClick={handleReset}
                 className="text-red-500 dark:text-rose-400 hover:text-red-600 dark:hover:text-rose-300 transition cursor-pointer p-0.5 active:scale-90"
-                title="Đặt lại tiến độ bài này về 0"
+                title="Đặt lại tiến độ chủ điểm"
+                aria-label="Đặt lại tiến độ chủ điểm"
               >
-                <Trash2 className="w-4 h-4" />
+                <RefreshCcw className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -201,7 +225,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 className="relative text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer p-0.5 active:scale-90"
                 title="Mục đã lưu / Giỏ từ vựng"
               >
-                <ShoppingBag className="w-4 h-4" />
+                <Bookmark className="w-4 h-4" />
                 {savedCount > 0 && (
                   <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow-xs">
                     {savedCount}
@@ -233,7 +257,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 className="text-red-500 dark:text-rose-400 hover:text-red-600 dark:hover:text-rose-300 transition cursor-pointer p-0.5 active:scale-90"
                 title="Đặt lại tiến độ bài này về 0"
               >
-                <Trash2 className="w-4 h-4" />
+                <RefreshCcw className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -273,7 +297,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               className="relative text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer p-0.5 active:scale-90"
               title="Mục đã lưu / Giỏ từ vựng"
             >
-              <ShoppingBag className="w-4 h-4" />
+              <Bookmark className="w-4 h-4" />
               {savedCount > 0 && (
                 <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow-xs">
                   {savedCount}
@@ -305,7 +329,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
               className="text-red-500 dark:text-rose-400 hover:text-red-600 dark:hover:text-rose-300 transition cursor-pointer p-0.5 active:scale-90"
               title="Đặt lại tiến độ bài này về 0"
             >
-              <Trash2 className="w-4 h-4" />
+              <RefreshCcw className="w-4 h-4" />
             </button>
           </div>
 
@@ -352,7 +376,7 @@ export const StudentCardProgressAction: React.FC<StudentCardProgressActionProps>
                 Đặt lại tiến độ bài học?
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-                Bạn có chắc chắn muốn đặt lại tiến độ của bài học này về 0?
+                Thao tác này đặt lại {completed}/{total} câu đã làm, {correct} câu đúng và {wrong} câu sai về 0. Dấu trang và lịch ôn SRS không bị xóa.
               </p>
             </div>
 

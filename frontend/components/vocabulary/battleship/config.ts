@@ -270,6 +270,8 @@ export interface BattleFleetState {
 
 export interface BattleSetup {
   mode: "single_deck" | "all_decks" | "by_level";
+  deckScope?: "single_deck" | "all_decks";
+  filterByLevel?: boolean;
   selectedLevels: string[];
   difficulty: BattleDifficulty;
   questionCount: 10 | 20;

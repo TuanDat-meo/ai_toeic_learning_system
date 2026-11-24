@@ -10,9 +10,9 @@ export default async function VocabularyGamePage({
   searchParams,
 }: {
   params: Promise<{ game: string }>;
-  searchParams: Promise<{ setId?: string }>;
+  searchParams: Promise<{ setId?: string; wordIds?: string; source?: string }>;
 }) {
-  const [{ game }, { setId }] = await Promise.all([params, searchParams]);
+  const [{ game }, { setId, wordIds, source }] = await Promise.all([params, searchParams]);
   const selectedGame = games.find((candidate) => candidate === game);
   if (!selectedGame) notFound();
 
@@ -35,6 +35,8 @@ export default async function VocabularyGamePage({
       mode="game"
       game={selectedGame}
       setId={setId}
+      weakWordIds={wordIds?.split(",").map((id) => id.trim()).filter(Boolean)}
+      weakReview={source === "weak"}
     />
   );
 }
