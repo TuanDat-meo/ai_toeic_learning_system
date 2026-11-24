@@ -1057,6 +1057,11 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
             : undefined
           : undefined;
 
+      const matchingTargetCount = Math.min(
+        typeof matchingWordCount === "number" ? matchingWordCount : 8,
+        matchingEligibleWords.length > 0 ? matchingEligibleWords.length : 8
+      );
+
       const session = await startVocabularyGameSession({
         setId: primarySetId,
         gameType: gameTypeByMode[game],
@@ -1068,6 +1073,9 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
           difficulty: sentenceDifficulty,
           ...(sentenceMode === "TIME_ATTACK" ? { timeLimitSeconds } : {}),
           ...(sentenceMode === "CLASSIC" && questionCountForBackend ? { questionCount: questionCountForBackend } : {}),
+        } : {}),
+        ...(game === "matching" ? {
+          questionCount: matchingTargetCount,
         } : {}),
       });
       setGameSession(session);
@@ -1122,6 +1130,88 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
       setSubmitting(false);
     }
   };
+
+  const startWrongWordsGame = useCallback(async () => {
+    if (!gameResult?.wrongWords || gameResult.wrongWords.length === 0) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const primarySetId = selectedSetId === "ALL" ? (availableSets[0]?.id || "set-01") : selectedSetId;
+      const wordsMap = new Map<string, WordItem>();
+      allDeckWords.forEach((w) => wordsMap.set(w.id, w));
+      words.forEach((w) => wordsMap.set(w.id, w));
+      matchingEligibleWords.forEach((w) => wordsMap.set(w.id, w));
+
+      const sampledWords: WordItem[] = gameResult.wrongWords.map((ww) => {
+        const found = wordsMap.get(ww.vocabularyId);
+        if (found) return found;
+        return {
+          id: ww.vocabularyId,
+          setId: primarySetId,
+          word: ww.word,
+          meaning: ww.meaning,
+          partOfSpeech: "Word",
+          status: "PUBLISHED",
+          orderIndex: 0,
+        } as WordItem;
+      });
+
+      const session = await startVocabularyGameSession({
+        setId: primarySetId,
+        gameType: "MATCHING",
+        questionCount: sampledWords.length,
+      });
+
+      setGameSession(session);
+      setGameResult(null);
+      completionStarted.current = null;
+      setIndex(0);
+      setCorrectCount(0);
+      setWrongCount(0);
+      setMissedWords([]);
+      setLives(3);
+      setEnemyHealth(100);
+      setScore(0);
+      setComboCount(0);
+      setMaxCombo(0);
+      setBattleEnemy(1);
+      setWrongMatches(0);
+      setMatchFlipped([]);
+      setMatchMatched(new Set());
+      setMatchAttempts(0);
+      setMatchCombo(0);
+      setMatchBestCombo(0);
+      setMatchShakingCards([]);
+      if (matchFlipTimerRef.current !== null) {
+        window.clearTimeout(matchFlipTimerRef.current);
+        matchFlipTimerRef.current = null;
+      }
+      matchQueueRef.current = Promise.resolve();
+      matchStartTimeRef.current = Date.now();
+      setMatchingSessionWords(sampledWords);
+      setMatchingWordCount(sampledWords.length);
+      const eng = sampledWords.map((w) => ({ id: `word:${w.id}`, wordId: w.id, side: "word" as const, word: w }));
+      const vie = sampledWords.map((w) => ({ id: `meaning:${w.id}`, wordId: w.id, side: "meaning" as const, word: w }));
+      setMatchingBoardCards(shuffleArray([...eng, ...vie]));
+      setMatchingMeaningWords(shuffleArray([...sampledWords]));
+      gameAnswerRequestIds.current.clear();
+      matchRequestIdsRef.current.clear();
+      setSeconds(0);
+      setTotalSeconds(0);
+      setTimeLeft(timeLimitSeconds);
+      setQuestionTimeLeft(15);
+      setQuestionTimedOut(false);
+      setTimedOutSubmissionFailed(false);
+      timedOutQuestionIndex.current = null;
+      setInput("");
+      setAnswerResult(null);
+      setStarted(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể bắt đầu phiên ôn từ sai.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [allDeckWords, availableSets, gameResult?.wrongWords, matchingEligibleWords, selectedSetId, timeLimitSeconds, words]);
 
   const retryGameCompletion = () => {
     if (!gameSession) return;
@@ -1922,23 +2012,57 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
         {/* ── FINISHED SCREEN (Results) ── */}
         {started && isFinished && (
           <section className={`overflow-hidden rounded-3xl border-2 p-6 sm:p-10 shadow-xl text-center ${isGameDarkMode ? "border-slate-700 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}>
-            <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border-2 shadow-md ${isGameDarkMode ? "border-amber-500 bg-amber-900/40 text-amber-400" : "border-amber-300 bg-amber-50 text-amber-600"}`}>
-              <Trophy className="h-10 w-10 animate-bounce" />
+            <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border-2 shadow-md ${
+              isGameDarkMode
+                ? gameResult?.tier === "INCOMPLETE"
+                  ? "border-amber-600/50 bg-amber-950/40 text-amber-400"
+                  : "border-amber-500 bg-amber-900/40 text-amber-400"
+                : gameResult?.tier === "INCOMPLETE"
+                  ? "border-amber-300 bg-amber-50 text-amber-700"
+                  : "border-amber-300 bg-amber-50 text-amber-600"
+            }`}>
+              {gameResult?.tier === "INCOMPLETE" ? (
+                <Clock className="h-10 w-10 text-amber-500" />
+              ) : (
+                <Trophy className="h-10 w-10 animate-bounce" />
+              )}
             </div>
 
-            <h2 className={`mt-4 text-2xl sm:text-4xl font-black ${isGameDarkMode ? "text-white" : "text-slate-900"}`}>Hoàn Thành Thử Thách! 🎉</h2>
+            <h2 className={`mt-4 text-2xl sm:text-4xl font-black ${isGameDarkMode ? "text-white" : "text-slate-900"}`}>
+              {gameResult?.tier === "INCOMPLETE" ? "Chưa Hoàn Thành Thử Thách! ⏳" : "Hoàn Thành Thử Thách! 🎉"}
+            </h2>
             <p className={`mt-1 text-sm font-medium ${isGameDarkMode ? "text-slate-400" : "text-slate-600"}`}>
             {gameResult
-              ? "Kết quả đã được máy chủ xác nhận và cập nhật tiến độ ôn tập SRS."
+              ? gameResult.tier === "INCOMPLETE"
+                ? "Bạn chưa ghép hết tất cả các cặp thẻ. Kết quả và các từ cần ôn đã được ghi nhận."
+                : "Kết quả đã được máy chủ xác nhận và cập nhật tiến độ ôn tập SRS."
               : error
                 ? "Chưa xác nhận được kết quả. Hãy thử lưu lại trước khi rời màn hình."
                 : "Đang xác nhận điểm và đồng bộ tiến độ ôn tập SRS..."}
             </p>
 
             {/* Performance Rating Badge */}
-            <div className={`mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-1 text-xs font-black shadow-sm ${isGameDarkMode ? "border-amber-600/50 bg-amber-900/40 text-amber-300" : "border-amber-300 bg-amber-50 text-amber-800"}`}>
+            <div className={`mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-1 text-xs font-black shadow-sm ${
+              isGameDarkMode
+                ? gameResult?.tier === "INCOMPLETE"
+                  ? "border-amber-500/50 bg-amber-950/40 text-amber-300"
+                  : "border-amber-600/50 bg-amber-900/40 text-amber-300"
+                : gameResult?.tier === "INCOMPLETE"
+                  ? "border-amber-400 bg-amber-50 text-amber-800"
+                  : "border-amber-300 bg-amber-50 text-amber-800"
+            }`}>
               {!gameResult ? (
                 <>ĐANG CHỜ XÁC NHẬN</>
+              ) : gameResult.tier === "INCOMPLETE" ? (
+                <>⚠️ CHƯA HOÀN THÀNH</>
+              ) : gameResult.tier === "S" ? (
+                <>🏆 XUẤT SẮC - S TIER</>
+              ) : gameResult.tier === "A" ? (
+                <>⭐ RẤT TỐT - A TIER</>
+              ) : gameResult.tier === "B" ? (
+                <>👍 HOÀN THÀNH - B TIER</>
+              ) : gameResult.tier === "C" ? (
+                <>📘 CẦN LUYỆN THÊM - C TIER</>
               ) : resultAccuracy >= 90 ? (
                 <>🏆 XUẤT SẮC - S TIER</>
               ) : resultAccuracy >= 80 ? (
@@ -1957,7 +2081,7 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
                   <Star
                     key={star}
                     className={`h-8 w-8 transition-all ${
-                      star <= (gameResult.stars ?? 0)
+                      gameResult.tier !== "INCOMPLETE" && star <= (gameResult.stars ?? 0)
                         ? "fill-amber-400 text-amber-400 drop-shadow-md scale-110"
                         : "fill-slate-200 text-slate-300 dark:fill-slate-700 dark:text-slate-600"
                     }`}
@@ -2001,8 +2125,77 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
               </div>
             </div>
 
-            {/* Missed Words Review List */}
-            {missedWords.length > 0 && (
+            {/* Wrong words list (Memory Match: "Từ cần ôn (n)") */}
+            {gameResult?.wrongWords && gameResult.wrongWords.length > 0 ? (
+              <div className={`mx-auto mt-6 max-w-xl text-left rounded-2xl border p-4 sm:p-5 shadow-sm ${
+                isGameDarkMode ? "border-rose-900/40 bg-rose-950/20 text-white" : "border-rose-200 bg-rose-50/50 text-slate-900"
+              }`}>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 mb-3 border-rose-200/40">
+                  <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-2 ${
+                    isGameDarkMode ? "text-rose-400" : "text-rose-800"
+                  }`}>
+                    <XCircle className="h-4 w-4 text-rose-500" />
+                    Từ cần ôn ({gameResult.wrongWords.length})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={startWrongWordsGame}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 px-3 py-1.5 text-xs font-bold text-white shadow transition active:scale-95"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Ôn lại từ sai
+                  </button>
+                </div>
+
+                <div className="divide-y divide-rose-200/30 max-h-56 overflow-y-auto pr-1">
+                  {gameResult.wrongWords.map((ww) => (
+                    <div key={ww.vocabularyId} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-black text-sm ${isGameDarkMode ? "text-white" : "text-slate-900"}`}>
+                            {ww.word}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            ww.matched
+                              ? isGameDarkMode
+                                ? "bg-emerald-900/60 text-emerald-300 border border-emerald-700"
+                                : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                              : isGameDarkMode
+                                ? "bg-rose-900/60 text-rose-300 border border-rose-700"
+                                : "bg-rose-100 text-rose-800 border border-rose-300"
+                          }`}>
+                            {ww.matched ? "Đã ghép" : "Chưa ghép được"}
+                          </span>
+                          <span className={`text-[11px] font-medium ${isGameDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                            Sai: <strong className="text-rose-500">{ww.wrongCount}</strong> lần
+                            {ww.avoidableCount > 0 && (
+                              <span className="ml-1 text-[10px] text-amber-500">
+                                (Tránh được: {ww.avoidableCount})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <p className={`mt-0.5 font-medium text-xs ${isGameDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                          {ww.meaning}
+                        </p>
+                        {ww.confusedWith && ww.confusedWith.length > 0 && (
+                          <p className={`mt-1 text-[11px] ${isGameDarkMode ? "text-amber-300/80" : "text-amber-800/90"}`}>
+                            <span className="font-semibold">Hay nhầm với:</span> {ww.confusedWith.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : isMatching && gameResult && gameResult.tier !== "INCOMPLETE" ? (
+              <div className={`mx-auto mt-6 max-w-xl text-center rounded-2xl border p-4 shadow-sm ${
+                isGameDarkMode ? "border-emerald-800/40 bg-emerald-950/20 text-emerald-300" : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              }`}>
+                <p className="text-sm font-bold flex items-center justify-center gap-2">
+                  <span>🎉</span> Xuất sắc! Bạn không ghép sai cặp nào trong ván này.
+                </p>
+              </div>
+            ) : missedWords.length > 0 ? (
               <div className={`mx-auto mt-6 max-w-xl text-left rounded-2xl border p-4 ${isGameDarkMode ? "border-rose-800/50 bg-rose-900/20" : "border-rose-200 bg-rose-50/40"}`}>
                 <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${isGameDarkMode ? "text-rose-400" : "text-rose-800"}`}>
                   <XCircle className="h-4 w-4" /> Từ cần củng cố lại ({missedWords.length} từ):
@@ -2026,7 +2219,7 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {error && !gameResult && (
               <div role="alert" className={`mx-auto mt-4 max-w-lg rounded-2xl border p-3 text-xs font-semibold ${isGameDarkMode ? "border-red-700/50 bg-red-900/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
@@ -2043,6 +2236,15 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
 
             {/* Actions */}
             <div className="mt-8 flex flex-wrap justify-center gap-3">
+              {gameResult?.wrongWords && gameResult.wrongWords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={startWrongWordsGame}
+                  className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-md transition hover:bg-rose-700 active:scale-95"
+                >
+                  <RotateCcw className="h-4 w-4" /> Ôn lại từ sai ({gameResult.wrongWords.length})
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!gameResult}

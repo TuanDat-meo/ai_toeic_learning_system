@@ -94,6 +94,16 @@ export interface VocabularyAnswerResult {
 
 export type VocabularyGameType = 'FLASHCARD' | 'RUNNER' | 'SENTENCE' | 'MATCHING' | 'BATTLE' | 'TYPING';
 
+export interface WrongWordDetail {
+  vocabularyId: string;
+  word: string;
+  meaning: string;
+  wrongCount: number;
+  avoidableCount: number;
+  matched: boolean;
+  confusedWith: string[];
+}
+
 export interface VocabularyGameSession {
   id: string;
   setId: string;
@@ -117,6 +127,12 @@ export interface VocabularyGameSession {
   won?: boolean;
   playerHpRemaining?: number;
   fleetHpRemaining?: number;
+  tier?: 'S' | 'A' | 'B' | 'C' | 'INCOMPLETE';
+  accuracy?: number;
+  correct?: number;
+  wrong?: number;
+  avoidableMistakes?: number;
+  wrongWords?: WrongWordDetail[];
 }
 
 export interface VocabularyGameQuestion {
@@ -356,7 +372,7 @@ export async function startVocabularyGameSession(data: {
   deckIds?: string[];
   mode?: 'CLASSIC' | 'TIME_ATTACK';
   timeLimitSeconds?: 30 | 60 | 90 | 120;
-  questionCount?: 10 | 20;
+  questionCount?: number;
   difficulty?: 'ALL' | 'EASY' | 'MEDIUM' | 'HARD';
 }): Promise<VocabularyGameSession> {
   return writeAuthRequest<VocabularyGameSession>('POST', '/api/vocabulary/games/sessions', data);

@@ -493,4 +493,28 @@ class VocabularyLearningServiceIntegrationTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .matches(ex -> ((ResponseStatusException) ex).getStatusCode().value() == 409);
     }
+
+    @Test
+    void matchingSessionCompletion_withZeroCorrect_returnsIncompleteTierAndWrongWords() {
+        String wordId2 = "test-word2-" + UUID.randomUUID();
+        jdbc.update("INSERT INTO vocabulary_items (id, set_id, word, part_of_speech, meaning, order_index) VALUES (?, ?, 'invoice', 'Noun', 'hóa đơn', 2)", wordId2, setId);
+
+        var session = vocabularyService.startGameSession(studentId,
+                new VocabularyService.StartVocabularyGameRequest(setId, "matching", null, "CLASSIC", null, 2, "MEDIUM"));
+
+        // Record 1 incorrect attempt: user flipped wordId (EN) and wordId2 (VN)
+        vocabularyService.recordAnswer(studentId, new VocabularyService.RecordVocabularyAnswerRequest(
+                UUID.randomUUID(), wordId, "GAME", "ENGLISH_TO_VIETNAMESE", wordId2, null, 1_000,
+                session.id(), 0, null, null, null, null, null, null, null, wordId, wordId2));
+
+        var completed = vocabularyService.completeGameSession(studentId, session.id());
+
+        assertThat(completed.tier()).isEqualTo("INCOMPLETE");
+        assertThat(completed.stars()).isEqualTo(0);
+        assertThat(completed.score()).isEqualTo(0);
+        assertThat(completed.correctCount()).isEqualTo(0);
+        assertThat(completed.wrongCount()).isEqualTo(1);
+        assertThat(completed.wrongWords()).isNotEmpty();
+        assertThat(completed.wrongWords()).anyMatch(w -> w.vocabularyId().equals(wordId) && !w.matched());
+    }
 }
