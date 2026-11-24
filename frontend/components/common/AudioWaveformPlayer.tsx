@@ -71,7 +71,6 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     examMode &&
     Boolean(
       hasPlayedInExamMode ||
-        (normalizedUrl && playedExamUrlsRef.current.has(normalizedUrl)) ||
         (normalizedUrl && playedExamAudioUrls?.has(normalizedUrl))
     );
   const skipStep = 3; // Tua mặc định 3 giây theo yêu cầu

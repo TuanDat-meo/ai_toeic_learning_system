@@ -667,6 +667,25 @@ public class ContentImportService {
                                 + "OR lower(g.title) = lower(EXCLUDED.payload_json ->> 'title'))",
                         batch.contentType().name(), item.dedupeKey(), item.title(),
                         toJson(item.normalizedData()), item.id(), publishedBy);
+            } else if (batch.contentType() == ContentType.VOCABULARY) {
+                inserted = jdbcTemplate.update(
+                        """
+                        INSERT INTO imported_content (content_type, dedupe_key, title, payload_json,
+                                source_import_item_id, created_by)
+                        VALUES (?, ?, ?, ?::jsonb, ?, ?)
+                        ON CONFLICT (content_type, dedupe_key) DO UPDATE SET
+                            title = EXCLUDED.title,
+                            payload_json = EXCLUDED.payload_json,
+                            source_import_item_id = EXCLUDED.source_import_item_id,
+                            created_by = EXCLUDED.created_by,
+                            published_at = now()
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM vocabulary_items vi
+                            WHERE lower(trim(vi.word)) = lower(trim(EXCLUDED.payload_json ->> 'word'))
+                        )
+                        """,
+                        batch.contentType().name(), item.dedupeKey(), item.title(),
+                        toJson(publishData), item.id(), publishedBy);
             } else if (batch.contentType() == ContentType.LISTENING) {
                 inserted = jdbcTemplate.update(
                         "INSERT INTO imported_content (content_type, dedupe_key, title, payload_json, "
