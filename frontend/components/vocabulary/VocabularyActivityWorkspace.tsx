@@ -1211,7 +1211,7 @@ export function VocabularyActivityWorkspace({ mode, setId, game, wordId, weakWor
     } finally {
       setSubmitting(false);
     }
-  }, [allDeckWords, availableSets, gameResult?.wrongWords, matchingEligibleWords, selectedSetId, timeLimitSeconds, words]);
+  }, [allDeckWords, availableSets, gameResult, matchingEligibleWords, selectedSetId, timeLimitSeconds, words]);
 
   const retryGameCompletion = () => {
     if (!gameSession) return;
