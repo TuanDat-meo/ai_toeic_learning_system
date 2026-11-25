@@ -12,9 +12,379 @@ import {
   Loader2,
   CheckCircle2,
   Image as ImageIcon,
+  Scissors,
+  FolderUp,
+  Sparkles,
 } from "lucide-react";
 import { DictationCardData, LevelCategoryCardData, DictationQuestion, TranscriptSegment } from "@/app/admin/content/listening/types";
-import { uploadListeningMediaFile, buildTranscriptSegmentsFromText } from "@/lib/api/listening";
+import {
+  uploadListeningMediaFile,
+  uploadListeningMediaBatch,
+  detectAudioSlicesInBrowser,
+  buildTranscriptSegmentsFromText,
+} from "@/lib/api/listening";
+
+interface SmartMediaAssistantProps {
+  part: "Part 1" | "Part 2" | "Part 3" | "Part 4";
+  defaultFolderSlug?: string;
+  questionsList: DictationQuestion[];
+  setQuestionsList: React.Dispatch<React.SetStateAction<DictationQuestion[]>>;
+  onTotalQuestionsChange?: (count: number) => void;
+  isDictation?: boolean;
+}
+
+const SmartListeningMediaAssistant: React.FC<SmartMediaAssistantProps> = ({
+  part,
+  defaultFolderSlug = "",
+  questionsList,
+  setQuestionsList,
+  onTotalQuestionsChange,
+  isDictation = false,
+}) => {
+  const [folderSlug, setFolderSlug] = useState(defaultFolderSlug);
+  const [groupThreeForPart34, setGroupThreeForPart34] = useState(!isDictation && (part === "Part 3" || part === "Part 4"));
+  const [busyMode, setBusyMode] = useState<"batch" | "slice" | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const isPart34 = part === "Part 3" || part === "Part 4";
+  const effectiveGroupSize = !isDictation && isPart34 && groupThreeForPart34 ? 3 : 1;
+
+  const createBlankQuestion = (id: number): DictationQuestion =>
+    isDictation
+      ? {
+          id,
+          part,
+          audioUrl: "",
+          fullTranscript: "",
+          vietnameseTranslation: "",
+          explanation: "",
+        }
+      : {
+          id,
+          part,
+          audioUrl: "",
+          fullTranscript: "",
+          vietnameseTranslation: "",
+          question: "",
+          options: { A: "", B: "", C: "", D: "" },
+          optionTranslations: { A: "", B: "", C: "", D: "" },
+          correctAnswer: "A",
+          explanation: "",
+          trapNote: "",
+        };
+
+  // Trích xuất chỉ số câu (0-based) hoặc khoảng câu từ tên file (VD: q1.mp3 -> [0], g62_64.jpg -> [61,62,63], c1.mp3 -> cụm 1)
+  const extractTargetIndices = (fileName: string, totalExisting: number, fallbackIdx: number): number[] => {
+    const base = fileName.replace(/\.[^.]+$/, "").toLowerCase();
+    // Dạng g62_64 hoặc 32-34
+    const rangeMatch = base.match(/(?:q|g|c|cau|_|-|^)(\d{1,3})[_-](\d{1,3})$/i);
+    if (rangeMatch) {
+      const startNum = Number(rangeMatch[1]);
+      const endNum = Number(rangeMatch[2]);
+      if (startNum >= 1 && endNum >= startNum && endNum - startNum <= 5) {
+        // Nếu bài hiện tại chỉ có N câu nhỏ (VD 30 câu của Part 3 nhưng tên file đánh số 32-34 chuẩn TOEIC)
+        const offset = startNum > 100 ? 100 : startNum >= 71 && part === "Part 4" ? 70 : startNum >= 32 && part === "Part 3" ? 31 : startNum >= 7 && part === "Part 2" ? 6 : 0;
+        const normalizedStart = totalExisting <= 40 && offset > 0 ? startNum - offset : startNum;
+        const normalizedEnd = totalExisting <= 40 && offset > 0 ? endNum - offset : endNum;
+        const indices: number[] = [];
+        for (let n = normalizedStart; n <= normalizedEnd; n++) {
+          if (n >= 1) indices.push(n - 1);
+        }
+        if (indices.length > 0) return indices;
+      }
+    }
+
+    // Dạng c1..c13 hoặc talk1..talk10 (nhóm hội thoại / bài nói)
+    const convMatch = base.match(/(?:^|[_-])(?:c|conv|talk|group)(\d{1,2})$/i);
+    if (convMatch) {
+      const groupNum = Number(convMatch[1]);
+      if (groupNum >= 1) {
+        if (effectiveGroupSize === 3) {
+          const baseIdx = (groupNum - 1) * 3;
+          return [baseIdx, baseIdx + 1, baseIdx + 2];
+        }
+        return [groupNum - 1];
+      }
+    }
+
+    // Dạng q1, cau1, test1_q12, hoặc 01.mp3
+    const singleMatch = base.match(/(?:q|cau|question|_)(\d{1,3})$/i) || base.match(/^(\d{1,3})$/);
+    if (singleMatch) {
+      const rawNum = Number(singleMatch[1]);
+      if (rawNum >= 1) {
+        const offset =
+          totalExisting <= 40
+            ? rawNum >= 71 && part === "Part 4"
+              ? 70
+              : rawNum >= 32 && part === "Part 3"
+              ? 31
+              : rawNum >= 7 && part === "Part 2"
+              ? 6
+              : 0
+            : 0;
+        const norm = Math.max(1, rawNum - offset);
+        if (effectiveGroupSize === 3 && !base.includes("q")) {
+          const baseIdx = (norm - 1) * 3;
+          return [baseIdx, baseIdx + 1, baseIdx + 2];
+        }
+        return [norm - 1];
+      }
+    }
+
+    // Fallback theo thứ tự file đã sắp xếp tự nhiên
+    if (effectiveGroupSize === 3) {
+      const baseIdx = fallbackIdx * 3;
+      return [baseIdx, baseIdx + 1, baseIdx + 2];
+    }
+    return [fallbackIdx];
+  };
+
+  // CÔNG CỤ 1: Tải lên hàng loạt file Audio + Ảnh và tự động ghép vào Câu 1..N
+  const handleBatchFilesUpload = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setBusyMode("batch");
+    setStatusMessage(null);
+    try {
+      const files = Array.from(fileList).sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
+      );
+      const uploaded = await uploadListeningMediaBatch(files, {
+        folder: folderSlug.trim() || undefined,
+        keepCleanName: Boolean(folderSlug.trim()),
+      });
+
+      const audioItems = uploaded.filter((u) => u.mediaType === "audio");
+      const imageItems = uploaded.filter((u) => u.mediaType === "image");
+
+      let updatedCount = 0;
+      setQuestionsList((prev) => {
+        const next = prev.length > 0 ? [...prev] : [createBlankQuestion(1)];
+        const ensureIndex = (idx: number) => {
+          while (next.length <= idx) {
+            next.push(createBlankQuestion(next.length + 1));
+          }
+        };
+
+        audioItems.forEach((item, idx) => {
+          const targets = extractTargetIndices(item.fileName, next.length, idx);
+          targets.forEach((tIdx) => {
+            if (tIdx >= 0 && tIdx < 200) {
+              ensureIndex(tIdx);
+              next[tIdx] = { ...next[tIdx], audioUrl: item.url };
+            }
+          });
+        });
+
+        imageItems.forEach((item, idx) => {
+          const targets = extractTargetIndices(item.fileName, next.length, idx);
+          targets.forEach((tIdx) => {
+            if (tIdx >= 0 && tIdx < 200) {
+              ensureIndex(tIdx);
+              next[tIdx] = { ...next[tIdx], imageUrl: item.url };
+            }
+          });
+        });
+
+        const reindexed = next.map((q, i) => ({ ...q, id: i + 1 }));
+        updatedCount = reindexed.length;
+        return reindexed;
+      });
+
+      if (updatedCount > 0) {
+        onTotalQuestionsChange?.(updatedCount);
+      }
+      setStatusMessage({
+        type: "ok",
+        text: `Đã tải lên và tự động ghép ${audioItems.length} file Audio & ${imageItems.length} file Ảnh vào danh sách câu hỏi!`,
+      });
+    } catch (err) {
+      setStatusMessage({
+        type: "err",
+        text: err instanceof Error ? err.message : "Tải lên hàng loạt thất bại.",
+      });
+    } finally {
+      setBusyMode(null);
+    }
+  };
+
+  // CÔNG CỤ 2: Tải 1 file Audio dài chưa cắt -> Web Audio API tự dò khoảng lặng và gán #t=start,end cho từng câu
+  const handleSingleLongAudioAutoSlice = async (file: File | undefined) => {
+    if (!file) return;
+    setBusyMode("slice");
+    setStatusMessage(null);
+    try {
+      const currentTotalQuestions = Math.max(1, questionsList.length);
+      const targetSliceCount =
+        effectiveGroupSize === 3
+          ? Math.max(1, Math.ceil(currentTotalQuestions / 3))
+          : currentTotalQuestions;
+
+      const [uploaded, slices] = await Promise.all([
+        uploadListeningMediaFile(file, {
+          folder: folderSlug.trim() || undefined,
+          keepCleanName: Boolean(folderSlug.trim()),
+        }),
+        detectAudioSlicesInBrowser(file, targetSliceCount),
+      ]);
+
+      setQuestionsList((prev) => {
+        const baseList = prev.length > 0 ? [...prev] : [createBlankQuestion(1)];
+        return baseList.map((q, idx) => {
+          const sliceIdx =
+            effectiveGroupSize === 3
+              ? Math.min(slices.length - 1, Math.floor(idx / 3))
+              : Math.min(slices.length - 1, idx);
+          const slice = slices[sliceIdx] || { startTime: 0, endTime: 15 };
+          const slicedUrl = `${uploaded.url}#t=${slice.startTime},${slice.endTime}`;
+          return {
+            ...q,
+            audioUrl: slicedUrl,
+          };
+        });
+      });
+
+      const previewRanges = slices
+        .slice(0, 4)
+        .map((s, i) => `#${i + 1} (${s.startTime}s–${s.endTime}s)`)
+        .join(", ");
+
+      setStatusMessage({
+        type: "ok",
+        text: `Đã tải file Audio gốc và tự động cắt ảo thành ${slices.length} đoạn cho ${currentTotalQuestions} câu: ${previewRanges}${slices.length > 4 ? "..." : ""}`,
+      });
+    } catch (err) {
+      setStatusMessage({
+        type: "err",
+        text: err instanceof Error ? err.message : "Không thể phân tích và chia mốc file Audio.",
+      });
+    } finally {
+      setBusyMode(null);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-indigo-200/90 bg-gradient-to-r from-indigo-50/80 via-blue-50/70 to-sky-50/80 p-3.5 space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-2xs">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-extrabold text-slate-900">
+              Trợ lý Media Thông minh (Dành cho Quản trị viên & Khách hàng)
+            </p>
+            <p className="text-[11px] text-slate-600">
+              Tự động ghép hàng loạt file theo tên (<code className="font-mono text-indigo-700">q1.mp3, q1.jpg, c1.mp3</code>) hoặc dùng 1 file Audio dài chưa cắt cho cả bài
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+            <span className="text-[10px] font-bold text-slate-500">Thư mục lưu:</span>
+            <input
+              type="text"
+              placeholder="test_11 (tùy chọn)"
+              value={folderSlug}
+              onChange={(e) => setFolderSlug(e.target.value)}
+              className="w-24 text-[11px] font-mono text-slate-800 focus:outline-hidden"
+              title="Nếu nhập tên thư mục (VD: test_11), file sẽ lưu gọn vào /ets_2024_lc/test_11/audio/..."
+            />
+          </div>
+
+          {!isDictation && isPart34 && (
+            <label className="inline-flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-[11px] font-semibold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={groupThreeForPart34}
+                onChange={(e) => setGroupThreeForPart34(e.target.checked)}
+                className="rounded text-indigo-600"
+              />
+              <span>Ghép 1 Audio / cụm 3 câu</span>
+            </label>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {/* NÚT 1: TẢI HÀNG LOẠT FILE ĐÃ CẮT */}
+        <label className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white hover:bg-indigo-50/60 border border-indigo-200/90 cursor-pointer transition shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+              {busyMode === "batch" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderUp className="w-4 h-4" />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-900 truncate">
+                1. Tải hàng loạt Audio & Ảnh (Tự ghép câu)
+              </p>
+              <p className="text-[10px] text-slate-500 truncate">
+                Chọn nhiều file .mp3, .jpg, .png cùng lúc để tự điền vào Câu 1..N
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold shrink-0">
+            {busyMode === "batch" ? "Đang ghép..." : "Chọn nhiều file"}
+          </span>
+          <input
+            type="file"
+            multiple
+            accept=".mp3,.wav,.ogg,.m4a,.png,.jpg,.jpeg,.webp,audio/*,image/*"
+            className="hidden"
+            disabled={busyMode !== null}
+            onChange={(e) => {
+              void handleBatchFilesUpload(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
+
+        {/* NÚT 2: TẢI 1 FILE AUDIO DÀI CHƯA CẮT */}
+        <label className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white hover:bg-emerald-50/60 border border-emerald-200/90 cursor-pointer transition shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              {busyMode === "slice" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scissors className="w-4 h-4" />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-900 truncate">
+                2. Dùng 1 File Audio dài chưa cắt ({questionsList.length} câu)
+              </p>
+              <p className="text-[10px] text-slate-500 truncate">
+                Tự dò khoảng lặng & chia mốc <code className="font-mono">#t=start,end</code> cho từng câu
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold shrink-0">
+            {busyMode === "slice" ? "Đang tách..." : "Chọn 1 Audio dài"}
+          </span>
+          <input
+            type="file"
+            accept=".mp3,.wav,.ogg,.m4a,audio/*"
+            className="hidden"
+            disabled={busyMode !== null}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              void handleSingleLongAudioAutoSlice(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+
+      {statusMessage && (
+        <div
+          className={`px-3 py-2 rounded-xl text-[11px] font-semibold border ${
+            statusMessage.type === "ok"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-rose-50 text-rose-800 border-rose-200"
+          }`}
+        >
+          {statusMessage.type === "ok" ? "✅ " : "⚠️ "}
+          {statusMessage.text}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- 1. MODAL GIỎ TỪ VỰNG ---
 interface VocabBagModalProps {
@@ -569,6 +939,16 @@ export const DictationFormModal: React.FC<DictationFormModalProps> = ({
               />
             </div>
           </div>
+
+          {/* TRỢ LÝ MEDIA THÔNG MINH CHO BÀI NGHE CHÉP CHÍNH TẢ */}
+          <SmartListeningMediaAssistant
+            part={dictationFormPart}
+            defaultFolderSlug={`test_${dictationFormTestNum}`}
+            questionsList={dictationQuestionsList}
+            setQuestionsList={setDictationQuestionsList}
+            onTotalQuestionsChange={setDictationFormQuestions}
+            isDictation={true}
+          />
 
           {/* DANH SÁCH CÂU HỎI TRONG BÀI CHÉP CHÍNH TẢ */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
@@ -1264,6 +1644,15 @@ export const LevelFormModal: React.FC<LevelFormModalProps> = ({
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:border-blue-500 resize-none"
             />
           </div>
+
+          {/* TRỢ LÝ MEDIA THÔNG MINH CHO CHỦ ĐIỂM LUYỆN NGHE */}
+          <SmartListeningMediaAssistant
+            part={levelFormPart}
+            questionsList={levelFormQuestionsList}
+            setQuestionsList={setLevelFormQuestionsList}
+            onTotalQuestionsChange={setLevelFormQuestions}
+            isDictation={false}
+          />
 
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">

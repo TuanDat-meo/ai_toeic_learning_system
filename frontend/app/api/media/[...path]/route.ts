@@ -115,6 +115,10 @@ function resolveMediaFile(relativePath: string): string | null {
   const publicRoot = path.resolve(process.cwd(), "public");
   const publicSearchDirs = [
     path.resolve(publicRoot, "ets_2024_lc", testFolderPublic),
+    path.resolve(publicRoot, "ets_2024_lc", testFolderPublic, "audio"),
+    path.resolve(publicRoot, "ets_2024_lc", testFolderPublic, "images"),
+    path.resolve(publicRoot, "ets_2024_lc", "uploads", "audio"),
+    path.resolve(publicRoot, "ets_2024_lc", "uploads", "images"),
     path.resolve(publicRoot, "ets_2024_lc", "audio"),
     path.resolve(publicRoot, "ets_2024_lc1"),
     path.resolve(publicRoot, "audio"),

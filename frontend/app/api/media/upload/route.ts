@@ -68,44 +68,26 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    const fileEntry = formData.get("file");
+    const rawFolder = String(formData.get("folder") || "").trim();
+    const cleanFolder = rawFolder ? sanitizeBaseName(rawFolder).toLowerCase() : "";
+    const keepCleanName = String(formData.get("keepCleanName") || "") === "true";
 
-    if (!fileEntry || !(fileEntry instanceof File)) {
+    const fileEntries: File[] = [];
+    const multiFiles = formData.getAll("files");
+    for (const entry of multiFiles) {
+      if (entry instanceof File) fileEntries.push(entry);
+    }
+    const singleFile = formData.get("file");
+    if (fileEntries.length === 0 && singleFile instanceof File) {
+      fileEntries.push(singleFile);
+    }
+
+    if (fileEntries.length === 0) {
       return NextResponse.json(
         { error: "Vui lòng chọn tệp âm thanh hoặc hình ảnh để tải lên." },
         { status: 400 }
       );
     }
-
-    const originalName = fileEntry.name || "upload";
-    const ext = path.extname(originalName).toLowerCase();
-    const isAudio = AUDIO_EXTENSIONS.has(ext);
-    const isImage = IMAGE_EXTENSIONS.has(ext);
-
-    if (!isAudio && !isImage) {
-      return NextResponse.json(
-        {
-          error:
-            "Định dạng tệp không hợp lệ. Chỉ hỗ trợ âm thanh (.mp3, .wav, .ogg, .m4a) hoặc hình ảnh (.png, .jpg, .jpeg, .webp).",
-        },
-        { status: 400 }
-      );
-    }
-
-    const maxBytes = isAudio ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES;
-    if (fileEntry.size <= 0 || fileEntry.size > maxBytes) {
-      return NextResponse.json(
-        {
-          error: isAudio
-            ? "Dung lượng tệp âm thanh không hợp lệ (tối đa 50 MB)."
-            : "Dung lượng tệp hình ảnh không hợp lệ (tối đa 15 MB).",
-        },
-        { status: 400 }
-      );
-    }
-
-    const subFolder = isAudio ? "audio" : "images";
-    const safeName = `${Date.now()}-${sanitizeBaseName(originalName)}${ext}`;
 
     const basePublicRoot =
       process.env.MEDIA_ROOT
@@ -114,21 +96,76 @@ export async function POST(req: NextRequest) {
         ? path.resolve(process.env.MEDIA_DIR)
         : path.resolve(process.cwd(), "public");
 
-    const uploadDir = path.join(basePublicRoot, "ets_2024_lc", "uploads", subFolder);
-    await fs.promises.mkdir(uploadDir, { recursive: true });
+    const uploadedItems: Array<{
+      url: string;
+      fileName: string;
+      mediaType: "audio" | "image";
+      sizeBytes: number;
+    }> = [];
 
-    const targetPath = path.join(uploadDir, safeName);
-    const arrayBuffer = await fileEntry.arrayBuffer();
-    await fs.promises.writeFile(targetPath, Buffer.from(arrayBuffer));
+    for (const fileEntry of fileEntries) {
+      const originalName = fileEntry.name || "upload";
+      const ext = path.extname(originalName).toLowerCase();
+      const isAudio = AUDIO_EXTENSIONS.has(ext);
+      const isImage = IMAGE_EXTENSIONS.has(ext);
 
-    const publicUrl = `/ets_2024_lc/uploads/${subFolder}/${safeName}`;
+      if (!isAudio && !isImage) {
+        return NextResponse.json(
+          {
+            error: `Định dạng tệp "${originalName}" không hợp lệ. Chỉ hỗ trợ âm thanh (.mp3, .wav, .ogg, .m4a) hoặc hình ảnh (.png, .jpg, .jpeg, .webp).`,
+          },
+          { status: 400 }
+        );
+      }
 
-    return NextResponse.json(
-      {
+      const maxBytes = isAudio ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES;
+      if (fileEntry.size <= 0 || fileEntry.size > maxBytes) {
+        return NextResponse.json(
+          {
+            error: isAudio
+              ? `Dung lượng tệp âm thanh "${originalName}" không hợp lệ (tối đa 50 MB).`
+              : `Dung lượng tệp hình ảnh "${originalName}" không hợp lệ (tối đa 15 MB).`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const subFolder = isAudio ? "audio" : "images";
+      const cleanBase = sanitizeBaseName(originalName);
+      const safeName = keepCleanName ? `${cleanBase}${ext}` : `${Date.now()}-${cleanBase}${ext}`;
+
+      const uploadDir = cleanFolder
+        ? path.join(basePublicRoot, "ets_2024_lc", cleanFolder, subFolder)
+        : path.join(basePublicRoot, "ets_2024_lc", "uploads", subFolder);
+      await fs.promises.mkdir(uploadDir, { recursive: true });
+
+      const targetPath = path.join(uploadDir, safeName);
+      const arrayBuffer = await fileEntry.arrayBuffer();
+      await fs.promises.writeFile(targetPath, Buffer.from(arrayBuffer));
+
+      const publicUrl = cleanFolder
+        ? `/ets_2024_lc/${cleanFolder}/${subFolder}/${safeName}`
+        : `/ets_2024_lc/uploads/${subFolder}/${safeName}`;
+
+      uploadedItems.push({
         url: publicUrl,
         fileName: originalName,
         mediaType: isAudio ? "audio" : "image",
         sizeBytes: fileEntry.size,
+      });
+    }
+
+    if (uploadedItems.length === 1 && multiFiles.length === 0) {
+      return NextResponse.json(uploadedItems[0], { status: 201 });
+    }
+
+    return NextResponse.json(
+      {
+        items: uploadedItems,
+        url: uploadedItems[0]?.url,
+        fileName: uploadedItems[0]?.fileName,
+        mediaType: uploadedItems[0]?.mediaType,
+        sizeBytes: uploadedItems[0]?.sizeBytes,
       },
       { status: 201 }
     );

@@ -32,7 +32,7 @@ build/
 dist/
 backend/target/
 *.tsbuildinfo
-
+import-data/
 # Logs
 *.log
 npm-debug.log*

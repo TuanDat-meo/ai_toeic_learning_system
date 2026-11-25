@@ -93,14 +93,21 @@ export async function deleteListeningUnit(unitId: string): Promise<void> {
   await writeAuthRequest<void>('DELETE', `/api/admin/listening/units/${unitId}`);
 }
 
-export async function uploadListeningMediaFile(file: File): Promise<{
+export interface UploadedMediaItem {
   url: string;
   fileName: string;
   mediaType: 'audio' | 'image';
   sizeBytes: number;
-}> {
+}
+
+export async function uploadListeningMediaFile(
+  file: File,
+  options?: { folder?: string; keepCleanName?: boolean }
+): Promise<UploadedMediaItem> {
   const formData = new FormData();
   formData.append('file', file);
+  if (options?.folder) formData.append('folder', options.folder);
+  if (options?.keepCleanName) formData.append('keepCleanName', 'true');
   const res = await fetch('/api/media/upload', {
     method: 'POST',
     body: formData,
@@ -110,6 +117,156 @@ export async function uploadListeningMediaFile(file: File): Promise<{
     throw new Error(payload?.error || 'Không thể tải tệp media lên máy chủ.');
   }
   return payload;
+}
+
+export async function uploadListeningMediaBatch(
+  files: File[],
+  options?: { folder?: string; keepCleanName?: boolean }
+): Promise<UploadedMediaItem[]> {
+  if (files.length === 0) return [];
+  const formData = new FormData();
+  for (const f of files) {
+    formData.append('files', f);
+  }
+  if (options?.folder) formData.append('folder', options.folder);
+  if (options?.keepCleanName) formData.append('keepCleanName', 'true');
+  const res = await fetch('/api/media/upload', {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || 'Không thể tải danh sách tệp media lên máy chủ.');
+  }
+  if (Array.isArray(payload?.items)) {
+    return payload.items as UploadedMediaItem[];
+  }
+  if (payload?.url) {
+    return [payload as UploadedMediaItem];
+  }
+  return [];
+}
+
+/**
+ * Tự động phân tích 1 file Audio dài chưa cắt trên trình duyệt (Web Audio API)
+ * để tìm các khoảng lặng giữa các câu / đoạn hội thoại và chia thành targetSlices đoạn (startTime, endTime).
+ */
+export async function detectAudioSlicesInBrowser(
+  file: File,
+  targetSlices: number
+): Promise<Array<{ startTime: number; endTime: number }>> {
+  const count = Math.max(1, targetSlices);
+  const arrayBuffer = await file.arrayBuffer();
+  const AudioCtx =
+    typeof window !== 'undefined'
+      ? window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      : undefined;
+  if (!AudioCtx) {
+    throw new Error('Trình duyệt không hỗ trợ Web Audio API để phân tích tệp âm thanh.');
+  }
+  const ctx = new AudioCtx();
+  try {
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+    const totalDuration = Math.max(1, audioBuffer.duration);
+    if (count === 1) {
+      return [{ startTime: 0, endTime: Math.round(totalDuration * 10) / 10 }];
+    }
+
+    const sampleRate = audioBuffer.sampleRate;
+    const channelData = audioBuffer.getChannelData(0);
+    const windowSec = 0.1; // 100ms
+    const windowSamples = Math.max(1, Math.floor(sampleRate * windowSec));
+    const numWindows = Math.floor(channelData.length / windowSamples);
+
+    const rmsList: number[] = new Array(numWindows);
+    let maxRms = 0.0001;
+    for (let w = 0; w < numWindows; w++) {
+      let sumSq = 0;
+      const offset = w * windowSamples;
+      for (let i = 0; i < windowSamples; i += 4) {
+        const s = channelData[offset + i] || 0;
+        sumSq += s * s;
+      }
+      const rms = Math.sqrt(sumSq / Math.max(1, Math.ceil(windowSamples / 4)));
+      rmsList[w] = rms;
+      if (rms > maxRms) maxRms = rms;
+    }
+
+    const silenceThreshold = maxRms * 0.075;
+    // Bỏ qua khoảng lặng ở 2s đầu và 2s cuối file
+    const minWindow = Math.floor(2.0 / windowSec);
+    const maxWindow = Math.max(minWindow + 1, numWindows - Math.floor(2.0 / windowSec));
+
+    interface SilenceGap {
+      startSec: number;
+      endSec: number;
+      midSec: number;
+      durationSec: number;
+    }
+    const gaps: SilenceGap[] = [];
+    let gapStart = -1;
+    for (let w = minWindow; w < maxWindow; w++) {
+      if (rmsList[w] <= silenceThreshold) {
+        if (gapStart === -1) gapStart = w;
+      } else if (gapStart !== -1) {
+        const durWindows = w - gapStart;
+        const durSec = durWindows * windowSec;
+        if (durSec >= 0.9) {
+          const sSec = gapStart * windowSec;
+          const eSec = w * windowSec;
+          gaps.push({
+            startSec: sSec,
+            endSec: eSec,
+            midSec: (sSec + eSec) / 2,
+            durationSec: durSec,
+          });
+        }
+        gapStart = -1;
+      }
+    }
+
+    const neededSplits = count - 1;
+    let splitPoints: number[] = [];
+
+    if (gaps.length >= neededSplits) {
+      // Chọn các khoảng lặng dài nhất nhưng cách nhau tối thiểu (totalDuration / count) * 0.35 giây
+      const minSpacing = Math.max(2.5, (totalDuration / count) * 0.35);
+      const sortedByDuration = [...gaps].sort((a, b) => b.durationSec - a.durationSec);
+      const chosen: SilenceGap[] = [];
+      for (const candidate of sortedByDuration) {
+        if (chosen.length >= neededSplits) break;
+        const tooClose = chosen.some((c) => Math.abs(c.midSec - candidate.midSec) < minSpacing);
+        if (!tooClose) {
+          chosen.push(candidate);
+        }
+      }
+      if (chosen.length === neededSplits) {
+        splitPoints = chosen.map((c) => c.midSec).sort((a, b) => a - b);
+      }
+    }
+
+    // Fallback: nếu file có nhạc nền hoặc không đủ khoảng lặng rõ rệt, chia đều hoặc bám điểm lặng gần nhất với mốc chia đều
+    if (splitPoints.length !== neededSplits) {
+      splitPoints = [];
+      for (let i = 1; i <= neededSplits; i++) {
+        const idealSec = (totalDuration * i) / count;
+        const nearbyGap = gaps.find((g) => Math.abs(g.midSec - idealSec) <= (totalDuration / count) * 0.25);
+        splitPoints.push(nearbyGap ? nearbyGap.midSec : idealSec);
+      }
+      splitPoints.sort((a, b) => a - b);
+    }
+
+    const bounds = [0, ...splitPoints, totalDuration];
+    const slices: Array<{ startTime: number; endTime: number }> = [];
+    for (let i = 0; i < count; i++) {
+      const s = Math.round(bounds[i] * 10) / 10;
+      const e = Math.round(Math.max(s + 0.5, bounds[i + 1]) * 10) / 10;
+      slices.push({ startTime: s, endTime: e });
+    }
+    return slices;
+  } finally {
+    void ctx.close().catch(() => {});
+  }
 }
 
 export async function saveListeningProgress(req: {
