@@ -103,7 +103,7 @@ services:
       - type: bind
         source: ${MEDIA_DIR:-./frontend/public}/ets_2024_lc
         target: /app/public/ets_2024_lc
-        read_only: true
+        read_only: false
         bind:
           create_host_path: false
       - type: bind
