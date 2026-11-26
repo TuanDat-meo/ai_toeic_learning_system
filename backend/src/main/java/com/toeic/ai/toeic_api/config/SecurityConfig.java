@@ -83,6 +83,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/billing/**").hasRole("STUDENT")
                         .requestMatchers("/api/learning-profile/**").hasRole("STUDENT")
                         .requestMatchers(HttpMethod.GET, "/api/chat/discussion").permitAll()
+                        .requestMatchers("/api/chat/ai").permitAll()
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/support-reports/**").authenticated()
                         .requestMatchers("/api/notifications/**").authenticated()

@@ -25,6 +25,8 @@ import {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  broadcastAnnouncementChange,
+  subscribeAnnouncementChanges,
   PRESET_ACTION_DESTINATIONS,
   resolveStudentActionUrl,
   getActionUrlLabel,
@@ -147,11 +149,8 @@ export function AdminAnnouncementsView() {
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
 
-  const notifyChange = () => {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("announcement-updated"));
-      window.dispatchEvent(new Event("announcement-read-updated"));
-    }
+  const notifyChange = (action?: string, payload?: unknown) => {
+    broadcastAnnouncementChange(action, payload);
   };
 
   const loadData = useCallback(async () => {
@@ -168,13 +167,10 @@ export function AdminAnnouncementsView() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadData(), 0);
-    const handleUpdate = () => void loadData();
-    window.addEventListener("announcement-updated", handleUpdate);
-    window.addEventListener("announcement-read-updated", handleUpdate);
+    const unsubscribe = subscribeAnnouncementChanges(() => void loadData());
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener("announcement-updated", handleUpdate);
-      window.removeEventListener("announcement-read-updated", handleUpdate);
+      unsubscribe();
     };
   }, [loadData]);
 
@@ -309,42 +305,60 @@ export function AdminAnnouncementsView() {
   }
 
   async function togglePin(announcement: Announcement) {
+    const nextPinned = !announcement.isPinned;
+    // Optimistic update for instant visual response
+    setAnnouncements((current) =>
+      current.map((item) => (item.id === announcement.id ? { ...item, isPinned: nextPinned } : item))
+    );
     try {
       const updated = await updateAnnouncement(announcement.id, {
         ...announcement,
-        isPinned: !announcement.isPinned,
+        isPinned: nextPinned,
       });
       setAnnouncements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      notifyChange();
-      showFeedback(announcement.isPinned ? "Đã gỡ ghim thông báo" : "Đã ghim thông báo lên đầu trang học viên");
+      notifyChange("PIN_TOGGLE", { id: announcement.id, isPinned: nextPinned });
+      showFeedback(nextPinned ? "Đã ghim thông báo lên đầu trang học viên" : "Đã gỡ ghim thông báo");
     } catch (error) {
-      showFeedback(error instanceof Error ? error.message : "Không thể cập nhật thông báo.", true);
+      // Rollback on failure
+      setAnnouncements((current) =>
+        current.map((item) => (item.id === announcement.id ? announcement : item))
+      );
+      showFeedback(error instanceof Error ? error.message : "Không thể cập nhật trạng thái ghim.", true);
     }
   }
 
   async function toggleStatus(announcement: Announcement) {
     const nextStatus: AnnouncementStatus = announcement.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
+    // Optimistic update
+    setAnnouncements((current) =>
+      current.map((item) => (item.id === announcement.id ? { ...item, status: nextStatus } : item))
+    );
     try {
       const updated = await updateAnnouncement(announcement.id, {
         ...announcement,
         status: nextStatus,
       });
       setAnnouncements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      notifyChange();
+      notifyChange("STATUS_TOGGLE", { id: announcement.id, status: nextStatus });
       showFeedback(nextStatus === "ACTIVE" ? "Đã kích hoạt hiển thị thông báo tới học viên" : "Đã chuyển thông báo sang bản nháp ẩn");
     } catch (error) {
+      setAnnouncements((current) =>
+        current.map((item) => (item.id === announcement.id ? announcement : item))
+      );
       showFeedback(error instanceof Error ? error.message : "Không thể cập nhật thông báo.", true);
     }
   }
 
   async function handleDeleteConfirm() {
     if (!deletingItem) return;
+    const deletedId = deletingItem.id;
+    const deletedTitle = deletingItem.title;
     try {
-      await deleteAnnouncement(deletingItem.id);
-      setAnnouncements((current) => current.filter((item) => item.id !== deletingItem.id));
-      notifyChange();
+      await deleteAnnouncement(deletedId);
+      setAnnouncements((current) => current.filter((item) => item.id !== deletedId));
+      notifyChange("DELETE", { id: deletedId });
       setDeletingItem(null);
-      showFeedback(`Đã xóa thông báo "${deletingItem.title}"`);
+      showFeedback(`Đã xóa thông báo "${deletedTitle}"`);
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Không thể xóa thông báo.", true);
     }

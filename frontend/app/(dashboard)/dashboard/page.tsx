@@ -36,6 +36,7 @@ import {
   resolveStudentActionUrl,
   getActionUrlLabel,
   normalizeLineBreaks,
+  subscribeAnnouncementChanges,
   type Announcement,
 } from "@/lib/api/support";
 import {
@@ -280,13 +281,28 @@ export default function StudentDashboardPage() {
       }
     };
     void fetchAnnouncement();
-    const handleUpdated = () => void fetchAnnouncement();
-    window.addEventListener("announcement-updated", handleUpdated);
-    window.addEventListener("announcement-read-updated", handleUpdated);
+    const unsubscribe = subscribeAnnouncementChanges(() => void fetchAnnouncement());
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void fetchAnnouncement();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchAnnouncement();
+      }
+    }, 15_000);
+
     return () => {
       active = false;
-      window.removeEventListener("announcement-updated", handleUpdated);
-      window.removeEventListener("announcement-read-updated", handleUpdated);
+      unsubscribe();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
     };
   }, []);
 

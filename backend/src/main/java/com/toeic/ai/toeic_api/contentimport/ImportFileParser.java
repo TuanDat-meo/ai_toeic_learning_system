@@ -365,7 +365,8 @@ public class ImportFileParser {
             }
             String candidate = value.asText().trim();
             if (candidate.matches("(?i)^https?://.+")
-                    || (candidate.startsWith("/") && !candidate.startsWith("//"))) {
+                    || (candidate.startsWith("/") && !candidate.startsWith("//"))
+                    || candidate.matches("(?i).+\\.(mp3|wav|ogg|m4a|jpg|jpeg|png|webp|svg)")) {
                 target.put(targetField, candidate);
                 return;
             }

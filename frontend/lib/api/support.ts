@@ -300,6 +300,7 @@ export async function getStudentAnnouncements(): Promise<Announcement[]> {
 
 export async function markAnnouncementRead(id: string): Promise<void> {
   await writeAuthRequest<void>("PATCH", `/api/announcements/${id}/read`);
+  broadcastAnnouncementChange("MARK_READ", { id });
 }
 
 export async function markAllAnnouncementsRead(): Promise<void> {
@@ -311,4 +312,161 @@ export async function markAllAnnouncementsRead(): Promise<void> {
     const unread = all.filter((a) => !a.isRead);
     await Promise.all(unread.map((a) => markAnnouncementRead(a.id)));
   }
+  broadcastAnnouncementChange("MARK_ALL_READ");
+}
+
+export const ANNOUNCEMENT_BROADCAST_CHANNEL = "toeic_announcements_channel";
+export const ANNOUNCEMENT_STORAGE_KEY = "toeic_announcements_last_updated";
+export const SUPPORT_REPORT_BROADCAST_CHANNEL = "toeic_support_reports_channel";
+export const SUPPORT_REPORT_STORAGE_KEY = "toeic_support_reports_last_updated";
+
+/**
+ * Broadcast an announcement change (create, edit, pin/unpin, delete, mark read)
+ * across all browser tabs, windows, and the current window.
+ */
+export function broadcastAnnouncementChange(action?: string, payload?: unknown): void {
+  if (typeof window === "undefined") return;
+
+  // 1. Dispatch locally in current window
+  window.dispatchEvent(
+    new CustomEvent("announcement-updated", { detail: { action, payload, time: Date.now() } })
+  );
+  window.dispatchEvent(new Event("announcement-read-updated"));
+
+  // 2. Broadcast across tabs via BroadcastChannel
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(ANNOUNCEMENT_BROADCAST_CHANNEL);
+      channel.postMessage({ action, payload, time: Date.now() });
+      channel.close();
+    }
+  } catch {
+    // Ignore BroadcastChannel errors in restrictive environments
+  }
+
+  // 3. Fallback broadcast via localStorage storage event (notifies all OTHER tabs)
+  try {
+    localStorage.setItem(ANNOUNCEMENT_STORAGE_KEY, Date.now().toString());
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
+/**
+ * Subscribe to announcement changes across tabs, windows, and local events.
+ * Returns an unsubscribe cleanup function.
+ */
+export function subscribeAnnouncementChanges(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  let bc: BroadcastChannel | null = null;
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      bc = new BroadcastChannel(ANNOUNCEMENT_BROADCAST_CHANNEL);
+      bc.onmessage = () => {
+        onChange();
+      };
+    }
+  } catch {
+    // Ignore
+  }
+
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === ANNOUNCEMENT_STORAGE_KEY) {
+      onChange();
+    }
+  };
+
+  const handleLocalUpdate = () => {
+    onChange();
+  };
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener("announcement-updated", handleLocalUpdate);
+  window.addEventListener("announcement-read-updated", handleLocalUpdate);
+
+  return () => {
+    if (bc) {
+      bc.onmessage = null;
+      bc.close();
+    }
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener("announcement-updated", handleLocalUpdate);
+    window.removeEventListener("announcement-read-updated", handleLocalUpdate);
+  };
+}
+
+/**
+ * Broadcast a support report change (status change, admin reply, delete)
+ * across all browser tabs, windows, and the current window.
+ */
+export function broadcastSupportReportChange(action?: string, payload?: unknown): void {
+  if (typeof window === "undefined") return;
+
+  // 1. Dispatch locally
+  window.dispatchEvent(
+    new CustomEvent("support-reports-updated", { detail: { action, payload, time: Date.now() } })
+  );
+  window.dispatchEvent(new Event("notification-updated"));
+
+  // 2. Broadcast across tabs via BroadcastChannel
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(SUPPORT_REPORT_BROADCAST_CHANNEL);
+      channel.postMessage({ action, payload, time: Date.now() });
+      channel.close();
+    }
+  } catch {
+    // Ignore
+  }
+
+  // 3. Fallback via localStorage storage event
+  try {
+    localStorage.setItem(SUPPORT_REPORT_STORAGE_KEY, Date.now().toString());
+  } catch {
+    // Ignore
+  }
+}
+
+/**
+ * Subscribe to support report changes across tabs, windows, and local events.
+ */
+export function subscribeSupportReportChanges(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  let bc: BroadcastChannel | null = null;
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      bc = new BroadcastChannel(SUPPORT_REPORT_BROADCAST_CHANNEL);
+      bc.onmessage = () => {
+        onChange();
+      };
+    }
+  } catch {
+    // Ignore
+  }
+
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === SUPPORT_REPORT_STORAGE_KEY) {
+      onChange();
+    }
+  };
+
+  const handleLocal = () => {
+    onChange();
+  };
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener("support-reports-updated", handleLocal);
+  window.addEventListener("notification-updated", handleLocal);
+
+  return () => {
+    if (bc) {
+      bc.onmessage = null;
+      bc.close();
+    }
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener("support-reports-updated", handleLocal);
+    window.removeEventListener("notification-updated", handleLocal);
+  };
 }

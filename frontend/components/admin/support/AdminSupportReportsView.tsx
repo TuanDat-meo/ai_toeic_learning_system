@@ -31,6 +31,8 @@ import {
   batchUpdateSupportReports,
   batchDeleteSupportReports,
   markAllNotificationsRead,
+  broadcastSupportReportChange,
+  subscribeSupportReportChanges,
   type SupportReport,
   type SupportReportCategory,
   type SupportReportPriority,
@@ -230,6 +232,9 @@ export function AdminSupportReportsView() {
     try {
       const data = await getReports();
       setReports(data);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("notification-updated"));
+      }
     } catch {
       showFeedback("Không thể tải danh sách phản hồi. Đang thử kết nối lại...", true);
       if (!isRetry) {
@@ -248,12 +253,12 @@ export function AdminSupportReportsView() {
   useEffect(() => {
     void loadData();
 
-    const handleUpdated = () => void loadData();
-    window.addEventListener("support-reports-updated", handleUpdated);
-    window.addEventListener("support-report-created", handleUpdated);
+    const unsubscribe = subscribeSupportReportChanges(() => void loadData());
+    const handleCreated = () => void loadData();
+    window.addEventListener("support-report-created", handleCreated);
     return () => {
-      window.removeEventListener("support-reports-updated", handleUpdated);
-      window.removeEventListener("support-report-created", handleUpdated);
+      unsubscribe();
+      window.removeEventListener("support-report-created", handleCreated);
     };
   }, [loadData]);
 
@@ -357,8 +362,7 @@ export function AdminSupportReportsView() {
       );
       showFeedback(`Đã chuyển ${ids.length} ticket sang trạng thái ${statusBadges[status].label}.`);
       setSelectedIds(new Set());
-      window.dispatchEvent(new Event("support-reports-updated"));
-      window.dispatchEvent(new Event("notification-updated"));
+      broadcastSupportReportChange("BULK_STATUS", { ids, status });
     } catch {
       showFeedback("Không thể cập nhật hàng loạt.", true);
     } finally {
@@ -376,8 +380,7 @@ export function AdminSupportReportsView() {
       setReports((current) => current.filter((r) => !selectedIds.has(r.id)));
       showFeedback(`Đã xóa thành công ${ids.length} ticket.`);
       setSelectedIds(new Set());
-      window.dispatchEvent(new Event("support-reports-updated"));
-      window.dispatchEvent(new Event("notification-updated"));
+      broadcastSupportReportChange("BULK_DELETE", { ids });
     } catch {
       showFeedback("Không thể xóa hàng loạt.", true);
     } finally {
@@ -394,8 +397,7 @@ export function AdminSupportReportsView() {
       });
       setReports((current) => current.map((r) => (r.id === updated.id ? updated : r)));
       showFeedback(`Đã đổi trạng thái ticket ${report.ticketCode} sang ${statusBadges[newStatus].label}.`);
-      window.dispatchEvent(new Event("support-reports-updated"));
-      window.dispatchEvent(new Event("notification-updated"));
+      broadcastSupportReportChange("STATUS_CHANGE", { id: report.id, status: newStatus });
     } catch (err) {
       showFeedback(err instanceof Error ? err.message : "Không thể cập nhật trạng thái.", true);
     }
@@ -423,8 +425,7 @@ export function AdminSupportReportsView() {
         });
         setReports((current) => current.map((r) => (r.id === updated.id ? updated : r)));
         setActiveReport((prev) => (prev && prev.id === updated.id ? { ...prev, status: "IN_PROGRESS" } : prev));
-        window.dispatchEvent(new Event("support-reports-updated"));
-        window.dispatchEvent(new Event("notification-updated"));
+        broadcastSupportReportChange("STATUS_CHANGE", { id: report.id, status: "IN_PROGRESS" });
       } catch (err) {
         console.warn("Không thể tự động cập nhật trạng thái sang IN_PROGRESS:", err);
       }
@@ -495,8 +496,7 @@ export function AdminSupportReportsView() {
       setReports((current) => current.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
       setActiveReport(null);
       showFeedback(`Đã cập nhật & gửi thông báo cho Ticket ${updatedReport.ticketCode}.`);
-      window.dispatchEvent(new Event("support-reports-updated"));
-      window.dispatchEvent(new Event("notification-updated"));
+      broadcastSupportReportChange("ADMIN_REPLY", { id: updatedReport.id, ticketCode: updatedReport.ticketCode });
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Không thể cập nhật ticket.", true);
     } finally {
@@ -511,8 +511,7 @@ export function AdminSupportReportsView() {
       setReports((current) => current.filter((report) => report.id !== deletingReport.id));
       setDeletingReport(null);
       showFeedback(`Đã xóa Ticket ${deletingReport.ticketCode}`);
-      window.dispatchEvent(new Event("support-reports-updated"));
-      window.dispatchEvent(new Event("notification-updated"));
+      broadcastSupportReportChange("DELETE", { id: deletingReport.id, ticketCode: deletingReport.ticketCode });
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Không thể xóa ticket.", true);
     }

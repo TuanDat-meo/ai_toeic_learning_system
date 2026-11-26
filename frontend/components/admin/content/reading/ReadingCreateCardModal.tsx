@@ -20,6 +20,11 @@ import {
   normalizeVocabArray,
 } from "@/lib/api/reading";
 import {
+  normalizeReadingCardTitle,
+  extractReadingCardSignature,
+  findDuplicateReadingCard,
+} from "@/app/admin/content/reading/readingTitleUtils";
+import {
   X,
   BookOpen,
   AlertCircle,
@@ -199,26 +204,6 @@ const resolveOptionMeaning = (text: string): string => {
 
 type ModalTab = "info" | "passage" | "questions" | "vocab" | "quick_paste";
 
-// Helper trích xuất chữ ký đặc trưng của bộ đề (dùng nhận diện trùng lặp thông minh)
-export function extractReadingTestSignature(title: string, category: string): string {
-  if (!title) return "";
-  const clean = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-  // Nhận diện ETS + Năm + Số Test: ví dụ "etstoeic2024test07..." -> "ets_2024_test_7"
-  const m = clean.match(/ets.*?(\d{4}).*?test.*?(\d{1,2})/);
-  if (m) {
-    return `ets_${m[1]}_test_${parseInt(m[2], 10)}_${category}`;
-  }
-  // Nhận diện tiêu đề loại bỏ các hậu tố phụ như "200 câu", "Part 5 (101-130)", v.v.
-  const stripped = title
-    .toLowerCase()
-    .replace(/\s*\((?:bản chi tiết đầy đủ\s*)?200\s*câu\)/gi, "")
-    .replace(/\s*-\s*part\s*\d+\s*\([^\)]*\)/gi, "")
-    .replace(/\s*\([^\)]*\)/g, "")
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
-  return `${stripped}_${category}`;
-}
-
 export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
   editingCard,
   isPassageOnlyMode = false,
@@ -257,16 +242,17 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
   // Phát hiện bài đọc trùng lặp thông minh (cùng mã đề ETS hoặc cùng tiêu đề & part)
   const existingDuplicate = useMemo(() => {
-    if (!cardFormTitle.trim() || !existingCards || existingCards.length === 0) return null;
-    const currentSig = extractReadingTestSignature(cardFormTitle, cardFormCategory);
-    return (
-      existingCards.find((c) => {
-        if (editingCard && c.id === editingCard.id) return false;
-        const otherSig = extractReadingTestSignature(c.title, c.category);
-        return otherSig === currentSig;
-      }) || null
-    );
+    return findDuplicateReadingCard(cardFormTitle, cardFormCategory, existingCards, editingCard?.id);
   }, [cardFormTitle, cardFormCategory, existingCards, editingCard]);
+
+  // Tự động đồng bộ overwriteTargetId khi phát hiện trùng lặp
+  useEffect(() => {
+    if (existingDuplicate) {
+      setOverwriteTargetId(existingDuplicate.id);
+    } else {
+      setOverwriteTargetId(null);
+    }
+  }, [existingDuplicate]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [passageModeError, setPassageModeError] = useState<string | null>(null);
   const [internalToast, setInternalToast] = useState<string | null>(null);
@@ -1891,6 +1877,20 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
       return;
     }
 
+    // KIỂM TRA TRÙNG LẶP: Nếu phát hiện bài đọc trùng lặp và Admin không bấm "Chấp nhận thay thế" (overwriteTargetId === null):
+    if (existingDuplicate && !overwriteTargetId) {
+      const msg = `❌ Trùng lặp đề thi: Bài đọc "${existingDuplicate.title}" (${existingDuplicate.category.toUpperCase()}) đã có trong hệ thống. Do bạn chưa bấm "Chấp nhận thay thế", hệ thống KHÔNG cho phép lưu để tránh tạo bản sao trùng lặp. Vui lòng bấm "Chấp nhận thay thế lại toàn bộ nội dung bài này" hoặc đổi tên đề thi khác!`;
+      setErrorMsg(msg);
+      setTitleError("Bài đọc này đã có trong hệ thống. Vui lòng bấm 'Chấp nhận thay thế' hoặc đổi tên đề thi.");
+      setPassageError(null);
+      setQuestionError(null);
+      setOptionsError(null);
+      setBilingualError(null);
+      setVocabFormError(null);
+      setActiveTab("info");
+      return;
+    }
+
     // 0. NẾU MỞ TỪ KHO ĐOẠN VĂN (isPassageOnlyMode): Bắt buộc chỉ Part 6 hoặc Part 7 và phải có bài đọc hợp lệ
     if (isPassageOnlyMode) {
       if (cardFormCategory === "part5" || cardFormCategory === "grammar") {
@@ -2704,41 +2704,70 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
 
                 {/* CẢNH BÁO PHÁT HIỆN BÀI ĐỌC TRÙNG LẶP & TÙY CHỌN GHI ĐÈ */}
                 {existingDuplicate && (
-                  <div className="mt-2.5 p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300 shadow-2xs animate-in fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs sm:text-sm font-bold text-amber-950 leading-snug">
-                          Phát hiện bài đọc tương tự đã có sẵn:{" "}
-                          <span className="font-extrabold text-blue-800 underline">
-                            &quot;{existingDuplicate.title}&quot;
-                          </span>{" "}
-                          ({existingDuplicate.category.toUpperCase()} • {existingDuplicate.totalQuestions} câu)
-                        </p>
-                        <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                          {overwriteTargetId === existingDuplicate.id
-                            ? "✅ Đang chọn chế độ GHI ĐÈ: Khi bạn bấm 'Lưu', bài đọc cũ trên sẽ được cập nhật thay thế bằng dữ liệu mới này (tránh sinh thêm dòng trùng lặp)."
-                            : "Bộ đề này đã có trong danh sách. Bạn có thể chọn ghi đè để cập nhật bài cũ thay vì tạo bài mới!"}
-                        </p>
+                  <div className="mt-3 p-4 rounded-2xl bg-amber-50/95 border-2 border-amber-400 shadow-sm animate-in fade-in flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2.5 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                        <span className="text-xs sm:text-sm font-extrabold text-amber-950">
+                          Hệ thống phát hiện bài đọc này đã có sẵn trong danh sách!
+                        </span>
                       </div>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                        existingDuplicate.status === "published"
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : "bg-amber-100 text-amber-800 border-amber-300"
+                      }`}>
+                        {existingDuplicate.status === "published" ? "🟢 ĐÃ PHÁT HÀNH CHO HỌC VIÊN" : "🟡 BẢN NHÁP"}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+
+                    <div className="rounded-xl bg-white/90 p-3 border border-amber-200 text-xs text-slate-800 space-y-1.5">
+                      <p className="font-semibold text-slate-900">
+                        Bài đọc hiện có:{" "}
+                        <span className="font-extrabold text-blue-700 underline text-sm">
+                          &quot;{existingDuplicate.title}&quot;
+                        </span>{" "}
+                        <span className="text-slate-500">
+                          ({existingDuplicate.category.toUpperCase()} • {existingDuplicate.totalQuestions} câu • Mã: <code className="bg-slate-100 px-1 py-0.5 rounded text-[11px] font-mono text-slate-700">{existingDuplicate.id}</code>)
+                        </span>
+                      </p>
+                      <p className="text-[11.5px] leading-relaxed text-slate-600">
+                        {overwriteTargetId === existingDuplicate.id ? (
+                          <span className="text-emerald-800 font-semibold flex items-center gap-1">
+                            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                            Đang chọn chế độ THAY THẾ TOÀN BỘ NỘI DUNG: Khi bạn bấm &quot;Lưu&quot;, toàn bộ câu hỏi, bài đọc, từ vựng cũ sẽ được cập nhật thay thế bằng bộ mới này và bên học viên sẽ được đồng bộ ngay lập tức!
+                          </span>
+                        ) : (
+                          <span className="text-rose-800 font-bold flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            Hệ thống đang KHÓA LƯU: Bài đọc này đã có trong hệ thống. Bạn chưa chấp nhận thay thế, hệ thống không cho phép lưu để tránh tạo bản sao trùng lặp. Vui lòng bấm &quot;Chấp nhận thay thế lại toàn bộ nội dung bài này&quot; hoặc đổi tên bài khác.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end">
                       {overwriteTargetId === existingDuplicate.id ? (
-                        <button
-                          type="button"
-                          onClick={() => setOverwriteTargetId(null)}
-                          className="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs sm:text-sm font-bold cursor-pointer transition shadow-2xs"
-                        >
-                          Hủy ghi đè (Tạo bài mới)
-                        </button>
+                        <>
+                          <span className="text-xs font-bold text-emerald-700 hidden sm:inline">
+                            ✓ Đang sẵn sàng thay thế bài cũ
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setOverwriteTargetId(null)}
+                            className="px-3.5 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold cursor-pointer transition shadow-2xs"
+                          >
+                            Hủy thay thế (Tạo bài mới riêng)
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setOverwriteTargetId(existingDuplicate.id)}
-                          className="px-3.5 sm:px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
+                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer transition flex items-center gap-1.5"
                         >
-                          <Sparkles className="w-4 h-4" />
-                          <span>Ghi đè lên bài cũ này</span>
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>Chấp nhận thay thế lại toàn bộ nội dung bài này</span>
                         </button>
                       )}
                     </div>
@@ -3796,10 +3825,28 @@ export const ReadingCreateCardModal: React.FC<ReadingCreateCardModalProps> = ({
             <button
               type="button"
               onClick={handleSubmit}
-              className="h-10 sm:h-11 rounded-xl bg-blue-600 px-5 sm:px-6 text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-blue-700 active:scale-95 transition cursor-pointer flex items-center gap-2"
+              disabled={!!existingDuplicate && !overwriteTargetId}
+              className={`h-10 sm:h-11 rounded-xl px-5 sm:px-6 text-xs sm:text-sm font-bold text-white shadow-xs transition flex items-center gap-2 ${
+                !!existingDuplicate && !overwriteTargetId
+                  ? "bg-slate-300 cursor-not-allowed opacity-75"
+                  : "bg-blue-600 hover:bg-blue-700 active:scale-95 cursor-pointer"
+              }`}
+              title={
+                !!existingDuplicate && !overwriteTargetId
+                  ? "Bài đọc trùng lặp: Bạn cần bấm 'Chấp nhận thay thế' hoặc đổi tên đề thi để lưu"
+                  : undefined
+              }
             >
               <Sparkles className="w-4 h-4" />
-              <span>{editingCard ? "Lưu thay đổi" : "Thêm vào danh sách"}</span>
+              <span>
+                {!!existingDuplicate && !overwriteTargetId
+                  ? "Đang khóa lưu (Cần chấp nhận thay thế)"
+                  : editingCard
+                    ? "Lưu thay đổi"
+                    : overwriteTargetId
+                      ? "Lưu & Thay thế bài cũ"
+                      : "Thêm vào danh sách"}
+              </span>
             </button>
           </div>
         </div>

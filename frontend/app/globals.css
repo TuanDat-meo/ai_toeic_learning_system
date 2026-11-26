@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Colors */
   --color-surface: #f8f9ff;
@@ -1367,12 +1369,41 @@ html.dark .dark\:bg-emerald-600 {
   background-color: #059669 !important;
 }
 
-html.dark .dark\:bg-slate-900 {
+html.dark .dark\:bg-slate-950,
+html.dark [class*="dark:bg-slate-950"] {
+  background-color: #020617 !important;
+}
+
+html.dark .dark\:bg-slate-900,
+html.dark .dark\:bg-slate-900\/90,
+html.dark .dark\:bg-slate-900\/80,
+html.dark [class*="dark:bg-slate-900"] {
   background-color: #0f172a !important;
 }
 
-html.dark .dark\:bg-slate-800 {
+html.dark .dark\:bg-slate-850,
+html.dark [class*="dark:bg-slate-850"] {
+  background-color: #172236 !important;
+}
+
+html.dark .dark\:bg-slate-800,
+html.dark .dark\:bg-slate-800\/90,
+html.dark .dark\:bg-slate-800\/80,
+html.dark .dark\:bg-slate-800\/60,
+html.dark .dark\:bg-slate-800\/50,
+html.dark .dark\:bg-slate-800\/40,
+html.dark [class*="dark:bg-slate-800"] {
   background-color: #1e293b !important;
+}
+
+html.dark .dark\:border-slate-800,
+html.dark [class*="dark:border-slate-800"] {
+  border-color: #1e293b !important;
+}
+
+html.dark .dark\:border-slate-700,
+html.dark [class*="dark:border-slate-700"] {
+  border-color: #334155 !important;
 }
 
 html.dark .text-slate-700 {
@@ -1391,81 +1422,128 @@ html.dark .text-\[\#1b41ae\] {
   color: #60a5fa !important;
 }
 
-html.dark .bg-blue-50,
-html.dark .bg-blue-50\/60,
-html.dark .bg-sky-50,
-html.dark .bg-indigo-50 {
-  background-color: rgba(59, 130, 246, 0.14) !important;
+/* ------------------------------------------------------------------------- */
+/* Tame all glaring pastel backgrounds (Bảo vệ mắt, chống chói trên nền tối)  */
+/* ------------------------------------------------------------------------- */
+html.dark [class*="bg-blue-50"],
+html.dark [class*="bg-sky-50"],
+html.dark [class*="bg-indigo-50"],
+html.dark [class*="bg-indigo-100"],
+html.dark [class*="bg-violet-50"],
+html.dark [class*="bg-violet-100"],
+html.dark [class*="bg-purple-50"],
+html.dark [class*="bg-purple-100"] {
+  background-color: rgba(99, 102, 241, 0.16) !important;
 }
 
-html.dark .bg-emerald-50,
-html.dark .bg-teal-50,
-html.dark .bg-teal-50\/60 {
-  background-color: rgba(16, 185, 129, 0.14) !important;
+html.dark [class*="bg-emerald-50"],
+html.dark [class*="bg-emerald-100"],
+html.dark [class*="bg-teal-50"],
+html.dark [class*="bg-teal-100"] {
+  background-color: rgba(16, 185, 129, 0.16) !important;
 }
 
-html.dark .bg-amber-50,
-html.dark .bg-amber-50\/60,
-html.dark .bg-amber-100 {
+html.dark [class*="bg-amber-50"],
+html.dark [class*="bg-amber-100"],
+html.dark [class*="bg-yellow-50"] {
   background-color: rgba(245, 158, 11, 0.16) !important;
 }
 
-html.dark .bg-rose-50,
-html.dark .bg-red-50 {
+html.dark [class*="bg-rose-50"],
+html.dark [class*="bg-rose-100"],
+html.dark [class*="bg-red-50"],
+html.dark [class*="bg-red-100"] {
   background-color: rgba(244, 63, 94, 0.16) !important;
 }
 
-html.dark .border-blue-100,
-html.dark .border-blue-200,
-html.dark .border-blue-200\/70,
-html.dark .border-sky-100,
-html.dark .border-indigo-100 {
-  border-color: rgba(59, 130, 246, 0.3) !important;
+/* ------------------------------------------------------------------------- */
+/* Pastel & Card Borders in Dark Mode (Viền mềm mại, không bị sắc chói)     */
+/* ------------------------------------------------------------------------- */
+html.dark [class*="border-blue-100"],
+html.dark [class*="border-blue-200"],
+html.dark [class*="border-sky-100"],
+html.dark [class*="border-sky-200"],
+html.dark [class*="border-indigo-100"],
+html.dark [class*="border-indigo-200"],
+html.dark [class*="border-violet-100"],
+html.dark [class*="border-violet-200"] {
+  border-color: rgba(99, 102, 241, 0.32) !important;
 }
 
-html.dark .border-emerald-100,
-html.dark .border-emerald-200,
-html.dark .border-teal-200,
-html.dark .border-teal-200\/80 {
+html.dark [class*="border-emerald-100"],
+html.dark [class*="border-emerald-200"],
+html.dark [class*="border-teal-100"],
+html.dark [class*="border-teal-200"] {
   border-color: rgba(16, 185, 129, 0.32) !important;
 }
 
-html.dark .border-amber-100,
-html.dark .border-amber-200,
-html.dark .border-amber-200\/80,
-html.dark .border-amber-300,
-html.dark .border-amber-300\/70 {
+html.dark [class*="border-amber-100"],
+html.dark [class*="border-amber-200"],
+html.dark [class*="border-amber-300"] {
   border-color: rgba(245, 158, 11, 0.35) !important;
 }
 
-html.dark .border-rose-100,
-html.dark .border-rose-200 {
+html.dark [class*="border-rose-100"],
+html.dark [class*="border-rose-200"] {
   border-color: rgba(244, 63, 94, 0.35) !important;
 }
 
+/* ------------------------------------------------------------------------- */
+/* High Contrast Accent Texts (Làm sáng màu chữ đậm, chống chìm màu khó đọc) */
+/* ------------------------------------------------------------------------- */
+html.dark .text-amber-950,
 html.dark .text-amber-900,
 html.dark .text-amber-800,
 html.dark .text-amber-700 {
-  color: #fcd34d !important;
+  color: #fde047 !important;
 }
 
+html.dark .text-emerald-950,
+html.dark .text-emerald-900,
 html.dark .text-emerald-800,
 html.dark .text-emerald-700,
+html.dark .text-teal-900,
+html.dark .text-teal-800,
 html.dark .text-teal-700 {
-  color: #34d399 !important;
+  color: #6ee7b7 !important;
 }
 
+html.dark .text-rose-950,
+html.dark .text-rose-900,
+html.dark .text-rose-800,
 html.dark .text-rose-700,
-html.dark .text-rose-600 {
-  color: #fb7185 !important;
+html.dark .text-red-900,
+html.dark .text-red-800,
+html.dark .text-red-700 {
+  color: #fda4af !important;
 }
 
+html.dark .text-blue-950,
+html.dark .text-blue-900,
+html.dark .text-blue-800,
 html.dark .text-blue-700,
-html.dark .text-sky-700,
-html.dark .text-indigo-700 {
+html.dark .text-sky-900,
+html.dark .text-sky-800,
+html.dark .text-sky-700 {
   color: #93c5fd !important;
 }
 
+html.dark .text-indigo-950,
+html.dark .text-indigo-900,
+html.dark .text-indigo-800,
+html.dark .text-indigo-700,
+html.dark .text-violet-900,
+html.dark .text-violet-800,
+html.dark .text-violet-700,
+html.dark .text-purple-900,
+html.dark .text-purple-800,
+html.dark .text-purple-700 {
+  color: #a5b4fc !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Form inputs & Native Controls in Dark Mode                               */
+/* ------------------------------------------------------------------------- */
 html.dark input,
 html.dark textarea,
 html.dark select {
@@ -1476,5 +1554,5 @@ html.dark select {
 
 html.dark input::placeholder,
 html.dark textarea::placeholder {
-  color: #64748b;
+  color: #94a3b8;
 }

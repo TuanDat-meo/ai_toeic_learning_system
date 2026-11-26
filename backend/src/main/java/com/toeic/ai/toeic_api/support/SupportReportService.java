@@ -109,6 +109,11 @@ public class SupportReportService {
 
         SupportReport updated = find(id);
         try {
+            // Khi Admin giải quyết, chuyển sang đang xử lý hoặc từ chối, tự động đánh dấu đã đọc thông báo báo lỗi của ticket này
+            if (!"PENDING".equals(request.status()) || (request.adminReply() != null && !request.adminReply().isBlank())) {
+                notificationService.markSupportReportNotificationsRead(existing.ticketCode());
+            }
+
             if (updated.reporterId() != null && !updated.reporterId().isBlank()) {
                 String statusLabel = switch (request.status()) {
                     case "RESOLVED" -> "đã được giải quyết";
@@ -136,9 +141,13 @@ public class SupportReportService {
 
     @Transactional
     public void delete(UUID id) {
-        find(id);
+        SupportReport existing = find(id);
         jdbc.update("DELETE FROM question_corrections WHERE report_id = ?", id);
         jdbc.update("DELETE FROM support_reports WHERE id = ?", id);
+        try {
+            notificationService.deleteSupportReportNotifications(existing.ticketCode());
+        } catch (Exception ignored) {
+        }
     }
 
     public Map<String, Object> findQuestionCorrection(String questionRef) {

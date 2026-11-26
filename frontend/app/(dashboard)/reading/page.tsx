@@ -55,11 +55,18 @@ export default function StudentReadingPage() {
 
     void loadCards();
     const handleUpdated = () => { void loadCards(); };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "toeic_reading_last_updated") {
+        void loadCards();
+      }
+    };
 
     window.addEventListener("toeic-reading-cards-updated", handleUpdated);
+    window.addEventListener("storage", handleStorage);
     return () => {
       active = false;
       window.removeEventListener("toeic-reading-cards-updated", handleUpdated);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 

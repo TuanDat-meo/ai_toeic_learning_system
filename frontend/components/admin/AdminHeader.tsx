@@ -32,6 +32,7 @@ import {
   markAllNotificationsRead,
   getReports,
   updateSupportReport,
+  broadcastSupportReportChange,
   type AppNotification,
   type SupportReport,
 } from "@/lib/api/support";
@@ -188,7 +189,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
     const loadNotifs = async () => {
       try {
         const [list, count, reports] = await Promise.all([
-          getNotifications(5).catch(() => []),
+          getNotifications(20).catch(() => []),
           getUnreadNotificationCount().catch(() => 0),
           getReports().catch(() => []),
         ]);
@@ -471,7 +472,17 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
           {/* Notification Bell */}
           <div className="relative" ref={notifMenuRef}>
             {(() => {
-              const totalAlertCount = unreadNotifCount + pendingReports.length;
+              const pendingTicketCodes = new Set(pendingReports.map((r) => r.ticketCode));
+              // Lọc các thông báo chưa đọc mà không bị trùng với ticket đã nằm trong danh sách pending
+              const unreadNonTicketNotifs = notifications.filter(
+                (n) => !n.isRead && !(n.type === "SUPPORT_REPORT_NEW" && n.referenceId && pendingTicketCodes.has(n.referenceId))
+              ).length;
+              // Tổng số alert cần admin xử lý = ticket chờ xử lý + thông báo hệ thống chưa đọc
+              const totalAlertCount = pendingReports.length + unreadNonTicketNotifs;
+              // Danh sách thông báo hệ thống không hiển thị lại ticket đã xuất hiện ở danh sách chờ xử lý phía trên
+              const systemNotifications = notifications.filter(
+                (n) => !(n.type === "SUPPORT_REPORT_NEW" && pendingTicketCodes.has(n.referenceId || ""))
+              );
               return (
                 <>
                   <button
@@ -499,7 +510,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          {unreadNotifCount > 0 && (
+                          {(unreadNotifCount > 0 || unreadNonTicketNotifs > 0) && (
                             <button
                               type="button"
                               onClick={async () => {
@@ -544,8 +555,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                                   priority: report.priority,
                                 });
                                 setPendingReports((prev) => prev.filter((r) => r.id !== report.id));
-                                window.dispatchEvent(new Event("support-reports-updated"));
-                                window.dispatchEvent(new Event("notification-updated"));
+                                broadcastSupportReportChange("STATUS_CHANGE", { id: report.id, status: "IN_PROGRESS" });
                               } catch (e) {
                                 console.warn(e);
                               }
@@ -571,7 +581,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick: () => void }) {
                         ))}
 
                         {/* Thông báo hệ thống */}
-                        {notifications.length > 0 && notifications.map((notif) => (
+                        {systemNotifications.length > 0 && systemNotifications.map((notif) => (
                           <Link
                             key={notif.id}
                             href={notif.linkUrl || "/admin/support/reports"}

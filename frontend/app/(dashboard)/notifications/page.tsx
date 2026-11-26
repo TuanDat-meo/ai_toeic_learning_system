@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Bell,
-  Check,
   CheckCheck,
   Clock,
   ExternalLink,
@@ -15,7 +14,6 @@ import {
   Sparkles,
   Trash2,
   X,
-  Filter,
 } from 'lucide-react';
 import {
   getMySupportReports,
@@ -27,6 +25,8 @@ import {
   resolveStudentActionUrl,
   getActionUrlLabel,
   normalizeLineBreaks,
+  subscribeAnnouncementChanges,
+  subscribeSupportReportChanges,
   type Announcement,
   type SupportReport,
   type AnnouncementType,
@@ -61,8 +61,8 @@ export default function NotificationsPage() {
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
   const [activeDetailItem, setActiveDetailItem] = useState<Announcement | null>(null);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const [annRes, repRes] = await Promise.allSettled([
@@ -71,14 +71,21 @@ export default function NotificationsPage() {
       ]);
       if (annRes.status === 'fulfilled') {
         setItems(annRes.value);
+        setActiveDetailItem((currentDetail) => {
+          if (!currentDetail) return null;
+          const matched = annRes.value.find((a) => a.id === currentDetail.id);
+          return matched ? { ...matched, isRead: true } : currentDetail;
+        });
       } else {
-        setError(annRes.reason instanceof Error ? annRes.reason.message : 'Không thể tải thông báo.');
+        if (!silent) {
+          setError(annRes.reason instanceof Error ? annRes.reason.message : 'Không thể tải thông báo.');
+        }
       }
       if (repRes.status === 'fulfilled') {
         setReports(repRes.value);
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -102,17 +109,34 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    const handleUpdated = () => void load();
-    window.addEventListener('announcement-updated', handleUpdated);
-    window.addEventListener('announcement-read-updated', handleUpdated);
-    window.addEventListener('support-reports-updated', handleUpdated);
-    window.addEventListener('support-report-created', handleUpdated);
+    const unsubscribeAnn = subscribeAnnouncementChanges(() => void load(true));
+    const unsubscribeRep = subscribeSupportReportChanges(() => void load(true));
+    const handleReportCreated = () => void load(true);
+    window.addEventListener('support-report-created', handleReportCreated);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void load(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    // Auto-refresh interval while tab is active to ensure instant sync even across different browsers
+    const pollInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void load(true);
+      }
+    }, 12_000);
+
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('announcement-updated', handleUpdated);
-      window.removeEventListener('announcement-read-updated', handleUpdated);
-      window.removeEventListener('support-reports-updated', handleUpdated);
-      window.removeEventListener('support-report-created', handleUpdated);
+      window.clearInterval(pollInterval);
+      unsubscribeAnn();
+      unsubscribeRep();
+      window.removeEventListener('support-report-created', handleReportCreated);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, []);
 
@@ -332,11 +356,11 @@ export default function NotificationsPage() {
                 <article
                   key={item.id}
                   onClick={() => handleOpenDetail(item)}
-                  className={`group relative rounded-2xl border bg-white p-5 shadow-2xs transition-all hover:shadow-md cursor-pointer ${
+                  className={`group relative rounded-2xl border bg-white p-5 shadow-2xs transition-all duration-300 hover:shadow-md cursor-pointer ${
                     item.isPinned
                       ? 'border-amber-300/90 ring-1 ring-amber-200/60 bg-gradient-to-r from-amber-50/20 via-white to-white'
                       : item.isRead
-                        ? 'border-slate-200'
+                        ? 'border-slate-200 hover:border-slate-300'
                         : 'border-blue-300 ring-2 ring-blue-100/70 bg-gradient-to-r from-blue-50/20 to-white'
                   }`}
                 >

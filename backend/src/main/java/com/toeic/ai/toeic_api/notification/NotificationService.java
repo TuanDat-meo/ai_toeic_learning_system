@@ -27,6 +27,20 @@ public class NotificationService {
     }
 
     public List<Notification> listForUser(UUID userId, int limit) {
+        // Tự động đồng bộ đánh dấu đã đọc các thông báo ticket đã được Admin giải quyết hoặc từ chối
+        jdbc.update("""
+                UPDATE notifications n
+                SET is_read = true
+                WHERE n.user_id = ?
+                  AND n.type = 'SUPPORT_REPORT_NEW'
+                  AND n.is_read = false
+                  AND EXISTS (
+                    SELECT 1 FROM support_reports r
+                    WHERE r.ticket_code = n.reference_id
+                      AND r.status IN ('RESOLVED', 'REJECTED')
+                  )
+                """, userId);
+
         int safeLimit = Math.clamp(limit, 1, 100);
         return jdbc.query(
                 SELECT + " WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
@@ -36,6 +50,20 @@ public class NotificationService {
     }
 
     public int getUnreadCount(UUID userId) {
+        // Tự động đồng bộ đánh dấu đã đọc các thông báo ticket đã được Admin giải quyết hoặc từ chối
+        jdbc.update("""
+                UPDATE notifications n
+                SET is_read = true
+                WHERE n.user_id = ?
+                  AND n.type = 'SUPPORT_REPORT_NEW'
+                  AND n.is_read = false
+                  AND EXISTS (
+                    SELECT 1 FROM support_reports r
+                    WHERE r.ticket_code = n.reference_id
+                      AND r.status IN ('RESOLVED', 'REJECTED')
+                  )
+                """, userId);
+
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false",
                 Integer.class,
@@ -93,6 +121,26 @@ public class NotificationService {
         );
         if (deleted == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy thông báo để xóa.");
+        }
+    }
+
+    @Transactional
+    public void markSupportReportNotificationsRead(String ticketCode) {
+        if (ticketCode != null && !ticketCode.isBlank()) {
+            jdbc.update(
+                    "UPDATE notifications SET is_read = true WHERE reference_id = ? AND type = 'SUPPORT_REPORT_NEW'",
+                    ticketCode.trim()
+            );
+        }
+    }
+
+    @Transactional
+    public void deleteSupportReportNotifications(String ticketCode) {
+        if (ticketCode != null && !ticketCode.isBlank()) {
+            jdbc.update(
+                    "DELETE FROM notifications WHERE reference_id = ? AND type = 'SUPPORT_REPORT_NEW'",
+                    ticketCode.trim()
+            );
         }
     }
 

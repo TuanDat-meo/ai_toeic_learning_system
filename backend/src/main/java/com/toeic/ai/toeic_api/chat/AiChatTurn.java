@@ -6,4 +6,4 @@ import jakarta.validation.constraints.Size;
 
 public record AiChatTurn(
         @NotBlank @Pattern(regexp = "user|model") String role,
-        @NotBlank @Size(max = 2000) String content) { }
+        @NotBlank @Size(max = 10000) String content) { }

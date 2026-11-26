@@ -129,27 +129,6 @@ public class ReadingService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void seedInitialDataIfEmpty() {
-        Integer count = jdbc.queryForObject("SELECT count(*) FROM reading_exercise_cards", Integer.class);
-        if (count == null || count == 0) {
-            String sampleQsP5 = "[{\"questionNum\":\"101\",\"question\":\"Ms. Reynolds requested that all department managers submit _______ quarterly budget estimates by Friday.\",\"options\":[\"they\",\"their\",\"theirs\",\"them\"],\"correctIndex\":1,\"explanation\":\"Trước cụm danh từ quarterly budget estimates cần một tính từ sở hữu their.\",\"bilingual\":\"Bà Reynolds yêu cầu tất cả trưởng phòng nộp dự toán ngân sách quý của họ trước thứ Sáu.\"}]";
-
-            jdbc.update("""
-                    INSERT INTO reading_exercise_cards (id, title, category, sub_category, subtitle, tag, total_questions, sample_questions, order_index)
-                    VALUES ('rc-p5-grammar-nouns', 'Part 5: Phân Loại Danh Từ & Tính Từ', 'part5', 'word_types',
-                        'Nắm chắc 15 dạng từ loại ăn điểm tối đa trong Part 5 ETS 2024', 'Từ loại trọng tâm', 10,
-                        ?::jsonb, 0)
-                    """, sampleQsP5);
-
-            String passageP6 = "Notice to All Tenants: Routine plumbing maintenance will be carried out across all residential units on Tuesday, October 24.";
-            String sampleQsP6 = "[{\"questionNum\":\"131\",\"question\":\"The technicians will need to _______ each bathroom to inspect the water pipes.\",\"options\":[\"enter\",\"entering\",\"entrance\",\"entered\"],\"correctIndex\":0,\"explanation\":\"Cấu trúc need to + V nguyên mẫu (enter).\",\"bilingual\":\"Các kỹ thuật viên sẽ cần vào từng phòng tắm để kiểm tra đường ống nước.\"}]";
-
-            jdbc.update("""
-                    INSERT INTO reading_exercise_cards (id, title, category, sub_category, subtitle, tag, total_questions, passage_text, sample_questions, order_index)
-                    VALUES ('rc-p6-notices', 'Part 6: Thông Báo & Quy Định Chung', 'part6', 'text_types',
-                        'Kỹ thuật điền từ vào đoạn văn thông báo nội bộ công ty', 'Thông báo & Biên bản', 4,
-                        ?, ?::jsonb, 1)
-                    """, passageP6, sampleQsP6);
-        }
         syncPublishedImports();
     }
 

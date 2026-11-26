@@ -12,7 +12,11 @@ import {
   autoExtractVocabListForReading,
 } from "@/lib/readingVocabExtractor";
 import { parseAdminReadingFile, normalizeSampleQuestion, normalizeOptions } from "@/lib/api/reading";
-import { normalizeReadingCardTitle } from "@/app/admin/content/reading/readingTitleUtils";
+import {
+  normalizeReadingCardTitle,
+  findDuplicateReadingCard,
+  extractReadingCardSignature,
+} from "@/app/admin/content/reading/readingTitleUtils";
 import {
   X,
   Upload,
@@ -161,13 +165,9 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
   const [importStatus, setImportStatus] = useState<"draft" | "published">("draft");
   const [overwriteExisting, setOverwriteExisting] = useState(true);
 
-  // Phát hiện bài đọc trùng lặp trong hệ thống theo tiêu đề và part
+  // Phát hiện bài đọc trùng lặp thông minh trong hệ thống theo chữ ký bộ đề và part
   const existingDuplicate = useMemo(() => {
-    if (!title.trim() || !existingCards || existingCards.length === 0) return null;
-    const cleanTitle = title.trim().toLowerCase();
-    return existingCards.find(
-      (c) => c.title.trim().toLowerCase() === cleanTitle && c.category === category
-    );
+    return findDuplicateReadingCard(title, category, existingCards);
   }, [title, category, existingCards]);
 
   // Passage Data (optional for Part 6/7)
@@ -461,14 +461,30 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
       .replace(/[\s\-_]+$/, "")
       .trim() || "ETS TOEIC";
 
+    const p5Title = `${cleanBaseTitle} - Part 5 (Câu 101 - 130)`;
+    const p6Title = `${cleanBaseTitle} - Part 6 (Câu 131 - 146)`;
+    const p7Title = `${cleanBaseTitle} - Part 7 (Câu 147 - 200)`;
+
+    const dupP5 = p5Qs.length > 0 ? findDuplicateReadingCard(p5Title, "part5", existingCards) : null;
+    const dupP6 = p6Qs.length > 0 ? findDuplicateReadingCard(p6Title, "part6", existingCards) : null;
+    const dupP7 = p7Qs.length > 0 ? findDuplicateReadingCard(p7Title, "part7", existingCards) : null;
+
+    if ((dupP5 || dupP6 || dupP7) && !overwriteExisting) {
+      const duplicatedParts = [
+        dupP5 ? `Part 5 ("${dupP5.title}")` : "",
+        dupP6 ? `Part 6 ("${dupP6.title}")` : "",
+        dupP7 ? `Part 7 ("${dupP7.title}")` : "",
+      ].filter(Boolean).join(", ");
+      triggerError(
+        `❌ Trùng lặp đề thi: Bộ đề này đã có bài đọc tồn tại trong hệ thống [${duplicatedParts}]. Do bạn chưa chọn "Thay thế & Cập nhật bài cũ", hệ thống KHÔNG cho phép tải lên để tránh tạo bản sao trùng lặp. Vui lòng tick chọn "Thay thế & Cập nhật bài cũ" hoặc đổi tên đề thi!`
+      );
+      return;
+    }
+
     const cardsToSave: ExerciseCardData[] = [];
 
     // 1. Tạo Card Part 5
     if (p5Qs.length > 0) {
-      const p5Title = `${cleanBaseTitle} - Part 5 (Câu 101 - 130)`;
-      const dupP5 = existingCards.find(
-        (c) => c.title.trim().toLowerCase() === p5Title.toLowerCase() && c.category === "part5"
-      );
       const isOverwritingP5 = overwriteExisting && !!dupP5;
       const p5Vocabs = extractVocabsForQuestionSet(p5Qs);
 
@@ -478,7 +494,7 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
         category: "part5",
         subCategory: "word_types",
         tag: tag.trim() || "Thương mại & Hợp đồng",
-        status: importStatus,
+        status: isOverwritingP5 && dupP5.status ? dupP5.status : importStatus,
         createdAt: isOverwritingP5 ? (dupP5.createdAt || new Date().toISOString()) : new Date().toISOString(),
         totalQuestions: p5Qs.length,
         studiedQuestions: isOverwritingP5 ? (dupP5.studiedQuestions || 0) : 0,
@@ -499,10 +515,6 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
 
     // 2. Tạo Card Part 6
     if (p6Qs.length > 0) {
-      const p6Title = `${cleanBaseTitle} - Part 6 (Câu 131 - 146)`;
-      const dupP6 = existingCards.find(
-        (c) => c.title.trim().toLowerCase() === p6Title.toLowerCase() && c.category === "part6"
-      );
       const isOverwritingP6 = overwriteExisting && !!dupP6;
       const p6Vocabs = extractVocabsForQuestionSet(p6Qs, passageText);
 
@@ -512,7 +524,7 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
         category: "part6",
         subCategory: "text_types",
         tag: tag.trim() || "Thương mại & Doanh nghiệp",
-        status: importStatus,
+        status: isOverwritingP6 && dupP6.status ? dupP6.status : importStatus,
         createdAt: isOverwritingP6 ? (dupP6.createdAt || new Date().toISOString()) : new Date().toISOString(),
         totalQuestions: p6Qs.length,
         studiedQuestions: isOverwritingP6 ? (dupP6.studiedQuestions || 0) : 0,
@@ -535,10 +547,6 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
 
     // 3. Tạo Card Part 7
     if (p7Qs.length > 0) {
-      const p7Title = `${cleanBaseTitle} - Part 7 (Câu 147 - 200)`;
-      const dupP7 = existingCards.find(
-        (c) => c.title.trim().toLowerCase() === p7Title.toLowerCase() && c.category === "part7"
-      );
       const isOverwritingP7 = overwriteExisting && !!dupP7;
       const p7Vocabs = extractVocabsForQuestionSet(p7Qs, passageText);
 
@@ -548,7 +556,7 @@ export const ReadingBulkImportModal: React.FC<ReadingBulkImportModalProps> = ({
         category: "part7",
         subCategory: "text_types",
         tag: tag.trim() || "Đọc hiểu văn bản",
-        status: importStatus,
+        status: isOverwritingP7 && dupP7.status ? dupP7.status : importStatus,
         createdAt: isOverwritingP7 ? (dupP7.createdAt || new Date().toISOString()) : new Date().toISOString(),
         totalQuestions: p7Qs.length,
         studiedQuestions: isOverwritingP7 ? (dupP7.studiedQuestions || 0) : 0,
@@ -1393,6 +1401,13 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
       return;
     }
 
+    if (existingDuplicate && !overwriteExisting) {
+      triggerError(
+        `❌ Trùng lặp đề thi: Bài đọc "${existingDuplicate.title}" (${existingDuplicate.category.toUpperCase()}) đã có trong hệ thống. Do bạn chưa chọn "Thay thế & Cập nhật bài cũ", hệ thống KHÔNG cho phép tải lên để tránh tạo bản sao trùng lặp. Vui lòng tick chọn "Thay thế & Cập nhật bài cũ" hoặc đổi tên đề bài khác!`
+      );
+      return;
+    }
+
     if (parsedQuestions.length === 0) {
       triggerError("Chưa có câu hỏi nào được bóc tách! Vui lòng bấm 'Phân tích nội dung bài đọc' trước.");
       return;
@@ -1490,14 +1505,19 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
       }
     }
 
+    if (existingDuplicate && !overwriteExisting) {
+      triggerError(
+        `❌ Trùng lặp đề thi: Bài đọc "${existingDuplicate.title}" đã có trong hệ thống. Do bạn chưa chọn "Thay thế & Cập nhật bài cũ", hệ thống KHÔNG cho phép tải lên. Vui lòng tick chọn "Thay thế & Cập nhật bài cũ" hoặc đổi tên đề bài khác!`
+      );
+      return;
+    }
+
     const isOverwriting = overwriteExisting && !!existingDuplicate;
     const finalId = isOverwriting
       ? existingDuplicate.id
       : `reading-import-${Date.now().toString().slice(-6)}`;
 
-    const rawTitle = (existingDuplicate && !overwriteExisting)
-      ? `${title.trim()} (Bản sao ${Date.now().toString().slice(-4)})`
-      : title.trim() || `Chuyên đề Reading TOEIC ${parsedQuestions.length} câu`;
+    const rawTitle = title.trim() || `Chuyên đề Reading TOEIC ${parsedQuestions.length} câu`;
     const finalTitle = normalizeReadingCardTitle(rawTitle, category, parsedQuestions.length);
 
     const finalCard: ExerciseCardData = {
@@ -1655,29 +1675,62 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
             </div>
           </div>
 
-          {/* Cảnh báo đề thi trùng lặp & tùy chọn ghi đè */}
+          {/* Cảnh báo đề thi trùng lặp & tùy chọn thay thế nội dung */}
           {existingDuplicate && (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
-              <div className="flex items-center gap-2.5">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                <div>
-                  <p className="font-bold">
-                    Phát hiện bài đọc đã tồn tại: &quot;{existingDuplicate.title}&quot; ({existingDuplicate.totalQuestions} câu, {existingDuplicate.category.toUpperCase()})
-                  </p>
-                  <p className="text-[11px] text-amber-700 mt-0.5">
-                    Hệ thống sẽ <strong>ghi đè &amp; cập nhật</strong> bài đọc này để không tạo thêm bài trùng lặp ngoài ý muốn.
-                  </p>
+            <div className={`p-4 rounded-2xl border-2 flex flex-col gap-3 text-xs shadow-sm animate-in fade-in transition-all ${
+              overwriteExisting
+                ? "bg-amber-50/95 border-amber-400 text-amber-950"
+                : "bg-rose-50/95 border-rose-500 text-rose-950 ring-2 ring-rose-200"
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${overwriteExisting ? "text-amber-600" : "text-rose-600"}`} />
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-sm text-slate-900">
+                        Bài đọc này đã tồn tại trong hệ thống:
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                        existingDuplicate.status === "published"
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : "bg-amber-100 text-amber-800 border-amber-300"
+                      }`}>
+                        {existingDuplicate.status === "published" ? "🟢 ĐÃ PHÁT HÀNH" : "🟡 BẢN NHÁP"}
+                      </span>
+                    </div>
+                    <p className="mt-1 font-bold text-blue-700 text-xs">
+                      &quot;{existingDuplicate.title}&quot;{" "}
+                      <span className="font-normal text-slate-600">
+                        ({existingDuplicate.totalQuestions} câu • {existingDuplicate.category.toUpperCase()} • Mã: <code className="bg-white/80 px-1 py-0.5 rounded font-mono text-[11px]">{existingDuplicate.id}</code>)
+                      </span>
+                    </p>
+                    <p className="text-[11.5px] text-slate-600 mt-1 leading-relaxed">
+                      {overwriteExisting
+                        ? "Khi chấp nhận thay thế, toàn bộ câu hỏi và nội dung của bài đọc cũ sẽ được làm mới hoàn toàn. Học viên sẽ được học theo bộ câu hỏi mới sau khi phát hành."
+                        : "⚠️ Đang từ chối thay thế: Hệ thống sẽ khóa tính năng tải lên để ngăn ngừa tạo bài đọc trùng lặp. Vui lòng tick chọn thay thế hoặc đổi tên đề thi khác."}
+                    </p>
+                  </div>
                 </div>
+                <label className={`flex items-center gap-2.5 font-bold cursor-pointer px-4 py-2.5 rounded-xl border-2 shadow-sm self-start sm:self-auto transition shrink-0 ${
+                  overwriteExisting
+                    ? "bg-white border-blue-500 text-blue-900 hover:bg-blue-50/50"
+                    : "bg-white border-rose-400 text-rose-800 hover:bg-rose-50/50"
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={overwriteExisting}
+                    onChange={(e) => setOverwriteExisting(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                  />
+                  <span className="text-xs sm:text-sm">Thay thế &amp; Cập nhật bài cũ (Khuyên dùng)</span>
+                </label>
               </div>
-              <label className="flex items-center gap-2 font-bold cursor-pointer bg-white px-3.5 py-2 rounded-xl border border-amber-300 shadow-2xs self-start sm:self-auto hover:bg-amber-100/50 transition">
-                <input
-                  type="checkbox"
-                  checked={overwriteExisting}
-                  onChange={(e) => setOverwriteExisting(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-                />
-                <span>Ghi đè bài cũ (Khuyên dùng)</span>
-              </label>
+              {!overwriteExisting && (
+                <div className="p-2.5 rounded-xl bg-white border border-rose-200 text-rose-700 text-[11.5px] font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Hệ thống đang KHÓA tính năng tải lên: Hãy tick chọn &quot;Thay thế &amp; Cập nhật bài cũ&quot; hoặc đổi tên đề thi trước khi tải lên.</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -2510,18 +2563,25 @@ Từ vựng: consecutive (adj): liên tiếp, infrastructure (n): cơ sở hạ 
             <button
               type="button"
               onClick={handleSaveToBank}
-              disabled={parsedQuestions.length === 0}
+              disabled={parsedQuestions.length === 0 || (!!existingDuplicate && !overwriteExisting)}
               className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition cursor-pointer shadow-md whitespace-nowrap ${
-                parsedQuestions.length > 0
-                  ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
-                  : "bg-slate-300 cursor-not-allowed"
+                parsedQuestions.length === 0 || (!!existingDuplicate && !overwriteExisting)
+                  ? "bg-slate-300 cursor-not-allowed opacity-75"
+                  : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
               }`}
+              title={
+                !!existingDuplicate && !overwriteExisting
+                  ? "Bạn chưa đồng ý thay thế bài cũ. Vui lòng tick chọn 'Thay thế & Cập nhật bài cũ' hoặc đổi tên đề bài để tải lên."
+                  : undefined
+              }
             >
               <Check className="w-4 h-4 shrink-0" />
               <span>
-                {parsedQuestions.length > 54
-                  ? `⚡ Tách & Lưu cả 3 Part (${parsedQuestions.length} câu)`
-                  : `Lưu ${parsedQuestions.length} câu vào Kho (${importStatus === "draft" ? "Bản nháp" : "Phát hành"})`}
+                {!!existingDuplicate && !overwriteExisting
+                  ? "Đang khóa tải lên (Cần chấp nhận thay thế)"
+                  : parsedQuestions.length > 54
+                    ? `⚡ Tách & Lưu cả 3 Part (${parsedQuestions.length} câu)`
+                    : `Lưu ${parsedQuestions.length} câu vào Kho (${importStatus === "draft" ? "Bản nháp" : "Phát hành"})`}
               </span>
             </button>
           </div>

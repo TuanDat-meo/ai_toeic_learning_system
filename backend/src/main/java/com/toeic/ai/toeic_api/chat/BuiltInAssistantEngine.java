@@ -7,11 +7,68 @@ import java.util.regex.Pattern;
 public class BuiltInAssistantEngine {
 
     private static final Pattern DIACRITICS_PATTERN = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+    private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9\\s]");
+    private static final Pattern MULTI_SPACES = Pattern.compile("\\s+");
 
     public static String normalize(String text) {
         if (text == null) return "";
-        String normalized = Normalizer.normalize(text, Normalizer.Form.NFD);
-        return DIACRITICS_PATTERN.matcher(normalized).replaceAll("").toLowerCase(Locale.ROOT).trim();
+        // 1. Explicitly replace Vietnamese stroke letters D/d
+        String s = text.replace('đ', 'd').replace('Đ', 'D');
+        // 2. Decompose diacritics
+        String normalized = Normalizer.normalize(s, Normalizer.Form.NFD);
+        // 3. Strip combining marks and convert to lowercase
+        String clean = DIACRITICS_PATTERN.matcher(normalized).replaceAll("").toLowerCase(Locale.ROOT);
+        // 4. Strip emojis and non-alphanumeric symbols to spaces
+        String alphaNumOnly = NON_ALPHANUMERIC.matcher(clean).replaceAll(" ");
+        // 5. Condense multiple spaces and trim
+        return MULTI_SPACES.matcher(alphaNumOnly).replaceAll(" ").trim();
+    }
+
+    /**
+     * Determines whether the user prompt can be handled immediately by the built-in knowledge base
+     * with high confidence (< 10ms response time).
+     */
+    public static boolean canHandleImmediately(String prompt) {
+        if (prompt == null || prompt.isBlank()) return true;
+        String norm = normalize(prompt);
+
+        return containsAny(norm,
+                // Quick Starters
+                "huong dan luyen nghe chep chinh ta",
+                "cach luyen doc part 5",
+                "huong dan thi thu full test 120 phut",
+                "suc khoe", "dung thuoc",
+                "luat viet vi",
+                "50 30 20", "503020",
+                // Chế độ sáng / tối
+                "che do toi", "dark mode", "giao dien toi", "mau den", "mau trang", "che do sang", "sang toi", "chinh sang", "bat che do toi",
+                // Luyện Đọc & Tra từ
+                "luyen doc", "lam bai luyen doc", "lam bai doc", "reading", "part 5", "part 6", "part 7", "tra tu", "so tu", "dien tu", "doc hieu", "nhap dup", "tra tu dien", "so tay cau sai", "huong dan doc", "cach lam bai doc",
+                // Luyện Nghe & Dictation
+                "luyen nghe", "listening", "chep chinh ta", "dictation", "part 1", "part 2", "part 3", "part 4", "toc do nghe", "shadowing", "nuot am", "noi am", "audio",
+                // Từ vựng & Game
+                "tu vung", "vocab", "flashcard", "game", "tro choi", "srs", "lap lai ngat quang", "ghep the", "dua top", "so tu ca nhan", "bang xep hang",
+                // Ngữ pháp & Thì động từ
+                "ngu phap", "grammar", "thi dong tu", "hien tai hoan thanh", "qua khu don", "hien tai don", "tuong lai don", "menh de quan he", "cau bi dong", "cau dieu kien", "lien tu", "gioi tu", "dao ngu", "although", "despite", "because",
+                // Thi thử Mock Test
+                "thi thu", "mock test", "full test", "de thi", "cham diem", "wpm", "120 phut", "200 cau", "dong ho dem nguoc",
+                // Gói VIP & Thanh toán
+                "goi hoc", "vip", "thanh toan", "nang cap", "chuyen khoan", "vietqr", "hoc phi", "mo khoa", "qr code",
+                // Tổng quan & Streak
+                "tong quan", "dashboard", "streak", "muc tieu", "tien do", "chuoi ngay hoc", "bieu do", "trang chu",
+                // Mẹo thi & Lộ trình
+                "meo thi", "bi quyet", "chien thuoc", "tips", "kinh nghiem thi", "lo trinh", "mat goc", "nang diem", "tang diem", "500 len 750", "450", "500", "650", "750", "800", "900",
+                // Sức khỏe & Thuốc
+                "paracetamol", "panadol", "efferalgan", "ibuprofen", "oresol", "cam cum", "dau dau", "dau bung", "sot", "dinh duong", "vitamin", "ngu du", "met moi", "uong thuoc",
+                // Phương pháp học
+                "hoc tap", "tren truong", "pomodoro", "feynman", "active recall", "quan ly thoi gian", "tap trung", "tin chi", "phuong phap hoc", "dai hoc", "thi cu", "on thi",
+                // Bóng đá & Thể thao
+                "bong da", "the thao", "ngoai hang anh", "premier league", "champions league", "c1", "world cup", "euro", "messi", "ronaldo", "real madrid", "mu", "arsenal", "viet vi", "offside", "var",
+                // Tài chính & Kinh tế
+                "tai chinh", "kinh te", "tiet kiem", "lam phat", "lai suat", "quy khan cap", "dau tu", "tien te", "ngan sach", "gdp",
+                // Chào hỏi & giới thiệu
+                "chao", "hello", "hi", "xin chao", "hey", "ban la ai", "ten gi", "tro ly", "ai toan nang", "giup gi"
+        );
     }
 
     public static String generateReply(String prompt) {
@@ -22,161 +79,194 @@ public class BuiltInAssistantEngine {
         String norm = normalize(prompt);
 
         // 1. Giao diện Sáng / Tối (Dark mode / Light mode)
-        if (containsAny(norm, "che do toi", "dark mode", "giao dien toi", "mau den", "mau trang", "che do sang", "sang toi", "chinh sang")) {
+        if (containsAny(norm, "che do toi", "dark mode", "giao dien toi", "mau den", "mau trang", "che do sang", "sang toi", "chinh sang", "bat che do toi")) {
             return """
                     🌓 **Hướng dẫn sử dụng Chế độ Sáng / Tối (Dark / Light Mode):**
                     
-                    1. **Cách chuyển đổi:**
-                       - Nhấp vào biểu tượng **Mặt trăng / Mặt trời** trên thanh điều hướng góc trên màn hình (hoặc trong menu tài khoản cá nhân).
+                    1. **Cách chuyển đổi tức thì:**
+                       - Nhấp vào biểu tượng **Mặt trăng / Mặt trời** trên thanh điều hướng góc trên màn hình (hoặc bấm vào menu ảnh đại diện cá nhân ở góc phải).
                        - Giao diện sẽ lập tức chuyển đổi mượt mà giữa tone Trắng thanh lịch (Light) và tone Đen xanh hiện đại (Dark).
                     
-                    2. **Lợi ích:**
-                       - **Chế độ Tối (Dark Mode):** Giảm mỏi mắt khi học vào ban đêm hoặc trong phòng tối, tiết kiệm pin cho màn hình OLED.
-                       - Tất cả thẻ bài học, đề thi thử, từ vựng và khung chat đều được tinh chỉnh độ tương phản sắc nét, chữ sáng rõ ràng giúp bạn dễ đọc nhất!
+                    2. **Lợi ích nổi bật:**
+                       - **Chế độ Tối (Dark Mode):** Giảm mỏi mắt khi học vào ban đêm, tiết kiệm pin cho màn hình OLED.
+                       - Toàn bộ thẻ bài đọc, bài nghe, khung luyện thi và khung chat AI đều được tối ưu hóa độ tương phản sắc nét, chữ sáng rõ ràng trên nền tối giúp bạn tập trung học lâu mà không mỏi mắt!
                     """;
         }
 
-        // 2. Chức năng Luyện Đọc (Reading - Part 5, 6, 7)
-        if (containsAny(norm, "luyen doc", "reading", "part 5", "part 6", "part 7", "tra tu", "so tu", "dien tu", "doc hieu")) {
+        // 2. Chức năng Luyện Nghe (Listening & Chép chính tả Dictation)
+        if (containsAny(norm, "chep chinh ta", "dictation", "luyen nghe", "listening", "part 1", "part 2", "part 3", "part 4", "toc do nghe", "shadowing", "nuot am", "noi am", "audio")) {
             return """
-                    📖 **Hướng dẫn vận hành Chức năng Luyện Đọc (Reading):**
+                    🎧 **Hướng dẫn vận hành Chức năng Luyện Nghe & Chép Chính Tả (Dictation):**
                     
-                    Phân hệ Luyện Đọc được thiết kế chuẩn cấu trúc ETS với 3 phần trọng tâm:
-                    - **Part 5 (Điền từ vào câu):** 30 câu hỏi trắc nghiệm ngữ pháp và từ vựng thông dụng trong môi trường công sở.
-                    - **Part 6 (Điền từ vào đoạn văn):** 16 câu hỏi rèn luyện kỹ năng liên kết câu và nắm bắt ngữ cảnh.
-                    - **Part 7 (Đọc hiểu văn bản):** 54 câu hỏi bao gồm đoạn đơn, đoạn đôi và đoạn ba (Email, thông báo, bài báo, hóa đơn).
+                    Hệ thống cung cấp trọn bộ 4 phần thi Listening chuẩn ETS cùng phương pháp luyện chép chính tả độc quyền:
+                    - **Part 1 (Mô tả tranh ảnh):** Quan sát hành động nhân vật (V-ing), vị trí đồ vật và bẫy thì bị động (`being + V3`).
+                    - **Part 2 (Hỏi & Đáp):** Luyện phản xạ câu hỏi Wh-questions, Yes/No, câu hỏi đuôi và bẫy câu trả lời gián tiếp.
+                    - **Part 3 (Hội thoại ngắn):** Luyện nghe đoạn đối thoại 2-3 người trong môi trường công sở.
+                    - **Part 4 (Bài nói ngắn):** Luyện nghe thông báo sân bay, tin nhắn thoại, bản tin giao thông.
                     
-                    🎯 **Các tính năng thông minh khi luyện đọc:**
-                    1. **Bộ lọc thông minh:** Bạn có thể lọc đề theo năm ETS (2022, 2023, 2024) hoặc theo cấp độ mục tiêu (Cơ bản 350+, Trung cấp 500+, Nâng cao 650+, Chuyên gia 800+).
-                    2. **Tra từ điển tức thì:** Đang đọc bài mà gặp từ mới? Hãy **nhấp đúp chuột** vào từ đó, hệ thống sẽ hiển thị nghĩa tiếng Việt, phiên âm IPA, từ loại và phát âm chuẩn.
-                    3. **Lưu vào Sổ từ vựng:** Bấm biểu tượng dấu cộng `(+)` cạnh từ điển để đưa ngay từ mới vào sổ tay ôn tập SRS.
-                    4. **Làm lại câu sai:** Sau khi nộp bài, hệ thống hiển thị giải thích chi tiết từng câu. Bạn có thể bấm biểu tượng xoay vòng để làm lại ngay các câu làm sai để ghi nhớ sâu!
+                    ✍️ **Phương pháp Luyện Nghe Chép Chính Tả (Dictation) 4 Bước:**
+                    1. **Nghe lần 1:** Nghe toàn bộ câu ngắn để nắm ý tổng quát và ngữ cảnh.
+                    2. **Gõ lại:** Nghe lại và gõ chính xác từng từ bạn nghe được vào ô nhập liệu.
+                    3. **Bấm Kiểm tra:** Hệ thống sẽ tô **màu xanh lá** cho các từ đúng và **màu đỏ** cho các từ sai hoặc thiếu, đồng thời chỉ ra hiện tượng nuốt âm, nối âm (*linking sounds*).
+                    4. **Công cụ hỗ trợ thông minh:**
+                       - Nút điều chỉnh tốc độ nghe: **0.75x (chậm)**, **1.0x (chuẩn)**, **1.25x (nhanh)**.
+                       - Phím tắt **Space (phím cách)** để Play/Pause và nút tua lại 5 giây.
+                       - Transcript song ngữ Anh - Việt hiển thị đầy đủ giải thích từ vựng sau khi hoàn thành bài.
                     """;
         }
 
-        // 3. Chức năng Luyện Nghe (Listening & Chép chính tả Dictation)
-        if (containsAny(norm, "luyen nghe", "listening", "chep chinh ta", "dictation", "part 1", "part 2", "part 3", "part 4", "toc do nghe")) {
+        // 3. Chức năng Luyện Đọc (Reading - Part 5, 6, 7) & Tra từ điển
+        if (containsAny(norm, "luyen doc", "lam bai luyen doc", "lam bai doc", "reading", "part 5", "part 6", "part 7", "tra tu", "so tu", "dien tu", "doc hieu", "nhap dup", "tra tu dien", "so tay cau sai", "huong dan doc", "cach lam bai doc")) {
             return """
-                    🎧 **Hướng dẫn vận hành Chức năng Luyện Nghe (Listening & Dictation):**
+                    📖 **Hướng dẫn Làm Bài Luyện Đọc TOEIC (Reading Part 5, 6, 7) Chuẩn Điểm Cao:**
                     
-                    Hệ thống cung cấp đầy đủ 4 phần thi Listening cùng phương pháp luyện chép chính tả độc quyền:
-                    - **Part 1 (Mô tả tranh ảnh):** Rèn luyện quan sát hành động nhân vật và vị trí đồ vật.
-                    - **Part 2 (Hỏi & Đáp):** Luyện phản xạ câu hỏi Wh-questions, Yes/No và câu trả lời gián tiếp.
-                    - **Part 3 (Hội thoại ngắn):** Luyện nghe đoạn đối thoại 2-3 người trong công việc.
-                    - **Part 4 (Bài nói ngắn):** Nghe thông báo sân bay, tin nhắn thoại, bản tin thời tiết.
+                    Chào bạn! Để bứt phá điểm số phần Luyện Đọc (100 câu trắc nghiệm trong 75 phút), bạn hãy áp dụng chiến lược và phương pháp sau:
                     
-                    ✍️ **Phương pháp Luyện Nghe Chép Chính Tả (Dictation):**
-                    1. Chọn bài nghe theo chủ đề. Bấm nghe từng câu ngắn được cắt tự động.
-                    2. Gõ lại chính xác những gì bạn nghe được vào ô nhập liệu.
-                    3. Bấm **Kiểm tra**: Hệ thống sẽ tô màu xanh các từ đúng và đỏ các từ thiếu/sai, chỉ ra hiện tượng nuốt âm, nối âm (linking sounds).
-                    4. **Điều chỉnh linh hoạt:** Có nút tăng giảm tốc độ (0.75x, 1.0x, 1.25x), phím cách (Space) để Play/Pause và nút nghe lại từng câu 5 giây.
-                    5. Có sẵn **Transcript song ngữ Anh - Việt** để bạn đối chiếu sau khi hoàn thành.
+                    ⏱️ **1. Phân bổ thời gian làm bài (Tổng 75 phút):**
+                    - **Part 5 (30 câu):** Tối đa **10 – 12 phút** (trung bình 20–25 giây/câu).
+                    - **Part 6 (16 câu):** Tối đa **8 – 10 phút** (khoảng 30 giây/câu).
+                    - **Part 7 (54 câu):** Dành trọn **50 – 55 phút** (khoảng 50–60 giây/câu). Tuyệt đối không để Part 5-6 chiếm quá 25 phút kẻo không kịp làm Part 7.
+                    
+                    🎯 **2. Chiến thuật làm bài từng phần:**
+                    - **Part 5 (Điền từ vào câu đơn):**
+                      * *Liếc nhanh 4 đáp án trước:*
+                        + Nếu 4 đáp án chung gốc từ (chỉ khác đuôi danh/động/tính/trạng) ➔ Đây là câu hỏi **ngữ pháp**. Nhìn từ đứng trước và sau chỗ trống để xác định từ loại, không cần dịch cả câu.
+                        + Nếu 4 đáp án khác nghĩa hoàn toàn ➔ Đây là câu hỏi **từ vựng**. Dịch nhanh từ khóa chính xung quanh chỗ trống để chọn từ hợp ngữ cảnh.
+                    - **Part 6 (Điền từ vào đoạn văn):**
+                      * Đọc lướt câu trước và sau chỗ trống để nắm mạch văn.
+                      * Với câu hỏi điền cả câu văn, chú ý liên từ kết nối (*However, Therefore, In addition, Consequently*) và đại từ chỉ định (*this, these, such...*).
+                    - **Part 7 (Đọc hiểu đoạn đơn, đôi, ba):**
+                      * **Kỹ thuật Skimming & Scanning:** Đọc câu hỏi và gạch chân từ khóa (tên riêng, thời gian, con số, sự kiện) trước khi đọc bài, sau đó quét ngược lên văn bản để định vị thông tin.
+                      * **Cảnh giác Paraphrasing:** Từ khóa trong câu hỏi thường được thay thế bằng từ đồng nghĩa trong bài đọc (ví dụ: *renovate* ➔ *repair/remodel*), tránh tìm từ giống y đúc.
+                    
+                    🛠️ **3. Tận dụng 4 trợ thủ thông minh trên web khi luyện đọc:**
+                    1. **Bộ lọc thông minh:** Bạn có thể chọn đề thi theo năm ETS (2022, 2023, 2024) hoặc theo cấp độ mục tiêu (350+, 500+, 650+, 800+).
+                    2. **Tra từ điển tức thì:** Gặp từ mới trong bài đọc? Bạn chỉ cần **nhấp đúp chuột (double-click)** vào từ đó, hệ thống sẽ hiện popup nghĩa tiếng Việt, phiên âm IPA, từ loại và phát âm chuẩn.
+                    3. **Lưu vào Sổ từ vựng (+):** Bấm biểu tượng dấu cộng `(+)` cạnh từ điển để thêm ngay vào Sổ từ vựng cá nhân và ôn luyện với Flashcard SRS.
+                    4. **Làm lại câu sai (Mistake Notebook):** Sau khi nộp bài, bấm **Xem giải thích** để hiểu tường tận ngữ pháp, và bấm nút **Làm lại câu sai** để khắc phục ngay những câu chưa đúng!
+                    
+                    Chúc bạn luyện đọc thật hiệu quả và bứt phá điểm số nhé! 🚀
                     """;
         }
 
         // 4. Chức năng Từ Vựng & Game Center
-        if (containsAny(norm, "tu vung", "vocab", "flashcard", "game", "tro choi", "srs", "lap lai ngat quang", "ghep the", "dua top")) {
+        if (containsAny(norm, "tu vung", "vocab", "flashcard", "game", "tro choi", "srs", "lap lai ngat quang", "ghep the", "dua top", "so tu ca nhan", "bang xep hang")) {
             return """
                     🗂️ **Hướng dẫn vận hành Kho Từ Vựng & Game Center:**
                     
                     1. **Học Flashcards với thuật toán SRS (Spaced Repetition):**
-                       - Thẻ từ vựng hiển thị từ vựng, phiên âm IPA, ví dụ minh họa và phát âm audio chuẩn bản xứ.
-                       - Thuật toán lặp lại ngắt quãng tự động tính toán thời gian bạn sắp quên một từ để nhắc bạn ôn lại (1 ngày, 3 ngày, 7 ngày, 30 ngày), giúp chuyển từ vựng vào trí nhớ dài hạn.
+                       - Thẻ từ vựng hiển thị từ vựng, phiên âm IPA, ví dụ minh họa và audio phát âm chuẩn bản xứ.
+                       - Thuật toán lặp lại ngắt quãng tự động tính toán thời điểm bạn sắp quên từ để nhắc bạn ôn lại theo các chu kỳ: **1 ngày -> 3 ngày -> 7 ngày -> 30 ngày**, giúp chuyển từ vựng vào trí nhớ dài hạn.
                     
-                    2. **Game Center 5 chế độ tương tác:**
+                    2. **Game Center với 5 chế độ tương tác:**
                        - **Ghép thẻ (Card Match):** Ghép cặp từ vựng tiếng Anh với nghĩa tiếng Việt tương ứng thật nhanh.
-                       - **Trắc nghiệm phản xạ:** Chọn đáp án đúng trong 4 lựa chọn dưới áp lực thời gian.
-                       - **Gõ từ nhanh (Speed Typing):** Nghe phát âm và gõ chính xác mặt chữ.
-                       - **Điền khuyết ngữ cảnh:** Điền từ vựng phù hợp vào câu văn TOEIC thực tế.
+                       - **Trắc nghiệm phản xạ:** Chọn đáp án đúng trong 4 lựa chọn dưới áp lực thời gian đếm ngược.
+                       - **Gõ từ nhanh (Speed Typing):** Nghe phát âm và gõ lại chính xác mặt chữ.
+                       - **Điền khuyết ngữ cảnh:** Điền từ vựng phù hợp vào chỗ trống trong câu văn TOEIC thực tế.
                        - **Đua Top Bảng Xếp Hạng:** Tích lũy điểm kinh nghiệm (XP) qua từng ván game để leo hạng học viên xuất sắc toàn hệ thống.
                     
-                    3. **Sổ từ cá nhân:** Tự do tạo bộ từ riêng theo chủ đề công việc, xuất khẩu file ôn tập tiện lợi.
+                    3. **Sổ từ cá nhân:** Tự do tạo bộ từ theo chủ đề công việc, chuyên ngành và xuất file ôn tập tiện lợi.
                     """;
         }
 
-        // 5. Chức năng Ngữ Pháp (Grammar)
-        if (containsAny(norm, "ngu phap", "grammar", "thi dong tu", "menh de", "cau bi dong", "cau dieu kien", "lien tu", "gioi tu")) {
+        // 5. Ngữ pháp & Phân biệt các thì (Grammar)
+        if (containsAny(norm, "hien tai hoan thanh", "qua khu don", "hien tai don", "tuong lai don", "ngu phap", "grammar", "thi dong tu", "menh de quan he", "cau bi dong", "cau dieu kien", "lien tu", "gioi tu", "dao ngu", "although", "despite", "because")) {
             return """
-                    📚 **Hướng dẫn vận hành Chuyên đề Ngữ Pháp (Grammar):**
+                    📚 **Hướng dẫn & Phân biệt Ngữ Pháp Trọng Điểm TOEIC:**
                     
-                    Hệ thống tích hợp trọn bộ hơn 20 chuyên đề ngữ pháp TOEIC then chốt:
-                    - **Các thì quan trọng:** Hiện tại đơn, Hiện tại tiếp diễn, Hiện tại hoàn thành, Quá khứ đơn, Tương lai đơn...
-                    - **Cấu trúc câu nâng cao:** Mệnh đề quan hệ (Relative Clauses), Rút gọn mệnh đề, Câu bị động (Passive Voice), Câu điều kiện (If clauses), Thể giả định (Subjunctive).
-                    - **Từ loại & Cụm từ:** Danh từ đếm được/không đếm được, Tính từ & Trạng từ, V-ing & To-V, Giới từ chỉ nơi chốn/thời gian, Liên từ tương quan (Either...or, Neither...nor, Not only...but also).
+                    1. **Phân biệt Thì Hiện Tại Hoàn Thành (Present Perfect) vs. Quá Khứ Đơn (Past Simple):**
+                       - **Quá khứ đơn (`S + V2/ed`):** Diễn tả hành động ĐÃ CHẤM DỨT hoàn toàn trong quá khứ tại thời điểm xác định. Dấu hiệu: `yesterday`, `ago`, `last week/month`, `in 2023`.
+                       - **Hiện tại hoàn thành (`S + have/has + V3/ed`):** Diễn tả hành động xảy ra trong quá khứ kéo dài đến hiện tại hoặc kết quả còn ảnh hưởng ở hiện tại. Dấu hiệu: `since`, `for`, `already`, `yet`, `recently`, `just`.
                     
-                    💡 **Cách học hiệu quả:**
-                    - Đọc phần **Lý thuyết tóm tắt** với sơ đồ bảng biểu trực quan.
-                    - Bấm sang tab **Bài tập vận dụng**: Làm các câu hỏi trích từ đề thi thật có giải thích ngữ pháp chi tiết từng bước.
+                    2. **Các chuyên đề then chốt khác:**
+                       - **Mệnh đề quan hệ rút gọn:** Dùng `V-ing` cho câu chủ động (*The man standing there...*), dùng `V3/ed` cho câu bị động (*The goods ordered yesterday...*).
+                       - **Cặp Liên từ vs. Giới từ:**
+                         - `Although / Even though / Though` (+ S + V) đối chiếu với `Despite / In spite of` (+ Cụm danh từ / V-ing).
+                         - `Because / Since / As` (+ S + V) đối chiếu với `Because of / Due to` (+ Cụm danh từ / V-ing).
+                    
+                    💡 Bạn có thể vào mục **Ngữ pháp** trên thanh điều hướng để xem lý thuyết chi tiết và làm bài tập trắc nghiệm có giải thích từng câu!
                     """;
         }
 
         // 6. Chức năng Thi Thử Mock Test (Full Test 120 phút)
-        if (containsAny(norm, "thi thu", "mock test", "full test", "de thi", "cham diem", "wpm", "120 phut", "200 cau")) {
+        if (containsAny(norm, "thi thu", "mock test", "full test", "de thi", "cham diem", "wpm", "120 phut", "200 cau", "dong ho dem nguoc")) {
             return """
                     🎯 **Hướng dẫn vận hành Phòng Thi Thử (Mock Tests):**
                     
-                    1. **Chuẩn format đề thi ETS:**
-                       - Mỗi đề thi gồm đúng 200 câu hỏi (100 câu Listening - 45 phút, 100 câu Reading - 75 phút) với tổng thời gian làm bài 120 phút.
-                       - Có đồng hồ đếm ngược thời gian thực, bảng điều hướng 200 câu hỏi dễ dàng chuyển câu và đánh dấu câu phân vân để xem lại.
+                    1. **Chuẩn format đề thi ETS quốc tế:**
+                       - Mỗi đề thi gồm đúng **200 câu hỏi** (100 câu Listening - 45 phút, 100 câu Reading - 75 phút) với tổng thời gian làm bài **120 phút**.
+                       - Đồng hồ đếm ngược thời gian thực, bảng điều hướng 200 câu hỏi dễ dàng chuyển câu và tính năng đánh dấu câu phân vân để xem lại trước khi nộp bài.
                     
-                    2. **Phân tích kết quả sau thi với AI:**
+                    2. **Chiến thuật phân bổ thời gian phòng thi:**
+                       - **Listening (45 phút):** Tập trung tuyệt đối, tranh thủ đọc trước 3 câu hỏi Part 3 & 4 khi băng đọc phần hướng dẫn.
+                       - **Reading (75 phút):** 
+                         - Part 5 (30 câu): Giải quyết nhanh trong **10 - 12 phút** (20-25s/câu).
+                         - Part 6 (16 câu): Làm trong **8 - 10 phút**.
+                         - Part 7 (54 câu): Dành trọn **52 - 55 phút** để đọc kỹ đoạn đôi và đoạn ba.
+                    
+                    3. **Phân tích kết quả chuyên sâu sau thi với AI:**
                        - Điểm số tự động quy đổi theo thang điểm TOEIC quốc tế (10 - 990 điểm).
-                       - **Đo tốc độ làm bài (WPM - Words Per Minute):** Giúp bạn biết mình đọc nhanh hay chậm ở Part 7.
-                       - **Radar phân tích điểm mạnh - điểm yếu:** Chỉ rõ bạn sai nhiều ở dạng câu hỏi nào (chi tiết, suy luận, từ vựng hay ngữ pháp) để đề xuất bài luyện tập khắc phục ngay lập tức!
+                       - **Đo tốc độ làm bài (WPM - Words Per Minute):** Giúp bạn biết tốc độ đọc thực tế để điều chỉnh nhịp làm bài Part 7.
+                       - **Radar phân tích điểm mạnh - điểm yếu:** Chỉ rõ bạn sai nhiều ở dạng câu nào để đề xuất bài luyện tập khắc phục ngay lập tức!
                     """;
         }
 
         // 7. Gói học, Nâng cấp VIP & Thanh toán VietQR
-        if (containsAny(norm, "goi hoc", "vip", "thanh toan", "nang cap", "chuyen khoan", "vietqr", "hoc phi", "mo khoa")) {
+        if (containsAny(norm, "goi hoc", "vip", "thanh toan", "nang cap", "chuyen khoan", "vietqr", "hoc phi", "mo khoa", "qr code")) {
             return """
                     💳 **Hướng dẫn Nâng cấp Gói VIP & Thanh toán tự động VietQR:**
                     
-                    1. **Quyền lợi gói VIP:**
+                    1. **Quyền lợi vượt trội của gói VIP:**
                        - Mở khóa không giới hạn toàn bộ kho đề Full Test ETS 2022 - 2024.
-                       - Luyện nghe chép chính tả và tra cứu từ điển không giới hạn.
+                       - Luyện nghe chép chính tả và tra cứu từ điển không giới hạn lượt.
                        - Không giới hạn số lượt hỏi đáp cùng Trợ lý AI và phân tích điểm yếu chuyên sâu.
                     
-                    2. **Quy trình thanh toán tự động 24/7:**
+                    2. **Quy trình thanh toán tự động 24/7 qua VietQR:**
                        - Bấm nút **Nâng cấp** màu cam trên góc phải màn hình.
                        - Chọn gói học phù hợp (3 tháng, 6 tháng hoặc Trọn đời).
                        - Màn hình xuất hiện mã **VietQR** cùng Số tiền và Nội dung chuyển khoản chính xác.
-                       - Bạn mở ứng dụng ngân hàng bất kỳ (Vietcombank, MBBank, Techcombank...), quét mã QR và xác nhận chuyển tiền.
-                       - **Kích hoạt tức thì:** Hệ thống tự động kiểm tra giao dịch và nâng cấp tài khoản của bạn ngay trong 30 giây mà không cần chụp ảnh biên lai gửi admin!
+                       - Mở ứng dụng ngân hàng bất kỳ (Vietcombank, MBBank, Techcombank...), quét mã QR và xác nhận chuyển tiền.
+                       - **Kích hoạt tức thì trong 30 giây:** Hệ thống tự động kiểm tra giao dịch và nâng cấp tài khoản của bạn ngay lập tức mà không cần chụp ảnh biên lai gửi admin!
                     """;
         }
 
         // 8. Tổng quan Dashboard, Streak & Mục tiêu
-        if (containsAny(norm, "tong quan", "dashboard", "streak", "muc tieu", "tien do", "trang chu")) {
+        if (containsAny(norm, "tong quan", "dashboard", "streak", "muc tieu", "tien do", "chuoi ngay hoc", "bieu do", "trang chu")) {
             return """
                     📊 **Hướng dẫn sử dụng Trang Tổng Quan (Dashboard):**
                     
-                    - **Chuỗi học tập (Streak):** Mỗi ngày bạn hoàn thành ít nhất 1 bài học hoặc 10 câu trắc nghiệm, ngọn lửa Streak sẽ tăng lên 1 ngày. Duy trì Streak liên tục giúp xây dựng thói quen kiên trì.
+                    - **Chuỗi học tập (Streak):** Mỗi ngày bạn hoàn thành ít nhất 1 bài học hoặc 10 câu trắc nghiệm, ngọn lửa Streak sẽ tăng lên 1 ngày. Duy trì Streak liên tục giúp xây dựng thói quen kiên trì mỗi ngày.
                     - **Mục tiêu điểm số:** Bạn có thể thiết lập mục tiêu (ví dụ 650 TOEIC trong 3 tháng). Hệ thống sẽ vẽ biểu đồ dự báo và tính toán số bài học bạn cần hoàn thành mỗi tuần.
                     - **Biểu đồ thời lượng:** Theo dõi thời gian bạn đã dành cho Nghe, Đọc, Từ vựng và Ngữ pháp trong tuần để cân bằng lộ trình học tập.
                     """;
         }
 
-        // 9. Cách vận hành tổng quát hệ thống
-        if (containsAny(norm, "van hanh", "huong dan", "chuc nang", "cach dung", "he thong", "lam sao de hoc", "bat dau tu dau")) {
+        // 9. Mẹo thi & Lộ trình bứt phá điểm số TOEIC (450, 650, 800+, nâng điểm 500 lên 750)
+        if (containsAny(norm, "meo thi", "bi quyet", "chien thuoc", "tips", "kinh nghiem thi", "lo trinh", "mat goc", "nang diem", "tang diem", "500 len 750", "450", "500", "650", "750", "800", "900")) {
             return """
-                    🌟 **Tổng quan Vận hành Hệ thống Học & Luyện Thi TOEIC AI:**
+                    🚀 **Lộ trình Bứt Phá Điểm Số & Mẹo Làm Bài TOEIC Hiệu Quả:**
                     
-                    Hệ thống được xây dựng toàn diện với 6 trụ cột chính giúp bạn bứt phá band điểm:
-                    1. 🎧 **Nghe (Listening):** Luyện 4 Parts chuẩn ETS + Tính năng Luyện nghe chép chính tả (Dictation) có chỉnh tốc độ & transcript song ngữ.
-                    2. 📖 **Đọc (Reading):** Luyện Part 5, 6, 7 với bộ lọc thông minh, tính năng nhấp đúp tra từ điển tức thì và làm lại câu sai.
-                    3. 🗂️ **Từ vựng (Vocabulary):** Học thẻ Flashcard thuật toán lặp lại ngắt quãng SRS + Game Center 5 chế độ đua top.
-                    4. 📚 **Ngữ pháp (Grammar):** Tổng hợp 20+ chuyên đề trọng điểm kèm bài tập thực hành sát đề thi.
-                    5. 🎯 **Thi thử (Mock Tests):** Đề thi Full Test 200 câu 120 phút, tự động bấm giờ, chấm điểm và phân tích WPM tốc độ làm bài.
-                    6. ✨ **Trợ lý AI (Chính là mình!):** Luôn đồng hành 24/7 để giải đáp thắc mắc, hướng dẫn thao tác trên web và trả lời mọi câu hỏi kiến thức!
+                    1. **Lộ trình nâng điểm từ 500 lên 750+:**
+                       - **Giai đoạn 1 (Tuần 1 - 3): Khắc phục Listening Part 3 & 4:**
+                         - Chuyển từ nghe hiểu chung chung sang kỹ năng bắt từ khóa (*Keywords*) và nhận diện hiện tượng Paraphrase (từ đồng nghĩa trong câu hỏi và audio).
+                         - Luyện tập phương pháp **Chép chính tả (Dictation)** 30 phút mỗi ngày trên web để triệt tiêu hiện tượng nuốt âm và nối âm.
+                       - **Giai đoạn 2 (Tuần 4 - 6): Tối ưu tốc độ Reading Part 5 & 6:**
+                         - Part 5 làm trong tối đa 10-12 phút (khoảng 20s/câu). Phân biệt chắc chắn từ loại (Danh/Động/Tính/Trạng) và các thì hay thi.
+                       - **Giai đoạn 3 (Tuần 7 - 8): Chinh phục Reading Part 7:**
+                         - Áp dụng kỹ thuật Skimming (đọc lướt tiêu đề) và Scanning (quét tìm ngày tháng, tên riêng, số tiền).
+                         - Luyện làm quen với đoạn kép (Double) và đoạn ba (Triple passages).
                     
-                    👉 Bạn muốn mình hướng dẫn chi tiết mục nào ở trên, cứ nhắn cho mình nhé!
+                    2. **3 Mẹo thi cực kỳ đắt giá:**
+                       - **Part 2:** Loại ngay đáp án có từ phát âm giống hoặc lặp lại y nguyên từ trong câu hỏi (bẫy *same sound*).
+                       - **Part 3 & 4:** Tuyệt đối đọc trước 3 câu hỏi trước khi audio phát.
+                       - **Part 7:** Luôn đọc câu hỏi trước để định hướng thông tin cần tìm.
                     """;
         }
 
-        // 10. Lĩnh vực Sức khỏe & Thuốc men (Health & Medicine)
-        if (containsAny(norm, "suc khoe", "thuoc", "benh", "paracetamol", "panadol", "ibuprofen", "uong thuoc", "cam cum", "dau dau", "dau bung", "sot", "ho", "dinh duong", "met moi", "vitamin", "khang sinh", "ngu")) {
+        // 10. Lĩnh vực Sức khỏe & Thuốc men khi ôn thi (Health & Medicine)
+        if (containsAny(norm, "suc khoe", "thuoc", "paracetamol", "panadol", "efferalgan", "ibuprofen", "oresol", "cam cum", "dau dau", "dau bung", "sot", "dinh duong", "vitamin", "ngu du", "met moi", "uong thuoc")) {
             return """
-                    🩺 **Tư vấn Kiến thức Sức khỏe & Dược phẩm:**
+                    🩺 **Tư vấn Kiến thức Sức khỏe & Dược phẩm An toàn:**
                     
                     1. **Thông tin về các nhóm thuốc thông dụng:**
                        - **Paracetamol (Panadol, Efferalgan):** Thuốc hạ sốt, giảm đau thông dụng nhất. Liều dùng thông thường ở người lớn là 500mg - 1000mg/lần, mỗi lần cách nhau tối thiểu 4 - 6 tiếng, không quá 3g (3000mg) mỗi ngày để tránh gây độc cho gan.
@@ -195,7 +285,7 @@ public class BuiltInAssistantEngine {
         }
 
         // 11. Học tập trên trường & Phương pháp học (School & Study methods)
-        if (containsAny(norm, "hoc tap", "tren truong", "dai hoc", "thi cu", "on thi", "phuong phap hoc", "pomodoro", "feynman", "quan ly thoi gian", "tap trung", "luoi", "mat tap trung", "tin chi", "bai tap")) {
+        if (containsAny(norm, "hoc tap", "tren truong", "pomodoro", "feynman", "active recall", "quan ly thoi gian", "tap trung", "tin chi", "phuong phap hoc", "dai hoc", "thi cu", "on thi")) {
             return """
                     🎓 **Phương pháp Học tập Hiệu quả & Cân bằng Thi cử trên Trường:**
                     
@@ -212,7 +302,7 @@ public class BuiltInAssistantEngine {
         }
 
         // 12. Bóng đá & Thể thao (Football & Sports)
-        if (containsAny(norm, "bong da", "the thao", "ngoai hang anh", "premier league", "champions league", "c1", "world cup", "euro", "messi", "ronaldo", "real madrid", "manchester", "mu", "arsenal", "chelsea", "barca", "viet vi", "cau thu", "ban thang")) {
+        if (containsAny(norm, "bong da", "the thao", "ngoai hang anh", "premier league", "champions league", "c1", "world cup", "euro", "messi", "ronaldo", "real madrid", "mu", "arsenal", "viet vi", "offside", "var")) {
             return """
                     ⚽ **Kiến thức Bóng đá & Thể thao Đỉnh cao:**
                     
@@ -229,8 +319,115 @@ public class BuiltInAssistantEngine {
                     """;
         }
 
-        // 13. Tài chính & Kinh tế (Finance & Economics)
-        if (containsAny(norm, "tai chinh", "kinh te", "tien te", "dau tu", "tiet kiem", "lam phat", "lai suat", "chung khoan", "co phieu", "50/30/20", "ngan sach", "gdp")) {
+        // 13. Lĩnh vực Ăn uống, Ẩm thực & Đói bụng (Food, Hunger & Nutrition)
+        if (containsAny(norm, "doi bung", "doi qua", "doi", "an gi", "an uong", "mon an", "an sang", "an trua", "an toi", "an dem", "an vat", "am thuc", "thuc don", "dinh duong", "them an", "nau an", "an ngon", "quan an", "uong gi", "tra sua", "cafe", "ca phe")) {
+            return """
+                    🍲 **Gợi ý Ăn uống & Thực đơn Nạp Năng lượng:**
+                    
+                    Đói bụng rồi thì phải nạp năng lượng ngay để bảo vệ dạ dày và giữ cho não bộ tỉnh táo bạn nhé! Dưới đây là những gợi ý tuyệt vời tùy theo hoàn cảnh của bạn:
+                    
+                    🥪 **1. Cần ăn nhanh, gọn, lẹ (Không mất công chế biến):**
+                    - **Bánh mì Việt Nam:** Bánh mì thịt chả, pate hoặc bánh mì ốp la kèm dưa chuột. Vừa giòn ngon, đủ đạm, lại cực kỳ tiện lợi.
+                    - **Mì gói "nâng cấp":** Nấu một gói mì tôm, thả thêm 1 quả trứng chần, vài cọng hành/rau xanh hoặc lát xúc xích, vừa ấm bụng vừa đỡ cảm giác xót ruột.
+                    - **Sữa chua & Chuối / Trái cây tươi:** Giải pháp nạp đường tự nhiên lành mạnh, giúp giảm đói tức thì mà không gây nặng bụng.
+                    - **Bánh ngọt, bánh quy hoặc ngũ cốc yến mạch:** Pha cùng một ly sữa tươi ấm, rất tiện nếu bạn đang ngồi tại bàn học hoặc văn phòng.
+                    
+                    🍜 **2. Bữa ăn chính thơm ngon, no lâu (Đặt đồ ăn hoặc ra quán):**
+                    - **Bún chả / Bún bò Huế / Bún riêu cua:** Nước dùng đậm đà, thơm lừng, nhiều topping thịt, chả, rau sống tươi mát.
+                    - **Phở bò / Phở gà truyền thống:** Nước dùng trong thanh, ấm bụng, nhiều dưỡng chất giúp hồi phục thể lực nhanh chóng.
+                    - **Cơm tấm sườn bì chả / Cơm gà xối mỡ:** Chắc bụng, no lâu cho một buổi chiều hoặc tối cần nhiều sức lực.
+                    - **Bánh cuốn nóng / Mì Quảng / Hủ tiếu Nam Vang:** Dễ ăn, hương vị hài hòa, rất thích hợp đổi bữa.
+                    
+                    🧠 **3. Mẹo ăn uống "bổ não" cho người đang học tập & ôn thi:**
+                    - **Ăn đêm khi học bài:** Nếu đói sau 22h, hãy tránh đồ chiên rán nhiều dầu mỡ vì sẽ gây khó tiêu, mất ngủ. Nên chọn 1 quả chuối chín, 1 ly sữa ấm hoặc một nắm hạt (hạnh nhân, óc chó, hạt điều).
+                    - **Bổ sung nước:** Não bộ chiếm 80% là nước, khi đói hoặc mệt, hãy thử uống trước một cốc nước ấm, bạn sẽ thấy cơ thể dễ chịu hơn nhiều.
+                    
+                    Mau đi nạp năng lượng thơm ngon rồi tiếp tục ngày mới bạn nhé! Chúc bạn ăn thật ngon miệng! 😋✨
+                    """;
+        }
+
+        // 14. Lĩnh vực Chính trị & Pháp luật (Politics & Law)
+        if (containsAny(norm, "chinh tri", "phap luat", "hien phap", "quoc hoi", "chinh phu", "toa an", "nha nuoc", "quyen cong dan", "phap quyen", "asean", "lien hop quoc", "ngoai giao", "bau cu", "luat phap", "toa an nhan dan")) {
+            return """
+                    ⚖️ **Kiến thức Chính trị, Pháp luật & Thể chế:**
+                    
+                    1. **Cơ cấu tổ chức bộ máy Nhà nước Cộng hòa Xã hội Chủ nghĩa Việt Nam:**
+                       - **Quốc hội:** Cơ quan đại biểu cao nhất của Nhân dân, cơ quan quyền lực nhà nước cao nhất, thực hiện quyền lập hiến, quyền lập pháp và quyết định các vấn đề quan trọng của đất nước.
+                       - **Chủ tịch nước:** Người đứng đầu Nhà nước, thay mặt nước Cộng hòa xã hội chủ nghĩa Việt Nam về đối nội và đối ngoại.
+                       - **Chính phủ:** Cơ quan hành chính nhà nước cao nhất, thực hiện quyền hành pháp, là cơ quan chấp hành của Quốc hội (đứng đầu là Thủ tướng Chính phủ).
+                       - **Tòa án nhân dân & Viện kiểm sát nhân dân:** Các cơ quan thực hiện quyền tư pháp, bảo vệ công lý, quyền con người và pháp chế xã hội chủ nghĩa.
+                    
+                    2. **Nguyên tắc Nhà nước Pháp quyền & Thượng tôn Pháp luật:**
+                       - "Sống và làm việc theo Hiến pháp và pháp luật" là kim chỉ nam cho mọi công dân và tổ chức.
+                       - Mọi công dân đều bình đẳng trước pháp luật, được bảo hộ về tính mạng, danh dự, tài sản và các quyền cơ bản.
+                    
+                    3. **Hội nhập Quốc tế & Đối ngoại:**
+                       - Việt Nam thực hiện đường lối đối ngoại độc lập, tự chủ, hòa bình, hữu nghị, hợp tác và phát triển; là bạn, là đối tác tin cậy và là thành viên tích cực, có trách nhiệm trong cộng đồng quốc tế.
+                       - Đóng vai trò nòng cốt trong Hiệp hội các quốc gia Đông Nam Á (**ASEAN**), thành viên tích cực của Liên Hợp Quốc (**UN**), APEC, WTO...
+                    """;
+        }
+
+        // 15. Lĩnh vực Giáo dục, Đại học & Nghề nghiệp (Education & Careers)
+        if (containsAny(norm, "giao duc", "dai hoc", "chon nganh", "nganh hoc", "hoc bong", "du hoc", "tin chi", "hoc phi", "tuyen sinh", "cao dang", "ra truong", "xin viec", "ky nang mem", "cv")) {
+            return """
+                    🎓 **Kiến thức Giáo dục, Định hướng Ngành học & Kỹ năng Phát triển:**
+                    
+                    1. **Phương pháp Định hướng Chọn ngành theo mô hình IKIGAI:**
+                       - Giao thoa giữa 4 yếu tố cốt lõi:
+                         + **Điều bạn đam mê yêu thích:** Bạn có hứng thú tìm tòi nó mỗi ngày không?
+                         + **Điều bạn có thế mạnh (Sở trường):** Khả năng tư duy logic, ngôn ngữ hay giao tiếp xã hội?
+                         + **Điều xã hội đang có nhu cầu tuyển dụng:** Xu hướng công nghệ, chuyển đổi số, thương mại quốc tế, y tế, logistics...
+                         + **Điều tạo ra thu nhập tốt:** Mức lương và cơ hội thăng tiến bền vững trong 5-10 năm tới.
+                    
+                    2. **Bí quyết học đại học theo học chế Tín chỉ:**
+                       - Đăng ký lượng tín chỉ vừa sức (15 - 18 tín chỉ/kỳ), tránh đăng ký quá tải dẫn đến rớt môn hoặc kéo tụt GPA.
+                       - Đọc trước đề cương môn học (*Syllabus*) và tài liệu tham khảo trước khi lên giảng đường để chủ động đặt câu hỏi cho giảng viên.
+                    
+                    3. **Chiến lược săn Học bổng & Nâng cao Hồ sơ xin việc (CV):**
+                       - Duy trì GPA từ 8.0/10 hoặc 3.2/4.0 trở lên.
+                       - Sở hữu chứng chỉ ngoại ngữ chuẩn quốc tế (**TOEIC 750+** hoặc **IELTS 6.5+**) là tấm vé thông hành cực lớn vào các tập đoàn đa quốc gia.
+                       - Tham gia câu lạc bộ, dự án thực tế hoặc nghiên cứu khoa học để tích lũy kỹ năng mềm: làm việc nhóm, tư duy phản biện và giải quyết vấn đề.
+                    """;
+        }
+
+        // 16. Lĩnh vực Đời sống, Tâm lý & Giải tỏa Căng thẳng (Life, Psychology & Stress Relief)
+        if (containsAny(norm, "doi song", "tam ly", "stress", "cang thang", "met moi", "mat ngu", "buon", "ap luc", "burnout", "can bang", "tram cam", "lo lang", "dong luc", "thoi quen", "atomic habits", "giac ngu")) {
+            return """
+                    🌿 **Chăm sóc Tinh thần, Tâm lý & Cân bằng Cuộc sống:**
+                    
+                    1. **5 Bước xoa dịu căng thẳng (Stress Relief) cấp tốc:**
+                       - **Kỹ thuật thở sâu 4-7-8:** Hít vào bằng mũi trong 4 giây, giữ hơi trong 7 giây, và thở ra từ từ bằng miệng trong 8 giây. Thực hiện 4 chu kỳ giúp nhịp tim ổn định và xua tan âu lo tức thì.
+                       - **Vận động cơ thể nhẹ:** Đứng dậy vươn vai, đi dạo 10-15 phút ngoài trời để não bộ giải phóng chất dẫn truyền thần kinh dopamine và endorphin.
+                       - **Viết nhật ký xả cảm xúc (Brain Dump):** Viết tất cả những điều đang khiến bạn bận tâm ra một tờ giấy, bạn sẽ thấy tâm trí nhẹ nhõm hơn rất nhiều.
+                    
+                    2. **Vượt qua áp lực đồng trang lứa (Peer Pressure) & Kiệt sức (Burnout):**
+                       - Đừng so sánh hành trình của mình với kết quả hào nhoáng của người khác trên mạng xã hội. Mỗi người có một múi giờ trưởng thành khác nhau.
+                       - Khi quá tải, hãy cho phép bản thân nghỉ ngơi hoàn toàn một ngày (nghe nhạc nhẹ, đọc sách, ngủ đủ giấc) để tái tạo năng lượng sáng tạo.
+                    
+                    3. **Xây dựng Thói quen Tích cực (Atomic Habits):**
+                       - Bắt đầu từ những việc siêu nhỏ (chỉ cần 2 phút mỗi ngày: đọc 2 trang sách, học 5 từ vựng mới, uống 1 ly nước khi vừa thức dậy).
+                       - Tiến bộ 1% mỗi ngày sẽ giúp bạn tốt hơn gấp 37 lần sau một năm!
+                    """;
+        }
+
+        // 17. Lĩnh vực Thi cử & Mẹo làm bài Tổng quát (Exams & Test Taking)
+        if (containsAny(norm, "thi cu", "phong thi", "on thi", "tam ly phong thi", "thi tot nghiep", "thi thpt", "meo lam bai", "trac nghiem", "nuoc rut", "chuan bi thi", "giam run")) {
+            return """
+                    📝 **Bí quyết Ôn thi Hiệu quả & Mẹo Làm Bài Thi Đỉnh cao:**
+                    
+                    1. **Chuẩn bị vững chắc trước ngày thi:**
+                       - **Đêm trước thi:** Tuyệt đối không thức thâu đêm để nhồi nhét kiến thức. Não bộ mệt mỏi sẽ làm giảm 40% khả năng tư duy và phản xạ trong phòng thi. Hãy ngủ sớm trước 23h.
+                       - **Chuẩn bị đồ dùng:** Soạn sẵn CCCD/CMND, thẻ dự thi, bút chì 2B (2-3 chiếc đã chuốt sẵn), gôm tẩy mềm, đồng hồ đeo tay cơ để tự canh giờ.
+                    
+                    2. **Tâm lý phòng thi & Mẹo làm bài trắc nghiệm:**
+                       - **Nguyên tắc "Dễ trước - Khó sau":** Lướt qua toàn bộ đề, làm ngay những câu bạn chắc chắn 100% để lấy trọn điểm và tạo đà tự tin.
+                       - **Kỹ thuật loại trừ đáp án:** Với những câu phân vân, hãy tìm các đáp án quá cực đoan (chứa *always, never, completely*...) hoặc có lỗi logic để loại bỏ trước, tăng xác suất chọn đúng lên 50%.
+                       - **Kiểm soát thời gian:** Luôn chừa ra 5 - 10 phút cuối giờ để kiểm tra lại phiếu trả lời, đảm bảo không tô lệch dòng và **tuyệt đối không bỏ trống bất kỳ câu nào**.
+                    """;
+        }
+
+        // 18. Tài chính & Kinh tế (Finance & Economics)
+        if (containsAny(norm, "tai chinh", "kinh te", "tiet kiem", "lam phat", "lai suat", "50 30 20", "503020", "quy khan cap", "dau tu", "tien te", "ngan sach", "gdp")) {
             return """
                     💰 **Kiến thức Tài chính Cá nhân & Kinh tế Học Thực tiễn:**
                     
@@ -246,32 +443,45 @@ public class BuiltInAssistantEngine {
                     """;
         }
 
-        // 14. Chào hỏi thân thiện
-        if (containsAny(norm, "chao", "hello", "hi", "xin chao", "hey", "ban la ai", "ten gi")) {
+        // 19. Chào hỏi thân thiện & Giới thiệu
+        if (containsAny(norm, "chao", "hello", "hi", "xin chao", "hey", "ban la ai", "ten gi", "tro ly", "ai toan nang", "giup gi")) {
             return """
                     👋 **Xin chào bạn!**
                     
-                    Mình là **Trợ lý Toàn Năng TOEIC AI**. Mình có thể hỗ trợ bạn mọi điều:
-                    1. 🎯 **Hướng dẫn mọi chức năng trên web:** Luyện đọc Part 5-7, tra từ điển, luyện nghe chép chính tả (Dictation), thẻ từ vựng SRS, game đua top, thi thử Full Test 120 phút, kích hoạt VIP VietQR, chế độ sáng/tối...
-                    2. 📚 **Giải đáp kiến thức TOEIC:** Giải thích câu hỏi ngữ pháp, từ vựng, mẹo tránh bẫy đề thi.
-                    3. 🌍 **Kiến thức tổng hợp ngoài đời sống:** Sức khỏe, thuốc men an toàn, phương pháp học tập trên trường, bóng đá & thể thao, tài chính cá nhân, kinh tế...
+                    Mình là **Trợ lý Toàn Năng TOEIC AI**. Mình luôn sẵn sàng hỗ trợ bạn 24/7 với kho kiến thức toàn diện:
+                    1. 🎯 **Hướng dẫn mọi tính năng trên web:** Luyện đọc Part 5-7, tra từ điển nhấp đúp, luyện nghe chép chính tả (Dictation), thẻ từ vựng SRS, game đua top, thi thử Full Test 120 phút, kích hoạt VIP VietQR, chế độ sáng/tối...
+                    2. 📚 **Chinh phục tiếng Anh & TOEIC:** Giải thích câu hỏi ngữ pháp, từ vựng, mẹo tránh bẫy đề thi và lộ trình tăng band điểm.
+                    3. 🌍 **Mọi lĩnh vực đời sống:** Ăn uống ngon miệng, sức khỏe, học tập, thi cử, kinh tế, chính trị, giáo dục, tâm lý, thể thao...
                     
                     Bạn đang quan tâm đến điều gì, hãy nhắn ngay cho mình nhé!
                     """;
         }
 
-        // 15. Default intelligent comprehensive answer
-        return """
-                Xin chào bạn! Mình đã nhận được câu hỏi:
-                > *"%s"*
-                
-                Dưới đây là câu trả lời và hướng dẫn chi tiết dành cho bạn:
-                
-                - **Về hệ thống học TOEIC AI:** Bạn có thể dễ dàng truy cập các mục trên thanh điều hướng để luyện tập: **Đọc (Reading Part 5-7)**, **Nghe (Listening & Chép chính tả)**, **Từ vựng (Flashcard & Game)**, **Ngữ pháp**, hoặc vào **Thi thử** để làm bài test 120 phút chuẩn ETS có phân tích WPM.
-                - **Về các câu hỏi kiến thức đời sống (Sức khỏe, học tập, bóng đá, tài chính, công việc):** Mình luôn sẵn sàng giải thích chi tiết, chính xác từng câu hỏi cụ thể của bạn.
-                
-                👉 Bạn có thể chia sẻ cụ thể hơn câu hỏi hoặc bài tập bạn đang quan tâm để mình giải đáp từng bước chính xác nhất nhé!
-                """.formatted(prompt.trim());
+        // 20. Smart Contextual Synthesis for Any Custom Question
+        return synthesizeCustomResponse(prompt.trim(), norm);
+    }
+
+    private static String synthesizeCustomResponse(String prompt, String norm) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("✨ **Giải đáp Chi tiết từ Trợ lý Toàn Năng AI:**\n\n");
+        sb.append("Chào bạn! Về câu hỏi / chia sẻ của bạn: *\"").append(prompt).append("\"*\n\n");
+
+        if (containsAny(norm, "tieng anh", "english", "dich", "nghia la gi", "nghia gi", "cau nay", "tu nay")) {
+            sb.append("🔍 **Phân tích Ngôn ngữ & Từ vựng:**\n");
+            sb.append("- Nếu bạn cần tra nghĩa hoặc dịch câu, hãy chú ý cấu trúc ngữ cảnh của câu để xác định từ loại (Danh từ, Động từ, Tính từ hay Trạng từ).\n");
+            sb.append("- Trên hệ thống TOEIC AI, bạn có thể **nhấp đúp chuột vào bất kỳ từ nào** trong bài đọc để xem nghĩa tiếng Việt, phiên âm IPA và phát âm audio chuẩn ngay lập tức!\n\n");
+        } else if (containsAny(norm, "thi", "de thi", "ets", "diem", "cau hoi", "dap an", "part")) {
+            sb.append("🎯 **Lời khuyên Luyện thi liên quan:**\n");
+            sb.append("- Hãy chú ý phân tích kỹ câu hỏi, tìm từ khóa then chốt (*keywords*) và loại trừ các đáp án bẫy gây nhiễu.\n");
+            sb.append("- Sau khi làm xong bài, đừng quên vào mục **Làm lại câu sai** để xem giải thích chi tiết từng câu và khắc phục lỗ hổng kiến thức nhé.\n\n");
+        } else {
+            sb.append("💡 **Gợi ý & Góc nhìn Thực tiễn:**\n");
+            sb.append("- Mình luôn sẵn sàng đồng hành cùng bạn để giải đáp chi tiết ở mọi góc độ: từ kiến thức học tập, thi cử, định hướng nghề nghiệp cho đến các chủ đề đời sống, ăn uống, sức khỏe hay kinh tế - xã hội.\n");
+            sb.append("- Nếu bạn cần làm rõ hoặc thảo luận sâu hơn về chủ đề này, bạn cứ tự nhiên chia sẻ thêm chi tiết (ví dụ: bối cảnh cụ thể, mục tiêu hoặc vướng mắc bạn đang gặp phải) để mình hỗ trợ bạn tường tận nhất nhé!\n\n");
+        }
+
+        sb.append("Chúc bạn luôn tràn đầy năng lượng và có những trải nghiệm học tập thật tuyệt vời! 🚀");
+        return sb.toString();
     }
 
     private static boolean containsAny(String text, String... keywords) {

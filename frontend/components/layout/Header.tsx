@@ -26,7 +26,12 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getCurrentUser, logout, type AuthUser } from '@/lib/api/auth';
-import { getStudentAnnouncements, getUnreadNotificationCount } from '@/lib/api/support';
+import {
+  getStudentAnnouncements,
+  getUnreadNotificationCount,
+  subscribeAnnouncementChanges,
+  subscribeSupportReportChanges,
+} from '@/lib/api/support';
 import { computeRealStreaks, getTodayDateString, type StudyTrackerData } from '@/lib/studyTracker';
 import {
   DOUBLE_CLICK_LOOKUP_EVENT,
@@ -168,6 +173,7 @@ export function Header() {
     } catch {
       // Ignore storage write errors
     }
+    window.dispatchEvent(new CustomEvent('toeic:dark-mode-changed', { detail: { isDark: next } }));
     showPrefNotice(next ? 'Đã bật Chế độ tối.' : 'Đã chuyển về Chế độ sáng.');
   };
 
@@ -219,18 +225,30 @@ export function Header() {
     };
 
     void refreshUnreadCount();
-    const interval = window.setInterval(() => void refreshUnreadCount(), 30_000);
-    window.addEventListener('focus', refreshUnreadCount);
-    window.addEventListener('announcement-read-updated', refreshUnreadCount);
-    window.addEventListener('announcement-updated', refreshUnreadCount);
-    window.addEventListener('notification-updated', refreshUnreadCount);
+    const unsubscribeAnn = subscribeAnnouncementChanges(() => void refreshUnreadCount());
+    const unsubscribeRep = subscribeSupportReportChanges(() => void refreshUnreadCount());
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshUnreadCount();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshUnreadCount();
+      }
+    }, 15_000);
+
     return () => {
       active = false;
       window.clearInterval(interval);
-      window.removeEventListener('focus', refreshUnreadCount);
-      window.removeEventListener('announcement-read-updated', refreshUnreadCount);
-      window.removeEventListener('announcement-updated', refreshUnreadCount);
-      window.removeEventListener('notification-updated', refreshUnreadCount);
+      unsubscribeAnn();
+      unsubscribeRep();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, [user, pathname]);
 

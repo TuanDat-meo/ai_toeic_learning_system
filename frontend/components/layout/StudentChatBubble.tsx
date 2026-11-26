@@ -76,6 +76,18 @@ export function StudentChatBubble() {
 
   useEffect(() => {
     try {
+      // Tự động làm sạch dữ liệu chat cũ và bản nháp bài đọc trên trình duyệt
+      const resetKey = 'toeic_clean_data_20261125';
+      if (!localStorage.getItem(resetKey)) {
+        localStorage.removeItem('toeic_ai_chat_history');
+        Object.keys(localStorage).forEach((key) => {
+          if (key.startsWith('toeic_reading_answers_') || key.startsWith('toeic_reading_notes_')) {
+            localStorage.removeItem(key);
+          }
+        });
+        localStorage.setItem(resetKey, '1');
+      }
+
       const today = new Date().toISOString().slice(0, 10);
       const used = Number(localStorage.getItem(`toeic_ai_chat_count_${today}`) || 0);
       setAiUsedToday(used);
@@ -112,8 +124,18 @@ export function StudentChatBubble() {
         setAiLimit(custom.detail.aiDailyChatLimitFree);
       }
     };
+    const handleClearAiChat = () => {
+      setAiMessages([]);
+      try {
+        localStorage.removeItem('toeic_ai_chat_history');
+      } catch {}
+    };
     window.addEventListener('toeic:system-settings-changed', handleSettingsChange);
-    return () => window.removeEventListener('toeic:system-settings-changed', handleSettingsChange);
+    window.addEventListener('toeic:clear-ai-chat', handleClearAiChat);
+    return () => {
+      window.removeEventListener('toeic:system-settings-changed', handleSettingsChange);
+      window.removeEventListener('toeic:clear-ai-chat', handleClearAiChat);
+    };
   }, []);
 
   useEffect(() => {
@@ -156,9 +178,9 @@ export function StudentChatBubble() {
         if (threadId) setMessages(await getSupportMessages(threadId));
         else setMessages([]);
       }
-      setError('');
+      if (tab !== 'ai') setError('');
     } catch {
-      setError('Không tải được tin nhắn. Kiểm tra kết nối rồi thử lại.');
+      if (tab !== 'ai') setError('Không tải được tin nhắn. Kiểm tra kết nối rồi thử lại.');
     }
   }, [tab, threadId, user]);
 
@@ -179,29 +201,32 @@ export function StudentChatBubble() {
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, aiMessages, tab]);
+  }, [messages, aiMessages, sending, tab]);
 
   const sendAiQuestion = async (content: string) => {
     if (!content.trim() || sending) return;
     setSending(true);
     setError('');
+    const today = new Date().toISOString().slice(0, 10);
+    const used = Number(localStorage.getItem(`toeic_ai_chat_count_${today}`) || 0);
+    if (aiLimit > 0 && used >= aiLimit) {
+      setError(`Bạn đã dùng hết ${aiLimit} lượt hỏi Trợ lý AI hôm nay. Vui lòng quay lại vào ngày mai!`);
+      setSending(false);
+      return;
+    }
+
+    const nextMessages: AiMessage[] = [
+      ...aiMessages,
+      { id: crypto.randomUUID(), role: 'user' as const, content: content.trim() }
+    ];
+    setAiMessages(nextMessages);
+    setDraft('');
+
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const used = Number(localStorage.getItem(`toeic_ai_chat_count_${today}`) || 0);
-      if (aiLimit > 0 && used >= aiLimit) {
-        setError(`Bạn đã dùng hết ${aiLimit} lượt hỏi Trợ lý AI hôm nay. Vui lòng quay lại vào ngày mai!`);
-        setSending(false);
-        return;
-      }
-
-      const nextMessages: AiMessage[] = [
-        ...aiMessages,
-        { id: crypto.randomUUID(), role: 'user' as const, content: content.trim() }
-      ];
-      setAiMessages(nextMessages);
-      setDraft('');
-
-      const history = nextMessages.slice(-12).map(({ role, content: text }) => ({ role, content: text }));
+      const history = nextMessages.slice(-12).map(({ role, content: text }) => ({
+        role,
+        content: role === 'model' && text.length > 2000 ? text.slice(0, 2000) + '...' : text
+      }));
       const response = await askAiChat(history);
       const updatedMessages: AiMessage[] = [
         ...nextMessages,
@@ -215,7 +240,14 @@ export function StudentChatBubble() {
       } catch {}
       setAiUsedToday(used + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không gửi được câu hỏi đến Trợ lý AI.');
+      const errorMsg = e instanceof Error ? e.message : 'Chưa nhận được phản hồi từ Trợ lý AI. Vui lòng thử lại!';
+      setError(errorMsg);
+      const errorResponse: AiMessage = {
+        id: crypto.randomUUID(),
+        role: 'model' as const,
+        content: `⚠️ ${errorMsg}\n\n*Hệ thống đã ghi nhận. Bạn có thể nhấn gửi lại để tiếp tục nhé!*`
+      };
+      setAiMessages([...nextMessages, errorResponse]);
     } finally {
       setSending(false);
     }
@@ -363,7 +395,7 @@ export function StudentChatBubble() {
           )}
 
           {tab === 'support' && (
-            <div className="border-b border-blue-100 bg-blue-50/70 px-3 py-2 text-[11px] text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+            <div className="border-b border-blue-100 bg-blue-50/70 px-3 py-2 text-[11px] text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-300">
               <div className="flex items-start gap-1.5">
                 <span className="font-bold">ℹ️</span>
                 <div className="flex-1">
@@ -407,24 +439,34 @@ export function StudentChatBubble() {
           <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-slate-50/50 p-3 dark:bg-slate-950">
             {tab === 'ai' ? (
               aiMessages.length > 0 ? (
-                aiMessages.map((message) => (
-                  <article key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs shadow-sm ${
-                        message.role === 'user'
-                          ? 'rounded-tr-sm bg-blue-600 text-white'
-                          : 'rounded-tl-sm border border-slate-200/80 bg-white text-slate-800 dark:border-slate-700/80 dark:bg-slate-850 dark:text-slate-100'
-                      }`}
-                    >
-                      <p className="mb-1 text-[10px] font-bold opacity-75">
-                        {message.role === 'user' ? 'Bạn' : '✨ Trợ lý TOEIC AI'}
-                      </p>
-                      <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px]">
-                        {message.content}
+                <>
+                  {aiMessages.map((message) => (
+                    <article key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs shadow-sm ${
+                          message.role === 'user'
+                            ? 'rounded-tr-sm bg-blue-600 text-white'
+                            : 'rounded-tl-sm border border-slate-200/80 bg-white text-slate-800 dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-100'
+                        }`}
+                      >
+                        <p className="mb-1 text-[10px] font-bold opacity-75">
+                          {message.role === 'user' ? 'Bạn' : '✨ Trợ lý TOEIC AI'}
+                        </p>
+                        <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px]">
+                          {message.content}
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  ))}
+                  {sending && (
+                    <article className="flex justify-start">
+                      <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-blue-200/80 bg-blue-50/90 px-3.5 py-2.5 text-xs font-medium text-blue-700 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/70 dark:text-blue-300">
+                        <Sparkles className="size-4 animate-spin text-blue-600 dark:text-blue-400" />
+                        <span>Trợ lý AI đang soạn câu trả lời…</span>
+                      </div>
+                    </article>
+                  )}
+                </>
               ) : (
                 <div className="flex h-full flex-col justify-between py-2">
                   <div className="py-4 text-center">
@@ -496,7 +538,7 @@ export function StudentChatBubble() {
                       </span>
                       <time className="shrink-0 text-[10px] text-slate-400">{formatTime(message.createdAt)}</time>
                     </div>
-                    <div className="w-fit max-w-full rounded-2xl rounded-tl-sm border border-slate-200/80 bg-white px-3.5 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-850">
+                    <div className="w-fit max-w-full rounded-2xl rounded-tl-sm border border-slate-200/80 bg-white px-3.5 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                       {message.replyToContent && (
                         <div className="mb-2 border-l-2 border-blue-400 pl-2 text-[10px] text-slate-500 dark:text-slate-400">
                           <b>{message.replyToSenderName}</b>: {message.replyToContent}
@@ -527,7 +569,7 @@ export function StudentChatBubble() {
               </p>
             )}
 
-            {sending && tab === 'ai' && (
+            {sending && tab === 'ai' && aiMessages.length === 0 && (
               <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-100 dark:border-blue-900">
                 <Sparkles className="size-4 animate-spin" />
                 <span>Trợ lý AI đang soạn câu trả lời…</span>

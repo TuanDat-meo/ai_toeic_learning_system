@@ -41,7 +41,17 @@ public class ChatController {
 
     @PostMapping("/api/chat/ai")
     public AiChatResponse askAi(@Valid @RequestBody AiChatRequest request, Authentication auth) {
-        var user = users.findManagedUser(auth.getName());
+        UUID userId = null;
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
+            try {
+                var user = users.findManagedUser(auth.getName());
+                if (user != null) {
+                    userId = user.id();
+                }
+            } catch (Exception ignored) {
+                // Anonymous or unresolvable user
+            }
+        }
         String lastPrompt = request.messages().stream()
                 .filter(turn -> "user".equals(turn.role()))
                 .reduce((first, second) -> second)
@@ -49,10 +59,14 @@ public class ChatController {
                 .orElse("(empty)");
         try {
             AiChatResponse response = gemini.reply(request.messages());
-            logAiInteraction(user.id(), lastPrompt, response.reply(), "SUCCESS");
+            if (userId != null) {
+                logAiInteraction(userId, lastPrompt, response.reply(), "SUCCESS");
+            }
             return response;
         } catch (RuntimeException exception) {
-            logAiInteraction(user.id(), lastPrompt, exception.getMessage(), "FAILED");
+            if (userId != null) {
+                logAiInteraction(userId, lastPrompt, exception.getMessage(), "FAILED");
+            }
             throw exception;
         }
     }

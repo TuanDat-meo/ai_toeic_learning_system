@@ -68,6 +68,9 @@ export default function ReadingLearningPage() {
     setCards(next);
     if (emitEvent) {
       window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
+      try {
+        localStorage.setItem("toeic_reading_last_updated", Date.now().toString());
+      } catch {}
     }
   };
 
@@ -752,7 +755,12 @@ export default function ReadingLearningPage() {
           for (const card of cardList) {
             const cardWithFlag: ExerciseCardData = { ...card, detailsLoaded: true };
             try {
-              savedCards.push(await createAdminReadingCard(cardWithFlag));
+              const isExisting = cards.some((c) => c.id === card.id);
+              if (isExisting) {
+                savedCards.push(await updateAdminReadingCard(card.id, cardWithFlag));
+              } else {
+                savedCards.push(await createAdminReadingCard(cardWithFlag));
+              }
             } catch (err) {
               if (savedCards.length > 0) {
                 updateCardsState((prev) => [
@@ -760,6 +768,9 @@ export default function ReadingLearningPage() {
                   ...prev.filter((existing) => !savedCards.some((saved) => saved.id === existing.id)),
                 ]);
                 window.dispatchEvent(new CustomEvent("toeic-reading-cards-updated"));
+                try {
+                  localStorage.setItem("toeic_reading_last_updated", Date.now().toString());
+                } catch {}
               }
               showToast(err instanceof Error ? `Không thể lưu nội dung đã import: ${err.message}` : "Không thể lưu nội dung đã import.");
               return;

@@ -20,6 +20,7 @@ const studentRoutes = [
   '/recommendation',
   '/result',
   '/notifications',
+  '/community',
 ];
 
 export function StudentPagesGuard({ children }: { children: ReactNode }) {
@@ -36,16 +37,36 @@ export function StudentPagesGuard({ children }: { children: ReactNode }) {
   // Chỉ kích hoạt chế độ tối bên trong không gian học viên (User).
   // Các trang Quản trị (Admin), Đăng nhập, Đăng ký, Trang chủ (Landing page) luôn ở chế độ sáng chuẩn.
   useEffect(() => {
-    if (requiresStudent) {
-      try {
-        const isDark = localStorage.getItem('toeic_pref_dark_mode') === 'true';
-        document.documentElement.classList.toggle('dark', isDark);
-      } catch {
-        // ignore
+    const applyDarkMode = () => {
+      if (requiresStudent) {
+        try {
+          const isDark = localStorage.getItem('toeic_pref_dark_mode') === 'true';
+          document.documentElement.classList.toggle('dark', isDark);
+        } catch {
+          // ignore
+        }
+      } else {
+        document.documentElement.classList.remove('dark');
       }
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    };
+
+    applyDarkMode();
+
+    const handleDarkChange = (event: Event) => {
+      const custom = event as CustomEvent<{ isDark?: boolean }>;
+      if (requiresStudent && typeof custom.detail?.isDark === 'boolean') {
+        document.documentElement.classList.toggle('dark', custom.detail.isDark);
+      } else {
+        applyDarkMode();
+      }
+    };
+
+    window.addEventListener('toeic:dark-mode-changed', handleDarkChange);
+    window.addEventListener('storage', applyDarkMode);
+    return () => {
+      window.removeEventListener('toeic:dark-mode-changed', handleDarkChange);
+      window.removeEventListener('storage', applyDarkMode);
+    };
   }, [pathname, requiresStudent]);
 
   useEffect(() => {

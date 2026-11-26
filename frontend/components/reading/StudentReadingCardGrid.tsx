@@ -176,7 +176,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
         {/* Lọc thể loại */}
         <div className="flex-1 min-w-0 max-w-full flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar">
           {/* Lọc Năm / Bộ đề ETS */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl overflow-x-auto no-scrollbar border border-transparent dark:border-slate-700/60">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-x-auto no-scrollbar border border-slate-200/60 dark:border-slate-700/60">
             {[
               { id: "all", label: "Tất cả năm" },
               { id: "2024", label: "ETS 2024" },
@@ -190,7 +190,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                   selectedSeries === s.id
                     ? "bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
                 }`}
               >
                 {s.label}
@@ -198,7 +198,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl shrink-0 border border-transparent dark:border-slate-700/60">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shrink-0 border border-slate-200/60 dark:border-slate-700/60">
             {[
               { id: "all", label: "Tất cả dạng bài" },
               { id: "part5", label: "Part 5 (Điền từ)" },
@@ -213,7 +213,7 @@ export const StudentReadingCardGrid: React.FC<StudentReadingCardGridProps> = ({
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                   selectedCategory === cat.id
                     ? "bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
                 }`}
               >
                 {cat.label}
