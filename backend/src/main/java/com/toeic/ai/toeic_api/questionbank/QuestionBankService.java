@@ -2,18 +2,23 @@ package com.toeic.ai.toeic_api.questionbank;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class QuestionBankService {
@@ -26,6 +31,151 @@ public class QuestionBankService {
 
     public QuestionBankService(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    @Transactional
+    public UploadedMedia uploadMedia(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vui lòng chọn file media.");
+        }
+        String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+        String extension = originalName.substring(Math.max(originalName.lastIndexOf('.'), 0) + 1)
+                .trim().toLowerCase(Locale.ROOT);
+        Map<String, String> supportedTypes = Map.of(
+                "jpg", "image/jpeg", "jpeg", "image/jpeg", "png", "image/png", "webp", "image/webp",
+                "mp3", "audio/mpeg", "wav", "audio/wav", "m4a", "audio/mp4");
+        String contentType = supportedTypes.get(extension);
+        if (contentType == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Chỉ hỗ trợ ảnh JPG, PNG, WEBP và audio MP3, WAV, M4A.");
+        }
+        long maxSize = contentType.startsWith("image/") ? 10L * 1024 * 1024 : 25L * 1024 * 1024;
+        if (file.getSize() > maxSize) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    contentType.startsWith("image/") ? "Ảnh không được vượt quá 10 MB." : "Audio không được vượt quá 25 MB.");
+        }
+        try {
+            UUID id = UUID.randomUUID();
+            String safeName = originalName.replaceAll("[\\r\\n\\\\/]", "_");
+            if (safeName.length() > 255) safeName = safeName.substring(safeName.length() - 255);
+            jdbc.update("""
+                    INSERT INTO media_assets (id, storage_key, original_name, content_type, size_bytes, content)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, id, "question-bank/" + id + "." + extension, safeName,
+                    contentType, file.getSize(), file.getBytes());
+            return new UploadedMedia("/api/media-assets/" + id, safeName, file.getSize(), contentType);
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không đọc được file media đã chọn.", exception);
+        }
+    }
+
+    public record UploadedMedia(String url, String fileName, long sizeBytes, String contentType) {}
+
+    @Transactional
+    public void syncFromImportItem(JsonNode data) {
+        List<QuestionBankOption> options = new java.util.ArrayList<>();
+        JsonNode importedOptions = data.path("options");
+        if (importedOptions.isArray()) {
+            importedOptions.forEach(option -> options.add(new QuestionBankOption(
+                    option.path("id").asText(), option.path("text").asText(),
+                    option.path("isCorrect").asBoolean(option.path("id").asText().equalsIgnoreCase(data.path("correctAnswer").asText())))));
+        }
+        String code = data.path("code").asText("");
+        if (!code.isBlank() && Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM toeic_question_bank WHERE external_code = ?)", Boolean.class, code))) {
+            return;
+        }
+        String importedDifficulty = data.path("difficulty").asText("650-750").toUpperCase(Locale.ROOT);
+        String difficulty = switch (importedDifficulty) {
+            case "EASY" -> "550-650";
+            case "MEDIUM" -> "650-750";
+            case "HARD" -> "750-850";
+            default -> importedDifficulty;
+        };
+        createQuestion(new QuestionBankQuestionRequest(
+                code.isBlank() ? null : code,
+                data.path("part").asText(),
+                data.path("questionText").asText(),
+                data.path("passage").asText(null),
+                data.path("imageUrl").asText(null),
+                data.path("audioUrl").asText(null),
+                options,
+                data.path("correctAnswer").asText(),
+                data.path("skill").asText(),
+                difficulty,
+                data.path("explanation").asText(null),
+                data.path("status").asText("DRAFT")));
+    }
+
+    @Transactional
+    public void syncFromListeningImportItem(JsonNode data) {
+        JsonNode questions = data.path("questions");
+        if (questions.isArray()) {
+            questions.forEach(question -> syncListeningQuestion(data, question));
+        } else if (data.has("question") || data.has("questionText")) {
+            syncListeningQuestion(data, data);
+        }
+    }
+
+    private void syncListeningQuestion(JsonNode parent, JsonNode source) {
+        String part = source.path("part").asText(parent.path("part").asText(""));
+        String questionText = firstText(source, "questionText", "question", "fullTranscript", "transcript");
+        if (questionText.isBlank()) questionText = firstText(parent, "questionText", "question", "fullTranscript", "transcript");
+        String answer = firstText(source, "correctAnswer", "answer").toUpperCase(Locale.ROOT);
+        List<QuestionBankOption> options = new java.util.ArrayList<>();
+        JsonNode optionsNode = source.path("options");
+        if (optionsNode.isObject()) {
+            optionsNode.fields().forEachRemaining(entry -> options.add(new QuestionBankOption(
+                    entry.getKey().toUpperCase(Locale.ROOT), entry.getValue().asText(), entry.getKey().equalsIgnoreCase(answer))));
+        } else if (optionsNode.isArray()) {
+            optionsNode.forEach(option -> options.add(new QuestionBankOption(
+                    option.path("id").asText(), option.path("text").asText(),
+                    option.path("isCorrect").asBoolean(option.path("id").asText().equalsIgnoreCase(answer)))));
+        }
+        if (questionText.isBlank() || answer.isBlank() || options.size() < 2) return;
+        String partValue = part.trim().toUpperCase(Locale.ROOT).replaceAll("[\\s-]+", "_");
+        if (partValue.matches("[1-4]")) partValue = "PART_" + partValue;
+        if (!partValue.matches("PART_[1-4]")) return;
+        String imageUrl = firstText(source, "imageUrl", "imageURL");
+        if (imageUrl.isBlank()) imageUrl = firstText(parent, "imageUrl", "imageURL");
+        String audioUrl = firstText(source, "audioUrl", "audioURL");
+        if (audioUrl.isBlank()) audioUrl = firstText(parent, "audioUrl", "audioURL");
+        String passage = firstText(source, "passage", "transcript", "fullTranscript");
+        if (passage.isBlank()) passage = firstText(parent, "passage", "transcript", "fullTranscript");
+        String parentCode = firstText(parent, "code", "id", "title");
+        String questionCode = firstText(source, "code", "questionNumber", "id");
+        String code = (parentCode.isBlank() ? "LISTENING" : parentCode) + "-"
+                + (questionCode.isBlank()
+                        ? partValue + "-" + Integer.toUnsignedString(questionText.hashCode(), 36)
+                        : questionCode);
+        code = code.replaceAll("[^A-Za-z0-9_-]", "-");
+        if (code.length() > 120) code = code.substring(code.length() - 120);
+        String difficulty = firstText(source, "difficulty");
+        if (!DIFFICULTIES.contains(difficulty.toUpperCase(Locale.ROOT))) difficulty = "650-750";
+        String explanation = firstText(source, "explanation", "trapNote");
+        var normalized = objectMapper.createObjectNode();
+        normalized.put("part", partValue);
+        normalized.put("questionText", questionText);
+        normalized.put("correctAnswer", answer);
+        normalized.set("options", objectMapper.valueToTree(options.stream()
+                .map(option -> Map.of("id", option.id(), "text", option.text(), "isCorrect", option.isCorrect())).toList()));
+        normalized.put("skill", "Listening (Nghe hiểu)");
+        normalized.put("difficulty", difficulty);
+        normalized.put("imageUrl", imageUrl);
+        normalized.put("audioUrl", audioUrl);
+        normalized.put("passage", passage);
+        normalized.put("code", code);
+        normalized.put("explanation", explanation);
+        normalized.put("status", "PUBLISHED");
+        syncFromImportItem(normalized);
+    }
+
+    private String firstText(JsonNode data, String... fields) {
+        for (String field : fields) {
+            String value = data.path(field).asText("").trim();
+            if (!value.isBlank()) return value;
+        }
+        return "";
     }
 
     public List<QuestionBankQuestion> listQuestions() {

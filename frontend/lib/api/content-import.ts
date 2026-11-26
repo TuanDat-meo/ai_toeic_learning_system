@@ -159,10 +159,10 @@ export function revalidateContentImportBatch(batchId: string) {
   );
 }
 
-export function publishContentImport(batchId: string) {
+export function publishContentImport(batchId: string, options?: { alsoSyncListeningQuestionsToBank?: boolean }) {
   return writeAuthRequest<ImportBatchSummary>(
     'POST',
-    `/api/admin/data/import/batches/${encodeURIComponent(batchId)}/publish`,
+    `/api/admin/data/import/batches/${encodeURIComponent(batchId)}/publish${options?.alsoSyncListeningQuestionsToBank ? '?alsoSyncListeningQuestionsToBank=true' : ''}`,
   );
 }
 

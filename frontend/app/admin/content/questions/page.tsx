@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { QuestionItem, QuestionPart, QuestionDifficulty, QUESTION_DIFFICULTY_BANDS } from "./types";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { QuestionItem, QuestionPart, QuestionDifficulty } from "./types";
 import { DEFAULT_SKILLS } from "./constants";
 import { QuestionFilterBar } from "@/components/admin/content/questions/QuestionFilterBar";
 import { QuestionTableView } from "@/components/admin/content/questions/QuestionTableView";
@@ -9,6 +9,9 @@ import { QuestionCardGridView } from "@/components/admin/content/questions/Quest
 import { QuestionPreviewModal } from "@/components/admin/content/questions/QuestionPreviewModal";
 import { QuestionEditModal } from "@/components/admin/content/questions/QuestionEditModal";
 import { QuestionDeleteModal } from "@/components/admin/content/questions/QuestionDeleteModal";
+import { ListeningBulkImportModal } from "@/components/admin/content/listening/ListeningBulkImportModal";
+import { ReadingBulkImportModal } from "@/components/admin/content/reading/ReadingBulkImportModal";
+import type { ExerciseCardData } from "@/app/admin/content/reading/types";
 import { exportToExcel } from "@/lib/exportExcel";
 import { playUnifiedAnswerSound } from "@/lib/sound";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -20,36 +23,6 @@ import {
   updateQuestionBankQuestion,
   type QuestionBankWrite,
 } from "@/lib/api/questionBank";
-
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (character === '"' && text[index + 1] === '"' && quoted) {
-      value += '"';
-      index += 1;
-    } else if (character === '"') {
-      quoted = !quoted;
-    } else if (character === "," && !quoted) {
-      row.push(value.trim());
-      value = "";
-    } else if ((character === "\n" || character === "\r") && !quoted) {
-      if (character === "\r" && text[index + 1] === "\n") index += 1;
-      row.push(value.trim());
-      if (row.some((cell) => cell !== "")) rows.push(row);
-      row = [];
-      value = "";
-    } else {
-      value += character;
-    }
-  }
-  row.push(value.trim());
-  if (row.some((cell) => cell !== "")) rows.push(row);
-  return rows;
-}
 
 const QUESTIONS_PER_PAGE = 10;
 
@@ -126,7 +99,8 @@ export default function QuestionsPage() {
     }
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [listeningImportOpen, setListeningImportOpen] = useState(false);
+  const [readingImportOpen, setReadingImportOpen] = useState(false);
 
   // Filters & Views
   const [selectedPart, setSelectedPart] = useState<QuestionPart | "ALL">("ALL");
@@ -328,6 +302,9 @@ export default function QuestionsPage() {
         correctAnswer: q.correctAnswer,
         explanation: q.explanation || "",
         status: q.status || "PUBLISHED",
+        passage: q.passage || "",
+        imageUrl: q.imageUrl || "",
+        audioUrl: q.audioUrl || "",
       };
     });
 
@@ -346,6 +323,7 @@ export default function QuestionsPage() {
         { header: "Kỹ năng", key: "skill", width: 90, align: "center" },
         { header: "Độ khó", key: "difficulty", width: 80, align: "center" },
         { header: "Nội dung câu hỏi", key: "questionText", width: 280, align: "left" },
+        { header: "Đoạn văn", key: "passage", width: 280, align: "left" },
         { header: "Lựa chọn A", key: "optA", width: 160, align: "left" },
         { header: "Lựa chọn B", key: "optB", width: 160, align: "left" },
         { header: "Lựa chọn C", key: "optC", width: 160, align: "left" },
@@ -353,99 +331,55 @@ export default function QuestionsPage() {
         { header: "Đáp án đúng", key: "correctAnswer", width: 90, align: "center" },
         { header: "Lời giải & Phân tích bẫy", key: "explanation", width: 280, align: "left" },
         { header: "Trạng thái", key: "status", width: 100, align: "center" },
+        { header: "ImageURL", key: "imageUrl", width: 180, align: "left" },
+        { header: "AudioURL", key: "audioUrl", width: 180, align: "left" },
       ],
       data: dataToExport,
     });
     showToast("Đã xuất ngân hàng câu hỏi ra file Excel (.xls) có cấu trúc cột rõ ràng! 📊");
   };
 
-  const handleImportCsvClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleCsvFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    let addedCount = 0;
+  const saveReadingImportToQuestionBank = async (imported: ExerciseCardData | ExerciseCardData[]) => {
+    const cards = Array.isArray(imported) ? imported : [imported];
+    let savedCount = 0;
     try {
-      const rows = parseCsv(await file.text());
-      if (rows.length < 2) throw new Error("File CSV không có dòng dữ liệu.");
-      const headers = rows[0].map((header) => header.replace(/^\uFEFF/, "").trim().toLowerCase());
-      const column = (...names: string[]) => headers.findIndex((header) => names.includes(header));
-      const requiredColumns = {
-        part: column("part", "phần thi"),
-        skill: column("skill", "kỹ năng"),
-        difficulty: column("difficulty", "độ khó"),
-        questionText: column("questiontext", "question text", "nội dung câu hỏi"),
-        optA: column("opta", "option a", "lựa chọn a"),
-        optB: column("optb", "option b", "lựa chọn b"),
-        correctAnswer: column("correctanswer", "correct answer", "đáp án đúng"),
-      };
-      if (Object.values(requiredColumns).some((index) => index < 0)) {
-        throw new Error("CSV cần các cột Part, Skill, Difficulty, QuestionText, OptA, OptB và CorrectAnswer.");
-      }
-
-      const optionalColumn = (name: string, alternate: string) => column(name, alternate);
-      const codeColumn = optionalColumn("code", "mã câu");
-      const optCColumn = column("optc", "option c", "lựa chọn c");
-      const optDColumn = column("optd", "option d", "lựa chọn d");
-      const explanationColumn = column("explanation", "giải thích");
-      const statusColumn = column("status", "trạng thái");
-      const passageColumn = column("passage", "đoạn văn");
-      const imageColumn = column("imageurl", "image url");
-      const audioColumn = column("audiourl", "audio url");
-      const imported: QuestionBankWrite[] = rows.slice(1).map((cells, index) => {
-        const get = (columnIndex: number) => columnIndex < 0 ? "" : (cells[columnIndex] ?? "").trim();
-        const part = get(requiredColumns.part) as QuestionPart;
-        const difficulty = get(requiredColumns.difficulty) as QuestionDifficulty;
-        const status = (get(statusColumn) || "DRAFT").toUpperCase();
-        const correctAnswer = get(requiredColumns.correctAnswer).toUpperCase();
-        if (!(/^Part [1-7]$/.test(part) || part === "Grammar" || part === "Vocabulary") || !QUESTION_DIFFICULTY_BANDS.includes(difficulty)
-          || !["DRAFT", "PUBLISHED"].includes(status)) {
-          throw new Error(`Dòng ${index + 2}: phần thi, độ khó hoặc trạng thái không hợp lệ.`);
+      for (const card of cards) {
+        const part: QuestionPart = card.category === "part6" ? "Part 6" : card.category === "part7" ? "Part 7" : card.category === "grammar" ? "Grammar" : "Part 5";
+        const status = card.status === "published" ? "PUBLISHED" : "DRAFT";
+        const sharedPassage = [card.passageText, ...(card.passages || []).map((passage) => passage.text)]
+          .filter((text): text is string => Boolean(text?.trim())).join("\n\n");
+        for (const [index, question] of card.sampleQuestions.entries()) {
+          const options = question.options
+            .map((text, optionIndex) => ({ id: String.fromCharCode(65 + optionIndex), text: text.trim(), isCorrect: optionIndex === question.correctIndex }))
+            .filter((option) => option.text);
+          if (!question.question.trim() || options.length < 2 || !options.some((option) => option.isCorrect)) continue;
+          const passage = question.passageText || question.passages?.map((item) => item.text).filter(Boolean).join("\n\n") || sharedPassage;
+          await createQuestionBankQuestion({
+            code: `${card.id}-${question.questionNum || index + 1}`.replace(/[^a-zA-Z0-9_-]/g, "-").slice(-120),
+            part,
+            questionText: question.question,
+            passage: passage || undefined,
+            options,
+            correctAnswer: options.find((option) => option.isCorrect)!.id,
+            skill: part === "Grammar" || part === "Part 5" ? "Grammar (Ngữ pháp)" : "Reading (Đọc hiểu)",
+            difficulty: "650-750",
+            explanation: question.explanation || "",
+            status,
+          });
+          savedCount += 1;
         }
-        const options = [
-          { id: "A", text: get(requiredColumns.optA), isCorrect: correctAnswer === "A" },
-          { id: "B", text: get(requiredColumns.optB), isCorrect: correctAnswer === "B" },
-          { id: "C", text: get(optCColumn), isCorrect: correctAnswer === "C" },
-          { id: "D", text: get(optDColumn), isCorrect: correctAnswer === "D" },
-        ].filter((option) => option.text !== "");
-        if (!get(requiredColumns.questionText) || !options.some((option) => option.id === correctAnswer)) {
-          throw new Error(`Dòng ${index + 2}: câu hỏi, đáp án đúng và nội dung phương án phải hợp lệ.`);
-        }
-        return {
-          code: get(codeColumn) || undefined,
-          part,
-          skill: get(requiredColumns.skill),
-          difficulty,
-          questionText: get(requiredColumns.questionText),
-          passage: get(passageColumn) || undefined,
-          imageUrl: get(imageColumn) || undefined,
-          audioUrl: get(audioColumn) || undefined,
-          options,
-          correctAnswer,
-          explanation: get(explanationColumn),
-          status: status as "PUBLISHED" | "DRAFT",
-        };
-      });
-
-      for (const question of imported) {
-        await createQuestionBankQuestion(question);
-        addedCount += 1;
       }
       await loadQuestions();
-      showToast(`Đã nhập ${addedCount} câu hỏi vào ngân hàng.`);
+      setReadingImportOpen(false);
+      showToast(`Đã nhập ${savedCount} câu Reading vào ngân hàng câu hỏi.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Lỗi khi đọc hoặc lưu tệp CSV.";
-      if (addedCount > 0) {
-        await loadQuestions();
-        showToast(`Đã lưu ${addedCount} câu hỏi trước khi gặp lỗi: ${message}`);
-      } else {
-        showToast(message);
-      }
+      await loadQuestions();
+      showToast(error instanceof Error ? `Đã lưu ${savedCount} câu; import gặp lỗi: ${error.message}` : `Đã lưu ${savedCount} câu trước khi import gặp lỗi.`);
     }
   };
+
+  const handleImportListeningClick = () => setListeningImportOpen(true);
+  const handleImportReadingClick = () => setReadingImportOpen(true);
 
   return (
     <div className="space-y-6">
@@ -455,15 +389,6 @@ export default function QuestionsPage() {
           {toastMessage}
         </div>
       )}
-
-      {/* Hidden file input for CSV Import */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleCsvFileChange}
-        accept=".csv"
-        className="hidden"
-      />
 
       {/* Header & Filter Bar */}
       <QuestionFilterBar
@@ -484,7 +409,8 @@ export default function QuestionsPage() {
         onBulkDelete={() => setBulkDeleteConfirm(true)}
         onOpenCreateModal={openAddModal}
         onExportCsv={handleExportCsv}
-        onImportCsvClick={handleImportCsvClick}
+        onImportListeningClick={handleImportListeningClick}
+        onImportReadingClick={handleImportReadingClick}
         playSfx={playSfx}
         showToast={showToast}
       />
@@ -593,6 +519,19 @@ export default function QuestionsPage() {
         onConfirmSingle={confirmDeleteSingle}
         onCloseBulk={() => setBulkDeleteConfirm(false)}
         onConfirmBulk={handleBulkDeleteConfirm}
+      />
+      <ListeningBulkImportModal
+        isOpen={listeningImportOpen}
+        onClose={() => setListeningImportOpen(false)}
+        onImported={() => void loadQuestions()}
+        triggerToast={showToast}
+        alsoSyncQuestionsToQuestionBank
+      />
+      <ReadingBulkImportModal
+        isOpen={readingImportOpen}
+        onClose={() => setReadingImportOpen(false)}
+        existingCards={[]}
+        onImportSuccess={(imported) => { void saveReadingImportToQuestionBank(imported); }}
       />
     </div>
   );

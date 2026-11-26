@@ -50,7 +50,7 @@ public class ContentPayloadValidator {
             "vocabList", "vocabulary", "keywords");
     private static final Set<String> QUESTION_FIELDS = Set.of(
             "part", "questionText", "passage", "options", "correctAnswer", "explanation",
-            "skill", "difficulty", "imageUrl", "audioUrl", "code");
+            "skill", "difficulty", "imageUrl", "audioUrl", "code", "status");
     private static final Set<String> MOCK_TEST_FIELDS = Set.of(
             "title", "description", "durationMinutes", "questionCodes", "level");
 
@@ -575,17 +575,45 @@ public class ContentPayloadValidator {
         copyText(raw, out, "questionText", errors, true);
         copyText(raw, out, "passage", errors, false);
         copyText(raw, out, "correctAnswer", errors, true);
-        copyText(raw, out, "explanation", errors, true);
+        copyText(raw, out, "explanation", errors, false);
         copyText(raw, out, "skill", errors, true);
         copyText(raw, out, "difficulty", errors, true);
         copyText(raw, out, "imageUrl", errors, false);
         copyText(raw, out, "audioUrl", errors, false);
         copyText(raw, out, "code", errors, false);
-        normalizePart(out, "part", errors);
-        normalizeDifficulty(out, "difficulty", errors);
+        copyText(raw, out, "status", errors, false);
+        normalizeQuestionPart(out, errors);
+        normalizeQuestionDifficulty(out, errors);
+        String status = out.path("status").asText("DRAFT").toUpperCase(Locale.ROOT);
+        if (!Set.of("DRAFT", "PUBLISHED").contains(status)) {
+            errors.add("Trường \"status\" chỉ nhận DRAFT hoặc PUBLISHED.");
+        } else {
+            out.put("status", status);
+        }
         validateUrl(out, "imageUrl", errors);
         validateUrl(out, "audioUrl", errors);
         normalizeOptions(raw, out, errors);
+    }
+
+    private void normalizeQuestionPart(ObjectNode out, List<String> errors) {
+        if (!out.has("part")) return;
+        String part = out.path("part").asText().trim().toUpperCase(Locale.ROOT).replaceAll("[\\s-]+", "_");
+        if (part.matches("[1-7]")) part = "PART_" + part;
+        if (Set.of("GRAMMAR", "VOCABULARY").contains(part) || part.matches("PART_[1-7]")) {
+            out.put("part", part);
+        } else {
+            errors.add("Trường \"part\" phải là Part 1 đến Part 7, Grammar hoặc Vocabulary.");
+        }
+    }
+
+    private void normalizeQuestionDifficulty(ObjectNode out, List<String> errors) {
+        if (!out.has("difficulty")) return;
+        String value = out.path("difficulty").asText().trim().toUpperCase(Locale.ROOT);
+        if (Set.of("450-550", "550-650", "650-750", "750-850", "850-900+", "EASY", "MEDIUM", "HARD").contains(value)) {
+            out.put("difficulty", value);
+        } else {
+            errors.add("Độ khó phải là một trong các band 450-550, 550-650, 650-750, 750-850, 850-900+.");
+        }
     }
 
     private void normalizeMockTest(JsonNode raw, ObjectNode out, List<String> errors) {
