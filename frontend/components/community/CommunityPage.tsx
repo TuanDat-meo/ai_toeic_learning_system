@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, BookOpenText, LoaderCircle, MessageCircle, MessagesSquare, Plus, Send, Trash2 } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/api/auth';
+import { CommunityAuthModal } from '@/components/community/CommunityAuthModal';
 import {
   createCommunityComment, createCommunityPost, deleteCommunityPost, getCommunityComments, getCommunityPosts,
   type CommunityComment, type CommunityPost,
@@ -17,6 +18,8 @@ function getQuestionName(snapshot: Record<string, unknown> | null) {
   if (!snapshot) return '';
   return String(snapshot.questionText ?? snapshot.question ?? snapshot.text ?? snapshot.transcript ?? '').trim();
 }
+
+type CommunityAuthAction = { type: 'CREATE_POST' } | { type: 'COMMENT'; postId: string };
 
 function QuestionSnapshot({ snapshot, showQuestionText = true }: { snapshot: Record<string, unknown>; showQuestionText?: boolean }) {
   const question = String(snapshot.questionText ?? snapshot.question ?? snapshot.text ?? '');
@@ -124,10 +127,12 @@ export function CommunityPage() {
   const [commentText, setCommentText] = useState('');
   const [error, setError] = useState('');
   const [feedFilter, setFeedFilter] = useState<'ALL' | 'QUESTION' | 'DISCUSSION'>('ALL');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingAuthAction, setPendingAuthAction] = useState<CommunityAuthAction | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCurrentUser(), getCommunityPosts()]).then(([currentUser, data]) => {
+    Promise.all([getCurrentUser().catch(() => null), getCommunityPosts()]).then(([currentUser, data]) => {
       if (!active) return;
       setUser(currentUser);
       setPosts(data);
@@ -135,6 +140,31 @@ export function CommunityPage() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  function requestLogin(action: CommunityAuthAction) {
+    setPendingAuthAction(action);
+    setAuthModalOpen(true);
+  }
+
+  function startCreatingPost() {
+    if (!user) { requestLogin({ type: 'CREATE_POST' }); return; }
+    setCreating(true);
+  }
+
+  async function handleAuthenticated() {
+    const currentUser = await getCurrentUser().catch(() => null);
+    if (currentUser) setUser(currentUser);
+    setAuthModalOpen(false);
+    const action = pendingAuthAction;
+    setPendingAuthAction(null);
+    if (action?.type === 'CREATE_POST') setCreating(true);
+    if (action?.type === 'COMMENT') {
+      setOpenCommentsPostId(action.postId);
+      setCommentText('');
+      try { setComments(await getCommunityComments(action.postId)); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'Kh?ng th? t?i b?nh lu?n.'); }
+    }
+  }
 
   useEffect(() => {
     if (!selectedId) return;
@@ -146,6 +176,7 @@ export function CommunityPage() {
 
   async function submitPost(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!user) { requestLogin({ type: 'CREATE_POST' }); return; }
     setSubmitting(true); setError('');
     try {
       const post = await createCommunityPost({ title: title.trim(), content: content.trim(), postType: 'DISCUSSION' });
@@ -171,6 +202,7 @@ export function CommunityPage() {
 
   async function submitComment(event: React.FormEvent<HTMLFormElement>, postId: string) {
     event.preventDefault();
+    if (!user) { requestLogin({ type: 'COMMENT', postId }); return; }
     if (!postId || !commentText.trim()) return;
     setSubmitting(true); setError('');
     try {
@@ -200,7 +232,11 @@ export function CommunityPage() {
       <div className="mx-auto max-w-[660px]">
         {!selected && (
           <section className="mb-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/95 p-4 shadow-sm">
-            <button type="button" onClick={() => setCreating((value) => !value)} className="flex w-full items-center gap-3 text-left">
+            <button
+              type="button"
+              onClick={() => user && creating ? setCreating(false) : startCreatingPost()}
+              className="flex w-full items-center gap-3 text-left"
+            >
               <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-base font-semibold text-white shadow-xs">
                 {user?.fullName?.slice(0, 1) || 'N'}
               </span>
@@ -330,7 +366,7 @@ export function CommunityPage() {
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Hãy mở đầu cuộc thảo luận đầu tiên của cộng đồng.</p>
                 <button
                   type="button"
-                  onClick={() => setCreating(true)}
+                  onClick={startCreatingPost}
                   className="mt-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white shadow-xs transition"
                 >
                   Tạo bài viết
@@ -422,27 +458,37 @@ export function CommunityPage() {
                             <p className="pl-10 text-sm text-slate-500 dark:text-slate-400">Chưa có bình luận. Hãy bắt đầu trò chuyện nhé.</p>
                           )}
                         </div>
-                        <form
-                          onSubmit={(event) => void submitComment(event, post.id)}
-                          className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 px-4 py-2"
-                        >
-                          <input
-                            required
-                            maxLength={3000}
-                            value={commentText}
-                            onChange={(event) => setCommentText(event.target.value)}
-                            placeholder="Viết bình luận..."
-                            className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
-                          />
-                          <button
-                            type="submit"
-                            disabled={submitting || !commentText.trim()}
-                            aria-label="Gửi bình luận"
-                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer"
+                        {user ? (
+                          <form
+                            onSubmit={(event) => void submitComment(event, post.id)}
+                            className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 px-4 py-2"
                           >
-                            <Send className="size-4" />
+                            <input
+                              required
+                              maxLength={3000}
+                              value={commentText}
+                              onChange={(event) => setCommentText(event.target.value)}
+                              placeholder="Viết bình luận..."
+                              className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
+                            />
+                            <button
+                              type="submit"
+                              disabled={submitting || !commentText.trim()}
+                              aria-label="Gửi bình luận"
+                              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer"
+                            >
+                              <Send className="size-4" />
+                            </button>
+                          </form>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => requestLogin({ type: 'COMMENT', postId: post.id })}
+                            className="mt-4 w-full rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50 dark:bg-indigo-950/40 px-4 py-3 text-left text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition"
+                          >
+                            Đăng nhập để bình luận
                           </button>
-                        </form>
+                        )}
                       </div>
                     )}
                   </article>
@@ -452,6 +498,12 @@ export function CommunityPage() {
           </>
         )}
       </div>
+      <CommunityAuthModal
+        isOpen={authModalOpen}
+        onClose={() => { setAuthModalOpen(false); setPendingAuthAction(null); }}
+        onAuthenticated={() => void handleAuthenticated()}
+      />
     </div>
   );
+}
 }

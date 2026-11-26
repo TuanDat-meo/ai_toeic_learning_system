@@ -200,9 +200,10 @@ public class ContentImportController {
 
     @PostMapping("/batches/{batchId}/publish")
     ContentImportService.BatchSummary publish(@PathVariable UUID batchId, Authentication authentication,
+            @RequestParam(defaultValue = "false") boolean alsoSyncListeningQuestionsToBank,
             HttpServletRequest servletRequest) {
         ManagedUser actor = userAccountService.findManagedUser(authentication.getName());
-        ContentImportService.BatchSummary result = importService.publish(batchId, actor.id());
+        ContentImportService.BatchSummary result = importService.publish(batchId, actor.id(), alsoSyncListeningQuestionsToBank);
         auditLogService.record(actor.id(), "PUBLISH_IMPORT", "IMPORT_BATCH", batchId,
                 "Publish lô import " + result.fileName() + ": " + result.publishedCount() + " dòng.",
                 servletRequest.getRemoteAddr());

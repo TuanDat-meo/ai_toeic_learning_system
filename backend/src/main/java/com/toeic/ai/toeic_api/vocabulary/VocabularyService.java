@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,30 +58,34 @@ public class VocabularyService {
 
     public List<VocabularyTestSet> listSetSummaries(String category) {
         StringBuilder query = new StringBuilder(
-                "SELECT id, title, year, category, word_count, status, release_at "
-                        + "FROM vocabulary_test_sets "
-                        + "WHERE status = 'PUBLISHED' AND (release_at IS NULL OR release_at <= now())");
+                "SELECT s.id, s.title, s.year, s.category, "
+                        + "COALESCE((SELECT COUNT(*) FROM vocabulary_items w WHERE w.set_id = s.id), s.word_count, 0) AS word_count, "
+                        + "s.status, s.release_at "
+                        + "FROM vocabulary_test_sets s "
+                        + "WHERE s.status = 'PUBLISHED' AND (s.release_at IS NULL OR s.release_at <= now())");
         List<Object> args = new ArrayList<>();
         if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
-            query.append(" AND category = ?");
+            query.append(" AND s.category = ?");
             args.add(category);
         }
-        query.append(" ORDER BY id ASC");
+        query.append(" ORDER BY s.id ASC");
         return jdbc.query(query.toString(), (rs, rowNum) -> mapSetSummary(rs), args.toArray());
     }
 
     public List<VocabularyTestSet> listSets(String category, UUID userId, boolean includeUnpublished) {
         StringBuilder setSql = new StringBuilder(
-                "SELECT id, title, year, category, word_count, status, release_at FROM vocabulary_test_sets WHERE 1=1");
+                "SELECT s.id, s.title, s.year, s.category, "
+                        + "COALESCE((SELECT COUNT(*) FROM vocabulary_items w WHERE w.set_id = s.id), s.word_count, 0) AS word_count, "
+                        + "s.status, s.release_at FROM vocabulary_test_sets s WHERE 1=1");
         List<Object> setArgs = new ArrayList<>();
         if (category != null && !category.isBlank() && !"all".equalsIgnoreCase(category)) {
-            setSql.append(" AND category = ?");
+            setSql.append(" AND s.category = ?");
             setArgs.add(category);
         }
         if (!includeUnpublished) {
-            setSql.append(" AND status = 'PUBLISHED' AND (release_at IS NULL OR release_at <= now())");
+            setSql.append(" AND s.status = 'PUBLISHED' AND (s.release_at IS NULL OR s.release_at <= now())");
         }
-        setSql.append(" ORDER BY id ASC");
+        setSql.append(" ORDER BY s.id ASC");
         List<VocabularyTestSet> sets = jdbc.query(setSql.toString(), (rs, rowNum) -> mapSetSummary(rs), setArgs.toArray());
 
         // Fetch words for all sets with user progress
@@ -276,9 +282,15 @@ public class VocabularyService {
                     user_id, goal_date, new_words_goal, review_goal,
                     completed_new_words, completed_review, created_at, updated_at
                 )
-                VALUES (?, (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 10, 20, 0, 0, now(), now())
+                VALUES (
+                    ?,
+                    (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date,
+                    COALESCE((SELECT recommended_new_words_per_day FROM study_plans WHERE user_id = ? AND is_active = TRUE LIMIT 1), 10),
+                    COALESCE((SELECT recommended_review_per_day FROM study_plans WHERE user_id = ? AND is_active = TRUE LIMIT 1), 20),
+                    0, 0, now(), now()
+                )
                 ON CONFLICT (user_id, goal_date) DO NOTHING
-                """, userId);
+                """, userId, userId, userId);
 
         String sql = """
                 SELECT new_words_goal, review_goal, completed_new_words, completed_review
@@ -338,7 +350,7 @@ public class VocabularyService {
         if (userId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
         }
-        int limit = Math.max(1, Math.min(requestedLimit, 100));
+        int limit = Math.max(1, Math.min(requestedLimit, 500));
         String sql = """
                 SELECT w.id, w.set_id, w.word, w.ipa, w.part_of_speech, w.meaning,
                        w.meaning_source, w.meaning_edited,
@@ -421,9 +433,14 @@ public class VocabularyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Classic không sử dụng giới hạn thời gian.");
         }
-        if (request.questionCount() != null && !Set.of(10, 20).contains(request.questionCount())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Số câu hỏi phải là 10, 20 hoặc toàn bộ câu khả dụng.");
+        if (request.questionCount() != null) {
+            if (request.questionCount() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số câu hỏi không hợp lệ.");
+            }
+            if (!"MATCHING".equals(gameType) && !Set.of(10, 20, 30).contains(request.questionCount())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Số câu hỏi phải là 10, 20, 30 hoặc toàn bộ câu khả dụng.");
+            }
         }
         Integer publishedSetCount = jdbc.queryForObject("""
                 SELECT count(*) FROM vocabulary_test_sets
@@ -463,12 +480,13 @@ public class VocabularyService {
         }
 
         UUID sessionId = UUID.randomUUID();
+        int initialTotalQuestions = request.questionCount() != null ? request.questionCount() : 0;
         jdbc.update("""
                 INSERT INTO vocabulary_game_sessions (
-                    id, user_id, set_id, game_type, play_mode, time_limit_seconds, difficulty
+                    id, user_id, set_id, game_type, play_mode, time_limit_seconds, difficulty, total_questions
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, sessionId, userId, request.setId().trim(), gameType, playMode, timeLimitSeconds, difficulty);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, sessionId, userId, request.setId().trim(), gameType, playMode, timeLimitSeconds, difficulty, initialTotalQuestions);
         jdbc.update("""
                 UPDATE vocabulary_game_sessions
                 SET deck_ids = string_to_array(?, ',')
@@ -606,14 +624,15 @@ public class VocabularyService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
         }
         List<VocabularyGameSessionState> sessions = jdbc.query("""
-                SELECT id, game_type, completed_at
+                SELECT id, game_type, completed_at, total_questions
                 FROM vocabulary_game_sessions
                 WHERE id = ? AND user_id = ?
                 FOR UPDATE
                 """, (rs, rowNum) -> new VocabularyGameSessionState(
                 rs.getObject("id", UUID.class),
                 rs.getString("game_type"),
-                rs.getTimestamp("completed_at")), sessionId, userId);
+                rs.getTimestamp("completed_at"),
+                rs.getInt("total_questions")), sessionId, userId);
         if (sessions.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lượt chơi.");
         }
@@ -711,6 +730,8 @@ public class VocabularyService {
             Boolean won = null;
             Integer playerHpRemaining = null;
             Integer fleetHpRemaining = null;
+            String tier = null;
+            Integer avoidableMistakes = null;
 
             if ("BATTLE".equals(session.gameType())) {
                 fleetHpRemaining = Math.max(0, 12 - totalDamage);
@@ -729,7 +750,83 @@ public class VocabularyService {
                 } else {
                     stars = 0;
                 }
+            } else if ("MATCHING".equals(session.gameType())) {
+                List<GameScoringCalculator.MemoryMatchAttempt> attempts = jdbc.query("""
+                        SELECT word_id, second_word_id, is_correct, game_question_index
+                        FROM vocabulary_learning_events
+                        WHERE game_session_id = ?
+                        ORDER BY game_question_index ASC, attempted_at ASC
+                        """, (rs, rowNum) -> new GameScoringCalculator.MemoryMatchAttempt(
+                        rs.getString("word_id"),
+                        rs.getString("second_word_id"),
+                        rs.getBoolean("is_correct"),
+                        rs.getInt("game_question_index")), sessionId);
+
+                Set<String> wordIds = new HashSet<>();
+                for (var a : attempts) {
+                    if (a.firstWordId() != null) wordIds.add(a.firstWordId());
+                    if (a.secondWordId() != null) wordIds.add(a.secondWordId());
+                }
+
+                Map<String, GameScoringCalculator.WordInfo> wordInfoMap = new HashMap<>();
+                if (!wordIds.isEmpty()) {
+                    String placeholders = String.join(",", Collections.nCopies(wordIds.size(), "?"));
+                    List<GameScoringCalculator.WordInfo> infos = jdbc.query(
+                            "SELECT id, word, meaning FROM vocabulary_items WHERE id IN (" + placeholders + ")",
+                            (rs, rowNum) -> new GameScoringCalculator.WordInfo(
+                                    rs.getString("id"),
+                                    rs.getString("word"),
+                                    rs.getString("meaning")),
+                            wordIds.toArray());
+                    for (var info : infos) {
+                        wordInfoMap.put(info.id(), info);
+                    }
+                }
+
+                int totalExpectedN = session.totalQuestions() > 0 ? session.totalQuestions() : summary.correctCount();
+                GameScoringCalculator.MemoryMatchResult mmResult = GameScoringCalculator.calculateMemoryMatchResult(
+                        totalExpectedN,
+                        summary.durationSeconds(),
+                        maxCombo,
+                        attempts,
+                        wordInfoMap
+                );
+
+                score = mmResult.score();
+                stars = mmResult.stars();
+                tier = mmResult.tier();
+                avoidableMistakes = mmResult.avoidableMistakes();
+                won = "S".equals(tier) || "A".equals(tier) || "B".equals(tier);
+
+                // SRS update in the same transaction
+                Set<String> penalizedWordIds = new HashSet<>();
+                for (GameScoringCalculator.WrongWordDetail wd : mmResult.wrongWords()) {
+                    if (!wd.matched() || wd.avoidableCount() >= 2) {
+                        if (penalizedWordIds.add(wd.vocabularyId())) {
+                            updateWordSrs(userId, wd.vocabularyId(), false, "AGAIN");
+                        }
+                    }
+                }
+                Set<String> wrongWordIds = mmResult.wrongWords().stream()
+                        .map(GameScoringCalculator.WrongWordDetail::vocabularyId)
+                        .collect(Collectors.toSet());
+                Set<String> rewardedWordIds = new HashSet<>();
+                for (var a : attempts) {
+                    if (a.isCorrect() && a.firstWordId() != null && !wrongWordIds.contains(a.firstWordId())) {
+                        if (rewardedWordIds.add(a.firstWordId())) {
+                            updateWordSrs(userId, a.firstWordId(), true, "GOOD");
+                        }
+                    }
+                }
             }
+
+            int finalCorrectCount = summary.correctCount();
+            int finalWrongCount = "MATCHING".equals(session.gameType())
+                    ? Math.max(0, summary.totalCount() - summary.correctCount())
+                    : summary.wrongCount();
+            int finalTotalQuestions = "MATCHING".equals(session.gameType())
+                    ? (session.totalQuestions() > 0 ? session.totalQuestions() : summary.correctCount())
+                    : summary.totalCount();
 
             jdbc.update("""
                     UPDATE vocabulary_game_sessions
@@ -743,19 +840,23 @@ public class VocabularyService {
                         stars = ?,
                         won = ?,
                         player_hp_remaining = ?,
-                        fleet_hp_remaining = ?
+                        fleet_hp_remaining = ?,
+                        tier = ?,
+                        avoidable_mistakes = ?
                     WHERE id = ? AND user_id = ? AND completed_at IS NULL
                     """,
                     score,
-                    summary.correctCount(),
-                    summary.wrongCount(),
-                    summary.totalCount(),
+                    finalCorrectCount,
+                    finalWrongCount,
+                    finalTotalQuestions,
                     summary.durationSeconds(),
                     maxCombo,
                     stars,
                     won,
                     playerHpRemaining,
                     fleetHpRemaining,
+                    tier,
+                    avoidableMistakes != null ? avoidableMistakes : 0,
                     sessionId,
                     userId);
         }
@@ -786,7 +887,7 @@ public class VocabularyService {
         if (userId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
         }
-        int limit = Math.max(1, Math.min(requestedLimit, 50));
+        int limit = Math.max(1, Math.min(requestedLimit, 500));
         return jdbc.query("""
                 SELECT w.id AS word_id, w.word, w.set_id, s.title AS set_title,
                        w.meaning, p.status, p.correct_count, p.incorrect_count, p.next_review_at
@@ -841,7 +942,7 @@ public class VocabularyService {
                 SELECT id, set_id, game_type, started_at, completed_at, score,
                        correct_count, wrong_count, total_questions, duration_seconds, max_combo,
                        stars, won, player_hp_remaining, fleet_hp_remaining,
-                       play_mode, time_limit_seconds, difficulty
+                       play_mode, time_limit_seconds, difficulty, tier, avoidable_mistakes
                 FROM vocabulary_game_sessions
                 WHERE id = ? AND user_id = ?
                 """, (rs, rowNum) -> new VocabularyGameSession(
@@ -863,7 +964,13 @@ public class VocabularyService {
                 rs.getString("play_mode"),
                 rs.getObject("time_limit_seconds", Integer.class),
                 List.of(),
-                rs.getString("difficulty")), sessionId, userId);
+                rs.getString("difficulty"),
+                rs.getString("tier"),
+                null,
+                rs.getInt("correct_count"),
+                rs.getInt("wrong_count"),
+                rs.getInt("avoidable_mistakes"),
+                List.of()), sessionId, userId);
         if (sessions.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy lượt chơi.");
         }
@@ -881,12 +988,72 @@ public class VocabularyService {
                     rs.getString("word_id"),
                     List.of(optionIds));
         }, sessionId);
+
+        List<GameScoringCalculator.WrongWordDetail> wrongWords = List.of();
+        String tier = session.tier();
+        int avoidableMistakes = session.avoidableMistakes() != null ? session.avoidableMistakes() : 0;
+
+        if ("MATCHING".equals(session.gameType())) {
+            List<GameScoringCalculator.MemoryMatchAttempt> attempts = jdbc.query("""
+                    SELECT word_id, second_word_id, is_correct, game_question_index
+                    FROM vocabulary_learning_events
+                    WHERE game_session_id = ?
+                    ORDER BY game_question_index ASC, attempted_at ASC
+                    """, (rs, rowNum) -> new GameScoringCalculator.MemoryMatchAttempt(
+                    rs.getString("word_id"),
+                    rs.getString("second_word_id"),
+                    rs.getBoolean("is_correct"),
+                    rs.getInt("game_question_index")), sessionId);
+
+            Set<String> wordIds = new HashSet<>();
+            for (var a : attempts) {
+                if (a.firstWordId() != null) wordIds.add(a.firstWordId());
+                if (a.secondWordId() != null) wordIds.add(a.secondWordId());
+            }
+
+            Map<String, GameScoringCalculator.WordInfo> wordInfoMap = new HashMap<>();
+            if (!wordIds.isEmpty()) {
+                String placeholders = String.join(",", Collections.nCopies(wordIds.size(), "?"));
+                List<GameScoringCalculator.WordInfo> infos = jdbc.query(
+                        "SELECT id, word, meaning FROM vocabulary_items WHERE id IN (" + placeholders + ")",
+                        (rs, rowNum) -> new GameScoringCalculator.WordInfo(
+                                rs.getString("id"),
+                                rs.getString("word"),
+                                rs.getString("meaning")),
+                        wordIds.toArray());
+                for (var info : infos) {
+                    wordInfoMap.put(info.id(), info);
+                }
+            }
+
+            int N = session.totalQuestions() > 0 ? session.totalQuestions() : session.correctCount();
+            GameScoringCalculator.MemoryMatchResult mmResult = GameScoringCalculator.calculateMemoryMatchResult(
+                    N,
+                    session.durationSeconds(),
+                    session.maxCombo(),
+                    attempts,
+                    wordInfoMap
+            );
+            wrongWords = mmResult.wrongWords();
+            if (tier == null) {
+                tier = mmResult.tier();
+            }
+            avoidableMistakes = mmResult.avoidableMistakes();
+        }
+
+        int totalAnswered = session.correctCount() + session.wrongCount();
+        int accuracy = totalAnswered > 0
+                ? (int) Math.round(((double) session.correctCount() / totalAnswered) * 100.0)
+                : 0;
+
         return new VocabularyGameSession(
                 session.id(), session.setId(), session.gameType(), session.startedAt(), session.completedAt(),
                 session.score(), session.correctCount(), session.wrongCount(), session.totalQuestions(),
                 session.durationSeconds(), session.maxCombo(), session.stars(), session.won(),
                 session.playerHpRemaining(), session.fleetHpRemaining(), session.mode(),
-                session.timeLimitSeconds(), questions, session.difficulty());
+                session.timeLimitSeconds(), questions, session.difficulty(),
+                tier, accuracy, session.correctCount(), session.wrongCount(),
+                avoidableMistakes, wrongWords);
     }
 
     public BattleSessionState getBattleSessionState(UUID userId, UUID sessionId) {
@@ -946,11 +1113,16 @@ public class VocabularyService {
         if (userId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ.");
         }
-        if (request == null || request.requestId() == null || request.wordId() == null
-                || request.wordId().isBlank()) {
+        if (request == null || request.requestId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu mã yêu cầu.");
+        }
+        String effectiveWordId = request.firstWordId() != null && !request.firstWordId().isBlank()
+                ? request.firstWordId().trim()
+                : (request.wordId() != null ? request.wordId().trim() : "");
+        if (effectiveWordId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu mã yêu cầu hoặc từ vựng.");
         }
-        if (request.wordId().trim().length() > 64) {
+        if (effectiveWordId.length() > 64) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã từ vựng không hợp lệ.");
         }
         if (request.responseTimeMs() < 0 || request.responseTimeMs() > 600_000) {
@@ -963,19 +1135,22 @@ public class VocabularyService {
         validateGameSession(
                 userId,
                 request.gameSessionId(),
-                request.wordId().trim(),
+                effectiveWordId,
                 request.requestId(),
                 request.gameQuestionIndex(),
                 questionType,
                 activity,
                 request.result());
+
+        String sessionGameType = request.gameSessionId() == null ? null : jdbc.queryForObject("""
+                SELECT game_type FROM vocabulary_game_sessions WHERE id = ? AND user_id = ?
+                """, String.class, request.gameSessionId(), userId);
+        boolean isMatching = "MATCHING".equals(sessionGameType);
+
         boolean hasBattleshipMetadata = request.result() != null || request.usedHint() != null || request.usedItem() != null
                 || request.enemyType() != null || request.damage() != null
                 || request.gameMode() != null || request.wordLevel() != null;
         if (hasBattleshipMetadata && request.gameSessionId() != null) {
-            String sessionGameType = jdbc.queryForObject("""
-                    SELECT game_type FROM vocabulary_game_sessions WHERE id = ? AND user_id = ?
-                    """, String.class, request.gameSessionId(), userId);
             if (!"BATTLE".equals(sessionGameType)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Kết quả mở rộng chỉ được dùng cho Battleship.");
@@ -992,6 +1167,7 @@ public class VocabularyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không gửi mức tự đánh giá cho câu hỏi có đáp án.");
         }
         if (!"FLASHCARD_RATING".equals(questionType) && request.answer() == null
+                && request.secondWordId() == null
                 && !"timeout".equalsIgnoreCase(request.result())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần gửi câu trả lời.");
         }
@@ -1030,63 +1206,92 @@ public class VocabularyService {
                         rs.getString("meaning"),
                         rs.getString("sense_meaning"),
                         rs.getString("synonyms")),
-                request.wordId().trim());
+                effectiveWordId);
         if (keys.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy từ vựng đã phát hành.");
         }
 
         List<String> acceptedAnswers = acceptedAnswers(keys, questionType);
         String correctAnswer = acceptedAnswers.isEmpty() ? keys.getFirst().word() : acceptedAnswers.getFirst();
-        boolean exactCorrect = "FLASHCARD_RATING".equals(questionType)
-                ? !"AGAIN".equals(rating)
-                : acceptedAnswers.stream().anyMatch(expected -> answersMatch(request.answer(), expected));
-        boolean allowNearAnswer = request.gameSessionId() != null
-                && !"SENTENCE".equals(jdbc.queryForObject("""
-                        SELECT game_type FROM vocabulary_game_sessions
-                        WHERE id = ? AND user_id = ?
-                        """, String.class, request.gameSessionId(), userId));
         String gameResult = null;
-        boolean correct = exactCorrect;
-        if (request.result() != null) {
-            String requestedResult = request.result().trim().toLowerCase(Locale.ROOT);
-            if (!Set.of("correct", "near", "wrong", "timeout").contains(requestedResult)
-                || request.gameSessionId() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kết quả câu trả lời game không hợp lệ.");
+        boolean correct;
+        String storedAnswer;
+        String secondWordId = null;
+
+        if (isMatching) {
+            secondWordId = request.secondWordId() != null && !request.secondWordId().isBlank()
+                    ? request.secondWordId().trim()
+                    : (request.answer() != null ? request.answer().trim() : "");
+            if (secondWordId.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần gửi từ thứ hai cho lượt ghép cặp.");
             }
-            boolean near = allowNearAnswer && !exactCorrect && isNearAnswer(request.answer(), acceptedAnswers);
-            if ("correct".equals(requestedResult) && !exactCorrect) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kết quả câu trả lời không khớp đáp án.");
+            Integer secondWordValid = jdbc.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM vocabulary_game_sessions gs
+                    JOIN vocabulary_items w ON w.id = ?
+                        AND (w.set_id = gs.set_id OR w.set_id = ANY(gs.deck_ids))
+                    WHERE gs.id = ? AND gs.user_id = ?
+                    """, Integer.class, secondWordId, request.gameSessionId(), userId);
+            if (secondWordValid == null || secondWordValid == 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Từ ghép thứ hai không thuộc phiên chơi này.");
             }
-            if ("near".equals(requestedResult) && !near && !exactCorrect) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Câu trả lời gần đúng không hợp lệ.");
+            List<String> matchedWords = jdbc.queryForList("""
+                    SELECT word_id
+                    FROM vocabulary_learning_events
+                    WHERE game_session_id = ? AND is_correct = true AND request_id != ?
+                    """, String.class, request.gameSessionId(), request.requestId());
+            boolean alreadyMatched = matchedWords.contains(effectiveWordId) || matchedWords.contains(secondWordId);
+            correct = effectiveWordId.equals(secondWordId) && !alreadyMatched;
+            gameResult = correct ? "correct" : "wrong";
+            storedAnswer = secondWordId;
+        } else {
+            boolean exactCorrect = "FLASHCARD_RATING".equals(questionType)
+                    ? !"AGAIN".equals(rating)
+                    : acceptedAnswers.stream().anyMatch(expected -> answersMatch(request.answer(), expected));
+            boolean allowNearAnswer = request.gameSessionId() != null
+                    && !Set.of("SENTENCE", "MATCHING").contains(sessionGameType);
+            correct = exactCorrect;
+            if (request.result() != null) {
+                String requestedResult = request.result().trim().toLowerCase(Locale.ROOT);
+                if (!Set.of("correct", "near", "wrong", "timeout").contains(requestedResult)
+                    || request.gameSessionId() == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kết quả câu trả lời game không hợp lệ.");
+                }
+                boolean near = allowNearAnswer && !exactCorrect && isNearAnswer(request.answer(), acceptedAnswers);
+                if ("correct".equals(requestedResult) && !exactCorrect) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kết quả câu trả lời không khớp đáp án.");
+                }
+                if ("near".equals(requestedResult) && !near && !exactCorrect) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Câu trả lời gần đúng không hợp lệ.");
+                }
+                if ("timeout".equals(requestedResult) && request.answer() != null && !request.answer().isBlank()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Câu hết giờ không được có đáp án.");
+                }
+                gameResult = "timeout".equals(requestedResult) ? "timeout"
+                    : exactCorrect ? "correct" : near ? "near" : "wrong";
+                correct = exactCorrect || near;
+            } else if (request.gameSessionId() != null) {
+                boolean near = allowNearAnswer && !exactCorrect && isNearAnswer(request.answer(), acceptedAnswers);
+                gameResult = exactCorrect ? "correct" : (near ? "near" : "wrong");
+                correct = exactCorrect || near;
             }
-            if ("timeout".equals(requestedResult) && request.answer() != null && !request.answer().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Câu hết giờ không được có đáp án.");
-            }
-            gameResult = "timeout".equals(requestedResult) ? "timeout"
-                : exactCorrect ? "correct" : near ? "near" : "wrong";
-            correct = exactCorrect || near;
-        } else if (request.gameSessionId() != null) {
-            boolean near = allowNearAnswer && !exactCorrect && isNearAnswer(request.answer(), acceptedAnswers);
-            gameResult = exactCorrect ? "correct" : (near ? "near" : "wrong");
-            correct = exactCorrect || near;
+            storedAnswer = "FLASHCARD_RATING".equals(questionType)
+                    ? rating : request.answer() == null ? "" : request.answer().trim();
         }
-        String storedAnswer = "FLASHCARD_RATING".equals(questionType)
-                ? rating : request.answer() == null ? "" : request.answer().trim();
 
         int inserted = jdbc.update("""
                 INSERT INTO vocabulary_learning_events (
                     id, user_id, word_id, request_id, activity_type, question_type,
                     student_answer, correct_answer, is_correct, rating, response_time_ms,
                     game_session_id, game_question_index, game_result, used_hint, used_item,
-                    enemy_type, damage, game_mode, word_level
+                    enemy_type, damage, game_mode, word_level, second_word_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (user_id, request_id) DO NOTHING
                 """,
                 UUID.randomUUID(),
                 userId,
-                request.wordId().trim(),
+                effectiveWordId,
                 request.requestId(),
                 activity,
                 questionType,
@@ -1103,12 +1308,14 @@ public class VocabularyService {
                 request.enemyType(),
                 request.damage(),
                 request.gameMode(),
-                request.wordLevel());
+                request.wordLevel(),
+                secondWordId);
 
         if (inserted == 0) {
             List<ExistingVocabularyAnswer> existingAnswers = jdbc.query("""
                     SELECT word_id, activity_type, question_type, student_answer, rating,
-                           game_session_id, game_question_index, game_result, used_hint, used_item
+                           game_session_id, game_question_index, game_result, used_hint, used_item,
+                           second_word_id
                     FROM vocabulary_learning_events
                     WHERE user_id = ? AND request_id = ?
                     """, (rs, rowNum) -> new ExistingVocabularyAnswer(
@@ -1121,13 +1328,14 @@ public class VocabularyService {
                     rs.getObject("game_question_index", Integer.class),
                     rs.getString("game_result"),
                     rs.getBoolean("used_hint"),
-                    rs.getString("used_item")), userId, request.requestId());
+                    rs.getString("used_item"),
+                    rs.getString("second_word_id")), userId, request.requestId());
             if (existingAnswers.isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Từ này đã được trả lời trong lượt chơi hiện tại.");
             }
             ExistingVocabularyAnswer existing = existingAnswers.getFirst();
-            if (!existing.wordId().equals(request.wordId().trim())
+            if (!existing.wordId().equals(effectiveWordId)
                     || !existing.activityType().equals(activity)
                     || !existing.questionType().equals(questionType)
                     || !existing.studentAnswer().equals(storedAnswer)
@@ -1136,7 +1344,8 @@ public class VocabularyService {
                     || !java.util.Objects.equals(existing.gameQuestionIndex(), request.gameQuestionIndex())
                     || !java.util.Objects.equals(existing.result(), gameResult)
                     || existing.usedHint() != (request.usedHint() != null && request.usedHint())
-                    || !java.util.Objects.equals(existing.usedItem(), request.usedItem())) {
+                    || !java.util.Objects.equals(existing.usedItem(), request.usedItem())
+                    || (isMatching && !java.util.Objects.equals(existing.secondWordId(), secondWordId))) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Mã yêu cầu đã được sử dụng cho một câu trả lời khác.");
             }
@@ -1148,9 +1357,6 @@ public class VocabularyService {
                     WHERE e.user_id = ? AND e.request_id = ?
                     """, this::mapAnswerResult, userId, request.requestId());
             if (request.gameSessionId() != null) {
-                String sessionGameType = jdbc.queryForObject(
-                        "SELECT game_type FROM vocabulary_game_sessions WHERE id = ? AND user_id = ?",
-                        String.class, request.gameSessionId(), userId);
                 if ("BATTLE".equals(sessionGameType)) {
                     return enrichBattleAnswerResult(dupResult, userId, request.gameSessionId());
                 }
@@ -1158,63 +1364,69 @@ public class VocabularyService {
             return dupResult;
         }
 
-        jdbc.update("""
-                INSERT INTO user_vocabulary_progress (user_id, word_id, status, starred, updated_at)
-                VALUES (?, ?, 'LEARNING', false, now())
-                ON CONFLICT (user_id, word_id) DO NOTHING
-                """, userId, request.wordId().trim());
+        if (isMatching) {
+            // Memory Match SRS updates are consolidated in completeGameSession in a single transaction
+        } else {
+            jdbc.update("""
+                    INSERT INTO user_vocabulary_progress (user_id, word_id, status, starred, updated_at)
+                    VALUES (?, ?, 'LEARNING', false, now())
+                    ON CONFLICT (user_id, word_id) DO NOTHING
+                    """, userId, effectiveWordId);
 
-        List<VocabularySrsState> previousStates = jdbc.query("""
-                SELECT status, srs_ease_factor, srs_interval_days, srs_repetitions, review_count
-                FROM user_vocabulary_progress
-                WHERE user_id = ? AND word_id = ?
-                FOR UPDATE
-                """, (rs, rowNum) -> new VocabularySrsState(
-                rs.getString("status"),
-                rs.getDouble("srs_ease_factor"),
-                rs.getInt("srs_interval_days"),
-                rs.getInt("srs_repetitions"),
-                rs.getInt("review_count")), userId, request.wordId().trim());
-        VocabularySrsState previous = previousStates.getFirst();
-        VocabularySrsSchedule schedule = calculateSrsSchedule(previous, correct, rating);
+            List<VocabularySrsState> previousStates = jdbc.query("""
+                    SELECT status, srs_ease_factor, srs_interval_days, srs_repetitions, review_count
+                    FROM user_vocabulary_progress
+                    WHERE user_id = ? AND word_id = ?
+                    FOR UPDATE
+                    """, (rs, rowNum) -> new VocabularySrsState(
+                    rs.getString("status"),
+                    rs.getDouble("srs_ease_factor"),
+                    rs.getInt("srs_interval_days"),
+                    rs.getInt("srs_repetitions"),
+                    rs.getInt("review_count")), userId, effectiveWordId);
+            VocabularySrsState previous = previousStates.getFirst();
+            VocabularySrsSchedule schedule = calculateSrsSchedule(previous, correct, rating);
 
-        jdbc.update("""
-                UPDATE user_vocabulary_progress
-                SET status = ?,
-                    srs_ease_factor = ?,
-                    srs_interval_days = ?,
-                    srs_repetitions = ?,
-                    correct_count = correct_count + ?,
-                    incorrect_count = incorrect_count + ?,
-                    review_count = review_count + 1,
-                    last_reviewed_at = now(),
-                    next_review_at = ?,
-                    updated_at = now()
-                WHERE user_id = ? AND word_id = ?
-                """,
-                schedule.status(),
-                schedule.easeFactor(),
-                schedule.intervalDays(),
-                schedule.repetitions(),
-                correct ? 1 : 0,
-                correct ? 0 : 1,
-                schedule.nextReviewAt(),
-                userId,
-                request.wordId().trim());
+            jdbc.update("""
+                    UPDATE user_vocabulary_progress
+                    SET status = ?,
+                        srs_ease_factor = ?,
+                        srs_interval_days = ?,
+                        srs_repetitions = ?,
+                        correct_count = correct_count + ?,
+                        incorrect_count = CASE
+                            WHEN ? THEN GREATEST(0, incorrect_count - 1)
+                            ELSE CASE WHEN ? THEN incorrect_count + 1 ELSE incorrect_count END
+                        END,
+                        review_count = review_count + 1,
+                        last_reviewed_at = now(),
+                        next_review_at = ?,
+                        updated_at = now()
+                    WHERE user_id = ? AND word_id = ?
+                    """,
+                    schedule.status(),
+                    schedule.easeFactor(),
+                    schedule.intervalDays(),
+                    schedule.repetitions(),
+                    correct ? 1 : 0,
+                    correct && (rating == null || "GOOD".equals(rating) || "EASY".equals(rating)),
+                    !correct,
+                    schedule.nextReviewAt(),
+                    userId,
+                    effectiveWordId);
 
-        incrementDailyGoal(userId, activity, previous.reviewCount() == 0);
+            incrementDailyGoal(userId, activity, previous.reviewCount() == 0);
+        }
+
         VocabularyAnswerResult rawResult = jdbc.queryForObject("""
                 SELECT e.id, e.is_correct, e.correct_answer, p.status, p.next_review_at,
                        e.game_result, FALSE AS duplicate
                 FROM vocabulary_learning_events e
-                JOIN user_vocabulary_progress p ON p.user_id = e.user_id AND p.word_id = e.word_id
+                LEFT JOIN user_vocabulary_progress p ON p.user_id = e.user_id AND p.word_id = e.word_id
                 WHERE e.user_id = ? AND e.request_id = ?
                 """, this::mapAnswerResult, userId, request.requestId());
 
         if (request.gameSessionId() != null) {
-            String sessionGameType = jdbc.queryForObject(
-                    "SELECT game_type FROM vocabulary_game_sessions WHERE id = ? AND user_id = ?",
-                    String.class, request.gameSessionId(), userId);
             if ("BATTLE".equals(sessionGameType)) {
                 return enrichBattleAnswerResult(rawResult, userId, request.gameSessionId());
             }
@@ -1233,12 +1445,18 @@ public class VocabularyService {
                     user_id, goal_date, new_words_goal, review_goal,
                     completed_new_words, completed_review, created_at, updated_at
                 )
-                VALUES (?, (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 10, 20, ?, ?, now(), now())
+                VALUES (
+                    ?,
+                    (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date,
+                    COALESCE((SELECT recommended_new_words_per_day FROM study_plans WHERE user_id = ? AND is_active = TRUE LIMIT 1), 10),
+                    COALESCE((SELECT recommended_review_per_day FROM study_plans WHERE user_id = ? AND is_active = TRUE LIMIT 1), 20),
+                    ?, ?, now(), now()
+                )
                 ON CONFLICT (user_id, goal_date) DO UPDATE SET
                     completed_new_words = vocabulary_daily_goals.completed_new_words + EXCLUDED.completed_new_words,
                     completed_review = vocabulary_daily_goals.completed_review + EXCLUDED.completed_review,
                     updated_at = now()
-                """, userId, newCount, reviewCount);
+                """, userId, userId, userId, newCount, reviewCount);
     }
 
     private VocabularyAnswerResult mapAnswerResult(ResultSet rs, int rowNum) throws SQLException {
@@ -1257,8 +1475,8 @@ public class VocabularyService {
         List<String> answers = new ArrayList<>();
         for (VocabularyAnswerKey key : keys) {
             if ("ENGLISH_TO_VIETNAMESE".equals(questionType)) {
-                addAcceptedAnswer(answers, key.senseMeaning());
-                addAcceptedAnswer(answers, key.meaning());
+                addAcceptedMeaningVariants(answers, key.senseMeaning());
+                addAcceptedMeaningVariants(answers, key.meaning());
             } else {
                 addEnglishWordVariants(answers, key.word());
                 if (key.synonyms() != null) {
@@ -1268,12 +1486,23 @@ public class VocabularyService {
                 }
             }
             if ("ENGLISH_TO_VIETNAMESE".equals(questionType) && key.synonyms() != null) {
-                for (String synonym : key.synonyms().split("[,;\\n]")) {
-                    addAcceptedAnswer(answers, synonym);
+                for (String synonym : key.synonyms().split("[,;\\n|/]")) {
+                    addAcceptedMeaningVariants(answers, synonym);
                 }
             }
         }
         return answers.stream().distinct().toList();
+    }
+
+    private void addAcceptedMeaningVariants(List<String> answers, String meaning) {
+        if (meaning == null || meaning.isBlank()) {
+            return;
+        }
+        String clean = meaning.trim();
+        addAcceptedAnswer(answers, clean);
+        for (String segment : clean.split("[,;\\n|/]")) {
+            addAcceptedAnswer(answers, segment);
+        }
     }
 
     private void addAcceptedAnswer(List<String> answers, String answer) {
@@ -1685,6 +1914,64 @@ public class VocabularyService {
 
     private int cappedRoundedSrsInterval(double days) {
         return (int) Math.min(MAX_SRS_INTERVAL_DAYS, Math.max(1, Math.round(days)));
+    }
+
+    private void updateWordSrs(UUID userId, String wordId, boolean correct, String rating) {
+        if (wordId == null || wordId.isBlank()) {
+            return;
+        }
+        jdbc.update("""
+                INSERT INTO user_vocabulary_progress (user_id, word_id, status, starred, updated_at)
+                VALUES (?, ?, 'LEARNING', false, now())
+                ON CONFLICT (user_id, word_id) DO NOTHING
+                """, userId, wordId);
+
+        List<VocabularySrsState> previousStates = jdbc.query("""
+                SELECT status, srs_ease_factor, srs_interval_days, srs_repetitions, review_count
+                FROM user_vocabulary_progress
+                WHERE user_id = ? AND word_id = ?
+                FOR UPDATE
+                """, (rs, rowNum) -> new VocabularySrsState(
+                rs.getString("status"),
+                rs.getDouble("srs_ease_factor"),
+                rs.getInt("srs_interval_days"),
+                rs.getInt("srs_repetitions"),
+                rs.getInt("review_count")), userId, wordId);
+        if (previousStates.isEmpty()) {
+            return;
+        }
+        VocabularySrsState previous = previousStates.getFirst();
+        VocabularySrsSchedule schedule = calculateSrsSchedule(previous, correct, rating);
+
+        jdbc.update("""
+                UPDATE user_vocabulary_progress
+                SET status = ?,
+                    srs_ease_factor = ?,
+                    srs_interval_days = ?,
+                    srs_repetitions = ?,
+                    correct_count = correct_count + ?,
+                    incorrect_count = CASE
+                        WHEN ? THEN GREATEST(0, incorrect_count - 1)
+                        ELSE CASE WHEN ? THEN incorrect_count + 1 ELSE incorrect_count END
+                    END,
+                    review_count = review_count + 1,
+                    last_reviewed_at = now(),
+                    next_review_at = ?,
+                    updated_at = now()
+                WHERE user_id = ? AND word_id = ?
+                """,
+                schedule.status(),
+                schedule.easeFactor(),
+                schedule.intervalDays(),
+                schedule.repetitions(),
+                correct ? 1 : 0,
+                correct && ("GOOD".equals(rating) || "EASY".equals(rating)),
+                !correct,
+                schedule.nextReviewAt(),
+                userId,
+                wordId);
+
+        incrementDailyGoal(userId, "VOCABULARY", previous.reviewCount() == 0);
     }
 
     @Transactional
@@ -2921,7 +3208,13 @@ public class VocabularyService {
             String mode,
             Integer timeLimitSeconds,
             List<SentenceGameQuestion> questions,
-            String difficulty
+            String difficulty,
+            String tier,
+            Integer accuracy,
+            Integer correct,
+            Integer wrong,
+            Integer avoidableMistakes,
+            List<GameScoringCalculator.WrongWordDetail> wrongWords
     ) {
         public VocabularyGameSession(
                 UUID id,
@@ -2937,7 +3230,7 @@ public class VocabularyService {
                 int maxCombo) {
             this(id, setId, gameType, startedAt, completedAt, score, correctCount, wrongCount,
                         totalQuestions, durationSeconds, maxCombo, null, null, null, null,
-                    "CLASSIC", null, List.of(), "MEDIUM");
+                    "CLASSIC", null, List.of(), "MEDIUM", null, null, null, null, null, List.of());
         }
 
         public VocabularyGameSession(
@@ -2958,7 +3251,32 @@ public class VocabularyService {
                     Integer fleetHpRemaining) {
                 this(id, setId, gameType, startedAt, completedAt, score, correctCount, wrongCount,
                         totalQuestions, durationSeconds, maxCombo, stars, won, playerHpRemaining,
-                        fleetHpRemaining, "CLASSIC", null, List.of(), "MEDIUM");
+                        fleetHpRemaining, "CLASSIC", null, List.of(), "MEDIUM", null, null, null, null, null, List.of());
+        }
+
+        public VocabularyGameSession(
+                UUID id,
+                String setId,
+                String gameType,
+                String startedAt,
+                String completedAt,
+                int score,
+                int correctCount,
+                int wrongCount,
+                int totalQuestions,
+                int durationSeconds,
+                int maxCombo,
+                Integer stars,
+                Boolean won,
+                Integer playerHpRemaining,
+                Integer fleetHpRemaining,
+                String mode,
+                Integer timeLimitSeconds,
+                List<SentenceGameQuestion> questions,
+                String difficulty) {
+            this(id, setId, gameType, startedAt, completedAt, score, correctCount, wrongCount,
+                    totalQuestions, durationSeconds, maxCombo, stars, won, playerHpRemaining,
+                    fleetHpRemaining, mode, timeLimitSeconds, questions, difficulty, null, null, null, null, null, List.of());
         }
     }
 
@@ -3025,7 +3343,9 @@ public class VocabularyService {
             String enemyType,
             Double damage,
             String gameMode,
-            String wordLevel
+            String wordLevel,
+            String firstWordId,
+            String secondWordId
     ) {
         public RecordVocabularyAnswerRequest(
                 UUID requestId,
@@ -3038,7 +3358,28 @@ public class VocabularyService {
                 UUID gameSessionId,
                 Integer gameQuestionIndex) {
             this(requestId, wordId, activityType, questionType, answer, rating, responseTimeMs,
-                    gameSessionId, gameQuestionIndex, null, null, null, null, null, null, null);
+                    gameSessionId, gameQuestionIndex, null, null, null, null, null, null, null, null, null);
+        }
+
+        public RecordVocabularyAnswerRequest(
+                UUID requestId,
+                String wordId,
+                String activityType,
+                String questionType,
+                String answer,
+                String rating,
+                int responseTimeMs,
+                UUID gameSessionId,
+                Integer gameQuestionIndex,
+                String result,
+                Boolean usedHint,
+                String usedItem,
+                String enemyType,
+                Double damage,
+                String gameMode,
+                String wordLevel) {
+            this(requestId, wordId, activityType, questionType, answer, rating, responseTimeMs,
+                    gameSessionId, gameQuestionIndex, result, usedHint, usedItem, enemyType, damage, gameMode, wordLevel, null, null);
         }
     }
 
@@ -3143,7 +3484,11 @@ public class VocabularyService {
 
     private record AnswerCount(long totalAnswers, long correctAnswers) {}
 
-    private record VocabularyGameSessionState(UUID id, String gameType, Timestamp completedAt) {}
+    private record VocabularyGameSessionState(UUID id, String gameType, Timestamp completedAt, int totalQuestions) {
+        public VocabularyGameSessionState(UUID id, String gameType, Timestamp completedAt) {
+            this(id, gameType, completedAt, 0);
+        }
+    }
 
     private record GameAnswerSummary(int correctCount, int wrongCount, int totalCount, int durationSeconds) {}
 
@@ -3157,7 +3502,8 @@ public class VocabularyService {
             Integer gameQuestionIndex,
             String result,
             boolean usedHint,
-            String usedItem
+            String usedItem,
+            String secondWordId
     ) {}
 
     private record GameAnswerState(boolean correct, String result, boolean usedHint, int responseTimeMs) {}

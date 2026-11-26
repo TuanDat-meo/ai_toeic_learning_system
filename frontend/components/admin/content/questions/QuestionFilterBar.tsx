@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Search,
   Plus,
@@ -31,7 +31,8 @@ interface QuestionFilterBarProps {
   onBulkDelete: () => void;
   onOpenCreateModal: () => void;
   onExportCsv?: () => void;
-  onImportCsvClick?: () => void;
+  onImportListeningClick?: () => void;
+  onImportReadingClick?: () => void;
   playSfx?: (sound: string) => void;
   showToast?: (msg: string) => void;
 }
@@ -54,10 +55,13 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
   onBulkDelete,
   onOpenCreateModal,
   onExportCsv = () => {},
-  onImportCsvClick,
+  onImportListeningClick,
+  onImportReadingClick,
   playSfx = () => {},
   showToast = () => {},
 }) => {
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Header Banner - Image 1 Style */}
@@ -76,21 +80,53 @@ export const QuestionFilterBar: React.FC<QuestionFilterBarProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              playSfx("click");
-              if (onImportCsvClick) {
-                onImportCsvClick();
-              } else {
-                showToast("Vui lòng chọn tệp CSV để nhập dữ liệu câu hỏi!");
-              }
-            }}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
-          >
-            <FileUp size={16} className="text-slate-500" aria-hidden="true" />
-            Nhập CSV
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              aria-expanded={importMenuOpen}
+              aria-haspopup="true"
+              onClick={() => {
+                playSfx("click");
+                setImportMenuOpen((open) => !open);
+              }}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
+            >
+              <FileUp size={16} className="text-slate-500" aria-hidden="true" />
+              Nhập file
+            </button>
+            {importMenuOpen && (
+              <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    onImportListeningClick?.();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <FileUp size={16} className="text-slate-500" aria-hidden="true" />
+                  Import Listening <span className="ml-auto text-xs text-slate-400">Part 1–4</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    onImportReadingClick?.();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <FileDown size={16} aria-hidden="true" />
+                  Import Reading <span className="ml-auto text-xs text-slate-400">Part 5–7</span>
+                </button>
+                <p className="px-3 pb-2 pt-1 text-[11px] leading-4 text-slate-500">
+                  Mỗi luồng có mẫu file và bước xem trước riêng như trang Listening/Reading.
+                </p>
+                <p className="px-3 pb-2 text-[11px] leading-4 text-amber-700">
+                  CSV không đính kèm được ảnh/audio; cột ImageURL và AudioURL chỉ nhận đường dẫn media đã có.
+                </p>
+              </div>
+            )}
+          </div>
 
           <button
             type="button"

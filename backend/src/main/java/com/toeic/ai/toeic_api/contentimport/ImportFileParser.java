@@ -22,6 +22,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
+import org.jsoup.Jsoup;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,8 +48,10 @@ public class ImportFileParser {
         try {
             return switch (extension) {
                 case "json" -> parseJson(file, type);
-                case "csv" -> maybeGroupReadingQuestionRows(parseCsv(file), name, type);
-                case "xlsx", "xls" -> maybeGroupReadingQuestionRows(parseXlsx(file), name, type);
+                case "csv" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(
+                        type == ContentType.QUESTION ? parseQuestionCsv(file) : parseCsv(file), name, type), name, type);
+                case "xlsx", "xls" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(
+                        type == ContentType.QUESTION ? parseQuestionWorkbook(file, name) : parseXlsx(file), name, type), name, type);
                 default -> throw new IllegalArgumentException("Chỉ hỗ trợ file CSV, XLSX hoặc JSON.");
             };
         } catch (IOException exception) {
@@ -436,6 +439,158 @@ public class ImportFileParser {
         }
     }
 
+    private List<ParsedImportRow> parseQuestionCsv(MultipartFile file) throws IOException {
+        try (var reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8);
+                CSVParser parser = CSVFormat.DEFAULT.builder().setIgnoreEmptyLines(true).setTrim(true).get().parse(reader)) {
+            List<List<String>> records = parser.getRecords().stream().map(record -> {
+                List<String> values = new ArrayList<>();
+                record.forEach(values::add);
+                return values;
+            }).toList();
+            int headerIndex = -1;
+            List<String> headers = List.of();
+            for (int index = 0; index < records.size(); index++) {
+                List<String> candidate = records.get(index).stream().map(this::canonicalQuestionHeader).toList();
+                if (candidate.contains("part")) {
+                    headerIndex = index;
+                    headers = candidate;
+                    break;
+                }
+            }
+            if (headerIndex < 0) throw new IllegalArgumentException("Không tìm thấy hàng tiêu đề cột câu hỏi trong CSV.");
+            List<ParsedImportRow> rows = new ArrayList<>();
+            for (int index = headerIndex + 1; index < records.size(); index++) {
+                List<String> cells = records.get(index);
+                if (cells.stream().allMatch(String::isBlank)) continue;
+                if (cells.size() > headers.size()) {
+                    throw new IllegalArgumentException("Dòng " + (index + 1) + " có số cột không khớp tiêu đề.");
+                }
+                ObjectNode data = objectMapper.createObjectNode();
+                for (int column = 0; column < headers.size(); column++) {
+                    String header = headers.get(column);
+                    String value = column < cells.size() ? cells.get(column).trim() : "";
+                    if (!header.isBlank() && !header.equals("stt") && !value.isBlank()) data.put(header, value);
+                }
+                ArrayNode options = objectMapper.createArrayNode();
+                for (String id : List.of("A", "B", "C", "D")) {
+                    String value = data.path("option" + id).asText("");
+                    if (!value.isBlank()) {
+                        ObjectNode option = options.addObject();
+                        option.put("id", id);
+                        option.put("text", value);
+                    }
+                    data.remove("option" + id);
+                }
+                if (!options.isEmpty()) data.set("options", options);
+                rows.add(new ParsedImportRow(index + 1, data));
+                if (rows.size() > MAX_ROWS) throw new IllegalArgumentException("Mỗi file chỉ được chứa tối đa " + MAX_ROWS + " dòng dữ liệu.");
+            }
+            return requireRows(rows);
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("CSV câu hỏi không hợp lệ hoặc thiếu hàng tiêu đề.");
+        }
+    }
+
+    private List<ParsedImportRow> parseQuestionWorkbook(MultipartFile file, String fileName) throws IOException {
+        if (fileName.toLowerCase(Locale.ROOT).endsWith(".xls")) {
+            byte[] bytes = file.getBytes();
+            String prefix = new String(bytes, 0, Math.min(bytes.length, 256), StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
+            if (prefix.contains("<html") || prefix.contains("<!doctype html")) {
+                var document = Jsoup.parse(file.getInputStream(), StandardCharsets.UTF_8.name(), "");
+                List<org.jsoup.nodes.Element> tableRows = document.select("table tr");
+                int headerIndex = -1;
+                List<String> headers = List.of();
+                for (int index = 0; index < tableRows.size(); index++) {
+                    List<String> candidate = tableRows.get(index).select("th,td").eachText()
+                            .stream().map(this::canonicalQuestionHeader).toList();
+                    if (candidate.contains("part")) { headerIndex = index; headers = candidate; break; }
+                }
+                if (headerIndex < 0) throw new IllegalArgumentException("Không tìm thấy hàng tiêu đề cột câu hỏi trong file Excel.");
+                List<ParsedImportRow> rows = new ArrayList<>();
+                for (int index = headerIndex + 1; index < tableRows.size(); index++) {
+                    List<String> cells = tableRows.get(index).select("th,td").eachText();
+                    if (cells.stream().allMatch(String::isBlank)) continue;
+                    rows.add(questionRow(headers, cells, index + 1));
+                }
+                return requireRows(rows);
+            }
+        }
+        return normalizeQuestionTabularRows(parseXlsx(file));
+    }
+
+    private ParsedImportRow questionRow(List<String> headers, List<String> cells, int rowNumber) {
+        ObjectNode data = objectMapper.createObjectNode();
+        for (int column = 0; column < headers.size(); column++) {
+            String header = headers.get(column);
+            String value = column < cells.size() ? cells.get(column).trim() : "";
+            if (!header.isBlank() && !header.equals("stt") && !value.isBlank()) data.put(header, value);
+        }
+        ArrayNode options = objectMapper.createArrayNode();
+        for (String id : List.of("A", "B", "C", "D")) {
+            String value = data.path("option" + id).asText("");
+            if (!value.isBlank()) {
+                ObjectNode option = options.addObject();
+                option.put("id", id);
+                option.put("text", value);
+            }
+            data.remove("option" + id);
+        }
+        if (!options.isEmpty()) data.set("options", options);
+        return new ParsedImportRow(rowNumber, data);
+    }
+
+    private List<ParsedImportRow> normalizeQuestionTabularRows(List<ParsedImportRow> sourceRows) {
+        List<ParsedImportRow> result = new ArrayList<>();
+        for (ParsedImportRow source : sourceRows) {
+            ObjectNode data = objectMapper.createObjectNode();
+            source.data().fields().forEachRemaining(field -> {
+                String canonical = canonicalQuestionHeader(field.getKey());
+                if (!canonical.isBlank() && !canonical.equals("stt") && !field.getValue().isNull()) {
+                    data.set(canonical, field.getValue().deepCopy());
+                }
+            });
+            ArrayNode options = objectMapper.createArrayNode();
+            for (String id : List.of("A", "B", "C", "D")) {
+                String value = data.path("option" + id).asText("");
+                if (!value.isBlank()) {
+                    ObjectNode option = options.addObject();
+                    option.put("id", id);
+                    option.put("text", value);
+                }
+                data.remove("option" + id);
+            }
+            if (!options.isEmpty() && !data.has("options")) data.set("options", options);
+            result.add(new ParsedImportRow(source.rowNumber(), data));
+        }
+        return result;
+    }
+
+    private String canonicalQuestionHeader(String header) {
+        String normalized = Normalizer.normalize(header.replace("\uFEFF", "").trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "").replaceAll("[^a-z0-9]", "");
+        return switch (normalized) {
+            case "stt", "index", "no" -> "stt";
+            case "code", "macau", "questioncode" -> "code";
+            case "part", "phanthi" -> "part";
+            case "skill", "kynang" -> "skill";
+            case "difficulty", "dokho" -> "difficulty";
+            case "questiontext", "question", "noidungcauhoi" -> "questionText";
+            case "passage", "doanvan" -> "passage";
+            case "opta", "optiona", "luachona" -> "optionA";
+            case "optb", "optionb", "luachonb" -> "optionB";
+            case "optc", "optionc", "luachonc" -> "optionC";
+            case "optd", "optiond", "luachond" -> "optionD";
+            case "correctanswer", "answer", "dapan", "dapandung" -> "correctAnswer";
+            case "explanation", "giaithich", "loigiaiphantichbay" -> "explanation";
+            case "status", "trangthai" -> "status";
+            case "imageurl", "image", "anh" -> "imageUrl";
+            case "audiourl", "audio", "amthanh" -> "audioUrl";
+            default -> normalized;
+        };
+    }
+
     private List<ParsedImportRow> parseXlsx(MultipartFile file) throws IOException {
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             if (workbook.getNumberOfSheets() == 0) {
@@ -609,6 +764,115 @@ public class ImportFileParser {
         card.set("questions", questions);
         card.put("totalQuestions", questions.size());
         return List.of(new ParsedImportRow(1, card));
+    }
+
+    private List<ParsedImportRow> maybeNormalizeListeningRows(
+            List<ParsedImportRow> rows, String fileName, ContentType type) {
+        if (type != ContentType.LISTENING || rows.isEmpty()) {
+            return rows;
+        }
+        boolean needsMapping = rows.stream().anyMatch(r -> {
+            JsonNode d = r.data();
+            return !d.has("transcript") || d.has("optionA") || d.has("Đáp án A") || d.has("Tiêu đề");
+        });
+        if (!needsMapping) {
+            return rows;
+        }
+
+        List<ParsedImportRow> normalized = new ArrayList<>(rows.size());
+        for (ParsedImportRow row : rows) {
+            JsonNode d = row.data();
+            ObjectNode out = objectMapper.createObjectNode();
+
+            String title = extractFieldByAliases(d, "title", "tieude", "tenbainghe", "chudiem");
+            if (!title.isBlank()) out.put("title", title);
+            else if (!fileName.isBlank()) out.put("title", stripFileExtension(fileName));
+
+            String part = extractFieldByAliases(d, "part", "phanthi");
+            if (!part.isBlank()) out.put("part", part);
+
+            String recordType = extractFieldByAliases(d, "recordtype", "mode", "hinhthuc");
+            if (!recordType.isBlank()) out.put("recordType", recordType);
+
+            String unitType = extractFieldByAliases(d, "unittype", "type", "loai");
+            if (!unitType.isBlank()) out.put("unitType", unitType);
+
+            String testNumber = extractFieldByAliases(d, "testnumber", "testso", "test");
+            if (!testNumber.isBlank()) out.put("testNumber", testNumber);
+
+            String year = extractFieldByAliases(d, "year", "nam");
+            if (!year.isBlank()) out.put("year", year);
+
+            String targetLevel = extractFieldByAliases(d, "targetlevel", "muctieu", "band");
+            if (!targetLevel.isBlank()) out.put("targetLevel", targetLevel);
+
+            String transcript = extractFieldByAliases(d, "transcript", "fulltranscript", "loithoai", "noidungnghe");
+            if (!transcript.isBlank()) out.put("transcript", transcript);
+
+            String translation = extractFieldByAliases(d, "vietnamesetranslation", "translation", "dichnghia", "bandich");
+            if (!translation.isBlank()) out.put("vietnameseTranslation", translation);
+
+            String audioUrl = extractFieldByAliases(d, "audiourl", "audio", "linkaudio", "mp3");
+            if (!audioUrl.isBlank()) out.put("audioUrl", audioUrl);
+
+            String imageUrl = extractFieldByAliases(d, "imageurl", "image", "hinhanh");
+            if (!imageUrl.isBlank()) out.put("imageUrl", imageUrl);
+
+            String question = extractFieldByAliases(d, "question", "questiontext", "cauhoi", "debai");
+            if (!question.isBlank()) out.put("question", question);
+
+            String optA = extractFieldByAliases(d, "optiona", "dapana", "a");
+            String optB = extractFieldByAliases(d, "optionb", "dapanb", "b");
+            String optC = extractFieldByAliases(d, "optionc", "dapanc", "c");
+            String optD = extractFieldByAliases(d, "optiond", "dapand", "d");
+            if (!optA.isBlank() || !optB.isBlank() || !optC.isBlank() || !optD.isBlank()) {
+                ObjectNode opts = objectMapper.createObjectNode();
+                if (!optA.isBlank()) opts.put("A", optA);
+                if (!optB.isBlank()) opts.put("B", optB);
+                if (!optC.isBlank()) opts.put("C", optC);
+                if (!optD.isBlank()) opts.put("D", optD);
+                out.set("options", opts);
+            } else if (d.has("options")) {
+                out.set("options", d.get("options"));
+            }
+
+            String correctAnswer = extractFieldByAliases(d, "correctanswer", "dapandung", "answer", "key");
+            if (!correctAnswer.isBlank()) out.put("correctAnswer", correctAnswer);
+
+            String explanation = extractFieldByAliases(d, "explanation", "giaithich");
+            if (!explanation.isBlank()) out.put("explanation", explanation);
+
+            String trapNote = extractFieldByAliases(d, "trapnote", "bay", "luuybay");
+            if (!trapNote.isBlank()) out.put("trapNote", trapNote);
+
+            String theorySummary = extractFieldByAliases(d, "theorysummary", "lythuyet", "tomtat");
+            if (!theorySummary.isBlank()) out.put("theorySummary", theorySummary);
+
+            String rules = extractFieldByAliases(d, "rules", "quytac", "meo");
+            if (!rules.isBlank()) out.put("rules", rules);
+
+            String durationSeconds = extractFieldByAliases(d, "durationseconds", "thoiluong");
+            if (!durationSeconds.isBlank()) out.put("durationSeconds", durationSeconds);
+
+            String difficulty = extractFieldByAliases(d, "difficulty", "dokho");
+            if (!difficulty.isBlank()) out.put("difficulty", difficulty);
+
+            String source = extractFieldByAliases(d, "source", "nguon");
+            if (!source.isBlank()) out.put("source", source);
+
+            String vocabRaw = extractFieldByAliases(d, "vocablist", "vocabbag", "tuvung", "vocab");
+            if (!vocabRaw.isBlank()) {
+                if (vocabRaw.trim().startsWith("[")) {
+                    out.put("vocabList", vocabRaw);
+                } else {
+                    ArrayNode vocabArr = parseTabularVocabList(vocabRaw);
+                    if (!vocabArr.isEmpty()) out.set("vocabList", vocabArr);
+                }
+            }
+
+            normalized.add(new ParsedImportRow(row.rowNumber(), out));
+        }
+        return normalized;
     }
 
     private String extractFieldByAliases(JsonNode rowData, String... aliases) {

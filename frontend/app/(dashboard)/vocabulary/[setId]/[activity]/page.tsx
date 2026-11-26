@@ -8,9 +8,9 @@ export default async function VocabularyActivityPage({
   searchParams,
 }: {
   params: Promise<{ setId: string; activity: string }>;
-  searchParams: Promise<{ wordId?: string }>;
+  searchParams: Promise<{ wordId?: string; wordIds?: string; source?: string }>;
 }) {
-  const [{ setId, activity }, { wordId }] = await Promise.all([params, searchParams]);
+  const [{ setId, activity }, { wordId, wordIds, source }] = await Promise.all([params, searchParams]);
   const mode = modes.find((candidate) => candidate === activity);
   if (!mode) notFound();
 
@@ -20,6 +20,8 @@ export default async function VocabularyActivityPage({
       mode={mode}
       setId={setId}
       wordId={wordId}
+      weakWordIds={wordIds?.split(",").map((id) => id.trim()).filter(Boolean)}
+      weakReview={source === "weak"}
     />
   );
 }

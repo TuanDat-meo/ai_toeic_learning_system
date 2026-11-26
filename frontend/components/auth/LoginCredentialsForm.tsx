@@ -12,10 +12,12 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginCredentialsForm({
   compact = false,
+  redirectAfterLogin = true,
   onAuthenticated,
   onForgotPassword,
 }: {
   compact?: boolean;
+  redirectAfterLogin?: boolean;
   onAuthenticated?: () => void;
   onForgotPassword?: () => void;
 }) {
@@ -48,7 +50,7 @@ export function LoginCredentialsForm({
     try {
       const user = await login(normalizedEmail, password);
       onAuthenticated?.();
-      router.replace(getHomePathForRole(user.role));
+      if (redirectAfterLogin) router.replace(getHomePathForRole(user.role));
       router.refresh();
     } catch (requestError) {
       setServerError(requestError instanceof Error

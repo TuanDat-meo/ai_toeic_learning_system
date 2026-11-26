@@ -21,6 +21,7 @@ import {
   Check,
   Clock,
   Info,
+  RefreshCw,
   Calendar,
   BarChart3,
   MessageSquare,
@@ -29,6 +30,7 @@ import {
   AlertCircle,
   Megaphone,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import {
   getStudentAnnouncements,
@@ -47,6 +49,7 @@ import {
   getTodayDateString,
   StudyTrackerData,
 } from "@/lib/studyTracker";
+import { fetchListeningAnalytics, type ListeningAnalyticsSummary } from "@/lib/api/listening";
 import {
   getCurrentUser,
   getLearningOnboardingStatus,
@@ -57,7 +60,12 @@ import {
   getVocabularySetSummaries,
   type StudentVocabularyDashboard,
 } from "@/lib/api/vocabulary";
-import { getGrammarTopics } from "@/lib/api/grammar";
+import { getGrammarToday, getGrammarTopics } from "@/lib/api/grammar";
+import {
+  generateStudyPlan,
+  getStudyPlanSummary,
+  type StudyPlanSummary,
+} from "@/lib/api/study-plan";
 import { fetchListeningCards, fetchListeningUnits } from "@/lib/api/listening";
 import { fetchReadingCards } from "@/lib/api/reading";
 import { fetchMockTests } from "@/lib/api/mockTests";
@@ -184,9 +192,29 @@ export default function StudentDashboardPage() {
   const [progressMap, setProgressMap] = useState<Record<string, ItemProgress>>(readPracticeProgressMap);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [editDailyMinutes, setEditDailyMinutes] = useState(
-    () => getStudyTrackerData().dailyTargetMinutes
-  );
+  const [editDailyMinutes, setEditDailyMinutes] = useState(() => getStudyTrackerData().dailyTargetMinutes);
+  const [listeningAnalytics, setListeningAnalytics] = useState<ListeningAnalyticsSummary | null>(null);
+
+  useEffect(() => {
+    fetchListeningAnalytics()
+      .then((res) => setListeningAnalytics(res))
+      .catch(() => {});
+  }, []);
+
+  // Lắng nghe cập nhật thời gian học thực tế theo thời gian thực
+  useEffect(() => {
+    const handleTrackerUpdate = () => {
+      setTrackerData(getStudyTrackerData());
+    };
+    window.addEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+    window.addEventListener("storage", handleTrackerUpdate);
+    window.addEventListener("focus", handleTrackerUpdate);
+    return () => {
+      window.removeEventListener("toeic-study-tracker-updated", handleTrackerUpdate);
+      window.removeEventListener("storage", handleTrackerUpdate);
+      window.removeEventListener("focus", handleTrackerUpdate);
+    };
+  }, []);
 
   // Latest Score & Target Goal State
   const [latestScore, setLatestScore] = useState<LatestScoreData | null>(() => {
@@ -218,6 +246,82 @@ export default function StudentDashboardPage() {
     }
     return null;
   });
+
+  const [grammarTodayCount, setGrammarTodayCount] = useState<number | null>(null);
+  const [studyPlan, setStudyPlan] = useState<StudyPlanSummary | null>(null);
+  const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
+
+  useEffect(() => {
+    void getGrammarToday()
+      .then((data) => setGrammarTodayCount(data.due?.count ?? null))
+      .catch(() => setGrammarTodayCount(null));
+
+    void getStudyPlanSummary()
+      .then((data) => {
+        if (!data || data.targetScore <= 0) return;
+
+        setStudyPlan(data);
+        setTargetGoal((prev) => ({
+          targetBand: data.targetScore,
+          focusNote:
+            prev?.focusNote ||
+            (data.daysRemaining
+              ? `Còn ${data.daysRemaining} ngày thi`
+              : "Kế hoạch theo lộ trình"),
+        }));
+
+        const baselineScore = data.baselineScore;
+        if (baselineScore) {
+          setLatestScore((prev) => {
+            if (prev && prev.total > 0) return prev;
+            const half = Math.round(baselineScore / 2);
+            return {
+              lc: half,
+              rc: baselineScore - half,
+              total: baselineScore,
+              testName: "Đánh giá đầu vào",
+            };
+          });
+        }
+      })
+      .catch(() => {
+        // The study plan is optional until onboarding is complete.
+      });
+  }, []);
+
+  const handleRefreshStudyPlan = async () => {
+    setIsRefreshingPlan(true);
+    try {
+      const refreshed = await generateStudyPlan();
+      const updatedSummary: StudyPlanSummary = {
+        targetScore: refreshed.targetScore,
+        baselineScore: refreshed.baselineScore,
+        daysRemaining: refreshed.daysRemaining,
+        recommendedNewWords: refreshed.recommendedNewWords,
+        recommendedReview: refreshed.recommendedReview,
+        recommendedGrammar: refreshed.recommendedGrammar,
+        recommendedMockTestsPerWeek: refreshed.recommendedMockTestsPerWeek,
+        planExplanation: refreshed.planExplanation,
+        focusAreas: refreshed.focusAreas,
+        progressPercent: studyPlan?.progressPercent ?? 0,
+        baselineSource: refreshed.baselineSource,
+      };
+      setStudyPlan(updatedSummary);
+      setTargetGoal((prev) => ({
+        targetBand: refreshed.targetScore,
+        focusNote:
+          prev?.focusNote ||
+          (refreshed.daysRemaining
+            ? `Còn ${refreshed.daysRemaining} ngày thi`
+            : "Kế hoạch theo lộ trình"),
+      }));
+      showToast("Đã tính toán và đồng bộ lại lộ trình học tập cá nhân hóa!");
+    } catch {
+      showToast("Không thể tính lại lộ trình lúc này. Vui lòng thử lại sau.");
+    } finally {
+      setIsRefreshingPlan(false);
+    }
+  };
 
   // Filter tab for "Tiếp tục học & Ôn tập ưu tiên"
   const [resumeFilter, setResumeFilter] = useState<"all" | "in_progress" | "wrong">("all");
@@ -725,7 +829,9 @@ export default function StudentDashboardPage() {
       href: "/grammar",
       statText: moduleStats.loading
         ? "Đang tải dữ liệu..."
-        : `${moduleStats.grammarTotal} chuyên đề · Đã xong ${moduleStats.grammarCompleted}`,
+        : grammarTodayCount && grammarTodayCount > 0
+          ? `Hôm nay: ${grammarTodayCount} câu ngữ pháp đến hạn`
+          : `${moduleStats.grammarTotal} chuyên đề · Đã xong ${moduleStats.grammarCompleted}`,
       tag: moduleStats.grammarTotal > 0 ? `${moduleStats.grammarTotal} chủ điểm` : "Đang cập nhật",
       tagTone: "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700",
       iconClass: "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-800/60",
@@ -1134,6 +1240,72 @@ export default function StudentDashboardPage() {
         </div>
       </section>
 
+      {studyPlan && studyPlan.targetScore > 0 && (
+        <section
+          aria-labelledby="study-plan-title"
+          className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/50 p-5 shadow-xs dark:border-indigo-900/70 dark:from-indigo-950/40 dark:via-slate-900 dark:to-blue-950/30 sm:p-6"
+        >
+          <div className="flex flex-col gap-4 border-b border-indigo-100/70 pb-4 dark:border-indigo-900/70 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Sparkles className="size-4 text-indigo-600 dark:text-indigo-300" />
+                <h2 id="study-plan-title" className="text-base font-bold text-slate-900 dark:text-white">
+                  Lộ trình học tập cá nhân hóa
+                </h2>
+                {studyPlan.baselineScore != null && (
+                  <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">
+                    Điểm xuất phát: {studyPlan.baselineScore}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                Mục tiêu {studyPlan.targetScore} điểm
+                {studyPlan.daysRemaining
+                  ? ` · Còn ${studyPlan.daysRemaining} ngày thi`
+                  : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRefreshStudyPlan}
+              disabled={isRefreshingPlan}
+              className="inline-flex items-center gap-1.5 self-start rounded-xl border border-indigo-200 bg-white px-3.5 py-2 text-xs font-bold text-indigo-700 shadow-2xs transition hover:bg-indigo-50 disabled:cursor-wait disabled:opacity-60 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-slate-800 sm:self-auto"
+            >
+              <RefreshCw className={`size-3.5 ${isRefreshingPlan ? "animate-spin" : ""}`} />
+              {isRefreshingPlan ? "Đang tính toán..." : "Cập nhật lộ trình"}
+            </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "Từ mới / ngày", value: studyPlan.recommendedNewWords, unit: "từ" },
+              { label: "Ôn tập / ngày", value: studyPlan.recommendedReview, unit: "từ" },
+              { label: "Ngữ pháp / ngày", value: studyPlan.recommendedGrammar, unit: "câu" },
+              { label: "Thi thử / tuần", value: studyPlan.recommendedMockTestsPerWeek, unit: "đề" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-slate-200 bg-white/80 p-3.5 text-center dark:border-slate-700 dark:bg-slate-900/70"
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {item.label}
+                </span>
+                <div className="mt-1 font-mono text-xl font-black text-slate-900 dark:text-white">
+                  {item.value} <span className="text-xs font-normal text-slate-400">{item.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {studyPlan.planExplanation && (
+            <p className="mt-4 flex items-start gap-2.5 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5 text-xs leading-relaxed text-slate-700 dark:border-indigo-900/70 dark:bg-indigo-950/40 dark:text-slate-200">
+              <Info className="mt-0.5 size-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+              <span>{studyPlan.planExplanation}</span>
+            </p>
+          )}
+        </section>
+      )}
+
       {/* ===================================================================== */}
       {/* 3. BỐ CỤC 2 CỘT CÂN ĐỐI: THỜI GIAN TUẦN (5/12) | TIẾP TỤC HỌC (7/12)  */}
       {/* ===================================================================== */}
@@ -1522,7 +1694,75 @@ export default function StudentDashboardPage() {
       </section>
 
       {/* ===================================================================== */}
-      {/* 5. LỐI TẮT HỖ TRỢ: CỘNG ĐỒNG & LỊCH SỬ HỌC TẬP                        */}
+      {/* 5. ĐỀ XUẤT LỘ TRÌNH BKT & ANALYTICS LISTENING CÁ NHÂN HÓA             */}
+      {/* ===================================================================== */}
+      <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/70 via-sky-50/50 to-indigo-50/40 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-800">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              Đề xuất Lộ trình BKT &amp; Analytics Cá nhân hóa
+            </span>
+            <h4 className="text-sm font-bold text-slate-900">
+              {listeningAnalytics && listeningAnalytics.recommendations.length > 0
+                ? listeningAnalytics.recommendations[0].title
+                : "Chọn học phần phù hợp với mục tiêu của bạn"}
+            </h4>
+            <p className="text-xs text-slate-600">
+              {listeningAnalytics && listeningAnalytics.recommendations.length > 0
+                ? listeningAnalytics.recommendations[0].reason
+                : "Danh sách bài học và đề luyện tập được tải từ dữ liệu của hệ thống."}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/listening"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
+            >
+              Luyện nghe ngay
+            </Link>
+            <Link
+              href="/vocabulary"
+              className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition"
+            >
+              Học từ vựng
+            </Link>
+          </div>
+        </div>
+
+        {listeningAnalytics && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-blue-200/60">
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Điểm Listening quy đổi</div>
+              <div className="text-base font-black text-blue-700 font-mono mt-0.5">
+                {listeningAnalytics.estimatedListeningScore}/495
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Độ chính xác Listening</div>
+              <div className="text-base font-black text-emerald-700 font-mono mt-0.5">
+                {listeningAnalytics.overallAccuracyPercent}% ({listeningAnalytics.totalCorrect}/{listeningAnalytics.totalQuestionsAnswered})
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Số lượt Chế độ Thi thật</div>
+              <div className="text-base font-black text-rose-600 font-mono mt-0.5">
+                {listeningAnalytics.realExamAttempts} lượt
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/90 border border-blue-100 p-3">
+              <div className="text-[11px] font-semibold text-slate-500">Tổng XP Listening</div>
+              <div className="text-base font-black text-amber-600 font-mono mt-0.5">
+                +{listeningAnalytics.totalXpEarned} XP
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ===================================================================== */}
+      {/* 6. LỐI TẮT HỖ TRỢ: CỘNG ĐỒNG & LỊCH SỬ HỌC TẬP                        */}
       {/* ===================================================================== */}
       <section className="grid gap-4 sm:grid-cols-2">
         <Link

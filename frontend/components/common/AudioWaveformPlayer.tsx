@@ -15,6 +15,17 @@ export interface AudioWaveformPlayerProps {
   replayCount?: number;
   onReplayClick?: () => void;
   onTimeUpdateCallback?: (currentTime: number, duration: number) => void;
+  seekCommand?: {
+    startTime: number;
+    endTime?: number;
+    loop?: boolean;
+    nonce: number;
+  } | null;
+  examMode?: boolean;
+  examAutoPlay?: boolean;
+  playedExamAudioUrls?: Set<string>;
+  onExamAudioPlayed?: (audioUrl: string) => void;
+  onAudioEnded?: () => void;
 }
 
 // Mảng 36 chiều cao mẫu sóng âm thanh tự nhiên (tỷ lệ 0 -> 100)
@@ -23,6 +34,36 @@ const WAVEFORM_HEIGHTS = [
   75, 90, 35, 65, 80, 45, 70, 55, 30, 85, 60, 40, 95, 50, 75, 85,
   45, 65, 35, 50
 ];
+
+function parseAudioUrlWithClipFragment(rawUrl?: string): {
+  cleanSrc: string;
+  clipRange: { start: number; end?: number } | null;
+} {
+  const trimmed = rawUrl?.trim() || "";
+  if (!trimmed) return { cleanSrc: "", clipRange: null };
+  const hashIdx = trimmed.indexOf("#");
+  if (hashIdx === -1) return { cleanSrc: trimmed, clipRange: null };
+  const cleanSrc = trimmed.slice(0, hashIdx).trim();
+  const fragment = trimmed.slice(hashIdx + 1);
+  const match = fragment.match(/^t=(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?))?/i);
+  if (!match) return { cleanSrc: trimmed, clipRange: null };
+  const start = Math.max(0, Number(match[1]) || 0);
+  const endRaw = match[2] !== undefined ? Number(match[2]) : undefined;
+  const end = endRaw !== undefined && Number.isFinite(endRaw) && endRaw > start ? endRaw : undefined;
+  return { cleanSrc, clipRange: { start, end } };
+}
+
+let activeAudioElement: HTMLAudioElement | null = null;
+
+function playSingleAudio(audio: HTMLAudioElement): Promise<void> {
+  if (!audio.paused) return Promise.resolve();
+  if (activeAudioElement && activeAudioElement !== audio) {
+    activeAudioElement.pause();
+    activeAudioElement.currentTime = 0;
+  }
+  activeAudioElement = audio;
+  return audio.play();
+}
 
 export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   audioUrl,
@@ -36,9 +77,16 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   replayCount = 0,
   onReplayClick,
   onTimeUpdateCallback,
+  seekCommand,
+  examMode = false,
+  examAutoPlay = false,
+  playedExamAudioUrls,
+  onExamAudioPlayed,
+  onAudioEnded,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const playedExamUrlsRef = useRef<Set<string>>(new Set());
 
   // Trạng thái phát
   const [internalIsPlaying, setInternalIsPlaying] = useState(false);
@@ -47,7 +95,29 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const skipStep = 10;
+  const [hasPlayedInExamMode, setHasPlayedInExamMode] = useState(false);
+  const normalizedUrl = audioUrl?.trim() || "";
+  const { cleanSrc, clipRange } = parseAudioUrlWithClipFragment(normalizedUrl);
+  const clipStart = clipRange ? clipRange.start : 0;
+  const clipEnd =
+    clipRange?.end !== undefined && clipRange.end > clipStart
+      ? clipRange.end
+      : duration > clipStart
+      ? duration
+      : clipStart;
+  const effectiveDuration = clipRange
+    ? Math.max(0, (clipRange.end !== undefined ? clipRange.end : duration) - clipStart)
+    : duration;
+  const effectiveCurrentTime = clipRange
+    ? Math.max(0, Math.min(effectiveDuration || Infinity, currentTime - clipStart))
+    : currentTime;
+  const isExamAudioLocked =
+    examMode &&
+    Boolean(
+      hasPlayedInExamMode ||
+        (normalizedUrl && playedExamAudioUrls?.has(normalizedUrl))
+    );
+  const skipStep = 3; // Tua mặc định 3 giây theo yêu cầu
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Trạng thái kéo / tua (Drag & Scrub)
@@ -59,6 +129,14 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   const [isHovering, setIsHovering] = useState(false);
   const [hoverTime, setHoverTime] = useState(0);
   const [hoverPercent, setHoverPercent] = useState(0);
+  const segmentBoundsRef = useRef<{ startTime: number; endTime?: number; loop?: boolean } | null>(null);
+
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (activeAudioElement === audioRef.current) activeAudioElement = null;
+    }
+  }, []);
 
   // Giữ ref callback để tránh re-render loop
   const onPlayPauseChangeRef = useRef(onPlayPauseChange);
@@ -66,12 +144,32 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     onPlayPauseChangeRef.current = onPlayPauseChange;
   }, [onPlayPauseChange]);
 
+  // Xử lý lệnh tua theo câu/timestamp (seekCommand)
+  useEffect(() => {
+    if (!seekCommand || !audioRef.current) return;
+    const start = Math.max(0, seekCommand.startTime || 0);
+    segmentBoundsRef.current = {
+      startTime: start,
+      endTime: seekCommand.endTime,
+      loop: seekCommand.loop,
+    };
+    audioRef.current.currentTime = start;
+    setCurrentTime(start);
+    audioRef.current
+      .play()
+      .then(() => {
+        setInternalIsPlaying(true);
+        onPlayPauseChangeRef.current?.(true);
+      })
+      .catch(() => {});
+  }, [seekCommand]);
+
   // Đồng bộ controlledIsPlaying từ bên ngoài (chỉ khi có sự khác biệt thực tế)
   useEffect(() => {
     if (!audioRef.current) return;
     if (controlledIsPlaying !== undefined) {
       if (controlledIsPlaying && audioRef.current.paused) {
-        audioRef.current.play().catch((err) => {
+        playSingleAudio(audioRef.current).catch((err) => {
           console.warn("Autoplay blocked or playback error:", err);
           onPlayPauseChangeRef.current?.(false);
           setInternalIsPlaying(false);
@@ -85,45 +183,132 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   // Cập nhật tốc độ nghe khi playbackSpeed thay đổi
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.playbackRate = playbackSpeed;
+      audioRef.current.playbackRate = examMode ? 1.0 : playbackSpeed;
     }
-  }, [playbackSpeed]);
+  }, [playbackSpeed, examMode]);
+
+  useEffect(() => {
+    if (!examMode) {
+      playedExamUrlsRef.current.clear();
+      setHasPlayedInExamMode(false);
+    }
+  }, [examMode]);
 
   // Chỉ reset khi audioUrl THẬT SỰ thay đổi (tránh pause oan khi cha re-render)
   const prevAudioUrlRef = useRef<string | undefined>(undefined);
+  const prevCleanSrcRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const trimmed = audioUrl?.trim() || "";
+    const parsed = parseAudioUrlWithClipFragment(trimmed);
+    const nextStart = parsed.clipRange ? parsed.clipRange.start : 0;
+    const alreadyPlayed =
+      examMode &&
+      Boolean(
+        (trimmed && playedExamUrlsRef.current.has(trimmed)) ||
+          (trimmed && playedExamAudioUrls?.has(trimmed))
+      );
+
     if (prevAudioUrlRef.current !== undefined && prevAudioUrlRef.current !== audioUrl) {
+      const sameUnderlyingFile = prevCleanSrcRef.current === parsed.cleanSrc && Boolean(parsed.cleanSrc);
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.load();
+        if (sameUnderlyingFile) {
+          try {
+            audioRef.current.currentTime = nextStart;
+          } catch {
+            // Sẽ được gán lại khi metadata sẵn sàng
+          }
+        } else {
+          audioRef.current.currentTime = 0;
+          audioRef.current.load();
+        }
       }
-      setCurrentTime(0);
-      setDuration(0);
+      setCurrentTime(nextStart);
+      if (!sameUnderlyingFile) {
+        setDuration(0);
+      }
+      setHasPlayedInExamMode(alreadyPlayed);
       setInternalIsPlaying(false);
       onPlayPauseChangeRef.current?.(false);
       setErrorMessage(null);
+    } else if (alreadyPlayed && !hasPlayedInExamMode) {
+      setHasPlayedInExamMode(true);
     }
     prevAudioUrlRef.current = audioUrl;
-  }, [audioUrl]);
+    prevCleanSrcRef.current = parsed.cleanSrc;
+
+    // Tự động phát băng trong chế độ Thi thật (chuẩn phòng thi máy IIG) nếu câu này chưa phát
+    if (examMode && examAutoPlay && trimmed && !alreadyPlayed) {
+      const timer = setTimeout(() => {
+        if (!audioRef.current) return;
+        const stillUnplayed =
+          !playedExamUrlsRef.current.has(trimmed) && !playedExamAudioUrls?.has(trimmed);
+        if (stillUnplayed && audioRef.current.paused) {
+          audioRef.current.playbackRate = 1.0;
+          if (parsed.clipRange && audioRef.current.currentTime < parsed.clipRange.start) {
+            try {
+              audioRef.current.currentTime = parsed.clipRange.start;
+            } catch {
+              // ignore
+            }
+          }
+          audioRef.current
+            .play()
+            .then(() => {
+              setInternalIsPlaying(true);
+              onPlayPauseChangeRef.current?.(true);
+              setErrorMessage(null);
+            })
+            .catch(() => {
+              // Nếu trình duyệt chặn autoplay lần đầu, để học viên bấm Play
+            });
+        }
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [audioUrl, examMode, examAutoPlay, playedExamAudioUrls, hasPlayedInExamMode]);
 
   // Hàm bật/tắt phát âm thanh
   const togglePlay = () => {
+    if (!audioUrl || !audioUrl.trim()) {
+      setErrorMessage("Câu hỏi này chưa có tệp âm thanh.");
+      setInternalIsPlaying(false);
+      onPlayPauseChangeRef.current?.(false);
+      return;
+    }
+    if (isExamAudioLocked) {
+      setErrorMessage("Chế độ Thi thật: Mỗi đoạn băng chỉ được phát 1 lần duy nhất.");
+      return;
+    }
     if (!audioRef.current) return;
     setErrorMessage(null);
 
-    // Nếu đã chạy xong bài trước đó, tự động quay về đầu phát lại
-    if (audioRef.current.ended || (duration > 0 && currentTime >= duration)) {
-      audioRef.current.currentTime = 0;
-      setCurrentTime(0);
+    // Nếu là đoạn cắt ảo (#t=start,end) hoặc đã chạy xong bài trước đó, quay về mốc bắt đầu clipStart
+    const maxEnd = clipRange?.end !== undefined ? clipRange.end : duration;
+    if (
+      !examMode &&
+      (audioRef.current.ended ||
+        audioRef.current.currentTime < clipStart - 0.05 ||
+        (maxEnd > clipStart && audioRef.current.currentTime >= maxEnd - 0.05))
+    ) {
+      audioRef.current.currentTime = clipStart;
+      setCurrentTime(clipStart);
+    } else if (examMode && clipRange && audioRef.current.currentTime < clipStart - 0.05) {
+      audioRef.current.currentTime = clipStart;
+      setCurrentTime(clipStart);
     }
 
     if (!audioRef.current.paused) {
+      if (examMode) {
+        setErrorMessage("Chế độ Thi thật: Không thể tạm dừng băng đang phát.");
+        return;
+      }
       audioRef.current.pause();
+      if (activeAudioElement === audioRef.current) activeAudioElement = null;
       setInternalIsPlaying(false);
       onPlayPauseChangeRef.current?.(false);
     } else {
-      audioRef.current.play().then(() => {
+      playSingleAudio(audioRef.current).then(() => {
         setInternalIsPlaying(true);
         onPlayPauseChangeRef.current?.(true);
       }).catch((err) => {
@@ -137,26 +322,27 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
 
   // Tua lùi theo khoảng nhảy đã cấu hình.
   const handleRewind = (seconds?: number) => {
-    if (!audioRef.current) return;
+    if (examMode || !audioRef.current) return;
     const step = seconds ?? skipStep;
-    const newTime = Math.max(0, (audioRef.current.currentTime || 0) - step);
+    const newTime = Math.max(clipStart, (audioRef.current.currentTime || clipStart) - step);
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     if (audioRef.current.paused && autoPlayOnSeek) {
-      audioRef.current.play().catch(() => {});
+      playSingleAudio(audioRef.current).catch(() => {});
     }
   };
 
   // Tua tới theo khoảng nhảy đã cấu hình.
   const handleForward = (seconds?: number) => {
-    if (!audioRef.current) return;
+    if (examMode || !audioRef.current) return;
     const step = seconds ?? skipStep;
-    const maxTime = audioRef.current.duration || duration || 0;
-    const newTime = Math.min(maxTime, (audioRef.current.currentTime || 0) + step);
+    const rawMax = audioRef.current.duration || duration || 0;
+    const maxTime = clipRange?.end !== undefined ? Math.min(rawMax || clipRange.end, clipRange.end) : rawMax;
+    const newTime = Math.min(maxTime, Math.max(clipStart, (audioRef.current.currentTime || clipStart) + step));
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     if (audioRef.current.paused && autoPlayOnSeek) {
-      audioRef.current.play().catch(() => {});
+      playSingleAudio(audioRef.current).catch(() => {});
     }
   };
 
@@ -168,32 +354,34 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     return Math.max(0, Math.min(1, clickX / rect.width));
   };
 
-  const updateDrag = (clientX: number, immediateApply: boolean = false) => {
+  const updateDrag = (clientX: number) => {
     const ratio = getRatioFromClientX(clientX);
     const percent = ratio * 100;
     setDragPercent(percent);
 
-    const totalDur = audioRef.current?.duration || duration || 0;
-    const targetTime = ratio * totalDur;
-    setDragTime(targetTime);
+    const rawDur = audioRef.current?.duration || duration || 0;
+    const spanDur = clipRange
+      ? Math.max(0, (clipRange.end !== undefined ? clipRange.end : rawDur) - clipStart)
+      : rawDur;
+    const targetAbsoluteTime = clipStart + ratio * spanDur;
+    setDragTime(ratio * spanDur);
 
-    if (immediateApply && audioRef.current && totalDur > 0) {
-      audioRef.current.currentTime = targetTime;
-      setCurrentTime(targetTime);
-    }
   };
 
   const applySeek = (clientX: number) => {
     const ratio = getRatioFromClientX(clientX);
-    const totalDur = audioRef.current?.duration || duration || 0;
-    const targetTime = ratio * totalDur;
+    const rawDur = audioRef.current?.duration || duration || 0;
+    const spanDur = clipRange
+      ? Math.max(0, (clipRange.end !== undefined ? clipRange.end : rawDur) - clipStart)
+      : rawDur;
+    const targetAbsoluteTime = clipStart + ratio * spanDur;
 
     setDragPercent(null);
-    if (audioRef.current && totalDur > 0) {
-      audioRef.current.currentTime = targetTime;
-      setCurrentTime(targetTime);
+    if (audioRef.current && spanDur > 0) {
+      audioRef.current.currentTime = targetAbsoluteTime;
+      setCurrentTime(targetAbsoluteTime);
       if (autoPlayOnSeek) {
-        audioRef.current.play().then(() => {
+        playSingleAudio(audioRef.current).then(() => {
           setInternalIsPlaying(true);
           onPlayPauseChangeRef.current?.(true);
         }).catch((err) => {
@@ -203,74 +391,45 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     }
   };
 
-  // Mouse event handlers for dragging
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+  // Use Pointer Events so a touch gesture is not also processed as a mouse seek.
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (examMode || (e.pointerType === "mouse" && e.button !== 0)) return;
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
-    updateDrag(e.clientX, true);
+    updateDrag(e.clientX);
   };
 
-  // Touch event handlers for mobile
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (e.touches.length > 0) {
-      setIsDragging(true);
-      updateDrag(e.touches[0].clientX, true);
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      updateDrag(e.clientX);
+      return;
     }
+    if (e.pointerType === "mouse") handleHover(e.clientX);
   };
 
-  const updateDragRef = useRef(updateDrag);
-  const applySeekRef = useRef(applySeek);
-  useEffect(() => {
-    updateDragRef.current = updateDrag;
-    applySeekRef.current = applySeek;
-  });
-
-  // Global mousemove and mouseup listeners when dragging
-  useEffect(() => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDragging) return;
+    setIsDragging(false);
+    applySeek(e.clientX);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
 
-    const handleWindowMouseMove = (e: MouseEvent) => {
-      updateDragRef.current(e.clientX, false);
-    };
-
-    const handleWindowMouseUp = (e: MouseEvent) => {
-      setIsDragging(false);
-      applySeekRef.current(e.clientX);
-    };
-
-    const handleWindowTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        updateDragRef.current(e.touches[0].clientX, false);
-      }
-    };
-
-    const handleWindowTouchEnd = (e: TouchEvent) => {
-      setIsDragging(false);
-      if (e.changedTouches.length > 0) {
-        applySeekRef.current(e.changedTouches[0].clientX);
-      }
-    };
-
-    window.addEventListener("mousemove", handleWindowMouseMove);
-    window.addEventListener("mouseup", handleWindowMouseUp);
-    window.addEventListener("touchmove", handleWindowTouchMove);
-    window.addEventListener("touchend", handleWindowTouchEnd);
-
-    return () => {
-      window.removeEventListener("mousemove", handleWindowMouseMove);
-      window.removeEventListener("mouseup", handleWindowMouseUp);
-      window.removeEventListener("touchmove", handleWindowTouchMove);
-      window.removeEventListener("touchend", handleWindowTouchEnd);
-    };
-  }, [isDragging]);
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDragging(false);
+    setDragPercent(null);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
 
   // Hover di chuột trên khung để xem trước thời gian
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const ratio = getRatioFromClientX(e.clientX);
-    const totalDur = audioRef.current?.duration || duration || 0;
+  const handleHover = (clientX: number) => {
+    const ratio = getRatioFromClientX(clientX);
+    const rawDur = audioRef.current?.duration || duration || 0;
+    const spanDur = clipRange
+      ? Math.max(0, (clipRange.end !== undefined ? clipRange.end : rawDur) - clipStart)
+      : rawDur;
     setHoverPercent(ratio * 100);
-    setHoverTime(ratio * totalDur);
+    setHoverTime(ratio * spanDur);
   };
 
   // Đổi tốc độ phát
@@ -289,23 +448,28 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  const progressRatio = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
+  const progressRatio =
+    effectiveDuration > 0 ? Math.min(1, Math.max(0, effectiveCurrentTime / effectiveDuration)) : 0;
   const progressPercent = progressRatio * 100;
   // Vị trí thanh dọc dài: khi đang kéo thì theo tay kéo, bình thường theo thời gian phát
   const activePercent = isDragging && dragPercent !== null ? dragPercent : progressPercent;
   // Thời gian hiển thị trên đầu thanh dọc dài
-  const activeDisplayTime = isDragging ? dragTime : currentTime;
+  const activeDisplayTime = isDragging ? dragTime : effectiveCurrentTime;
 
   return (
     <div className={`bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3 ${className}`}>
       {/* Thẻ audio ẩn */}
       <audio
         ref={audioRef}
-        src={audioUrl || "/ets_2024_lc/audio/part1_test1.mp3"}
+        src={cleanSrc || undefined}
         preload="metadata"
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;
           if (Number.isFinite(d) && d > 0) setDuration(d);
+          if (clipRange && e.currentTarget.currentTime < clipStart) {
+            e.currentTarget.currentTime = clipStart;
+            setCurrentTime(clipStart);
+          }
         }}
         onCanPlay={(e) => {
           const d = e.currentTarget.duration;
@@ -318,43 +482,101 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
         onTimeUpdate={(e) => {
           const t = e.currentTarget.currentTime;
           const d = e.currentTarget.duration;
+          const bounds = segmentBoundsRef.current;
+          if (bounds && bounds.endTime !== undefined && bounds.endTime > bounds.startTime && t >= bounds.endTime) {
+            if (bounds.loop) {
+              e.currentTarget.currentTime = bounds.startTime;
+              setCurrentTime(bounds.startTime);
+              return;
+            } else {
+              e.currentTarget.pause();
+              setCurrentTime(bounds.endTime);
+              segmentBoundsRef.current = null;
+              setInternalIsPlaying(false);
+              onPlayPauseChangeRef.current?.(false);
+              onTimeUpdateCallback?.(bounds.endTime, d || duration);
+              return;
+            }
+          }
+          // Dừng khi chạm mốc cuối của đoạn cắt ảo (#t=start,end)
+          if (clipRange && clipRange.end !== undefined && clipRange.end > clipStart && t >= clipRange.end) {
+            e.currentTarget.pause();
+            setCurrentTime(clipRange.end);
+            setInternalIsPlaying(false);
+            onPlayPauseChangeRef.current?.(false);
+            if (examMode) {
+              setHasPlayedInExamMode(true);
+              if (normalizedUrl) {
+                playedExamUrlsRef.current.add(normalizedUrl);
+                onExamAudioPlayed?.(normalizedUrl);
+              }
+            }
+            onTimeUpdateCallback?.(clipRange.end - clipStart, effectiveDuration);
+            onAudioEnded?.();
+            return;
+          }
           setCurrentTime(t);
           if (Number.isFinite(d) && d > 0 && Math.abs(d - duration) > 0.1) {
             setDuration(d);
           }
-          onTimeUpdateCallback?.(t, d || duration);
+          onTimeUpdateCallback?.(clipRange ? Math.max(0, t - clipStart) : t, effectiveDuration || d || duration);
         }}
         onPlay={() => {
           setInternalIsPlaying(true);
           onPlayPauseChangeRef.current?.(true);
         }}
         onPause={() => {
+          if (activeAudioElement === audioRef.current) activeAudioElement = null;
           setInternalIsPlaying(false);
           onPlayPauseChangeRef.current?.(false);
         }}
         onEnded={() => {
+          if (activeAudioElement === audioRef.current) activeAudioElement = null;
           setInternalIsPlaying(false);
           onPlayPauseChangeRef.current?.(false);
+          if (examMode) {
+            setHasPlayedInExamMode(true);
+            if (normalizedUrl) {
+              playedExamUrlsRef.current.add(normalizedUrl);
+              onExamAudioPlayed?.(normalizedUrl);
+            }
+          }
           // Giữ thanh sóng ở trạng thái hoàn thành đầy đủ khi nói xong
-          if (duration > 0) {
+          if (clipRange && clipEnd > clipStart) {
+            setCurrentTime(clipEnd);
+          } else if (duration > 0) {
             setCurrentTime(duration);
           }
+          onAudioEnded?.();
         }}
         onError={(e) => {
+          if (!audioUrl?.trim()) return;
           console.error("Audio error event:", e);
-          setErrorMessage("Không thể tải file âm thanh. Vui lòng kiểm tra lại đường dẫn.");
+          setErrorMessage("Không thể tải file âm thanh. Kiểm tra tệp media và đường dẫn nguồn của câu hỏi.");
         }}
         className="hidden"
       />
 
       {/* Header nhỏ */}
-      <div className="flex items-center justify-between text-xs text-slate-500 px-0.5">
-        <div className="flex items-center gap-2 font-medium">
+      <div className="flex items-center justify-between text-xs text-slate-500 px-0.5 flex-wrap gap-1.5">
+        <div className="flex items-center gap-2 font-medium flex-wrap">
           {title && <span className="text-slate-700 font-bold">{title}</span>}
           <span className="text-[11px] text-slate-400">
-            • Nhấn vào sóng âm để phát từ điểm mong muốn
+            {examMode
+              ? "• Chế độ Thi thật: Băng chỉ phát 1 lần (1.0x), khóa tua âm thanh"
+              : "• Nhấn vào sóng âm để phát từ điểm mong muốn"}
           </span>
+          {clipRange && (
+            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+              ✂️ Đoạn câu: {formatTime(clipStart)} – {clipRange.end !== undefined ? formatTime(clipRange.end) : "Hết bài"}
+            </span>
+          )}
         </div>
+        {examMode && (
+          <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-extrabold">
+            {isExamAudioLocked ? "ĐÃ PHÁT XONG (1/1)" : "CHUẨN PHÒNG THI"}
+          </span>
+        )}
       </div>
 
       {errorMessage && (
@@ -370,9 +592,10 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           {/* Nút tua lùi 10s */}
           <button
             type="button"
-            onClick={() => handleRewind(skipStep)}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
-            title="Tua lại 10 giây"
+            disabled={examMode}
+            onClick={() => handleRewind(3)}
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 disabled:opacity-35 disabled:cursor-not-allowed flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
+            title={examMode ? "Khóa tua trong chế độ Thi thật" : "Tua lại 3 giây"}
           >
             <RotateCcw className="w-3.5 h-3.5 transition-transform group-hover:-rotate-45" />
             <span className="text-[9px] font-black -mt-0.5 tracking-tight">-10s</span>
@@ -381,9 +604,10 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           {/* Nút Play / Pause tròn màu xanh lớn */}
           <button
             type="button"
+            disabled={isExamAudioLocked}
             onClick={togglePlay}
-            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
-            title={isPlaying ? "Tạm dừng" : "Phát audio"}
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white flex items-center justify-center transition shadow-md shadow-blue-500/25 active:scale-95 shrink-0 cursor-pointer"
+            title={isExamAudioLocked ? "Đã phát hết lượt nghe trong chế độ Thi thật" : isPlaying ? "Tạm dừng" : "Phát audio"}
           >
             {isPlaying ? (
               <Pause className="w-5 h-5 fill-white" />
@@ -395,9 +619,10 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           {/* Nút tua tới 10s */}
           <button
             type="button"
-            onClick={() => handleForward(skipStep)}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
-            title="Tua tới 10 giây"
+            disabled={examMode}
+            onClick={() => handleForward(3)}
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-600 disabled:opacity-35 disabled:cursor-not-allowed flex flex-col items-center justify-center transition active:scale-95 cursor-pointer shadow-xs group"
+            title={examMode ? "Khóa tua trong chế độ Thi thật" : "Tua tới 3 giây"}
           >
             <RotateCw className="w-3.5 h-3.5 transition-transform group-hover:rotate-45" />
             <span className="text-[9px] font-black -mt-0.5 tracking-tight">+10s</span>
@@ -406,14 +631,14 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
 
         {/* KHUNG PHÁT ÂM THANH / THANH SÓNG KÉO & CLICK ĐỂ TUA (OVERFLOW VISIBLE ĐỂ HIỆN BADGE THỜI GIAN) */}
         <div
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleTouchStart}
-          onMouseEnter={() => setIsHovering(true)}
-          onMouseLeave={() => {
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerEnter={() => setIsHovering(true)}
+          onPointerLeave={() => {
             if (!isDragging) setIsHovering(false);
           }}
-          onMouseMove={handleMouseMove}
-          className="col-span-2 row-start-1 w-full min-w-0 relative h-11 sm:h-12 px-2.5 sm:px-3 bg-slate-50 hover:bg-blue-50/30 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer flex items-center select-none group"
           title="Kéo hoặc nhấn vào bất kỳ vị trí nào để nghe từ đoạn đó"
         >
           {/* TRACK SÓNG ÂM (CÙNG HỆ QUY CHIẾU TỌA ĐỘ CHO CẢ CÁC THANH VÀ THANH DỌC) */}
@@ -474,7 +699,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
               {/* BADGE HIỂN THỊ THỜI GIAN NGAY TRÊN ĐẦU THANH DỌC DÀI */}
               <div
                 className={`absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-blue-600 text-white font-mono text-[10px] font-bold rounded-md shadow-md flex items-center justify-center whitespace-nowrap transition-transform duration-100 ${
-                  isDragging || isHovering || isPlaying || currentTime > 0 ? "scale-100 opacity-100" : "scale-95 opacity-90"
+                  isDragging ? "scale-100 opacity-100" : "scale-95 opacity-0"
                 }`}
               >
                 <span>{formatTime(activeDisplayTime)}</span>
@@ -492,11 +717,11 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
         <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
           {/* Badge đồng hồ mm:ss / mm:ss */}
           <span className="font-mono text-[11px] sm:text-xs font-bold text-slate-700 bg-slate-100 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200/90 whitespace-nowrap">
-            {formatTime(currentTime)} / {formatTime(duration)}
+            {formatTime(effectiveCurrentTime)} / {formatTime(effectiveDuration)}
           </span>
 
           {/* Nút điều chỉnh tốc độ nghe (0.8x, 1.0x, 1.2x, 1.5x) */}
-          {showSpeedControl && (
+          {showSpeedControl && !examMode && (
             <button
               type="button"
               onClick={cyclePlaybackSpeed}
@@ -513,9 +738,9 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
               type="button"
               onClick={() => {
                 if (audioRef.current) {
-                  audioRef.current.currentTime = 0;
-                  setCurrentTime(0);
-                  audioRef.current.play().then(() => {
+                  audioRef.current.currentTime = clipStart;
+                  setCurrentTime(clipStart);
+                  playSingleAudio(audioRef.current).then(() => {
                     setInternalIsPlaying(true);
                     onPlayPauseChangeRef.current?.(true);
                   }).catch(() => {});

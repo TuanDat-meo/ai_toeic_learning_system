@@ -48,6 +48,7 @@ const categoryLabels: Record<SupportReportCategory, { label: string; bg: string 
 };
 
 const sourceLabels: Record<NonNullable<SupportReport["source"]>, { label: string; bg: string }> = {
+  GRAMMAR: { label: "Ngữ pháp", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   READING: { label: "Reading (Part 5-7)", bg: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   LISTENING: { label: "Listening (Part 1-4)", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   MOCK_TEST: { label: "Đề thi thử (Mock)", bg: "bg-orange-50 text-orange-700 border-orange-200" },
@@ -206,6 +207,7 @@ export function AdminSupportReportsView() {
   const [activeReport, setActiveReport] = useState<SupportReport | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyStatus, setReplyStatus] = useState<SupportReportStatus>("RESOLVED");
+  const [replyPriority, setReplyPriority] = useState<SupportReportPriority>("MEDIUM");
   const [deletingReport, setDeletingReport] = useState<SupportReport | null>(null);
   const [applyCorrection, setApplyCorrection] = useState(false);
   const [correctionQuestionText, setCorrectionQuestionText] = useState("");
@@ -407,6 +409,7 @@ export function AdminSupportReportsView() {
     setActiveReport(report);
     setReplyText(report.adminReply || "");
     setReplyStatus(report.status === "PENDING" ? "RESOLVED" : report.status);
+    setReplyPriority(report.priority);
     setApplyCorrection(false);
     setCopiedRef(false);
     const snapshot = report.correction || report.questionSnapshot || {};
@@ -669,6 +672,73 @@ export function AdminSupportReportsView() {
             <option value="RESOLVED">Đã giải quyết</option>
             <option value="REJECTED">Từ chối</option>
           </select>
+        </div>
+
+        {/* Date Filter Chips & Bulk Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+            <span className="text-slate-400 flex items-center gap-1 mr-1">
+              <Filter className="h-3 w-3" /> Thời gian:
+            </span>
+            {(
+              [
+                { id: "ALL", label: "Tất cả" },
+                { id: "TODAY", label: "Hôm nay" },
+                { id: "7_DAYS", label: "7 ngày qua" },
+                { id: "30_DAYS", label: "30 ngày qua" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setDateFilter(item.id)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                  dateFilter === item.id
+                    ? "bg-blue-600 text-white"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3 py-1.5 text-xs text-blue-900 animate-in fade-in">
+              <span className="font-bold">Đã chọn {selectedIds.size} ticket</span>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkStatus("RESOLVED")}
+                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+              >
+                ✓ Đã giải quyết
+              </button>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkStatus("IN_PROGRESS")}
+                className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+              >
+                Đang xử lý
+              </button>
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => void handleBulkDelete()}
+                className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                Xóa
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Date Filter Chips & Bulk Action Bar */}

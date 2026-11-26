@@ -48,6 +48,8 @@ import {
   Layers,
 } from "lucide-react";
 import { AudioWaveformPlayer } from "@/components/common/AudioWaveformPlayer";
+import { ListeningAiTutorModal } from "@/components/admin/content/listening/ListeningStudyToolsModals";
+import { recordListeningAttempt } from "@/lib/api/listening";
 
 interface MockTestPracticeModalProps {
   test: TestItem;
@@ -241,6 +243,8 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
   const [showPracticeSubmitConfirm, setShowPracticeSubmitConfirm] = React.useState(false);
   const [isPracticeCompleted, setIsPracticeCompleted] = React.useState(false);
   const [showTranscript, setShowTranscript] = React.useState(false);
+  const [isAiTutorOpen, setIsAiTutorOpen] = React.useState(false);
+  const [flaggedPracticeIds, setFlaggedPracticeIds] = React.useState<number[]>([]);
 
   React.useEffect(() => {
     setIsPlayingAudio(false);
@@ -1060,12 +1064,12 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                   </div>
                 )}
 
-                {/* Đối với Part 1: Hiển thị hình ảnh */}
-                {currentQ && qPart === "Part 1" && currentQ.imageUrl && (
+                {/* Đối với Part 1 và các câu hỏi có hình ảnh/biểu đồ (Part 3, 4, 7): Hiển thị hình ảnh */}
+                {currentQ && currentQ.imageUrl && (
                   <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-center overflow-hidden">
                     <img
                       src={currentQ.imageUrl}
-                      alt="Photograph"
+                      alt="Question stimulus"
                       className="max-h-[380px] w-auto max-w-full rounded-xl object-contain"
                     />
                   </div>
@@ -1143,17 +1147,40 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => triggerToast("Trợ lý AI đang sẵn sàng giải đáp câu hỏi của bạn!")}
+                        onClick={() => setIsAiTutorOpen(true)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-all cursor-pointer"
                       >
                         <HelpCircle className="w-3.5 h-3.5" />
-                        <span>Hỏi bài</span>
+                        <span>Hỏi bài AI</span>
                       </button>
                       <button
                         type="button"
-                        className="w-8 h-8 rounded-full border border-slate-200 text-slate-400 hover:text-amber-500 hover:bg-amber-50 flex items-center justify-center transition cursor-pointer"
+                        onClick={() => {
+                          if (!currentQ) return;
+                          setFlaggedPracticeIds((prev) => {
+                            const exists = prev.includes(currentQ.id);
+                            triggerToast(
+                              exists
+                                ? "Đã bỏ đánh dấu câu hỏi này."
+                                : "⭐ Đã đánh dấu câu hỏi cần ôn lại!"
+                            );
+                            return exists ? prev.filter((id) => id !== currentQ.id) : [...prev, currentQ.id];
+                          });
+                        }}
+                        className={`w-8 h-8 rounded-full border flex items-center justify-center transition cursor-pointer ${
+                          currentQ && flaggedPracticeIds.includes(currentQ.id)
+                            ? "border-amber-300 bg-amber-50 text-amber-500"
+                            : "border-slate-200 text-slate-400 hover:text-amber-500 hover:bg-amber-50"
+                        }`}
+                        title="Đánh dấu câu hỏi cần xem lại"
                       >
-                        <Star className="w-4 h-4" />
+                        <Star
+                          className={`w-4 h-4 ${
+                            currentQ && flaggedPracticeIds.includes(currentQ.id)
+                              ? "fill-amber-400 text-amber-500"
+                              : ""
+                          }`}
+                        />
                       </button>
                     </div>
                   </div>
@@ -1290,6 +1317,29 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
                               undefined,
                               answeredIds
                             );
+
+                            if (isListeningPart) {
+                              void recordListeningAttempt({
+                                targetType: "UNIT",
+                                targetId: `mock-practice-${test.id}-${qPart.toLowerCase().replace(/\s+/g, "")}`,
+                                targetTitle: `${test.title} · ${qPart} (Luyện tập)`,
+                                part: qPart,
+                                mode: "PART_PRACTICE",
+                                totalQuestions: 1,
+                                completedQuestions: 1,
+                                correctCount: isCurrentCorrect ? 1 : 0,
+                                wrongCount: isCurrentCorrect ? 0 : 1,
+                                durationSeconds: practiceTimerSeconds,
+                                xpEarned: isCurrentCorrect ? 10 : 0,
+                                details: {
+                                  source: "MOCK_TEST_PRACTICE",
+                                  testId: test.id,
+                                  questionId: currentQ.id,
+                                  chosenOption: optKey,
+                                  correctAnswer: currentQ.correctAnswer,
+                                },
+                              });
+                            }
                           }}
                           className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer ${cardStyle}`}
                         >
@@ -1690,6 +1740,19 @@ export const MockTestPracticeModal: React.FC<MockTestPracticeModalProps> = ({
             </div>
           </div>
         )}
+
+        <ListeningAiTutorModal
+          isOpen={isAiTutorOpen}
+          onClose={() => setIsAiTutorOpen(false)}
+          part={qPart}
+          questionText={currentQ?.questionText || undefined}
+          transcript={currentQ?.transcript || currentQ?.passage || undefined}
+          options={currentQ?.options}
+          correctAnswer={currentQ?.correctAnswer || undefined}
+          explanation={currentQ?.explanation || details.explanation || undefined}
+          trapNote={details.trapNote || currentQ?.trapNote || currentQ?.note || undefined}
+          isAnswerUnlocked={isChecked}
+        />
 
       </div>
     </div>

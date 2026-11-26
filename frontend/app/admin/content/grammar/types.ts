@@ -70,11 +70,19 @@ export interface GrammarTopicItem {
   linkedToeicQuestionCount?: number;
   completedQuestions?: number;
   userStatus?: string;
+  learningStatus?: "CHƯA HỌC" | "ĐANG HỌC" | "CẦN ÔN LẠI" | "ĐÃ ĐẠT" | "ĐÃ GHI NHỚ" | "TẠM NGƯNG";
+  dueCount?: number;
+  wrongCount?: number;
+  savedCount?: number;
+  resumeQuestionId?: string;
+  lockedSoft?: boolean;
+  prerequisiteNames?: string[];
+  weakRuleCount?: number;
+  masteryPercent?: number;
 
   // Legacy/UI metrics
   studiedCount?: number;
   correctCount?: number;
-  wrongCount?: number;
   accuracy?: number;
   isBookmarked?: boolean;
   bookmarked?: boolean;

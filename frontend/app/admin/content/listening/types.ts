@@ -70,6 +70,16 @@ export type ListeningStatusFilter = 'ALL' | ContentStatus;
 // Legacy dictation-card types used by the existing listening screens and API.
 // ============================================================
 
+/** Câu nhỏ kèm timestamp trong bài nghe chép chính tả */
+export interface TranscriptSegment {
+  id: number;
+  speaker?: string;
+  startTime: number;
+  endTime: number;
+  text: string;
+  translation?: string;
+}
+
 /** @deprecated — dùng ListeningStimulus thay thế */
 export interface DictationCardData {
   id: string;
@@ -79,8 +89,17 @@ export interface DictationCardData {
   year: '2026' | '2024' | '2023' | '2022';
   totalQuestions: number;
   completedQuestions: number;
+  correctCount?: number;
+  wrongCount?: number;
   /** @deprecated dùng ProgressStatus thay cho string tiếng Việt */
   status: 'Chưa bắt đầu' | 'Đang luyện tập' | 'Đã hoàn thành';
+  contentStatus?: 'DRAFT' | 'PUBLISHED';
+  answeredQuestionIds?: (number | string)[];
+  wrongQuestionIds?: (number | string)[];
+  flaggedQuestionIds?: (number | string)[];
+  userNotes?: Record<string, string>;
+  selfAssessments?: Record<string, string>;
+  lastQuestionIndex?: number;
   notesCount: number;
   vocabItems: { word: string; ipa: string; meaning: string; example?: string }[];
   questions: DictationQuestion[];
@@ -102,6 +121,7 @@ export interface DictationQuestion {
   correctAnswer?: string;
   explanation: string;
   trapNote?: string;
+  segments?: TranscriptSegment[];
   vocabList?: {
     word: string;
     pos: string;
@@ -131,6 +151,12 @@ export interface LevelCategoryCardData {
   wrongCount: number;
   /** @deprecated dùng ProgressStatus */
   status: 'Chưa luyện tập' | 'Đang học' | 'Đã hoàn thành';
+  contentStatus?: 'DRAFT' | 'PUBLISHED';
+  answeredQuestionIds?: (number | string)[];
+  wrongQuestionIds?: (number | string)[];
+  flaggedQuestionIds?: (number | string)[];
+  userNotes?: Record<string, string>;
+  lastQuestionIndex?: number;
   theorySummary: string;
   rules: string[];
   vocabBag: { word: string; ipa: string; meaning: string }[];

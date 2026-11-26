@@ -7,10 +7,13 @@ import { DictationCardData } from "@/app/admin/content/listening/types";
 interface ListeningDictationTabProps {
   selectedYear: "2024" | "2023" | "2022";
   setSelectedYear: (year: "2024" | "2023" | "2022") => void;
+  statusFilter?: "ALL" | "PUBLISHED" | "DRAFT";
+  setStatusFilter?: (status: "ALL" | "PUBLISHED" | "DRAFT") => void;
   flaggedReviewIds: number[];
   testsGrouped: { [testNum: number]: DictationCardData[] };
   handleOpenAddDictation: () => void;
   handleOpenEditDictation: (card: DictationCardData, e?: React.MouseEvent) => void;
+  handleToggleDictationStatus?: (card: DictationCardData, e?: React.MouseEvent) => void;
   setDeleteDictationConfirm: (card: DictationCardData | null) => void;
   setVocabBagModalData: (data: { title: string; items: { word: string; ipa: string; meaning: string; example?: string }[] } | null) => void;
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
@@ -21,6 +24,7 @@ interface ListeningDictationTabProps {
 function AdminDictationCardItem({
   card,
   handleOpenEditDictation,
+  handleToggleDictationStatus,
   setDeleteDictationConfirm,
   setVocabBagModalData,
   setTheoryModalData,
@@ -28,18 +32,39 @@ function AdminDictationCardItem({
 }: {
   card: DictationCardData;
   handleOpenEditDictation: (card: DictationCardData, e?: React.MouseEvent) => void;
+  handleToggleDictationStatus?: (card: DictationCardData, e?: React.MouseEvent) => void;
   setDeleteDictationConfirm: (card: DictationCardData | null) => void;
   setVocabBagModalData: (data: { title: string; items: { word: string; ipa: string; meaning: string; example?: string }[] } | null) => void;
   setTheoryModalData: (data: { title: string; summary: string; rules: string[] } | null) => void;
   handleOpenDictationPractice: (card: DictationCardData) => void;
 }) {
+  const isDraft = card.contentStatus === "DRAFT";
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-200 transition-all flex flex-col justify-between">
+    <div
+      className={`bg-white rounded-2xl border p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between ${
+        isDraft ? "border-amber-300/90 bg-amber-50/15" : "border-slate-200/90 hover:border-blue-200"
+      }`}
+    >
       <div>
         <div className="flex items-center justify-between mb-3">
-          <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold">
-            {card.part}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold">
+              {card.part}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => handleToggleDictationStatus?.(card, e)}
+              title={isDraft ? "Nhấn để Xuất bản ngay" : "Nhấn để chuyển về Bản nháp"}
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                isDraft
+                  ? "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+              }`}
+            >
+              {isDraft ? "🟡 Bản nháp" : "🟢 Đã xuất bản"}
+            </button>
+          </div>
 
           <div className="flex items-center gap-1.5 text-slate-400">
             <button
@@ -122,16 +147,22 @@ function AdminDictationCardItem({
       </div>
 
       <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
-        <span className="text-xs text-slate-500 font-medium">
-          {card.status}
-        </span>
+        <button
+          type="button"
+          onClick={(e) => handleToggleDictationStatus?.(card, e)}
+          className={`text-xs font-bold hover:underline cursor-pointer ${
+            isDraft ? "text-emerald-700" : "text-amber-700"
+          }`}
+        >
+          {isDraft ? "🚀 Xuất bản ngay" : "📝 Chuyển về nháp"}
+        </button>
 
         <button
           type="button"
           onClick={() => handleOpenDictationPractice(card)}
           className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
         >
-          Luyện tập
+          Xem trước
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -142,10 +173,13 @@ function AdminDictationCardItem({
 export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
   selectedYear,
   setSelectedYear,
+  statusFilter = "ALL",
+  setStatusFilter,
   flaggedReviewIds,
   testsGrouped,
   handleOpenAddDictation,
   handleOpenEditDictation,
+  handleToggleDictationStatus,
   setDeleteDictationConfirm,
   setVocabBagModalData,
   setTheoryModalData,
@@ -154,10 +188,10 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      {/* Thanh lọc theo Năm & Nút "Câu cần luyện lại" & Thêm bài */}
+      {/* Thanh lọc theo Năm & Trạng thái & Thêm bài */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Lọc Năm */}
-        <div className="flex items-center gap-2">
+        {/* Lọc Năm & Trạng thái */}
+        <div className="flex flex-wrap items-center gap-2">
           {(["2024", "2023", "2022"] as const).map((year) => (
             <button
               key={year}
@@ -172,6 +206,29 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
               ETS {year}
             </button>
           ))}
+
+          {setStatusFilter && (
+            <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200">
+              {([
+                { id: "ALL", label: "Tất cả" },
+                { id: "PUBLISHED", label: "🟢 Đã xuất bản" },
+                { id: "DRAFT", label: "🟡 Bản nháp" },
+              ] as const).map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setStatusFilter(st.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                    statusFilter === st.id
+                      ? "bg-slate-800 text-white"
+                      : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -219,6 +276,7 @@ export const ListeningDictationTab: React.FC<ListeningDictationTabProps> = ({
                   key={card.id}
                   card={card}
                   handleOpenEditDictation={handleOpenEditDictation}
+                  handleToggleDictationStatus={handleToggleDictationStatus}
                   setDeleteDictationConfirm={setDeleteDictationConfirm}
                   setVocabBagModalData={setVocabBagModalData}
                   setTheoryModalData={setTheoryModalData}

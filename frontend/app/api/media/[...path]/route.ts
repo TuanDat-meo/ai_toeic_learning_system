@@ -5,16 +5,19 @@ import { Readable } from "stream";
 
 export const dynamic = "force-dynamic";
 
-// Candidate roots for media data
-const DATA_ROOTS = [
+// Candidate roots for media data (both local disk datasets and environment directories)
+const ALLOWED_ROOTS = [
   path.resolve("E:/data trong dự án forntend"),
   path.resolve("e:/ai_toeic_learning_system/data"),
   path.resolve(process.cwd(), "data"),
   path.resolve(process.cwd(), "../data"),
   path.resolve("E:/Data"),
-].filter((p) => {
+  process.env.MEDIA_ROOT ? path.resolve(process.env.MEDIA_ROOT) : null,
+  process.env.MEDIA_DIR ? path.resolve(process.env.MEDIA_DIR) : null,
+  path.resolve(process.cwd(), "public"),
+].filter((p): p is string => {
   try {
-    return fs.existsSync(p) && fs.statSync(p).isDirectory();
+    return Boolean(p && fs.existsSync(p) && fs.statSync(p).isDirectory());
   } catch {
     return false;
   }
@@ -33,6 +36,14 @@ const MIME_MAP: Record<string, string> = {
   ".json": "application/json",
   ".pdf": "application/pdf",
 };
+
+function isExistingFile(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath) && fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
 
 function resolveMediaFile(relativePath: string, contextYear?: string | null): string | null {
   // Normalize clean path
@@ -57,50 +68,59 @@ function resolveMediaFile(relativePath: string, contextYear?: string | null): st
   // Extract test folder (e.g. test_01, Test 1, Test_01)
   const testMatch = cleaned.match(/test[_\s-]*0?(\d+)/i);
   let testFolder = "Test_01";
+  let testNum = 1;
   if (testMatch) {
-    const num = parseInt(testMatch[1], 10);
-    testFolder = `Test_${String(num).padStart(2, "0")}`;
+    testNum = parseInt(testMatch[1], 10);
+    testFolder = `Test_${String(testNum).padStart(2, "0")}`;
   }
 
   const filename = path.basename(cleaned);
 
   // Candidate file names (handling aliases: c1.mp3 <-> q32_34.mp3, talk1.mp3 <-> q71_73.mp3)
-  const candidateNames = [filename];
+  const candidateNames = new Set<string>([filename]);
   const talkMatch = filename.match(/^talk(\d+)\.mp3$/i);
   if (talkMatch) {
     const tNum = parseInt(talkMatch[1], 10);
-    candidateNames.push(`p4_t${tNum}.mp3`);
+    candidateNames.add(`p4_t${tNum}.mp3`);
     const qStart = 71 + (tNum - 1) * 3;
-    candidateNames.push(`q${qStart}_${qStart + 2}.mp3`);
+    candidateNames.add(`q${qStart}_${qStart + 2}.mp3`);
   }
   const p4Match = filename.match(/^p4_t(\d+)\.mp3$/i);
   if (p4Match) {
     const tNum = parseInt(p4Match[1], 10);
-    candidateNames.push(`talk${tNum}.mp3`);
+    candidateNames.add(`talk${tNum}.mp3`);
     const qStart = 71 + (tNum - 1) * 3;
-    candidateNames.push(`q${qStart}_${qStart + 2}.mp3`);
+    candidateNames.add(`q${qStart}_${qStart + 2}.mp3`);
   }
-  const qMatch = filename.match(/^q(\d+)_(\d+)\.mp3$/i);
+  const qMatch = filename.match(/^q(\d+)_(\d+)\.(mp3|jpg|png)$/i);
   if (qMatch) {
     const qStart = parseInt(qMatch[1], 10);
-    if (qStart >= 71) {
-      const tNum = Math.floor((qStart - 71) / 3) + 1;
-      candidateNames.push(`p4_t${tNum}.mp3`);
-      candidateNames.push(`talk${tNum}.mp3`);
-    } else if (qStart >= 32) {
-      const cNum = Math.floor((qStart - 32) / 3) + 1;
-      candidateNames.push(`c${cNum}.mp3`);
+    const qEnd = parseInt(qMatch[2], 10);
+    const ext = qMatch[3].toLowerCase();
+    if (ext === "mp3") {
+      if (qStart >= 71) {
+        const tNum = Math.floor((qStart - 71) / 3) + 1;
+        candidateNames.add(`p4_t${tNum}.mp3`);
+        candidateNames.add(`talk${tNum}.mp3`);
+      } else if (qStart >= 32) {
+        const cNum = Math.floor((qStart - 32) / 3) + 1;
+        candidateNames.add(`c${cNum}.mp3`);
+      }
+    } else {
+      candidateNames.add(`g${qStart}_${qEnd}.${ext}`);
     }
   }
   const cMatch = filename.match(/^c(\d+)\.mp3$/i);
   if (cMatch) {
     const cNum = parseInt(cMatch[1], 10);
     const qStart = 32 + (cNum - 1) * 3;
-    candidateNames.push(`q${qStart}_${qStart + 2}.mp3`);
+    candidateNames.add(`q${qStart}_${qStart + 2}.mp3`);
   }
   if (filename.toLowerCase().includes("part1_test")) {
-    candidateNames.push("q1.mp3");
+    candidateNames.add("q1.mp3");
   }
+
+  const candidateNamesList = Array.from(candidateNames);
 
   // Candidate year folders to inspect
   const candidateYearFolders: string[] = [];
@@ -110,27 +130,29 @@ function resolveMediaFile(relativePath: string, contextYear?: string | null): st
     candidateYearFolders.push("ets_2024", "ETS 2024", "ets_2023", "ETS 2023", "ets_2022", "ETS 2022");
   }
 
-  for (const root of DATA_ROOTS) {
-    // 1. Direct path check
+  // 1. Check all allowed roots
+  for (const root of ALLOWED_ROOTS) {
+    // 1a. Direct path check
     const pDirect = path.resolve(root, cleaned);
-    if (fs.existsSync(pDirect) && fs.statSync(pDirect).isFile()) {
+    if (isExistingFile(pDirect)) {
       return pDirect;
     }
 
-    // 2. Year-based search
+    // 1b. Year-based search inside root
     for (const yrFolder of candidateYearFolders) {
-      for (const fn of candidateNames) {
-        // Audio_Cat_Tung_Cau/Test_XX/filename
-        const p1 = path.resolve(root, yrFolder, "Audio_Cat_Tung_Cau", testFolder, fn);
-        if (fs.existsSync(p1) && fs.statSync(p1).isFile()) return p1;
+      for (const fn of candidateNamesList) {
+        const searchPaths = [
+          path.resolve(root, yrFolder, "Audio_Cat_Tung_Cau", testFolder, fn),
+          path.resolve(root, yrFolder, "Audio_Cat_Tung_Cau", `test_${testNum}`, fn),
+          path.resolve(root, yrFolder, "audio", fn),
+          path.resolve(root, yrFolder, "AUDIO", fn),
+          path.resolve(root, yrFolder, testFolder, fn),
+          path.resolve(root, yrFolder, `test_${testNum}`, fn),
+        ];
 
-        // audio/filename
-        const pAudio = path.resolve(root, yrFolder, "audio", fn);
-        if (fs.existsSync(pAudio) && fs.statSync(pAudio).isFile()) return pAudio;
-
-        // Test_XX/filename
-        const pTest = path.resolve(root, yrFolder, testFolder, fn);
-        if (fs.existsSync(pTest) && fs.statSync(pTest).isFile()) return pTest;
+        for (const sp of searchPaths) {
+          if (isExistingFile(sp)) return sp;
+        }
 
         // Case-insensitive search inside test folder
         const testDir = path.resolve(root, yrFolder, "Audio_Cat_Tung_Cau", testFolder);
@@ -141,10 +163,31 @@ function resolveMediaFile(relativePath: string, contextYear?: string | null): st
             const found = files.find((f) => f.toLowerCase() === lowerName);
             if (found) {
               const finalPath = path.resolve(testDir, found);
-              if (fs.existsSync(finalPath) && fs.statSync(finalPath).isFile()) return finalPath;
+              if (isExistingFile(finalPath)) return finalPath;
             }
           } catch {}
         }
+      }
+    }
+  }
+
+  // 2. Check public directory
+  const publicRoot = path.resolve(process.cwd(), "public");
+  const publicSearchDirs = [
+    path.resolve(publicRoot, "ets_2024_lc", `test_${testNum}`),
+    path.resolve(publicRoot, "ets_2024_lc", `test_${testNum}`, "audio"),
+    path.resolve(publicRoot, "ets_2024_lc", `test_${testNum}`, "images"),
+    path.resolve(publicRoot, "ets_2024_lc", "uploads", "audio"),
+    path.resolve(publicRoot, "ets_2024_lc", "uploads", "images"),
+    path.resolve(publicRoot, "ets_2024_lc", "audio"),
+    path.resolve(publicRoot, "audio"),
+  ];
+
+  for (const dir of publicSearchDirs) {
+    for (const fn of candidateNamesList) {
+      const candidatePath = path.resolve(dir, fn);
+      if (isExistingFile(candidatePath)) {
+        return candidatePath;
       }
     }
   }
@@ -178,17 +221,13 @@ export async function GET(
 
     const fullPath = resolveMediaFile(relativePath, contextYear);
 
-    // Security check: must reside inside one of DATA_ROOTS
-    const isSafe = fullPath && DATA_ROOTS.some((root) => fullPath.toLowerCase().startsWith(root.toLowerCase()));
-    if (!isSafe || !fullPath || !fs.existsSync(fullPath)) {
+    // Security check: must reside inside one of ALLOWED_ROOTS or public dir
+    const isSafe = fullPath && isExistingFile(fullPath);
+    if (!isSafe || !fullPath) {
       return new NextResponse("File Not Found", { status: 404 });
     }
 
     const stat = fs.statSync(fullPath);
-    if (!stat.isFile()) {
-      return new NextResponse("Invalid File", { status: 400 });
-    }
-
     const ext = path.extname(fullPath).toLowerCase();
     const contentType = MIME_MAP[ext] || "application/octet-stream";
     const fileSize = stat.size;

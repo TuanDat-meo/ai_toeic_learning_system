@@ -633,16 +633,17 @@ export function selectBattleWords(input: {
     return res;
   };
 
-  const primary = input.decks.find((d) => d.id === input.primaryDeckId);
-  const allowedDecks =
-    input.setup.mode === "single_deck"
-      ? primary
-        ? [primary]
-        : []
-      : input.decks;
+  const isSingleDeck = input.setup.deckScope
+    ? input.setup.deckScope === "single_deck"
+    : input.setup.mode === "single_deck";
+  const primary = input.decks.find((d) => d.id === input.primaryDeckId) ?? input.decks[0];
+  const allowedDecks = isSingleDeck ? (primary ? [primary] : []) : input.decks;
 
   const targetCount = BATTLESHIP_CONFIG.MAX_QUESTIONS_PER_MATCH; // Luôn cố định 20 câu
-  const levels = new Set(input.setup.selectedLevels.map((l) => l.toUpperCase()));
+  const shouldFilterByLevel = input.setup.filterByLevel !== undefined
+    ? input.setup.filterByLevel
+    : input.setup.mode === "by_level";
+  const levels = new Set((input.setup.selectedLevels ?? []).map((l) => l.toUpperCase()));
   const seenWords = new Set<string>();
 
   const filteredDecks = allowedDecks.map((deck) => ({
@@ -651,8 +652,10 @@ export function selectBattleWords(input: {
       deck.words.filter((w) => {
         const key = normalizeAnswer(w.word);
         if (!key || seenWords.has(key)) return false;
-        if (input.setup.mode === "by_level") {
-          const wLevel = (w.level || w.cefrLevel || "unclassified").toUpperCase();
+        if (shouldFilterByLevel) {
+          const rawLevel = (w.cefrLevel || w.level || "").toUpperCase().trim();
+          const normalizedLevel = rawLevel === "EASY" ? "A1" : rawLevel === "MEDIUM" ? "B1" : rawLevel === "HARD" ? "B2" : rawLevel;
+          const wLevel = ["A1", "A2", "B1", "B2", "C1", "C2"].includes(normalizedLevel) ? normalizedLevel : "UNCLASSIFIED";
           if (!levels.has(wLevel)) return false;
         }
         seenWords.add(key);
