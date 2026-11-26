@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { FileQuestion, X } from "lucide-react";
 import { QuestionItem, QuestionPart, QuestionDifficulty, QUESTION_DIFFICULTY_BANDS } from "@/app/admin/content/questions/types";
 import { DEFAULT_SKILLS } from "@/app/admin/content/questions/constants";
+import { uploadQuestionBankMedia } from "@/lib/api/questionBank";
 
 interface QuestionEditModalProps {
   isOpen: boolean;
@@ -44,6 +45,8 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
   const [formPassage, setFormPassage] = useState("");
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formAudioUrl, setFormAudioUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [formOptA, setFormOptA] = useState("");
   const [formOptB, setFormOptB] = useState("");
   const [formOptC, setFormOptC] = useState("");
@@ -51,6 +54,10 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
   const [formCorrectAnswer, setFormCorrectAnswer] = useState<string>("A");
   const [formExplanation, setFormExplanation] = useState("");
   const [formStatus, setFormStatus] = useState<"PUBLISHED" | "DRAFT">("PUBLISHED");
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (editingQuestion) {
@@ -62,6 +69,8 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       setFormPassage(editingQuestion.passage || "");
       setFormImageUrl(editingQuestion.imageUrl || "");
       setFormAudioUrl(editingQuestion.audioUrl || "");
+      setImageFile(null);
+      setAudioFile(null);
       setFormOptA(editingQuestion.options?.find((option) => option.id === "A")?.text || "");
       setFormOptB(editingQuestion.options?.find((option) => option.id === "B")?.text || "");
       setFormOptC(editingQuestion.options?.find((option) => option.id === "C")?.text || "");
@@ -77,6 +86,8 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       setFormPassage("");
       setFormImageUrl("");
       setFormAudioUrl("");
+      setImageFile(null);
+      setAudioFile(null);
       setFormOptA("");
       setFormOptB("");
       setFormOptC("");
@@ -85,50 +96,114 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       setFormExplanation("");
       setFormStatus("PUBLISHED");
     }
+    setSubmitted(false);
+    setTouched({});
+    setUploadErrors({});
   }, [editingQuestion, isOpen]);
 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const getValidationErrors = () => {
+    const errors: Record<string, string> = {};
+    const requiredOptions = formPart === "Part 2" ? 3 : 4;
+    const optionValues = [formOptA, formOptB, formOptC, formOptD];
+    const optionIds = ["A", "B", "C", "D"];
+    if (!formQuestionText.trim()) errors.questionText = "Vui lòng nhập nội dung câu hỏi.";
+    if (!formSkill.trim()) errors.skill = "Vui lòng chọn kỹ năng đánh giá.";
+    optionValues.slice(0, requiredOptions).forEach((value, index) => {
+      if (!value.trim()) errors[`opt${optionIds[index]}`] = `Vui lòng nhập phương án ${optionIds[index]}.`;
+    });
+    if (!optionValues[optionIds.indexOf(formCorrectAnswer)]?.trim()) {
+      errors.correctAnswer = "Đáp án đúng phải trỏ đến một phương án đã nhập.";
+    }
+    if (["Part 3", "Part 4", "Part 6", "Part 7"].includes(formPart) && !formPassage.trim()) {
+      errors.passage = "Vui lòng nhập nội dung đoạn văn hoặc lời thoại.";
+    }
+    if (!formExplanation.trim()) errors.explanation = "Vui lòng nhập lời giải thích.";
+
+    const validateMediaFile = (file: File | null, kind: "image" | "audio") => {
+      if (!file) return undefined;
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      const allowed = kind === "image" ? ["jpg", "jpeg", "png", "webp"] : ["mp3", "wav", "m4a"];
+      const maxSize = kind === "image" ? 10 * 1024 * 1024 : 25 * 1024 * 1024;
+      if (!extension || !allowed.includes(extension)) {
+        return kind === "image" ? "Chỉ nhận ảnh JPG, PNG hoặc WEBP." : "Chỉ nhận audio MP3, WAV hoặc M4A.";
+      }
+      if (file.size > maxSize) return kind === "image" ? "Ảnh không được vượt quá 10 MB." : "Audio không được vượt quá 25 MB.";
+      if (file.size === 0) return "File đang trống. Vui lòng chọn file khác.";
+      return undefined;
+    };
+
+    const imageError = validateMediaFile(imageFile, "image");
+    if (imageError) errors.imageFile = imageError;
+    if (formPart === "Part 1" && !imageFile && !formImageUrl.trim()) {
+      errors.imageFile = "Part 1 cần có ảnh. Vui lòng tải ảnh lên.";
+    }
+    const audioError = validateMediaFile(audioFile, "audio");
+    if (audioError) errors.audioFile = audioError;
+    if (["Part 1", "Part 2", "Part 3", "Part 4"].includes(formPart) && !audioFile && !formAudioUrl.trim()) {
+      errors.audioFile = `Part ${formPart.slice(-1)} cần có audio. Vui lòng tải file lên.`;
+    }
+    return errors;
+  };
+
+  const validationErrors = getValidationErrors();
+  const fieldError = (name: string) =>
+    (submitted || touched[name] ? validationErrors[name] : undefined) || uploadErrors[name];
+  const errorText = (name: string) => {
+    const message = fieldError(name);
+    return message ? <p id={`${name}-error`} className="text-[11px] font-medium text-red-600" role="alert">{message}</p> : null;
+  };
+  const touch = (name: string) => setTouched((current) => ({ ...current, [name]: true }));
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formQuestionText.trim()) {
-      setErrorMessage("Vui lòng nhập nội dung câu hỏi trắc nghiệm.");
-      return;
+    setSubmitted(true);
+    setUploadErrors({});
+    if (Object.keys(validationErrors).length > 0) return;
+    setIsUploading(true);
+    try {
+      let imageUrl = formPart === "Part 1" ? formImageUrl.trim() : "";
+      let audioUrl = ["Part 1", "Part 2", "Part 3", "Part 4"].includes(formPart) ? formAudioUrl.trim() : "";
+      if (imageFile) {
+        try {
+          imageUrl = (await uploadQuestionBankMedia(imageFile)).url;
+          setFormImageUrl(imageUrl);
+          setImageFile(null);
+        } catch (error) {
+          setUploadErrors({ imageFile: error instanceof Error ? error.message : "Không tải được ảnh lên." });
+          return;
+        }
+      }
+      if (audioFile) {
+        try {
+          audioUrl = (await uploadQuestionBankMedia(audioFile)).url;
+          setFormAudioUrl(audioUrl);
+          setAudioFile(null);
+        } catch (error) {
+          setUploadErrors({ audioFile: error instanceof Error ? error.message : "Không tải được audio lên." });
+          return;
+        }
+      }
+      await onSave({
+        part: formPart,
+        skill: formSkill.trim(),
+        difficulty: formDifficulty,
+        questionText: formQuestionText.trim(),
+        passage: formPassage.trim(),
+        imageUrl,
+        audioUrl,
+        optA: formOptA.trim(),
+        optB: formOptB.trim(),
+        optC: formOptC.trim(),
+        optD: formPart === "Part 2" ? "" : formOptD.trim(),
+        correctAnswer: formCorrectAnswer,
+        explanation: formExplanation.trim(),
+        status: formStatus,
+      });
+    } finally {
+      setIsUploading(false);
     }
-    if (!formOptA.trim() || !formOptB.trim()) {
-      setErrorMessage("Vui lòng nhập đầy đủ ít nhất 2 phương án A và B.");
-      return;
-    }
-    if (
-      (formPart === "Part 3" || formPart === "Part 4" || formPart === "Part 5" || formPart === "Part 6" || formPart === "Part 7" || formPart === "Grammar" || formPart === "Vocabulary") &&
-      (!formOptC.trim() || !formOptD.trim())
-    ) {
-      setErrorMessage(`Phần thi ${formPart} yêu cầu đầy đủ 4 phương án A, B, C, D.`);
-      return;
-    }
-    if (!formExplanation.trim()) {
-      setErrorMessage("Vui lòng nhập lời giải thích chi tiết cho câu hỏi.");
-      return;
-    }
-    setErrorMessage(null);
-    onSave({
-      part: formPart,
-      skill: formSkill,
-      difficulty: formDifficulty,
-      questionText: formQuestionText.trim(),
-      passage: formPassage.trim(),
-      imageUrl: formImageUrl.trim(),
-      audioUrl: formAudioUrl.trim(),
-      optA: formOptA.trim(),
-      optB: formOptB.trim(),
-      optC: formOptC.trim(),
-      optD: formOptD.trim(),
-      correctAnswer: formCorrectAnswer,
-      explanation: formExplanation.trim(),
-      status: formStatus,
-    });
   };
 
   return (
@@ -144,17 +219,12 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSaving || isUploading}
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {errorMessage && (
-          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
-            ⚠️ {errorMessage}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
@@ -162,7 +232,13 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
               <label className="font-bold text-slate-700">Phần thi (Part) *</label>
               <select
                 value={formPart}
-                onChange={(e) => setFormPart(e.target.value as QuestionPart)}
+                onChange={(e) => {
+                  const nextPart = e.target.value as QuestionPart;
+                  setFormPart(nextPart);
+                  if (nextPart !== "Part 1") setImageFile(null);
+                  if (!["Part 1", "Part 2", "Part 3", "Part 4"].includes(nextPart)) setAudioFile(null);
+                  if (nextPart === "Part 2") setFormOptD("");
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
               >
                 <option value="Part 1">Part 1 (Hình ảnh)</option>
@@ -182,7 +258,10 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
               <select
                 value={formSkill}
                 onChange={(e) => setFormSkill(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer"
+                onBlur={() => touch("skill")}
+                aria-invalid={Boolean(fieldError("skill"))}
+                aria-describedby={fieldError("skill") ? "skill-error" : undefined}
+                className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer ${fieldError("skill") ? "border-red-500" : "border-slate-200"}`}
               >
                 {availableSkills.map((s) => (
                   <option key={s} value={s}>
@@ -190,6 +269,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
                   </option>
                 ))}
               </select>
+              {errorText("skill")}
             </div>
 
             <div className="space-y-1">
@@ -209,94 +289,129 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
           {/* Ngữ cảnh hoặc đoạn văn (nếu là Part 3, 4, 6, 7) */}
           {(formPart === "Part 3" || formPart === "Part 4" || formPart === "Part 6" || formPart === "Part 7") && (
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">Đoạn văn / Bài đọc / Lời thoại (Passage)</label>
+                <label className="font-bold text-slate-700">Đoạn văn / Bài đọc / Lời thoại (Passage) *</label>
               <textarea
                 rows={3}
                 placeholder="Nhập nội dung đoạn văn hoặc bối cảnh trích dẫn..."
                 value={formPassage}
                 onChange={(e) => setFormPassage(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+                  onBlur={() => touch("passage")}
+                  aria-invalid={Boolean(fieldError("passage"))}
+                  aria-describedby={fieldError("passage") ? "passage-error" : undefined}
+                  className={`w-full bg-slate-50 border rounded-xl p-3 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 ${fieldError("passage") ? "border-red-500" : "border-slate-200"}`}
               />
+                {errorText("passage")}
             </div>
           )}
 
-          {/* URL ảnh & URL audio nếu có (Part 1, 2, 3, 4) */}
+          {/* Upload ảnh/audio trực tiếp thay vì nhập URL */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Liên kết Ảnh (Image URL - Part 1)</label>
+            {formPart === "Part 1" && <div className="space-y-1">
+              <label className="font-bold text-slate-700" htmlFor="question-image-file">Ảnh câu hỏi *</label>
               <input
-                type="text"
-                placeholder="https://example.com/photo.jpg"
-                value={formImageUrl}
-                onChange={(e) => setFormImageUrl(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+                id="question-image-file"
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                onChange={(e) => { setImageFile(e.target.files?.[0] ?? null); touch("imageFile"); setUploadErrors({}); }}
+                onBlur={() => touch("imageFile")}
+                aria-invalid={Boolean(fieldError("imageFile"))}
+                aria-describedby={fieldError("imageFile") ? "imageFile-error" : undefined}
+                className={`w-full rounded-xl border bg-white px-3 py-2 text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 ${fieldError("imageFile") ? "border-red-500" : "border-slate-200"}`}
               />
-            </div>
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Liên kết Âm thanh (Audio URL - Part 1-4)</label>
+              <p className="text-[11px] text-slate-500">JPG, PNG hoặc WEBP · tối đa 10 MB</p>
+              {imageFile && <p className="text-[11px] text-slate-600">Đã chọn: {imageFile.name}</p>}
+              {!imageFile && formImageUrl && <p className="text-[11px] text-slate-600">Đang dùng ảnh hiện tại. Chọn file mới để thay thế.</p>}
+              {errorText("imageFile")}
+            </div>}
+            {(["Part 1", "Part 2", "Part 3", "Part 4"].includes(formPart)) && <div className="space-y-1">
+              <label className="font-bold text-slate-700" htmlFor="question-audio-file">Audio câu hỏi *</label>
               <input
-                type="text"
-                placeholder="https://example.com/audio.mp3"
-                value={formAudioUrl}
-                onChange={(e) => setFormAudioUrl(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+                id="question-audio-file"
+                type="file"
+                accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4"
+                onChange={(e) => { setAudioFile(e.target.files?.[0] ?? null); touch("audioFile"); setUploadErrors({}); }}
+                onBlur={() => touch("audioFile")}
+                aria-invalid={Boolean(fieldError("audioFile"))}
+                aria-describedby={fieldError("audioFile") ? "audioFile-error" : undefined}
+                className={`w-full rounded-xl border bg-white px-3 py-2 text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 ${fieldError("audioFile") ? "border-red-500" : "border-slate-200"}`}
               />
-            </div>
+              <p className="text-[11px] text-slate-500">MP3, WAV hoặc M4A · tối đa 25 MB</p>
+              {audioFile && <p className="text-[11px] text-slate-600">Đã chọn: {audioFile.name}</p>}
+              {!audioFile && formAudioUrl && <p className="text-[11px] text-slate-600">Đang dùng audio hiện tại. Chọn file mới để thay thế.</p>}
+              {errorText("audioFile")}
+            </div>}
           </div>
 
           {/* Nội dung câu hỏi */}
           <div className="space-y-1">
             <label className="font-bold text-slate-700">Nội dung câu hỏi *</label>
             <textarea
-              required
               rows={2}
               placeholder="ví dụ: Look at the photograph and choose the statement... hoặc All members must submit..."
               value={formQuestionText}
               onChange={(e) => setFormQuestionText(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+              onBlur={() => touch("questionText")}
+              aria-invalid={Boolean(fieldError("questionText"))}
+              aria-describedby={fieldError("questionText") ? "questionText-error" : undefined}
+              className={`w-full bg-slate-50 border rounded-xl p-3 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 ${fieldError("questionText") ? "border-red-500" : "border-slate-200"}`}
             />
+            {errorText("questionText")}
           </div>
 
           {/* 4 Phương án A, B, C, D */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="font-bold text-slate-500">Phương án A *</label>
+                <label className="font-bold text-slate-500">Phương án A *</label>
               <input
                 type="text"
-                required
                 value={formOptA}
                 onChange={(e) => setFormOptA(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  onBlur={() => touch("optA")}
+                  aria-invalid={Boolean(fieldError("optA"))}
+                  aria-describedby={fieldError("optA") ? "optA-error" : undefined}
+                  className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-900 ${fieldError("optA") ? "border-red-500" : "border-slate-200"}`}
               />
+                {errorText("optA")}
             </div>
             <div className="space-y-1">
               <label className="font-bold text-slate-500">Phương án B *</label>
               <input
                 type="text"
-                required
                 value={formOptB}
                 onChange={(e) => setFormOptB(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  onBlur={() => touch("optB")}
+                  aria-invalid={Boolean(fieldError("optB"))}
+                  aria-describedby={fieldError("optB") ? "optB-error" : undefined}
+                  className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-900 ${fieldError("optB") ? "border-red-500" : "border-slate-200"}`}
               />
+                {errorText("optB")}
             </div>
             <div className="space-y-1">
-              <label className="font-bold text-slate-500">Phương án C</label>
+                <label className="font-bold text-slate-500">Phương án C{formPart === "Part 2" ? " *" : ""}</label>
               <input
                 type="text"
                 value={formOptC}
                 onChange={(e) => setFormOptC(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  onBlur={() => touch("optC")}
+                  aria-invalid={Boolean(fieldError("optC"))}
+                  aria-describedby={fieldError("optC") ? "optC-error" : undefined}
+                  className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-900 ${fieldError("optC") ? "border-red-500" : "border-slate-200"}`}
               />
+                {errorText("optC")}
             </div>
-            <div className="space-y-1">
-              <label className="font-bold text-slate-500">Phương án D</label>
+            {formPart !== "Part 2" && <div className="space-y-1">
+                <label className="font-bold text-slate-500">Phương án D *</label>
               <input
                 type="text"
                 value={formOptD}
                 onChange={(e) => setFormOptD(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  onBlur={() => touch("optD")}
+                  aria-invalid={Boolean(fieldError("optD"))}
+                  aria-describedby={fieldError("optD") ? "optD-error" : undefined}
+                  className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-900 ${fieldError("optD") ? "border-red-500" : "border-slate-200"}`}
               />
-            </div>
+                {errorText("optD")}
+            </div>}
           </div>
 
           {/* Lựa chọn đáp án đúng */}
@@ -324,20 +439,25 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
                 </label>
               ))}
             </div>
+            {errorText("correctAnswer")}
           </div>
 
           {/* Lời giải thích & Nút AI Generate */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="font-bold text-slate-700">Lời giải thích chi tiết</label>
+              <label className="font-bold text-slate-700">Lời giải thích chi tiết *</label>
             </div>
             <textarea
               rows={2}
               placeholder="Giải thích ngữ pháp, từ vựng và lý do chọn đáp án..."
               value={formExplanation}
               onChange={(e) => setFormExplanation(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+              onBlur={() => touch("explanation")}
+              aria-invalid={Boolean(fieldError("explanation"))}
+              aria-describedby={fieldError("explanation") ? "explanation-error" : undefined}
+              className={`w-full bg-slate-50 border rounded-xl p-3 text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 ${fieldError("explanation") ? "border-red-500" : "border-slate-200"}`}
             />
+            {errorText("explanation")}
           </div>
 
           {/* Trạng thái xuất bản */}
@@ -386,16 +506,17 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving || isUploading}
               className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
             >
               Hủy
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || isUploading}
               className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs cursor-pointer"
             >
-              {editingQuestion ? "Cập nhật câu hỏi" : "Lưu vào ngân hàng"}
+              {isUploading ? "Đang tải file lên…" : editingQuestion ? "Cập nhật câu hỏi" : "Lưu vào ngân hàng"}
             </button>
           </div>
         </form>

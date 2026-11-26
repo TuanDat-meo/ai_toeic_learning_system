@@ -22,6 +22,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
+import org.jsoup.Jsoup;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,8 +48,10 @@ public class ImportFileParser {
         try {
             return switch (extension) {
                 case "json" -> parseJson(file, type);
-                case "csv" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(parseCsv(file), name, type), name, type);
-                case "xlsx", "xls" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(parseXlsx(file), name, type), name, type);
+                case "csv" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(
+                        type == ContentType.QUESTION ? parseQuestionCsv(file) : parseCsv(file), name, type), name, type);
+                case "xlsx", "xls" -> maybeNormalizeListeningRows(maybeGroupReadingQuestionRows(
+                        type == ContentType.QUESTION ? parseQuestionWorkbook(file, name) : parseXlsx(file), name, type), name, type);
                 default -> throw new IllegalArgumentException("Chỉ hỗ trợ file CSV, XLSX hoặc JSON.");
             };
         } catch (IOException exception) {
@@ -433,6 +436,158 @@ public class ImportFileParser {
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("CSV không hợp lệ hoặc thiếu hàng tiêu đề.");
         }
+    }
+
+    private List<ParsedImportRow> parseQuestionCsv(MultipartFile file) throws IOException {
+        try (var reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8);
+                CSVParser parser = CSVFormat.DEFAULT.builder().setIgnoreEmptyLines(true).setTrim(true).get().parse(reader)) {
+            List<List<String>> records = parser.getRecords().stream().map(record -> {
+                List<String> values = new ArrayList<>();
+                record.forEach(values::add);
+                return values;
+            }).toList();
+            int headerIndex = -1;
+            List<String> headers = List.of();
+            for (int index = 0; index < records.size(); index++) {
+                List<String> candidate = records.get(index).stream().map(this::canonicalQuestionHeader).toList();
+                if (candidate.contains("part")) {
+                    headerIndex = index;
+                    headers = candidate;
+                    break;
+                }
+            }
+            if (headerIndex < 0) throw new IllegalArgumentException("Không tìm thấy hàng tiêu đề cột câu hỏi trong CSV.");
+            List<ParsedImportRow> rows = new ArrayList<>();
+            for (int index = headerIndex + 1; index < records.size(); index++) {
+                List<String> cells = records.get(index);
+                if (cells.stream().allMatch(String::isBlank)) continue;
+                if (cells.size() > headers.size()) {
+                    throw new IllegalArgumentException("Dòng " + (index + 1) + " có số cột không khớp tiêu đề.");
+                }
+                ObjectNode data = objectMapper.createObjectNode();
+                for (int column = 0; column < headers.size(); column++) {
+                    String header = headers.get(column);
+                    String value = column < cells.size() ? cells.get(column).trim() : "";
+                    if (!header.isBlank() && !header.equals("stt") && !value.isBlank()) data.put(header, value);
+                }
+                ArrayNode options = objectMapper.createArrayNode();
+                for (String id : List.of("A", "B", "C", "D")) {
+                    String value = data.path("option" + id).asText("");
+                    if (!value.isBlank()) {
+                        ObjectNode option = options.addObject();
+                        option.put("id", id);
+                        option.put("text", value);
+                    }
+                    data.remove("option" + id);
+                }
+                if (!options.isEmpty()) data.set("options", options);
+                rows.add(new ParsedImportRow(index + 1, data));
+                if (rows.size() > MAX_ROWS) throw new IllegalArgumentException("Mỗi file chỉ được chứa tối đa " + MAX_ROWS + " dòng dữ liệu.");
+            }
+            return requireRows(rows);
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("CSV câu hỏi không hợp lệ hoặc thiếu hàng tiêu đề.");
+        }
+    }
+
+    private List<ParsedImportRow> parseQuestionWorkbook(MultipartFile file, String fileName) throws IOException {
+        if (fileName.toLowerCase(Locale.ROOT).endsWith(".xls")) {
+            byte[] bytes = file.getBytes();
+            String prefix = new String(bytes, 0, Math.min(bytes.length, 256), StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
+            if (prefix.contains("<html") || prefix.contains("<!doctype html")) {
+                var document = Jsoup.parse(file.getInputStream(), StandardCharsets.UTF_8.name(), "");
+                List<org.jsoup.nodes.Element> tableRows = document.select("table tr");
+                int headerIndex = -1;
+                List<String> headers = List.of();
+                for (int index = 0; index < tableRows.size(); index++) {
+                    List<String> candidate = tableRows.get(index).select("th,td").eachText()
+                            .stream().map(this::canonicalQuestionHeader).toList();
+                    if (candidate.contains("part")) { headerIndex = index; headers = candidate; break; }
+                }
+                if (headerIndex < 0) throw new IllegalArgumentException("Không tìm thấy hàng tiêu đề cột câu hỏi trong file Excel.");
+                List<ParsedImportRow> rows = new ArrayList<>();
+                for (int index = headerIndex + 1; index < tableRows.size(); index++) {
+                    List<String> cells = tableRows.get(index).select("th,td").eachText();
+                    if (cells.stream().allMatch(String::isBlank)) continue;
+                    rows.add(questionRow(headers, cells, index + 1));
+                }
+                return requireRows(rows);
+            }
+        }
+        return normalizeQuestionTabularRows(parseXlsx(file));
+    }
+
+    private ParsedImportRow questionRow(List<String> headers, List<String> cells, int rowNumber) {
+        ObjectNode data = objectMapper.createObjectNode();
+        for (int column = 0; column < headers.size(); column++) {
+            String header = headers.get(column);
+            String value = column < cells.size() ? cells.get(column).trim() : "";
+            if (!header.isBlank() && !header.equals("stt") && !value.isBlank()) data.put(header, value);
+        }
+        ArrayNode options = objectMapper.createArrayNode();
+        for (String id : List.of("A", "B", "C", "D")) {
+            String value = data.path("option" + id).asText("");
+            if (!value.isBlank()) {
+                ObjectNode option = options.addObject();
+                option.put("id", id);
+                option.put("text", value);
+            }
+            data.remove("option" + id);
+        }
+        if (!options.isEmpty()) data.set("options", options);
+        return new ParsedImportRow(rowNumber, data);
+    }
+
+    private List<ParsedImportRow> normalizeQuestionTabularRows(List<ParsedImportRow> sourceRows) {
+        List<ParsedImportRow> result = new ArrayList<>();
+        for (ParsedImportRow source : sourceRows) {
+            ObjectNode data = objectMapper.createObjectNode();
+            source.data().fields().forEachRemaining(field -> {
+                String canonical = canonicalQuestionHeader(field.getKey());
+                if (!canonical.isBlank() && !canonical.equals("stt") && !field.getValue().isNull()) {
+                    data.set(canonical, field.getValue().deepCopy());
+                }
+            });
+            ArrayNode options = objectMapper.createArrayNode();
+            for (String id : List.of("A", "B", "C", "D")) {
+                String value = data.path("option" + id).asText("");
+                if (!value.isBlank()) {
+                    ObjectNode option = options.addObject();
+                    option.put("id", id);
+                    option.put("text", value);
+                }
+                data.remove("option" + id);
+            }
+            if (!options.isEmpty() && !data.has("options")) data.set("options", options);
+            result.add(new ParsedImportRow(source.rowNumber(), data));
+        }
+        return result;
+    }
+
+    private String canonicalQuestionHeader(String header) {
+        String normalized = Normalizer.normalize(header.replace("\uFEFF", "").trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "").replaceAll("[^a-z0-9]", "");
+        return switch (normalized) {
+            case "stt", "index", "no" -> "stt";
+            case "code", "macau", "questioncode" -> "code";
+            case "part", "phanthi" -> "part";
+            case "skill", "kynang" -> "skill";
+            case "difficulty", "dokho" -> "difficulty";
+            case "questiontext", "question", "noidungcauhoi" -> "questionText";
+            case "passage", "doanvan" -> "passage";
+            case "opta", "optiona", "luachona" -> "optionA";
+            case "optb", "optionb", "luachonb" -> "optionB";
+            case "optc", "optionc", "luachonc" -> "optionC";
+            case "optd", "optiond", "luachond" -> "optionD";
+            case "correctanswer", "answer", "dapan", "dapandung" -> "correctAnswer";
+            case "explanation", "giaithich", "loigiaiphantichbay" -> "explanation";
+            case "status", "trangthai" -> "status";
+            case "imageurl", "image", "anh" -> "imageUrl";
+            case "audiourl", "audio", "amthanh" -> "audioUrl";
+            default -> normalized;
+        };
     }
 
     private List<ParsedImportRow> parseXlsx(MultipartFile file) throws IOException {

@@ -1,7 +1,6 @@
 package com.toeic.ai.toeic_api.questionbank;
 
 import java.util.List;
-
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -14,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/admin/question-bank/questions")
@@ -33,6 +34,12 @@ public class QuestionBankController {
     @ResponseStatus(HttpStatus.CREATED)
     public QuestionBankQuestion createQuestion(@Valid @RequestBody QuestionBankQuestionRequest request) {
         return questionBankService.createQuestion(request);
+    }
+
+    @PostMapping(value = "/media", consumes = "multipart/form-data")
+    @ResponseStatus(HttpStatus.CREATED)
+    public QuestionBankService.UploadedMedia uploadMedia(@RequestParam("file") MultipartFile file) {
+        return questionBankService.uploadMedia(file);
     }
 
     @PutMapping("/{id}")

@@ -23,6 +23,7 @@ interface ListeningBulkImportModalProps {
   onClose: () => void;
   onImported: () => void;
   triggerToast: (msg: string) => void;
+  alsoSyncQuestionsToQuestionBank?: boolean;
 }
 
 const SAMPLE_DICTATION_JSON = [
@@ -121,6 +122,7 @@ export const ListeningBulkImportModal: React.FC<ListeningBulkImportModalProps> =
   onClose,
   onImported,
   triggerToast,
+  alsoSyncQuestionsToQuestionBank = false,
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportBatchDetails | null>(null);
@@ -162,8 +164,12 @@ export const ListeningBulkImportModal: React.FC<ListeningBulkImportModalProps> =
     setPublishing(true);
     setError(null);
     try {
-      const summary = await publishContentImport(preview.batch.id);
-      triggerToast(`🎉 Đã import & xuất bản thành công ${summary.publishedCount} mục bài nghe vào PostgreSQL!`);
+      const summary = await publishContentImport(preview.batch.id, {
+        alsoSyncListeningQuestionsToBank: alsoSyncQuestionsToQuestionBank,
+      });
+      triggerToast(alsoSyncQuestionsToQuestionBank
+        ? `🎉 Đã import ${summary.publishedCount} mục Listening và đồng bộ câu hỏi vào ngân hàng!`
+        : `🎉 Đã import & xuất bản thành công ${summary.publishedCount} mục bài nghe vào PostgreSQL!`);
       onImported();
       setFile(null);
       setPreview(null);
