@@ -69,6 +69,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/media-assets/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/mock-tests/submit").hasRole("STUDENT")
                         .requestMatchers(HttpMethod.POST, "/api/grammar/progress").authenticated()
                         .requestMatchers("/api/admin/grammar/**").hasAnyRole("ADMIN", "TEACHER", "AUTHOR", "REVIEWER")

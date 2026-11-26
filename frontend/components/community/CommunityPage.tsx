@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, BookOpenText, LoaderCircle, MessageCircle, MessagesSquare, Plus, Send, Trash2 } from 'lucide-react';
 import { getCurrentUser, type AuthUser } from '@/lib/api/auth';
+import { CommunityAuthModal } from '@/components/community/CommunityAuthModal';
 import {
   createCommunityComment, createCommunityPost, deleteCommunityPost, getCommunityComments, getCommunityPosts,
   type CommunityComment, type CommunityPost,
@@ -17,6 +18,8 @@ function getQuestionName(snapshot: Record<string, unknown> | null) {
   if (!snapshot) return '';
   return String(snapshot.questionText ?? snapshot.question ?? snapshot.text ?? snapshot.transcript ?? '').trim();
 }
+
+type CommunityAuthAction = { type: 'CREATE_POST' } | { type: 'COMMENT'; postId: string };
 
 function QuestionSnapshot({ snapshot, showQuestionText = true }: { snapshot: Record<string, unknown>; showQuestionText?: boolean }) {
   const question = String(snapshot.questionText ?? snapshot.question ?? snapshot.text ?? '');
@@ -77,10 +80,12 @@ export function CommunityPage() {
   const [commentText, setCommentText] = useState('');
   const [error, setError] = useState('');
   const [feedFilter, setFeedFilter] = useState<'ALL' | 'QUESTION' | 'DISCUSSION'>('ALL');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingAuthAction, setPendingAuthAction] = useState<CommunityAuthAction | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCurrentUser(), getCommunityPosts()]).then(([currentUser, data]) => {
+    Promise.all([getCurrentUser().catch(() => null), getCommunityPosts()]).then(([currentUser, data]) => {
       if (!active) return;
       setUser(currentUser);
       setPosts(data);
@@ -88,6 +93,31 @@ export function CommunityPage() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  function requestLogin(action: CommunityAuthAction) {
+    setPendingAuthAction(action);
+    setAuthModalOpen(true);
+  }
+
+  function startCreatingPost() {
+    if (!user) { requestLogin({ type: 'CREATE_POST' }); return; }
+    setCreating(true);
+  }
+
+  async function handleAuthenticated() {
+    const currentUser = await getCurrentUser().catch(() => null);
+    if (currentUser) setUser(currentUser);
+    setAuthModalOpen(false);
+    const action = pendingAuthAction;
+    setPendingAuthAction(null);
+    if (action?.type === 'CREATE_POST') setCreating(true);
+    if (action?.type === 'COMMENT') {
+      setOpenCommentsPostId(action.postId);
+      setCommentText('');
+      try { setComments(await getCommunityComments(action.postId)); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'Kh?ng th? t?i b?nh lu?n.'); }
+    }
+  }
 
   useEffect(() => {
     if (!selectedId) return;
@@ -99,6 +129,7 @@ export function CommunityPage() {
 
   async function submitPost(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!user) { requestLogin({ type: 'CREATE_POST' }); return; }
     setSubmitting(true); setError('');
     try {
       const post = await createCommunityPost({ title: title.trim(), content: content.trim(), postType: 'DISCUSSION' });
@@ -124,6 +155,7 @@ export function CommunityPage() {
 
   async function submitComment(event: React.FormEvent<HTMLFormElement>, postId: string) {
     event.preventDefault();
+    if (!user) { requestLogin({ type: 'COMMENT', postId }); return; }
     if (!postId || !commentText.trim()) return;
     setSubmitting(true); setError('');
     try {
@@ -151,7 +183,7 @@ export function CommunityPage() {
   return <div className="mx-auto w-full max-w-5xl">
     <div className="mx-auto max-w-[660px]">
     {!selected && <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <button type="button" onClick={() => setCreating((value) => !value)} className="flex w-full items-center gap-3 text-left">
+      <button type="button" onClick={() => user && creating ? setCreating(false) : startCreatingPost()} className="flex w-full items-center gap-3 text-left">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-base font-semibold text-white">{user?.fullName?.slice(0, 1) || 'N'}</span>
         <span className="min-w-0 flex-1 truncate text-sm text-slate-500">{user?.fullName ? `${user.fullName} ơi, bạn đang nghĩ gì thế?` : 'Bạn đang nghĩ gì thế?'}</span>
         <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"><Plus className="size-4" /> Đăng bài</span>
@@ -175,16 +207,17 @@ export function CommunityPage() {
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {([['ALL', 'Tất cả'], ['QUESTION', 'Hỏi bài'], ['DISCUSSION', 'Thảo luận']] as const).map(([filter, label]) => <button key={filter} type="button" onClick={() => { setFeedFilter(filter); router.replace('/community'); }} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${visibleFeedFilter === filter ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{label}</button>)}
       </div>
-      {loading ? <div className="flex justify-center py-16"><LoaderCircle className="size-7 animate-spin text-indigo-600" /></div> : visiblePosts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><MessagesSquare className="mx-auto size-10 text-indigo-300" /><h2 className="mt-3 font-bold text-slate-900">Chưa có bài viết</h2><p className="mt-1 text-sm text-slate-500">Hãy mở đầu cuộc thảo luận đầu tiên của cộng đồng.</p><button type="button" onClick={() => setCreating(true)} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Tạo bài viết</button></div> : <div className="space-y-3">{visiblePosts.map((post) => <article key={post.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
+      {loading ? <div className="flex justify-center py-16"><LoaderCircle className="size-7 animate-spin text-indigo-600" /></div> : visiblePosts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><MessagesSquare className="mx-auto size-10 text-indigo-300" /><h2 className="mt-3 font-bold text-slate-900">Chưa có bài viết</h2><p className="mt-1 text-sm text-slate-500">Hãy mở đầu cuộc thảo luận đầu tiên của cộng đồng.</p><button type="button" onClick={startCreatingPost} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Tạo bài viết</button></div> : <div className="space-y-3">{visiblePosts.map((post) => <article key={post.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
         <div className="flex items-start justify-between gap-4"><button type="button" onClick={() => { setComments([]); setSelectedId(post.id); window.history.replaceState(null, '', `/community?post=${post.id}`); }} className="flex min-w-0 flex-1 items-start gap-3 text-left"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-600">{post.authorName.slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2 text-sm font-bold text-slate-900">{post.authorName}<span className="font-normal text-slate-400">· {formatDate(post.createdAt)}</span><span className="font-normal text-slate-400">· {post.postType === 'QUESTION' ? 'Hỏi bài' : 'Thảo luận'}</span></span><h2 className="mt-2 text-base font-bold text-slate-900">{post.title}</h2>{getQuestionName(post.questionSnapshot) && <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm font-semibold leading-5 text-indigo-800">{getQuestionName(post.questionSnapshot)}</p>}<p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{post.content}</p></span></button>{(user?.id === post.authorId || user?.role === 'ADMIN') && <button type="button" onClick={() => void removePost(post.id)} title="Xóa bài viết" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><Trash2 className="size-4" /></button>}</div>
         {post.questionSnapshot && <button type="button" onClick={() => { setComments([]); setSelectedId(post.id); window.history.replaceState(null, '', `/community?post=${post.id}`); }} className="mt-4 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left text-sm"><span className="flex items-center gap-2 font-semibold text-slate-800"><BookOpenText className="size-4 text-blue-600" />{getQuestionName(post.questionSnapshot) || 'Câu hỏi TOEIC đính kèm'}</span><span className="font-semibold text-blue-600">Xem bài ›</span></button>}
         <div className="mt-4 flex items-center gap-5 border-t border-slate-100 pt-3 text-sm text-slate-500"><button type="button" onClick={() => void toggleComments(post.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-blue-600 hover:bg-blue-50"><MessageCircle className="size-4" /> {post.commentCount}</button></div>
         {openCommentsPostId === post.id && <div className="-mx-5 mt-3 border-t border-slate-100 px-5 pt-4">
           <div className="space-y-3">{comments.map((comment) => <article key={comment.id} className="flex items-start gap-2.5"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">{comment.authorName.slice(0, 1).toUpperCase()}</span><div className="min-w-0 rounded-2xl bg-slate-100 px-3 py-2"><p className="text-xs font-bold text-slate-800">{comment.authorName}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-slate-700">{comment.content}</p></div><span className="shrink-0 pt-1 text-[11px] text-slate-400">{formatDate(comment.createdAt)}</span></article>)}{comments.length === 0 && <p className="pl-10 text-sm text-slate-500">Chưa có bình luận. Hãy bắt đầu trò chuyện nhé.</p>}</div>
-          <form onSubmit={(event) => void submitComment(event, post.id)} className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2"><input required maxLength={3000} value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Viết bình luận..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" /><button type="submit" disabled={submitting || !commentText.trim()} aria-label="Gửi bình luận" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"><Send className="size-4" /></button></form>
+          {user ? <form onSubmit={(event) => void submitComment(event, post.id)} className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2"><input required maxLength={3000} value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Viết bình luận..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" /><button type="submit" disabled={submitting || !commentText.trim()} aria-label="Gửi bình luận" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"><Send className="size-4" /></button></form> : <button type="button" onClick={() => requestLogin({ type: 'COMMENT', postId: post.id })} className="mt-4 w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-100">Đăng nhập để bình luận</button>}
         </div>}
       </article>)}</div>}
     </>}
     </div>
+    <CommunityAuthModal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setPendingAuthAction(null); }} onAuthenticated={() => void handleAuthenticated()} />
   </div>;
 }
