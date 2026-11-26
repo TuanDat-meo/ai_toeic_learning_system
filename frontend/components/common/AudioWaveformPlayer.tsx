@@ -53,6 +53,18 @@ function parseAudioUrlWithClipFragment(rawUrl?: string): {
   return { cleanSrc, clipRange: { start, end } };
 }
 
+let activeAudioElement: HTMLAudioElement | null = null;
+
+function playSingleAudio(audio: HTMLAudioElement): Promise<void> {
+  if (!audio.paused) return Promise.resolve();
+  if (activeAudioElement && activeAudioElement !== audio) {
+    activeAudioElement.pause();
+    activeAudioElement.currentTime = 0;
+  }
+  activeAudioElement = audio;
+  return audio.play();
+}
+
 export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   audioUrl,
   isPlaying: controlledIsPlaying,
@@ -119,6 +131,13 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
   const [hoverPercent, setHoverPercent] = useState(0);
   const segmentBoundsRef = useRef<{ startTime: number; endTime?: number; loop?: boolean } | null>(null);
 
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (activeAudioElement === audioRef.current) activeAudioElement = null;
+    }
+  }, []);
+
   // Giữ ref callback để tránh re-render loop
   const onPlayPauseChangeRef = useRef(onPlayPauseChange);
   useEffect(() => {
@@ -150,7 +169,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     if (!audioRef.current) return;
     if (controlledIsPlaying !== undefined) {
       if (controlledIsPlaying && audioRef.current.paused) {
-        audioRef.current.play().catch((err) => {
+        playSingleAudio(audioRef.current).catch((err) => {
           console.warn("Autoplay blocked or playback error:", err);
           onPlayPauseChangeRef.current?.(false);
           setInternalIsPlaying(false);
@@ -285,10 +304,11 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
         return;
       }
       audioRef.current.pause();
+      if (activeAudioElement === audioRef.current) activeAudioElement = null;
       setInternalIsPlaying(false);
       onPlayPauseChangeRef.current?.(false);
     } else {
-      audioRef.current.play().then(() => {
+      playSingleAudio(audioRef.current).then(() => {
         setInternalIsPlaying(true);
         onPlayPauseChangeRef.current?.(true);
       }).catch((err) => {
@@ -308,7 +328,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     if (audioRef.current.paused && autoPlayOnSeek) {
-      audioRef.current.play().catch(() => {});
+      playSingleAudio(audioRef.current).catch(() => {});
     }
   };
 
@@ -322,7 +342,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     if (audioRef.current.paused && autoPlayOnSeek) {
-      audioRef.current.play().catch(() => {});
+      playSingleAudio(audioRef.current).catch(() => {});
     }
   };
 
@@ -334,7 +354,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     return Math.max(0, Math.min(1, clickX / rect.width));
   };
 
-  const updateDrag = (clientX: number, immediateApply: boolean = false) => {
+  const updateDrag = (clientX: number) => {
     const ratio = getRatioFromClientX(clientX);
     const percent = ratio * 100;
     setDragPercent(percent);
@@ -346,10 +366,6 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     const targetAbsoluteTime = clipStart + ratio * spanDur;
     setDragTime(ratio * spanDur);
 
-    if (immediateApply && audioRef.current && spanDur > 0) {
-      audioRef.current.currentTime = targetAbsoluteTime;
-      setCurrentTime(targetAbsoluteTime);
-    }
   };
 
   const applySeek = (clientX: number) => {
@@ -365,7 +381,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
       audioRef.current.currentTime = targetAbsoluteTime;
       setCurrentTime(targetAbsoluteTime);
       if (autoPlayOnSeek) {
-        audioRef.current.play().then(() => {
+        playSingleAudio(audioRef.current).then(() => {
           setInternalIsPlaying(true);
           onPlayPauseChangeRef.current?.(true);
         }).catch((err) => {
@@ -375,72 +391,39 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
     }
   };
 
-  // Mouse event handlers for dragging
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (examMode || e.button !== 0) return;
+  // Use Pointer Events so a touch gesture is not also processed as a mouse seek.
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (examMode || (e.pointerType === "mouse" && e.button !== 0)) return;
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
-    updateDrag(e.clientX, true);
+    updateDrag(e.clientX);
   };
 
-  // Touch event handlers for mobile
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (examMode) return;
-    if (e.touches.length > 0) {
-      setIsDragging(true);
-      updateDrag(e.touches[0].clientX, true);
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      updateDrag(e.clientX);
+      return;
     }
+    if (e.pointerType === "mouse") handleHover(e.clientX);
   };
 
-  const updateDragRef = useRef(updateDrag);
-  const applySeekRef = useRef(applySeek);
-  useEffect(() => {
-    updateDragRef.current = updateDrag;
-    applySeekRef.current = applySeek;
-  });
-
-  // Global mousemove and mouseup listeners when dragging
-  useEffect(() => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDragging) return;
+    setIsDragging(false);
+    applySeek(e.clientX);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
 
-    const handleWindowMouseMove = (e: MouseEvent) => {
-      updateDragRef.current(e.clientX, false);
-    };
-
-    const handleWindowMouseUp = (e: MouseEvent) => {
-      setIsDragging(false);
-      applySeekRef.current(e.clientX);
-    };
-
-    const handleWindowTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        updateDragRef.current(e.touches[0].clientX, false);
-      }
-    };
-
-    const handleWindowTouchEnd = (e: TouchEvent) => {
-      setIsDragging(false);
-      if (e.changedTouches.length > 0) {
-        applySeekRef.current(e.changedTouches[0].clientX);
-      }
-    };
-
-    window.addEventListener("mousemove", handleWindowMouseMove);
-    window.addEventListener("mouseup", handleWindowMouseUp);
-    window.addEventListener("touchmove", handleWindowTouchMove);
-    window.addEventListener("touchend", handleWindowTouchEnd);
-
-    return () => {
-      window.removeEventListener("mousemove", handleWindowMouseMove);
-      window.removeEventListener("mouseup", handleWindowMouseUp);
-      window.removeEventListener("touchmove", handleWindowTouchMove);
-      window.removeEventListener("touchend", handleWindowTouchEnd);
-    };
-  }, [isDragging]);
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDragging(false);
+    setDragPercent(null);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
 
   // Hover di chuột trên khung để xem trước thời gian
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const ratio = getRatioFromClientX(e.clientX);
+  const handleHover = (clientX: number) => {
+    const ratio = getRatioFromClientX(clientX);
     const rawDur = audioRef.current?.duration || duration || 0;
     const spanDur = clipRange
       ? Math.max(0, (clipRange.end !== undefined ? clipRange.end : rawDur) - clipStart)
@@ -543,10 +526,12 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
           onPlayPauseChangeRef.current?.(true);
         }}
         onPause={() => {
+          if (activeAudioElement === audioRef.current) activeAudioElement = null;
           setInternalIsPlaying(false);
           onPlayPauseChangeRef.current?.(false);
         }}
         onEnded={() => {
+          if (activeAudioElement === audioRef.current) activeAudioElement = null;
           setInternalIsPlaying(false);
           onPlayPauseChangeRef.current?.(false);
           if (examMode) {
@@ -567,7 +552,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
         onError={(e) => {
           if (!audioUrl?.trim()) return;
           console.error("Audio error event:", e);
-          setErrorMessage("Không thể tải file âm thanh. Vui lòng kiểm tra lại đường dẫn.");
+          setErrorMessage("Không thể tải file âm thanh. Kiểm tra tệp media và đường dẫn nguồn của câu hỏi.");
         }}
         className="hidden"
       />
@@ -646,14 +631,14 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
 
         {/* KHUNG PHÁT ÂM THANH / THANH SÓNG KÉO & CLICK ĐỂ TUA (OVERFLOW VISIBLE ĐỂ HIỆN BADGE THỜI GIAN) */}
         <div
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleTouchStart}
-          onMouseEnter={() => setIsHovering(true)}
-          onMouseLeave={() => {
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerEnter={() => setIsHovering(true)}
+          onPointerLeave={() => {
             if (!isDragging) setIsHovering(false);
           }}
-          onMouseMove={handleMouseMove}
-          className="col-span-2 row-start-1 w-full min-w-0 relative h-11 sm:h-12 px-2.5 sm:px-3 bg-slate-50 hover:bg-blue-50/30 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer flex items-center select-none group"
           title="Kéo hoặc nhấn vào bất kỳ vị trí nào để nghe từ đoạn đó"
         >
           {/* TRACK SÓNG ÂM (CÙNG HỆ QUY CHIẾU TỌA ĐỘ CHO CẢ CÁC THANH VÀ THANH DỌC) */}
@@ -714,7 +699,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
               {/* BADGE HIỂN THỊ THỜI GIAN NGAY TRÊN ĐẦU THANH DỌC DÀI */}
               <div
                 className={`absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-blue-600 text-white font-mono text-[10px] font-bold rounded-md shadow-md flex items-center justify-center whitespace-nowrap transition-transform duration-100 ${
-                  isDragging || isHovering || isPlaying || currentTime > 0 ? "scale-100 opacity-100" : "scale-95 opacity-90"
+                  isDragging ? "scale-100 opacity-100" : "scale-95 opacity-0"
                 }`}
               >
                 <span>{formatTime(activeDisplayTime)}</span>
@@ -755,7 +740,7 @@ export const AudioWaveformPlayer: React.FC<AudioWaveformPlayerProps> = ({
                 if (audioRef.current) {
                   audioRef.current.currentTime = clipStart;
                   setCurrentTime(clipStart);
-                  audioRef.current.play().then(() => {
+                  playSingleAudio(audioRef.current).then(() => {
                     setInternalIsPlaying(true);
                     onPlayPauseChangeRef.current?.(true);
                   }).catch(() => {});

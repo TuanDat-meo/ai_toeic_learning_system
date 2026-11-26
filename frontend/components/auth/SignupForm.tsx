@@ -10,7 +10,7 @@ import { User, Mail, Lock, Eye, EyeOff, ArrowRight, Check, X } from 'lucide-reac
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function SignupForm() {
+export function SignupForm({ onLoginClick }: { onLoginClick?: () => void } = {}) {
   const router = useRouter();
   useEnterToSubmitAuthForm();
   const [name, setName] = useState('');
@@ -118,7 +118,7 @@ export function SignupForm() {
           <div className="mt-4">
             <button
               type="button"
-              onClick={() => router.push('/?login=true')}
+              onClick={() => onLoginClick ? onLoginClick() : router.push('/?login=true')}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-primary-container"
             >
               <span>Đăng nhập ngay</span>
